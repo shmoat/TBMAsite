@@ -639,6 +639,12 @@
       // Chat & Right-Click Context Menu States
       const [openedDmPartners, setOpenedDmPartners] = useState([]);
       const [isRightMemberDrawerOpen, setIsRightMemberDrawerOpen] = useState(true);
+      // [เพิ่มใหม่ 2] States สำหรับย่อหน้าต่างห้องแชตฝั่งซ้าย, ระบบตอบกลับ (Reply), และอัปโหลดไฟล์ใหญ่
+      const [isLeftChatSidebarOpen, setIsLeftChatSidebarOpen] = useState(true);
+      const [replyingToChatMsg, setReplyingToChatMsg] = useState(null); // ข้อความในแชตที่กำลังกดตอบกลับ
+      const [replyingToComment, setReplyingToComment] = useState({}); // { [postId]: commentObj } คอมเมนต์ที่กำลังตอบกลับ
+      const [commentContextMenu, setCommentContextMenu] = useState(null); // { x, y, postId, comment }
+      const [isUploadingMedia, setIsUploadingMedia] = useState(false);
       const [rightMemberTagFilter, setRightMemberTagFilter] = useState('ALL');
 
       const [chatInputText, setChatInputText] = useState('');
