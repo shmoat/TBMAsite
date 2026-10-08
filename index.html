@@ -19,6 +19,11 @@
       overflow-x: hidden;
     }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #050811; }
+    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+
     @keyframes orbit-cw {
       from { transform: translate(-50%, -50%) rotate(0deg); }
       to { transform: translate(-50%, -50%) rotate(360deg); }
@@ -57,6 +62,9 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    // ============================================================================
+    // FIREBASE CONFIGURATION (โปรเจกต์ tbmasite)
+    // ============================================================================
     const firebaseConfig = {
       apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
       authDomain: "tbmasite.firebaseapp.com",
@@ -77,6 +85,14 @@
 
     const PRESET_MEMBER_TAGS = ['LCs & Pal', 'PCSHS', 'KPN', 'KMUTT', 'Instrumix', 'Others'];
 
+    const SOCIAL_PLATFORMS = [
+      { id: 'Facebook', label: 'Facebook', icon: '📘' },
+      { id: 'Instagram', label: 'Instagram', icon: '📸' },
+      { id: 'YouTube', label: 'YouTube', icon: '▶️' },
+      { id: 'TikTok', label: 'TikTok', icon: '🎵' },
+      { id: 'External Link', label: 'External Link (ลิงก์เว็บไซต์)', icon: '🔗' }
+    ];
+
     const INITIAL_OWNER_SEED = {
       id: 'M000',
       username: '',
@@ -84,13 +100,61 @@
       isActivated: false,
       role: 'admin',
       memberTag: 'LCs & Pal',
+      memberTags: ['LCs & Pal'],
       displayName: 'Founder (M000)',
       bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association',
       avatarUrl: '',
+      socialLinks: [],
+      isOnline: false,
       joinedAt: '2026-10-08'
     };
 
-    function Avatar({ user, size = 'md', className = '' }) {
+    const DEFAULT_GLOBAL_CHANNELS = [
+      {
+        id: 'global-lobby',
+        name: 'blue-moon-lobby',
+        icon: '🌐',
+        desc: 'โถงหลักสำหรับสมาชิกทุกคนในสมาคม',
+        createdBy: 'M000',
+        isProtected: true,
+        isSystemReadOnly: false,
+        timestamp: 1000
+      },
+      {
+        id: 'global-announce',
+        name: 'announcements',
+        icon: '📢',
+        desc: 'ห้องแจ้งเตือนอัตโนมัติเมื่อมีโพสต์ใหม่ในเว็บไซต์ (ไม่อนุญาตให้พิมพ์)',
+        createdBy: 'SYSTEM',
+        isProtected: true,
+        isSystemReadOnly: true,
+        timestamp: 2000
+      }
+    ];
+
+    // Helper ดึงหมวดหมู่ทั้งหมดของสมาชิก (รองรับทั้งรูปแบบเก่า memberTag เดียว และรูปแบบใหม่ memberTags หลายอัน)
+    function getUserTags(user) {
+      if (!user) return ['Others'];
+      if (Array.isArray(user.memberTags) && user.memberTags.length > 0) {
+        return user.memberTags;
+      }
+      if (user.memberTag) return [user.memberTag];
+      return ['Others'];
+    }
+
+    function getSocialIcon(platform) {
+      const found = SOCIAL_PLATFORMS.find((p) => p.id === platform);
+      return found ? found.icon : '🔗';
+    }
+
+    function formatSafeUrl(url) {
+      if (!url) return '#';
+      const trimmed = url.trim();
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+      return 'https://' + trimmed;
+    }
+
+    function Avatar({ user, size = 'md', showStatus = false, className = '' }) {
       const sizeMap = {
         xs: 'w-6 h-6 text-[10px]',
         sm: 'w-8 h-8 text-xs',
@@ -99,61 +163,153 @@
         xl: 'w-20 h-20 text-lg'
       };
       const sc = sizeMap[size] || sizeMap.md;
+      const isOnline = user && user.isOnline;
 
-      if (user && user.avatarUrl) {
-        return (
-          <img
-            src={user.avatarUrl}
-            alt={user.displayName || 'Avatar'}
-            className={sc + ' rounded-full object-cover border-2 border-white/40 bg-[#0F2547] shrink-0 ' + className}
-          />
-        );
-      }
       return (
-        <div className={sc + ' rounded-full bg-[#0F2547] border-2 border-white/30 flex items-center justify-center font-mono font-bold text-white shrink-0 ' + className}>
-          {user && user.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}
+        <div className={'relative inline-flex shrink-0 ' + className}>
+          {user && user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.displayName || 'Avatar'}
+              className={sc + ' rounded-full object-cover border-2 border-white/40 bg-[#0F2547] shrink-0'}
+            />
+          ) : (
+            <div className={sc + ' rounded-full bg-[#0F2547] border-2 border-white/30 flex items-center justify-center font-mono font-bold text-white shrink-0'}>
+              {user && user.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}
+            </div>
+          )}
+          {showStatus && user && (
+            <span
+              className={
+                'absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#050811] ' +
+                (isOnline ? 'bg-emerald-400' : 'bg-slate-500')
+              }
+              title={isOnline ? 'ออนไลน์' : 'ออฟไลน์'}
+            />
+          )}
         </div>
       );
     }
 
     function RoleBadge({ role }) {
       if (role === 'admin') {
-        return <span className="px-2 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase">👑 Owner</span>;
+        return <span className="px-2 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase shrink-0">👑 Owner</span>;
       }
       if (role === 'mod') {
-        return <span className="px-2 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase">🛡️ ผู้ดูแล (Mod)</span>;
+        return <span className="px-2 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase shrink-0">🛡️ Mod</span>;
       }
       return null;
     }
 
+    function TagBadgesList({ user, dark = false }) {
+      const tags = getUserTags(user);
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((t, i) => (
+            <span
+              key={i}
+              className={
+                dark
+                  ? 'px-2 py-0.5 rounded-full bg-[#050811] text-white border border-white/20 text-[10px] font-bold'
+                  : 'px-2 py-0.5 rounded-full bg-[#0F2547] border border-white/20 text-blue-100 text-[10px] font-semibold'
+              }
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    function FormattedMessageText({ text, currentUser }) {
+      if (!text) return null;
+      const regex = /(@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g;
+      const parts = text.split(regex);
+      const myTags = currentUser ? getUserTags(currentUser) : [];
+
+      return (
+        <p className="text-sm text-slate-100 mt-1.5 whitespace-pre-line leading-relaxed break-words">
+          {parts.map((part, idx) => {
+            if (!part.startsWith('@')) return <span key={idx}>{part}</span>;
+
+            const lower = part.toLowerCase();
+            let highlightMe = false;
+            if (currentUser) {
+              const isGlobalTag = lower === '@everyone' || (lower === '@here' && currentUser.isOnline);
+              const isMyCat = myTags.some(
+                (t) => part === '@[' + t + ']' || lower === '@' + t.toLowerCase()
+              );
+              const isDirectMe =
+                lower === '@' + String(currentUser.id).toLowerCase() ||
+                (currentUser.username && lower === '@' + currentUser.username.toLowerCase());
+              highlightMe = isGlobalTag || isMyCat || isDirectMe;
+            }
+
+            return (
+              <span
+                key={idx}
+                className={
+                  highlightMe
+                    ? 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-amber-400 text-[#050811] font-mono text-xs font-bold shadow'
+                    : 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#0F2547] border border-blue-400/50 text-blue-200 font-mono text-xs font-semibold'
+                }
+              >
+                {part}
+              </span>
+            );
+          })}
+        </p>
+      );
+    }
+
     function App() {
+      // Main Data States
       const [users, setUsers] = useState([INITIAL_OWNER_SEED]);
       const [posts, setPosts] = useState([]);
+      const [channels, setChannels] = useState(DEFAULT_GLOBAL_CHANNELS);
+      const [groups, setGroups] = useState([]);
+      const [chatMessages, setChatMessages] = useState([]);
+
       const [currentUser, setCurrentUser] = useState(null);
       const [dbErrorBanner, setDbErrorBanner] = useState('');
 
+      // Navigation: 'home' | 'feed' | 'members' | 'bookmarks' | 'chat' | 'admin' | 'login'
       const [currentView, setCurrentView] = useState('home');
       const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
       const [memberDirectoryTag, setMemberDirectoryTag] = useState('ALL');
       const [searchQuery, setSearchQuery] = useState('');
+      const [highlightedPostId, setHighlightedPostId] = useState(null);
+
+      // Modal ดูโปรไฟล์เต็มๆ ของสมาชิก (คลิกจากดาวบริวาร, โพสต์, หรือแถบรายชื่อในห้องแชต)
       const [selectedMemberModal, setSelectedMemberModal] = useState(null);
 
+      // Auth & Password Toggle & Remember Me States
       const [authMode, setAuthMode] = useState('signin');
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
+      const [showLoginPassword, setShowLoginPassword] = useState(false); // ปุ่มกดสลับดูรหัสผ่าน (Toggle)
+      const [rememberMe, setRememberMe] = useState(true); // ปุ่มล็อกอินค้างไว้
       const [authError, setAuthError] = useState('');
 
+      // Activate ID States
       const [activateIdInput, setActivateIdInput] = useState('');
       const [activateUsername, setActivateUsername] = useState('');
       const [activatePassword, setActivatePassword] = useState('');
+      const [showActivatePassword, setShowActivatePassword] = useState(false); // ปุ่มกดสลับดูรหัสผ่านตอนลงทะเบียน
       const [activateDisplayName, setActivateDisplayName] = useState('');
 
+      // Profile Edit & Social Links States
       const [isEditingProfile, setIsEditingProfile] = useState(false);
       const [editDisplayName, setEditDisplayName] = useState('');
       const [editBio, setEditBio] = useState('');
       const [editAvatarUrl, setEditAvatarUrl] = useState('');
+      const [editSocialLinks, setEditSocialLinks] = useState([]);
+      const [newSocialPlatform, setNewSocialPlatform] = useState('Instagram');
+      const [newSocialLabel, setNewSocialLabel] = useState('');
+      const [newSocialUrl, setNewSocialUrl] = useState('');
       const avatarInputRef = useRef(null);
 
+      // Create Post States
       const [isCreatingPost, setIsCreatingPost] = useState(false);
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
@@ -162,15 +318,55 @@
       const [attachmentUrlInput, setAttachmentUrlInput] = useState('');
       const [attachmentTypeInput, setAttachmentTypeInput] = useState('image');
       const postFileInputRef = useRef(null);
-
-      const [newMemberId, setNewMemberId] = useState('M001');
-      const [newMemberTag, setNewMemberTag] = useState('LCs & Pal');
-      const [copiedId, setCopiedId] = useState(null);
       const [commentInputs, setCommentInputs] = useState({});
 
+      // Admin Issue ID (รองรับหลายหมวดหมู่) & Edit Member Tags Modal
+      const [newMemberId, setNewMemberId] = useState('M001');
+      const [newMemberTags, setNewMemberTags] = useState(['LCs & Pal']);
+      const [customTagInput, setCustomTagInput] = useState('');
+      const [copiedId, setCopiedId] = useState(null);
+      const [editingTagsUser, setEditingTagsUser] = useState(null); // สมาชิกที่ Admin กำลังแก้ไขหมวดหมู่
+      const [editingTagsList, setEditingTagsList] = useState([]);
+      const [editingCustomTag, setEditingCustomTag] = useState('');
+
+      // ============================================================================
+      // CHAT STATES (The Blue Moon Comms V3)
+      // ============================================================================
+      const [activeRoom, setActiveRoom] = useState({ type: 'channel', id: 'global-lobby' });
+      const [openedDmPartners, setOpenedDmPartners] = useState([]); // เก็บรายชื่อคนที่กดทักแชตใหม่ในเซสชันนี้
+      const [isRightMemberDrawerOpen, setIsRightMemberDrawerOpen] = useState(true);
+      const [rightMemberTagFilter, setRightMemberTagFilter] = useState('ALL');
+
+      const [chatInputText, setChatInputText] = useState('');
+      const [chatPendingAttachments, setChatPendingAttachments] = useState([]);
+      const [isChatUrlAttachOpen, setIsChatUrlAttachOpen] = useState(false);
+      const [chatAttachUrlInput, setChatAttachUrlInput] = useState('');
+      const [chatAttachTypeInput, setChatAttachTypeInput] = useState('image');
+      const chatFileInputRef = useRef(null);
+
+      const [showMentionMenu, setShowMentionMenu] = useState(false);
+      const [mentionFilter, setMentionFilter] = useState('');
+
+      const [isCreateChannelOpen, setIsCreateChannelOpen] = useState(false);
+      const [newChannelName, setNewChannelName] = useState('');
+      const [newChannelIcon, setNewChannelIcon] = useState('💬');
+      const [newChannelDesc, setNewChannelDesc] = useState('');
+
+      const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+      const [newGroupName, setNewGroupName] = useState('');
+      const [selectedGroupMembers, setSelectedGroupMembers] = useState([]);
+
+      const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+      const [toastList, setToastList] = useState([]);
+      const messagesEndRef = useRef(null);
+
+      // ============================================================================
+      // 1. REALTIME SYNC กับ FIREBASE FIRESTORE
+      // ============================================================================
       useEffect(() => {
         if (!db) return;
 
+        // 1.1 Sync สมาชิก (bma_users)
         const unsubUsers = db.collection('bma_users').onSnapshot(
           async (snapshot) => {
             setDbErrorBanner('');
@@ -206,10 +402,11 @@
             }
           },
           (err) => {
-            setDbErrorBanner('แจ้งเตือน Firebase (' + err.code + '): กรุณาตรวจสอบว่าได้สร้าง Firestore Database (Start in test mode) แล้ว');
+            setDbErrorBanner('แจ้งเตือน Firebase (' + err.code + '): กรุณาตรวจสอบการตั้งค่า Firestore Database');
           }
         );
 
+        // 1.2 Sync โพสต์บล็อก (bma_posts)
         const unsubPosts = db.collection('bma_posts').onSnapshot(
           (snapshot) => {
             const loadedPosts = snapshot.docs.map((doc) => doc.data());
@@ -219,20 +416,123 @@
           (err) => console.error(err)
         );
 
+        // 1.3 Sync ห้อง Global Chat (bma_channels)
+        const unsubChannels = db.collection('bma_channels').onSnapshot(
+          async (snapshot) => {
+            if (snapshot.empty) {
+              try {
+                for (const ch of DEFAULT_GLOBAL_CHANNELS) {
+                  await db.collection('bma_channels').doc(ch.id).set(ch);
+                }
+              } catch (e) {}
+            } else {
+              const loadedCh = snapshot.docs.map((d) => d.data());
+              // รับประกันว่ามีห้อง lobby และ announcements เสมอ
+              const hasLobby = loadedCh.some((c) => c.id === 'global-lobby');
+              const hasAnnounce = loadedCh.some((c) => c.id === 'global-announce');
+              if (!hasLobby) await db.collection('bma_channels').doc('global-lobby').set(DEFAULT_GLOBAL_CHANNELS[0]);
+              if (!hasAnnounce) await db.collection('bma_channels').doc('global-announce').set(DEFAULT_GLOBAL_CHANNELS[1]);
+
+              loadedCh.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              setChannels(loadedCh);
+            }
+          },
+          (err) => console.error(err)
+        );
+
+        // 1.4 Sync กลุ่มแชตย่อย (bma_groups)
+        const unsubGroups = db.collection('bma_groups').onSnapshot(
+          (snapshot) => {
+            const loadedGrp = snapshot.docs.map((d) => d.data());
+            loadedGrp.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            setGroups(loadedGrp);
+          },
+          (err) => console.error(err)
+        );
+
+        // 1.5 Sync ข้อความแชตทั้งหมด (bma_messages)
+        const unsubMessages = db.collection('bma_messages').onSnapshot(
+          (snapshot) => {
+            const loadedMsgs = snapshot.docs.map((d) => d.data());
+            loadedMsgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            setChatMessages(loadedMsgs);
+          },
+          (err) => console.error(err)
+        );
+
         return () => {
           unsubUsers();
           unsubPosts();
+          unsubChannels();
+          unsubGroups();
+          unsubMessages();
         };
       }, []);
 
+      // ตรวจสอบการล็อกอินค้างไว้ (Remember Me Session) เมื่อโหลดรายชื่อสมาชิกเสร็จ
       useEffect(() => {
-        if (currentUser && users.length > 0) {
+        if (!currentUser && users.length > 0) {
+          const savedId =
+            localStorage.getItem('tbma_saved_user_id') ||
+            sessionStorage.getItem('tbma_session_user_id');
+          if (savedId) {
+            const found = users.find((u) => u.id === savedId && u.isActivated);
+            if (found) {
+              setCurrentUser(found);
+              if (db && !found.isOnline) {
+                db.collection('bma_users').doc(found.id).update({ isOnline: true }).catch(() => {});
+              }
+            }
+          }
+        } else if (currentUser && users.length > 0) {
           const latestMe = users.find((u) => u.id === currentUser.id);
           if (latestMe) setCurrentUser(latestMe);
         }
       }, [users]);
 
-      const handleSignIn = (e) => {
+      // เลื่อนแชตลงล่างสุดเมื่อมีข้อความใหม่ในห้องปัจจุบัน
+      const getDmRoomKey = (id1, id2) => {
+        const sorted = [id1, id2].sort();
+        return 'dm_' + sorted[0] + '_' + sorted[1];
+      };
+
+      const currentRoomKey =
+        currentUser && activeRoom.type === 'dm'
+          ? getDmRoomKey(currentUser.id, activeRoom.id)
+          : activeRoom.id;
+
+      useEffect(() => {
+        if (currentView === 'chat' && messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, [chatMessages, currentRoomKey, currentView]);
+
+      // ============================================================================
+      // 2. ระบบเข้าสู่ระบบ (พร้อมตัวเลือกล็อกอินค้างไว้ & ปุ่มดูรหัสผ่าน)
+      // ============================================================================
+      const saveLoginSession = (userObj, keepLoggedIn) => {
+        if (keepLoggedIn) {
+          localStorage.setItem('tbma_saved_user_id', userObj.id);
+          sessionStorage.removeItem('tbma_session_user_id');
+        } else {
+          sessionStorage.setItem('tbma_session_user_id', userObj.id);
+          localStorage.removeItem('tbma_saved_user_id');
+        }
+      };
+
+      const handleLogout = async () => {
+        if (currentUser && db) {
+          try {
+            await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false });
+          } catch (e) {}
+        }
+        localStorage.removeItem('tbma_saved_user_id');
+        sessionStorage.removeItem('tbma_session_user_id');
+        setCurrentUser(null);
+        setCurrentView('home');
+      };
+
+      const handleSignIn = async (e) => {
         e.preventDefault();
         setAuthError('');
         const found = users.find(
@@ -243,9 +543,17 @@
             u.password === loginPassword
         );
         if (found) {
-          setCurrentUser(found);
+          const onlineUser = { ...found, isOnline: true };
+          setCurrentUser(onlineUser);
+          saveLoginSession(onlineUser, rememberMe);
+          if (db) {
+            try {
+              await db.collection('bma_users').doc(found.id).update({ isOnline: true });
+            } catch (err) {}
+          }
           setLoginUsername('');
           setLoginPassword('');
+          setShowLoginPassword(false);
           setCurrentView('feed');
         } else {
           setAuthError('Username หรือ Password ไม่ถูกต้อง (หากเพิ่งได้รับรหัส เช่น M000 หรือ M001 กรุณากดแท็บ "เปิดใช้งาน Member ID" ด้านบน)');
@@ -289,6 +597,10 @@
           password: cleanPass,
           displayName: cleanName,
           isActivated: true,
+          isOnline: true,
+          socialLinks: targetAccount.socialLinks || [],
+          memberTags: getUserTags(targetAccount),
+          memberTag: getUserTags(targetAccount)[0] || 'Others',
           joinedAt: new Date().toISOString().split('T')[0]
         };
 
@@ -296,9 +608,11 @@
           if (db) await db.collection('bma_users').doc(targetAccount.id).set(updatedAccount);
           setUsers(users.map((u) => (u.id === targetAccount.id ? updatedAccount : u)));
           setCurrentUser(updatedAccount);
+          saveLoginSession(updatedAccount, rememberMe);
           setActivateIdInput('');
           setActivateUsername('');
           setActivatePassword('');
+          setShowActivatePassword(false);
           setActivateDisplayName('');
           setCurrentView('feed');
         } catch (err) {
@@ -306,12 +620,33 @@
         }
       };
 
+      // ============================================================================
+      // 3. ระบบ ADMIN: ออกรหัสหลายหมวดหมู่ & แก้ไขหมวดหมู่ย้อนหลังได้
+      // ============================================================================
+      const toggleNewMemberTagSelection = (tag) => {
+        if (newMemberTags.includes(tag)) {
+          if (newMemberTags.length > 1) {
+            setNewMemberTags(newMemberTags.filter((t) => t !== tag));
+          }
+        } else {
+          setNewMemberTags([...newMemberTags, tag]);
+        }
+      };
+
+      const handleAddCustomNewTag = () => {
+        const clean = customTagInput.trim();
+        if (!clean) return;
+        if (!newMemberTags.includes(clean)) {
+          setNewMemberTags([...newMemberTags, clean]);
+        }
+        setCustomTagInput('');
+      };
+
       const handleIssueNewId = async (e) => {
         e.preventDefault();
         if (!currentUser || currentUser.role !== 'admin') return;
         const cleanId = newMemberId.trim().toUpperCase();
-        const cleanTag = newMemberTag.trim();
-        if (!cleanId || !cleanTag) return;
+        if (!cleanId || newMemberTags.length === 0) return;
 
         if (users.some((u) => String(u.id).toUpperCase() === cleanId)) {
           alert('รหัส ' + cleanId + ' มีอยู่ในระบบแล้ว');
@@ -320,18 +655,59 @@
 
         const newSlot = {
           id: cleanId,
-          memberTag: cleanTag,
+          memberTag: newMemberTags[0],
+          memberTags: newMemberTags,
           role: 'member',
           isActivated: false,
+          isOnline: false,
           username: '',
           password: '',
           displayName: 'รออนุมัติตัวตน (' + cleanId + ')',
           bio: 'สมาชิกใหม่ (รอเจ้าตัวเข้ามากำหนด Username และโปรไฟล์)',
           avatarUrl: '',
+          socialLinks: [],
           joinedAt: new Date().toISOString().split('T')[0]
         };
 
         if (db) await db.collection('bma_users').doc(cleanId).set(newSlot);
+      };
+
+      // เปิดหน้าต่างแก้ไขหมวดหมู่ของสมาชิก (หลังจากออก ID ไปแล้ว)
+      const openEditTagsModal = (targetUser) => {
+        setEditingTagsUser(targetUser);
+        setEditingTagsList(getUserTags(targetUser));
+        setEditingCustomTag('');
+      };
+
+      const toggleEditingTagItem = (tag) => {
+        if (editingTagsList.includes(tag)) {
+          if (editingTagsList.length > 1) {
+            setEditingTagsList(editingTagsList.filter((t) => t !== tag));
+          }
+        } else {
+          setEditingTagsList([...editingTagsList, tag]);
+        }
+      };
+
+      const handleAddEditingCustomTag = () => {
+        const clean = editingCustomTag.trim();
+        if (!clean) return;
+        if (!editingTagsList.includes(clean)) {
+          setEditingTagsList([...editingTagsList, clean]);
+        }
+        setEditingCustomTag('');
+      };
+
+      const handleSaveEditedMemberTags = async (e) => {
+        e.preventDefault();
+        if (!editingTagsUser || editingTagsList.length === 0) return;
+        if (db) {
+          await db.collection('bma_users').doc(editingTagsUser.id).update({
+            memberTags: editingTagsList,
+            memberTag: editingTagsList[0]
+          });
+        }
+        setEditingTagsUser(null);
       };
 
       const handleToggleModerator = async (targetUser) => {
@@ -347,11 +723,12 @@
       };
 
       const handleCopyInviteId = (user) => {
+        const tagsStr = getUserTags(user).join(', ');
         const text =
           '[The Blue Moon Association]\nบัตรเชิญเข้าสู่สมาคมของคุณ:\n- Member ID: ' +
           user.id +
-          '\n- หมวดหมู่ (Tag): ' +
-          user.memberTag +
+          '\n- หมวดหมู่ (Tags): ' +
+          tagsStr +
           '\n\nวิธีเข้าใช้งานครั้งแรก:\n1. กดปุ่ม "เข้าสู่ระบบ / เปิดใช้งาน ID"\n2. เลือกแท็บ "เปิดใช้งาน Member ID"\n3. กรอกรหัส ' +
           user.id +
           ' เพื่อตั้ง Username และ Password ของคุณเอง';
@@ -360,21 +737,35 @@
         setTimeout(() => setCopiedId(null), 2500);
       };
 
-      const canManagePostOrComment = (authorId) => {
-        if (!currentUser) return false;
-        return currentUser.role === 'admin' || currentUser.role === 'mod' || currentUser.id === authorId;
+      // ============================================================================
+      // 4. ระบบโปรไฟล์ & ลิงก์ SOCIAL MEDIA / EXTERNAL LINKS
+      // ============================================================================
+      const openProfileEditor = () => {
+        if (!currentUser) return;
+        setEditDisplayName(currentUser.displayName);
+        setEditBio(currentUser.bio || '');
+        setEditAvatarUrl(currentUser.avatarUrl || '');
+        setEditSocialLinks(Array.isArray(currentUser.socialLinks) ? currentUser.socialLinks : []);
+        setNewSocialUrl('');
+        setNewSocialLabel('');
+        setIsEditingProfile(true);
       };
 
-      const handleDeletePost = async (postId) => {
-        if (!confirm('ยืนยันการลบโพสต์นี้?')) return;
-        if (db) await db.collection('bma_posts').doc(postId).delete();
+      const handleAddSocialLink = () => {
+        if (!newSocialUrl.trim()) return;
+        const newItem = {
+          id: 'soc-' + Date.now(),
+          platform: newSocialPlatform,
+          label: newSocialLabel.trim() || newSocialPlatform,
+          url: formatSafeUrl(newSocialUrl)
+        };
+        setEditSocialLinks([...editSocialLinks, newItem]);
+        setNewSocialUrl('');
+        setNewSocialLabel('');
       };
 
-      const handleDeleteComment = async (postId, commentId) => {
-        const targetPost = posts.find((p) => p.id === postId);
-        if (!targetPost) return;
-        const updatedComments = (targetPost.comments || []).filter((c) => c.id !== commentId);
-        if (db) await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
+      const handleRemoveSocialLink = (socId) => {
+        setEditSocialLinks(editSocialLinks.filter((s) => s.id !== socId));
       };
 
       const handleAvatarUpload = (e) => {
@@ -412,13 +803,17 @@
           ...currentUser,
           displayName: editDisplayName.trim(),
           bio: editBio.trim(),
-          avatarUrl: editAvatarUrl.trim()
+          avatarUrl: editAvatarUrl.trim(),
+          socialLinks: editSocialLinks
         };
         if (db) await db.collection('bma_users').doc(updatedUser.id).set(updatedUser);
         setCurrentUser(updatedUser);
         setIsEditingProfile(false);
       };
 
+      // ============================================================================
+      // 5. ระบบสร้างโพสต์บล็อก + ส่งแจ้งเตือนอัตโนมัติเข้าห้อง #announcements พร้อมปุ่มลิงก์ไปโพสต์ต้นทาง
+      // ============================================================================
       const handlePostFileSelect = (e) => {
         const files = Array.from(e.target.files || []);
         files.forEach((file) => {
@@ -467,8 +862,10 @@
         if (!currentUser) return;
         if (!newPostContent.trim() && !newPostTitle.trim() && newPostAttachments.length === 0) return;
 
+        const nowTs = Date.now();
+        const postId = 'post-' + nowTs;
         const postObj = {
-          id: 'post-' + Date.now(),
+          id: postId,
           authorId: currentUser.id,
           title: newPostTitle.trim(),
           content: newPostContent.trim(),
@@ -480,18 +877,70 @@
             hour: '2-digit',
             minute: '2-digit'
           }),
-          timestamp: Date.now(),
+          timestamp: nowTs,
           likes: [],
           bookmarks: [],
           comments: []
         };
 
-        if (db) await db.collection('bma_posts').doc(postObj.id).set(postObj);
+        // ข้อความแจ้งเตือนอัตโนมัติในห้อง #announcements (ไม่แท็กใคร และแนบ linkedPostId เพื่อให้กดไปดูโพสต์ต้นทางได้)
+        const announceMsgId = 'ann-' + nowTs;
+        const announceMsgObj = {
+          id: announceMsgId,
+          roomKey: 'global-announce',
+          senderId: currentUser.id,
+          text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่',
+          postTitle: postObj.title || (postObj.content ? postObj.content.slice(0, 60) : 'โพสต์แนบไฟล์สื่อ'),
+          linkedPostId: postId,
+          isSystemPostAlert: true,
+          time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: nowTs
+        };
+
+        if (db) {
+          await db.collection('bma_posts').doc(postId).set(postObj);
+          await db.collection('bma_messages').doc(announceMsgId).set(announceMsgObj);
+        }
+
         setNewPostTitle('');
         setNewPostContent('');
         setNewPostCategory('');
         setNewPostAttachments([]);
         setIsCreatingPost(false);
+      };
+
+      // กดปุ่มจากห้อง #announcements เพื่อกระโดดไปหาโพสต์ต้นทางบนเว็บ
+      const handleJumpToOriginPost = (postId) => {
+        setSelectedTagFilter('ALL');
+        setSearchQuery('');
+        setCurrentView('feed');
+        setHighlightedPostId(postId);
+        setTimeout(() => {
+          const el = document.getElementById('post-card-' + postId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 180);
+        setTimeout(() => {
+          setHighlightedPostId(null);
+        }, 4000);
+      };
+
+      const canManagePostOrComment = (authorId) => {
+        if (!currentUser) return false;
+        return currentUser.role === 'admin' || currentUser.role === 'mod' || currentUser.id === authorId;
+      };
+
+      const handleDeletePost = async (postId) => {
+        if (!confirm('ยืนยันการลบโพสต์นี้?')) return;
+        if (db) await db.collection('bma_posts').doc(postId).delete();
+      };
+
+      const handleDeleteComment = async (postId, commentId) => {
+        const targetPost = posts.find((p) => p.id === postId);
+        if (!targetPost) return;
+        const updatedComments = (targetPost.comments || []).filter((c) => c.id !== commentId);
+        if (db) await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
       };
 
       const toggleLike = async (postId) => {
@@ -544,26 +993,288 @@
         setCommentInputs({ ...commentInputs, [postId]: '' });
       };
 
+      // ============================================================================
+      // 6. ระบบแชต (The Blue Moon Comms V3)
+      // ============================================================================
+      const startDirectMessageWith = (targetMember) => {
+        if (!currentUser) {
+          setSelectedMemberModal(null);
+          setCurrentView('login');
+          return;
+        }
+        if (targetMember.id === currentUser.id) return;
+        if (!openedDmPartners.includes(targetMember.id)) {
+          setOpenedDmPartners([...openedDmPartners, targetMember.id]);
+        }
+        setSelectedMemberModal(null);
+        setActiveRoom({ type: 'dm', id: targetMember.id });
+        setCurrentView('chat');
+      };
+
+      const handleChatInputChange = (e) => {
+        const val = e.target.value;
+        setChatInputText(val);
+        const words = val.split(/\s+/);
+        const lastWord = words[words.length - 1] || '';
+        if (lastWord.startsWith('@')) {
+          setShowMentionMenu(true);
+          setMentionFilter(lastWord.slice(1).toLowerCase());
+        } else {
+          setShowMentionMenu(false);
+        }
+      };
+
+      const insertMentionTag = (tagToken) => {
+        const words = chatInputText.split(/\s+/);
+        const lastWord = words[words.length - 1] || '';
+        let newText = '';
+        if (lastWord.startsWith('@')) {
+          words[words.length - 1] = tagToken;
+          newText = words.join(' ') + ' ';
+        } else {
+          newText = (chatInputText ? chatInputText + ' ' : '') + tagToken + ' ';
+        }
+        setChatInputText(newText);
+        setShowMentionMenu(false);
+      };
+
+      const activatedMembers = users.filter((u) => u.isActivated);
+
+      // รวบรวมแท็กทั้งหมดที่มีในระบบ
+      const allAvailableTags = Array.from(
+        new Set([
+          ...PRESET_MEMBER_TAGS,
+          ...users.flatMap((u) => getUserTags(u))
+        ])
+      );
+
+      const getMentionSuggestions = () => {
+        const list = [
+          { token: '@everyone', label: '@everyone', sub: 'แจ้งเตือนสมาชิกทุกคนในห้อง', type: 'Global' },
+          { token: '@here', label: '@here', sub: 'แจ้งเตือนเฉพาะคนที่ออนไลน์อยู่ตอนนี้', type: 'Online' }
+        ];
+
+        allAvailableTags.forEach((t) => {
+          list.push({
+            token: '@[' + t + ']',
+            label: '@[' + t + ']',
+            sub: 'แท็กสมาชิกทุกคนในหมวดหมู่ ' + t,
+            type: 'หมวดหมู่ (Tag)'
+          });
+        });
+
+        activatedMembers.forEach((m) => {
+          list.push({
+            token: '@' + m.id,
+            label: '@' + m.id + ' (' + m.displayName + ')',
+            sub: 'Username: @' + m.username + ' • ' + getUserTags(m).join(', '),
+            type: 'Member ID',
+            searchExtra: (m.username || '').toLowerCase() + ' ' + m.displayName.toLowerCase()
+          });
+          if (m.username) {
+            list.push({
+              token: '@' + m.username,
+              label: '@' + m.username + ' (' + m.displayName + ')',
+              sub: 'ID: ' + m.id + ' • ' + getUserTags(m).join(', '),
+              type: 'Username',
+              searchExtra: String(m.id).toLowerCase() + ' ' + m.displayName.toLowerCase()
+            });
+          }
+        });
+
+        if (!mentionFilter) return list;
+        return list.filter(
+          (item) =>
+            item.label.toLowerCase().includes(mentionFilter) ||
+            item.sub.toLowerCase().includes(mentionFilter) ||
+            (item.searchExtra && item.searchExtra.includes(mentionFilter))
+        );
+      };
+
+      const handleChatFileSelect = (e) => {
+        const files = Array.from(e.target.files || []);
+        files.forEach((file) => {
+          if (file.size > 850 * 1024) {
+            alert('ไฟล์ "' + file.name + '" มีขนาดเกิน 850KB กรุณาใช้ไฟล์ขนาดเล็กลง หรือแนบเป็นลิงก์ URL แทนครับ');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            let fType = 'file';
+            if (file.type.startsWith('image/')) fType = 'image';
+            else if (file.type.startsWith('video/')) fType = 'video';
+            setChatPendingAttachments((prev) => [
+              ...prev,
+              {
+                id: 'att-' + Date.now() + Math.random().toString(36).slice(2, 5),
+                name: file.name,
+                type: fType,
+                url: reader.result,
+                size: (file.size / 1024).toFixed(1) + ' KB'
+              }
+            ]);
+          };
+          reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+      };
+
+      const handleAddChatUrlAttachment = () => {
+        if (!chatAttachUrlInput.trim()) return;
+        setChatPendingAttachments((prev) => [
+          ...prev,
+          {
+            id: 'att-' + Date.now(),
+            name: chatAttachUrlInput.split('/').pop() || 'Media Link',
+            type: chatAttachTypeInput,
+            url: chatAttachUrlInput.trim(),
+            size: 'External Link'
+          }
+        ]);
+        setChatAttachUrlInput('');
+        setIsChatUrlAttachOpen(false);
+      };
+
+      const activeChannelObj = activeRoom.type === 'channel' ? channels.find((c) => c.id === activeRoom.id) : null;
+      const activeGroupObj = activeRoom.type === 'group' ? groups.find((g) => g.id === activeRoom.id) : null;
+
+      const handleSendChatMessage = async (e) => {
+        e.preventDefault();
+        if (!currentUser) return;
+        if (!chatInputText.trim() && chatPendingAttachments.length === 0) return;
+        if (activeChannelObj && activeChannelObj.isSystemReadOnly) return;
+        if (activeGroupObj && activeGroupObj.isArchived) return;
+
+        const nowTs = Date.now();
+        const msgId = 'msg-' + nowTs;
+        const text = chatInputText.trim();
+
+        const newMsg = {
+          id: msgId,
+          roomKey: currentRoomKey,
+          senderId: currentUser.id,
+          receiverId: activeRoom.type === 'dm' ? activeRoom.id : null,
+          text,
+          attachments: chatPendingAttachments,
+          isSystemPostAlert: false,
+          time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: nowTs
+        };
+
+        if (db) {
+          await db.collection('bma_messages').doc(msgId).set(newMsg);
+        }
+
+        setChatInputText('');
+        setChatPendingAttachments([]);
+        setShowMentionMenu(false);
+      };
+
+      const handleCreateChannel = async (e) => {
+        e.preventDefault();
+        if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'mod')) return;
+        const cleanName = newChannelName.trim().toLowerCase().replace(/\s+/g, '-');
+        if (!cleanName) return;
+
+        const newCh = {
+          id: 'global-' + Date.now(),
+          name: cleanName,
+          icon: newChannelIcon || '💬',
+          desc: newChannelDesc.trim() || 'ห้องสนทนากลางของสมาคม',
+          createdBy: currentUser.id,
+          isProtected: false,
+          isSystemReadOnly: false,
+          timestamp: Date.now()
+        };
+
+        if (db) await db.collection('bma_channels').doc(newCh.id).set(newCh);
+        setActiveRoom({ type: 'channel', id: newCh.id });
+        setNewChannelName('');
+        setNewChannelDesc('');
+        setIsCreateChannelOpen(false);
+      };
+
+      const toggleSelectGroupMember = (memberId) => {
+        if (selectedGroupMembers.includes(memberId)) {
+          setSelectedGroupMembers(selectedGroupMembers.filter((id) => id !== memberId));
+        } else {
+          setSelectedGroupMembers([...selectedGroupMembers, memberId]);
+        }
+      };
+
+      const handleCreateGroup = async (e) => {
+        e.preventDefault();
+        if (!currentUser) return;
+        if (!newGroupName.trim() || selectedGroupMembers.length === 0) {
+          alert('กรุณาตั้งชื่อกลุ่มและเลือกสมาชิกอย่างน้อย 1 คนครับ');
+          return;
+        }
+
+        const allMembersInGroup = Array.from(new Set([currentUser.id, ...selectedGroupMembers]));
+        const newGrp = {
+          id: 'grp-' + Date.now(),
+          name: newGroupName.trim(),
+          members: allMembersInGroup,
+          createdBy: currentUser.id,
+          isArchived: false,
+          timestamp: Date.now()
+        };
+
+        if (db) await db.collection('bma_groups').doc(newGrp.id).set(newGrp);
+        setActiveRoom({ type: 'group', id: newGrp.id });
+        setNewGroupName('');
+        setSelectedGroupMembers([]);
+        setIsCreateGroupOpen(false);
+      };
+
+      const handleToggleArchiveGroup = async (groupObj) => {
+        if (!currentUser || !groupObj || groupObj.createdBy !== currentUser.id) return;
+        if (db) {
+          await db.collection('bma_groups').doc(groupObj.id).update({ isArchived: !groupObj.isArchived });
+        }
+      };
+
+      const handleConfirmDeleteRoom = async () => {
+        if (!deleteConfirmTarget || !currentUser || !db) return;
+
+        if (deleteConfirmTarget.roomType === 'channel') {
+          const targetCh = channels.find((c) => c.id === deleteConfirmTarget.id);
+          if (targetCh && !targetCh.isProtected && (currentUser.role === 'admin' || currentUser.role === 'mod')) {
+            await db.collection('bma_channels').doc(targetCh.id).delete();
+            setActiveRoom({ type: 'channel', id: 'global-lobby' });
+          }
+        } else if (deleteConfirmTarget.roomType === 'group') {
+          const targetGrp = groups.find((g) => g.id === deleteConfirmTarget.id);
+          if (targetGrp && targetGrp.createdBy === currentUser.id) {
+            await db.collection('bma_groups').doc(targetGrp.id).delete();
+            setActiveRoom({ type: 'channel', id: 'global-lobby' });
+          }
+        }
+        setDeleteConfirmTarget(null);
+      };
+
       const getAuthor = (authorId) => {
         return (
           users.find((u) => u.id === authorId) || {
             id: authorId,
             displayName: 'Member (' + authorId + ')',
             memberTag: 'Others',
+            memberTags: ['Others'],
             username: 'member',
             role: 'member',
-            avatarUrl: ''
+            avatarUrl: '',
+            socialLinks: []
           }
         );
       };
 
-      const allFilterTags = ['ALL', ...PRESET_MEMBER_TAGS];
-      const activatedMembers = users.filter((u) => u.isActivated);
+      const allFilterTags = ['ALL', ...allAvailableTags];
 
       const filteredPosts = posts.filter((post) => {
         const author = getAuthor(post.authorId);
+        const authorTags = getUserTags(author);
         const matchesBookmark = currentView === 'bookmarks' ? (post.bookmarks || []).includes(currentUser && currentUser.id) : true;
-        const matchesTag = selectedTagFilter === 'ALL' ? true : author.memberTag === selectedTagFilter;
+        const matchesTag = selectedTagFilter === 'ALL' ? true : authorTags.includes(selectedTagFilter);
         const matchesSearch =
           (post.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           (post.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -587,6 +1298,26 @@
         ];
       };
 
+      // คัดกรองเฉพาะคนที่เคยสนทนาส่วนตัว (DM) ด้วยเท่านั้น
+      const conversedDmMembers = currentUser
+        ? activatedMembers.filter((m) => {
+            if (m.id === currentUser.id) return false;
+            const rKey = getDmRoomKey(currentUser.id, m.id);
+            const hasHistory = chatMessages.some((msg) => msg.roomKey === rKey);
+            const isOpenedNow = openedDmPartners.includes(m.id) || (activeRoom.type === 'dm' && activeRoom.id === m.id);
+            return hasHistory || isOpenedNow;
+          })
+        : [];
+
+      const myGroups = currentUser ? groups.filter((g) => (g.members || []).includes(currentUser.id)) : [];
+      const currentRoomMessages = chatMessages.filter((m) => m.roomKey === currentRoomKey);
+      const activeDmPartner = activeRoom.type === 'dm' ? getAuthor(activeRoom.id) : null;
+      const isModOrAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod');
+
+      const filteredRightDrawerMembers = activatedMembers.filter((m) =>
+        rightMemberTagFilter === 'ALL' ? true : getUserTags(m).includes(rightMemberTagFilter)
+      );
+
       return (
         <div className="min-h-screen bg-[#050811] text-white flex flex-col">
           {dbErrorBanner && (
@@ -595,8 +1326,10 @@
             </div>
           )}
 
-          {/* NAVBAR */}
-          <header className="sticky top-0 z-40 bg-[#070C18]/90 backdrop-blur-md border-b border-[#1E3A5F]">
+          {/* ================================================================= */}
+          {/* TOP NAVBAR                                                        */}
+          {/* ================================================================= */}
+          <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F]">
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-3 text-left group">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-[#0F2547] to-[#050811] border border-white/40 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)]">
@@ -615,28 +1348,41 @@
               <nav className="hidden md:flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1">
                 <button
                   onClick={() => setCurrentView('home')}
-                  className={currentView === 'home' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                  className={currentView === 'home' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
                 >
-                  🪐 หน้าแรก (Orbit)
+                  🪐 หน้าแรก
                 </button>
                 <button
                   onClick={() => setCurrentView('feed')}
-                  className={currentView === 'feed' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                  className={currentView === 'feed' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
                 >
                   📝 กระดานโพสต์
                 </button>
                 <button
+                  onClick={() => {
+                    if (!currentUser) {
+                      setAuthMode('signin');
+                      setCurrentView('login');
+                    } else {
+                      setCurrentView('chat');
+                    }
+                  }}
+                  className={currentView === 'chat' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                >
+                  💬 ห้องแชตสมาคม
+                </button>
+                <button
                   onClick={() => setCurrentView('members')}
-                  className={currentView === 'members' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                  className={currentView === 'members' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
                 >
                   👥 สมาชิก ({activatedMembers.length})
                 </button>
                 {currentUser && currentUser.role === 'admin' && (
                   <button
                     onClick={() => setCurrentView('admin')}
-                    className={currentView === 'admin' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                    className={currentView === 'admin' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
                   >
-                    👑 จัดการรหัสสมาชิก (Owner)
+                    👑 จัดการรหัส (Owner)
                   </button>
                 )}
               </nav>
@@ -645,25 +1391,17 @@
                 {currentUser ? (
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => {
-                        setEditDisplayName(currentUser.displayName);
-                        setEditBio(currentUser.bio);
-                        setEditAvatarUrl(currentUser.avatarUrl || '');
-                        setIsEditingProfile(true);
-                      }}
+                      onClick={openProfileEditor}
                       className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B1325] border border-[#1E3A5F] hover:border-white/40"
                     >
-                      <Avatar user={currentUser} size="xs" />
+                      <Avatar user={currentUser} size="xs" showStatus={true} />
                       <span className="text-xs font-semibold hidden sm:inline max-w-[110px] truncate">
                         {currentUser.displayName}
                       </span>
                       <RoleBadge role={currentUser.role} />
                     </button>
                     <button
-                      onClick={() => {
-                        setCurrentUser(null);
-                        setCurrentView('home');
-                      }}
+                      onClick={handleLogout}
                       className="px-3 py-1.5 rounded-lg bg-[#050811] hover:bg-red-950/60 border border-[#1E3A5F] text-xs text-slate-300"
                     >
                       ออก
@@ -687,6 +1425,15 @@
             <div className="flex md:hidden items-center justify-around border-t border-[#1E3A5F] bg-[#050811] py-2 px-2 text-xs">
               <button onClick={() => setCurrentView('home')} className={currentView === 'home' ? 'text-white font-bold' : 'text-slate-400'}>🪐 หน้าแรก</button>
               <button onClick={() => setCurrentView('feed')} className={currentView === 'feed' ? 'text-white font-bold' : 'text-slate-400'}>📝 โพสต์</button>
+              <button
+                onClick={() => {
+                  if (!currentUser) setCurrentView('login');
+                  else setCurrentView('chat');
+                }}
+                className={currentView === 'chat' ? 'text-white font-bold' : 'text-slate-400'}
+              >
+                💬 แชต
+              </button>
               <button onClick={() => setCurrentView('members')} className={currentView === 'members' ? 'text-white font-bold' : 'text-slate-400'}>👥 สมาชิก</button>
               {currentUser && currentUser.role === 'admin' && (
                 <button onClick={() => setCurrentView('admin')} className={currentView === 'admin' ? 'text-white font-bold' : 'text-slate-400'}>👑 Owner</button>
@@ -694,7 +1441,9 @@
             </div>
           </header>
 
-          {/* VIEW 1: HOME ORBIT */}
+          {/* ================================================================= */}
+          {/* VIEW 1: HOME ORBIT                                                */}
+          {/* ================================================================= */}
           {currentView === 'home' && (
             <div className="relative flex-1 flex flex-col items-center justify-between py-8 px-4 overflow-hidden min-h-[calc(100vh-4rem)]">
               <div className="relative z-10 text-center space-y-2 max-w-xl">
@@ -705,7 +1454,7 @@
                   The Blue Moon Association
                 </h2>
                 <p className="text-xs md:text-sm text-slate-300">
-                  คลิกที่ดาวบริวารเพื่อดูข้อมูลสมาชิก หรือเลือกเข้าสู่กระดานโพสต์ด้านล่าง
+                  คลิกที่ดาวบริวารเพื่อดูโปรไฟล์สมาชิกและส่งข้อความ หรือเลือกเข้าสู่กระดานโพสต์ด้านล่าง
                 </p>
               </div>
 
@@ -743,12 +1492,14 @@
                         >
                           <button onClick={() => setSelectedMemberModal(member)} className="group flex flex-col items-center">
                             <div className="p-0.5 rounded-full bg-gradient-to-tr from-blue-500 to-white shadow-lg transition transform group-hover:scale-125">
-                              <Avatar user={member} size="md" />
+                              <Avatar user={member} size="md" showStatus={true} />
                             </div>
                             <div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] font-medium text-white whitespace-nowrap">
                               {member.displayName}
                             </div>
-                            <span className="text-[9px] font-mono text-blue-300">{member.memberTag}</span>
+                            <span className="text-[9px] font-mono text-blue-300">
+                              {getUserTags(member).join(', ')}
+                            </span>
                           </button>
                         </div>
                       );
@@ -757,7 +1508,7 @@
                 ))}
               </div>
 
-              <div className="relative z-20 flex flex-col sm:flex-row items-center gap-3 w-full max-w-md justify-center">
+              <div className="relative z-20 flex flex-col sm:flex-row items-center gap-3 w-full max-w-lg justify-center">
                 <button
                   onClick={() => setCurrentView('feed')}
                   className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-[#0F2547] hover:bg-[#163463] border border-white/25 text-white font-bold text-sm shadow-lg text-center"
@@ -766,10 +1517,10 @@
                 </button>
                 {currentUser ? (
                   <button
-                    onClick={() => setCurrentView('members')}
+                    onClick={() => setCurrentView('chat')}
                     className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shadow-lg text-center"
                   >
-                    👥 ดูทำเนียบสมาชิก
+                    💬 เข้าสู่ห้องแชตสมาคม
                   </button>
                 ) : (
                   <button
@@ -787,7 +1538,9 @@
             </div>
           )}
 
-          {/* VIEW 2: LOGIN & ACTIVATE ID */}
+          {/* ================================================================= */}
+          {/* VIEW 2: LOGIN & ACTIVATE ID (พร้อมปุ่มดูรหัสผ่าน Toggle & ล็อกอินค้างไว้) */}
+          {/* ================================================================= */}
           {currentView === 'login' && (
             <div className="flex-1 flex flex-col justify-center items-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-8 shadow-2xl">
@@ -829,15 +1582,38 @@
                     </div>
                     <div>
                       <label className="block text-xs uppercase text-slate-300 mb-1.5">Password</label>
-                      <input
-                        type="password"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
-                        required
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type={showLoginPassword ? 'text' : 'password'}
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl pl-4 pr-20 py-2.5 text-sm text-white outline-none"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword(!showLoginPassword)}
+                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold transition"
+                        >
+                          {showLoginPassword ? '🙈 ซ่อน' : '👁️ ดูรหัส'}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* ปุ่มกดเลือกการล็อกอินค้างไว้ */}
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-[#1E3A5F] bg-[#050811]"
+                      />
+                      <span className="text-xs text-slate-300">
+                        จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)
+                      </span>
+                    </label>
+
                     {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
                     <button type="submit" className="w-full bg-white text-[#050811] hover:bg-slate-200 font-bold py-2.5 rounded-xl text-sm shadow-lg">
                       เข้าสู่ระบบ (Sign In)
@@ -883,15 +1659,37 @@
                     </div>
                     <div>
                       <label className="block text-xs uppercase text-slate-300 mb-1">ตั้ง Password ของคุณเอง *</label>
-                      <input
-                        type="password"
-                        value={activatePassword}
-                        onChange={(e) => setActivatePassword(e.target.value)}
-                        placeholder="ตั้งรหัสผ่าน..."
-                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
-                        required
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type={showActivatePassword ? 'text' : 'password'}
+                          value={activatePassword}
+                          onChange={(e) => setActivatePassword(e.target.value)}
+                          placeholder="ตั้งรหัสผ่าน..."
+                          className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl pl-4 pr-20 py-2.5 text-sm text-white outline-none"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowActivatePassword(!showActivatePassword)}
+                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold transition"
+                        >
+                          {showActivatePassword ? '🙈 ซ่อน' : '👁️ ดูรหัส'}
+                        </button>
+                      </div>
                     </div>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-[#1E3A5F] bg-[#050811]"
+                      />
+                      <span className="text-xs text-slate-300">
+                        จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)
+                      </span>
+                    </label>
+
                     {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
                     <button type="submit" className="w-full bg-white text-[#050811] hover:bg-slate-200 font-bold py-2.5 rounded-xl text-sm shadow-lg">
                       ยืนยันและสร้างบัญชีสมาชิก
@@ -902,13 +1700,15 @@
             </div>
           )}
 
-          {/* VIEW 3: MEMBERS DIRECTORY */}
+          {/* ================================================================= */}
+          {/* VIEW 3: MEMBERS DIRECTORY                                         */}
+          {/* ================================================================= */}
           {currentView === 'members' && (
             <div className="max-w-7xl mx-auto w-full px-4 py-8 space-y-6 flex-1">
               <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-white">ทำเนียบสมาชิก The Blue Moon Association</h2>
-                  <p className="text-xs text-slate-300 mt-1">แสดงโปรไฟล์ของสมาชิกทั้งหมดแยกตามหมวดหมู่</p>
+                  <p className="text-xs text-slate-300 mt-1">คลิกที่การ์ดสมาชิกเพื่อดูโปรไฟล์เต็ม ลิงก์ Social Media หรือส่งข้อความส่วนตัว</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {allFilterTags.map((tag) => (
@@ -917,7 +1717,9 @@
                       onClick={() => setMemberDirectoryTag(tag)}
                       className={memberDirectoryTag === tag ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold border bg-white text-[#050811] border-white' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold border bg-[#050811] text-slate-300 border-[#1E3A5F] hover:bg-[#0F2547]'}
                     >
-                      {tag === 'ALL' ? 'ดูรวมทั้งหมด (' + activatedMembers.length + ')' : tag + ' (' + activatedMembers.filter((u) => u.memberTag === tag).length + ')'}
+                      {tag === 'ALL'
+                        ? 'ดูรวมทั้งหมด (' + activatedMembers.length + ')'
+                        : tag + ' (' + activatedMembers.filter((u) => getUserTags(u).includes(tag)).length + ')'}
                     </button>
                   ))}
                 </div>
@@ -925,31 +1727,50 @@
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {activatedMembers
-                  .filter((u) => (memberDirectoryTag === 'ALL' ? true : u.memberTag === memberDirectoryTag))
+                  .filter((u) => (memberDirectoryTag === 'ALL' ? true : getUserTags(u).includes(memberDirectoryTag)))
                   .map((member) => {
                     const count = posts.filter((p) => p.authorId === member.id).length;
                     return (
-                      <div key={member.id} className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between">
+                      <div
+                        key={member.id}
+                        onClick={() => setSelectedMemberModal(member)}
+                        className="cursor-pointer bg-[#0B1325] border border-[#1E3A5F] hover:border-white/50 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition"
+                      >
                         <div>
-                          <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3 border-b border-[#1E3A5F] flex items-center justify-between">
+                          <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3 border-b border-[#1E3A5F] flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-xs font-bold text-white">{member.id}</span>
                               <RoleBadge role={member.role} />
                             </div>
-                            <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold">{member.memberTag}</span>
+                            <TagBadgesList user={member} />
                           </div>
                           <div className="p-5 flex items-start gap-4">
-                            <Avatar user={member} size="lg" />
+                            <Avatar user={member} size="lg" showStatus={true} />
                             <div className="min-w-0 flex-1">
                               <h3 className="text-base font-bold text-white truncate">{member.displayName}</h3>
                               <p className="text-xs font-mono text-slate-400">@{member.username}</p>
-                              <p className="text-xs text-slate-200 mt-2.5 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">{member.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}</p>
+                              <p className="text-xs text-slate-200 mt-2.5 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] line-clamp-2">
+                                {member.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}
+                              </p>
+                              {member.socialLinks && member.socialLinks.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                  {member.socialLinks.map((soc) => (
+                                    <span
+                                      key={soc.id}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#050811] border border-[#1E3A5F] text-[10px] text-blue-200"
+                                    >
+                                      <span>{getSocialIcon(soc.platform)}</span>
+                                      <span className="truncate max-w-[90px]">{soc.label}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
                         <div className="px-5 py-3 bg-[#050811]/60 border-t border-[#1E3A5F] flex items-center justify-between text-[11px] text-slate-400">
                           <span>เข้าร่วม: {member.joinedAt}</span>
-                          <span>โพสต์: {count}</span>
+                          <span>โพสต์: {count} • คลิกดูโปรไฟล์</span>
                         </div>
                       </div>
                     );
@@ -958,46 +1779,605 @@
             </div>
           )}
 
-          {/* VIEW 4 & 5: FEED & OWNER ADMIN */}
+          {/* ================================================================= */}
+          {/* VIEW 4: CHAT SYSTEM (The Blue Moon Comms V3)                      */}
+          {/* ================================================================= */}
+          {currentView === 'chat' && (
+            <div className="flex-1 flex overflow-hidden h-[calc(100vh-4rem)]">
+              {/* LEFT SIDEBAR: Global Channels + Group Chats + Conversed DMs Only */}
+              <aside className="w-64 md:w-72 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 overflow-y-auto">
+                {/* 1. Global Channels */}
+                <div className="p-3 border-b border-[#1E3A5F]">
+                  <div className="px-1 mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">แชตรวม (Global)</span>
+                    {isModOrAdmin && (
+                      <button
+                        onClick={() => setIsCreateChannelOpen(true)}
+                        className="px-2 py-0.5 rounded bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[10px] font-bold text-sky-300 transition"
+                      >
+                        + สร้างห้อง
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {channels.map((ch) => {
+                      const isSelected = activeRoom.type === 'channel' && activeRoom.id === ch.id;
+                      return (
+                        <div key={ch.id} className="flex items-center gap-1">
+                          <button
+                            onClick={() => setActiveRoom({ type: 'channel', id: ch.id })}
+                            className={
+                              isSelected
+                                ? 'flex-1 flex items-center justify-between px-3 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs shadow min-w-0'
+                                : 'flex-1 flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-[#0F2547] text-xs min-w-0'
+                            }
+                          >
+                            <span className="truncate">{ch.icon} # {ch.name}</span>
+                          </button>
+                          {isModOrAdmin && !ch.isProtected && (
+                            <button
+                              onClick={() => setDeleteConfirmTarget({ roomType: 'channel', id: ch.id, name: '#' + ch.name })}
+                              className="p-2 rounded-xl text-slate-500 hover:text-red-400 hover:bg-[#0B1325] text-xs shrink-0"
+                              title="ลบห้อง Global นี้"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Group Chats */}
+                <div className="p-3 border-b border-[#1E3A5F]">
+                  <div className="px-1 mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">กลุ่มแชต (Groups)</span>
+                    <button
+                      onClick={() => {
+                        setSelectedGroupMembers([]);
+                        setIsCreateGroupOpen(true);
+                      }}
+                      className="px-2 py-0.5 rounded bg-white text-[#050811] hover:bg-slate-200 text-[10px] font-bold transition"
+                    >
+                      + สร้างกลุ่ม
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {myGroups.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 px-2 py-1">ยังไม่มีกลุ่มแชต</p>
+                    ) : (
+                      myGroups.map((grp) => {
+                        const isSelected = activeRoom.type === 'group' && activeRoom.id === grp.id;
+                        return (
+                          <button
+                            key={grp.id}
+                            onClick={() => setActiveRoom({ type: 'group', id: grp.id })}
+                            className={
+                              isSelected
+                                ? 'w-full flex items-center justify-between px-3 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs shadow'
+                                : 'w-full flex items-center justify-between px-3 py-2 rounded-xl text-slate-300 hover:bg-[#0F2547] text-xs'
+                            }
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span>{grp.isArchived ? '📦' : '👥'}</span>
+                              <span className="truncate">{grp.name}</span>
+                            </div>
+                            {grp.isArchived ? (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[9px] shrink-0">Archived</span>
+                            ) : (
+                              <span className="text-[10px] font-mono opacity-75 shrink-0">{(grp.members || []).length} คน</span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Direct Messages (แสดงเฉพาะคนที่เคยสนทนาด้วยเท่านั้น) */}
+                <div className="p-3 flex-1">
+                  <div className="px-1 mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      แชตส่วนตัว (ที่เคยคุย)
+                    </span>
+                  </div>
+                  {conversedDmMembers.length === 0 ? (
+                    <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-400 leading-relaxed">
+                      ยังไม่มีประวัติการสนทนาส่วนตัว คลิกที่ชื่อสมาชิกในแถบด้านขวาเพื่อดูโปรไฟล์และส่งข้อความแรกได้เลย
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {conversedDmMembers.map((member) => {
+                        const isSelected = activeRoom.type === 'dm' && activeRoom.id === member.id;
+                        const rKey = getDmRoomKey(currentUser.id, member.id);
+                        const msgs = chatMessages.filter((m) => m.roomKey === rKey);
+                        const lastMsg = msgs[msgs.length - 1];
+
+                        return (
+                          <button
+                            key={member.id}
+                            onClick={() => setActiveRoom({ type: 'dm', id: member.id })}
+                            className={
+                              isSelected
+                                ? 'w-full flex items-center gap-2.5 p-2 rounded-xl bg-white text-[#050811] text-left shadow'
+                                : 'w-full flex items-center gap-2.5 p-2 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'
+                            }
+                          >
+                            <Avatar user={member} size="sm" showStatus={true} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold truncate">{member.displayName}</span>
+                                <span className="font-mono text-[10px] opacity-80">{member.id}</span>
+                              </div>
+                              <div className="text-[10px] opacity-70 truncate">
+                                {lastMsg ? lastMsg.text : 'เริ่มการสนทนา...'}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </aside>
+
+              {/* CENTER CHAT ROOM */}
+              <main className="flex-1 flex flex-col bg-[#050811] min-w-0 relative">
+                {/* Chat Room Header */}
+                <div className="h-16 px-4 md:px-6 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-3 shrink-0">
+                  <div className="min-w-0 flex-1">
+                    {activeRoom.type === 'channel' && activeChannelObj && (
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{activeChannelObj.icon}</span>
+                          <h2 className="text-sm md:text-base font-bold text-white truncate"># {activeChannelObj.name}</h2>
+                          {activeChannelObj.isProtected && (
+                            <span className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-[10px] text-slate-300">🔒 ห้องหลัก</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 truncate">{activeChannelObj.desc}</p>
+                      </div>
+                    )}
+
+                    {activeRoom.type === 'group' && activeGroupObj && (
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{activeGroupObj.isArchived ? '📦' : '👥'}</span>
+                          <h2 className="text-sm md:text-base font-bold text-white truncate">{activeGroupObj.name}</h2>
+                          {activeGroupObj.isArchived && (
+                            <span className="px-2 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold">Archived (อ่านอย่างเดียว)</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono truncate">
+                          ผู้สร้าง: {activeGroupObj.createdBy} • สมาชิก {(activeGroupObj.members || []).length} คน
+                        </p>
+                      </div>
+                    )}
+
+                    {activeRoom.type === 'dm' && activeDmPartner && (
+                      <div
+                        onClick={() => setSelectedMemberModal(activeDmPartner)}
+                        className="flex items-center gap-3 cursor-pointer"
+                      >
+                        <Avatar user={activeDmPartner} size="sm" showStatus={true} />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-sm md:text-base font-bold text-white hover:underline">{activeDmPartner.displayName}</h2>
+                            <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{activeDmPartner.id}</span>
+                          </div>
+                          <p className="text-xs text-slate-400 font-mono">@{activeDmPartner.username} • คลิกเพื่อดูโปรไฟล์เต็ม</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ปุ่มจัดการห้อง & ปุ่มย่อ/เรียกคืนหน้าต่างสมาชิกด้านขวา */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {activeRoom.type === 'channel' && activeChannelObj && isModOrAdmin && !activeChannelObj.isProtected && (
+                      <button
+                        onClick={() => setDeleteConfirmTarget({ roomType: 'channel', id: activeChannelObj.id, name: '#' + activeChannelObj.name })}
+                        className="px-3 py-1.5 rounded-xl bg-red-950/70 hover:bg-red-800 border border-red-500/40 text-xs font-bold text-red-200"
+                      >
+                        🗑️ ลบห้อง
+                      </button>
+                    )}
+
+                    {activeRoom.type === 'group' && activeGroupObj && currentUser && activeGroupObj.createdBy === currentUser.id && (
+                      <>
+                        <button
+                          onClick={() => handleToggleArchiveGroup(activeGroupObj)}
+                          className={
+                            activeGroupObj.isArchived
+                              ? 'px-3 py-1.5 rounded-xl bg-amber-400 text-[#050811] font-bold text-xs'
+                              : 'px-3 py-1.5 rounded-xl bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/25 text-xs font-semibold text-white'
+                          }
+                        >
+                          {activeGroupObj.isArchived ? '🔓 ยกเลิก Archive' : '📦 Archive'}
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmTarget({ roomType: 'group', id: activeGroupObj.id, name: activeGroupObj.name })}
+                          className="px-3 py-1.5 rounded-xl bg-red-950/70 hover:bg-red-800 border border-red-500/40 text-xs font-bold text-red-200"
+                        >
+                          🗑️ ลบกลุ่ม
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => setIsRightMemberDrawerOpen(!isRightMemberDrawerOpen)}
+                      className={
+                        isRightMemberDrawerOpen
+                          ? 'px-3 py-1.5 rounded-xl bg-white text-[#050811] font-bold text-xs shadow'
+                          : 'px-3 py-1.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-slate-200 font-semibold text-xs'
+                      }
+                    >
+                      {isRightMemberDrawerOpen ? '👥 ซ่อนสมาชิก →' : '← 👥 สมาชิก (' + activatedMembers.length + ')'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chat Messages Feed */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  {currentRoomMessages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 space-y-2">
+                      <div className="text-3xl">💬</div>
+                      <p className="text-sm font-bold text-white">ยังไม่มีข้อความในห้องนี้</p>
+                      <p className="text-xs max-w-xs">เริ่มต้นส่งข้อความ รูปภาพ วิดีโอ หรือไฟล์เอกสารได้เลย</p>
+                    </div>
+                  ) : (
+                    currentRoomMessages.map((msg) => {
+                      // กรณีข้อความแจ้งเตือนโพสต์ใหม่ในห้อง #announcements (พร้อมปุ่มกดไปหาโพสต์ต้นทาง)
+                      if (msg.isSystemPostAlert) {
+                        const postAuthor = getAuthor(msg.senderId);
+                        return (
+                          <div
+                            key={msg.id}
+                            className="p-4 rounded-2xl bg-[#0B1325] border border-[#1E3A5F] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <Avatar user={postAuthor} size="md" showStatus={true} />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-[10px] font-bold text-blue-200">
+                                    📝 แจ้งเตือนโพสต์ใหม่
+                                  </span>
+                                  <span className="text-[11px] font-mono text-slate-400">{msg.time}</span>
+                                </div>
+                                <p className="text-sm font-bold text-white mt-1">{msg.text}</p>
+                                {msg.postTitle && (
+                                  <p className="text-xs text-slate-300 mt-0.5 truncate">หัวข้อ: "{msg.postTitle}"</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {msg.linkedPostId && (
+                              <button
+                                onClick={() => handleJumpToOriginPost(msg.linkedPostId)}
+                                className="px-4 py-2 rounded-xl bg-white text-[#050811] hover:bg-slate-200 text-xs font-bold shrink-0 shadow transition"
+                              >
+                                🔗 เปิดดูโพสต์ต้นทาง →
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const sender = getAuthor(msg.senderId);
+                      return (
+                        <div key={msg.id} className="flex items-start gap-3.5">
+                          <div onClick={() => setSelectedMemberModal(sender)} className="cursor-pointer">
+                            <Avatar user={sender} size="md" showStatus={true} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                onClick={() => setSelectedMemberModal(sender)}
+                                className="text-xs font-bold text-white cursor-pointer hover:underline"
+                              >
+                                {sender.displayName}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{sender.id}</span>
+                              <span className="text-[10px] font-mono text-slate-400">@{sender.username}</span>
+                              <TagBadgesList user={sender} />
+                              <RoleBadge role={sender.role} />
+                              <span className="text-[10px] font-mono text-slate-500">{msg.time}</span>
+                            </div>
+
+                            <FormattedMessageText text={msg.text} currentUser={currentUser} />
+
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className="mt-2.5 space-y-2 max-w-md">
+                                {msg.attachments.map((att) => {
+                                  if (att.type === 'image') {
+                                    return (
+                                      <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325]">
+                                        <img src={att.url} alt={att.name} className="max-h-72 w-auto object-contain" />
+                                      </div>
+                                    );
+                                  }
+                                  if (att.type === 'video') {
+                                    return (
+                                      <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black">
+                                        <video src={att.url} controls className="max-h-72 w-full" />
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <a
+                                      key={att.id}
+                                      href={att.url}
+                                      download={att.name}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="flex items-center justify-between p-3 rounded-xl bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
+                                    >
+                                      <span className="truncate font-semibold">📎 {att.name} ({att.size})</span>
+                                      <span className="px-2.5 py-1 rounded bg-white text-[#050811] font-bold text-[10px] shrink-0 ml-2">ดาวน์โหลด</span>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* POPUP MENU: @Mention */}
+                {showMentionMenu && (
+                  <div className="absolute bottom-24 left-6 right-6 max-w-md bg-[#0B1325] border-2 border-white/40 rounded-2xl shadow-2xl p-3 z-40">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1E3A5F] text-xs">
+                      <span className="font-bold text-white">@ เลือกแท็กแจ้งเตือน</span>
+                      <button onClick={() => setShowMentionMenu(false)} className="text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                      {getMentionSuggestions().map((item, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => insertMentionTag(item.token)}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[#0F2547] text-left"
+                        >
+                          <div>
+                            <div className="text-xs font-mono font-bold text-white">{item.label}</div>
+                            <div className="text-[10px] text-slate-400">{item.sub}</div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-[10px] text-blue-300">{item.type}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Chat Input Area */}
+                {activeChannelObj && activeChannelObj.isSystemReadOnly ? (
+                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">
+                      <span>📢</span>
+                      <span>ห้อง <strong className="text-white">#announcements</strong> สำหรับแจ้งเตือนโพสต์ใหม่อัตโนมัติเท่านั้น (ไม่อนุญาตให้พิมพ์)</span>
+                    </div>
+                  </div>
+                ) : activeGroupObj && activeGroupObj.isArchived ? (
+                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#050811] border border-amber-400/40 text-xs text-amber-200">
+                      <span>📦</span>
+                      <span>กลุ่มแชตนี้ถูกเก็บเข้ากรุ (Archived - โหมดอ่านอย่างเดียว)</span>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSendChatMessage} className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2.5">
+                    {chatPendingAttachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pb-1">
+                        {chatPendingAttachments.map((att) => (
+                          <div key={att.id} className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#050811] border border-[#1E3A5F] text-xs">
+                            <span className="truncate max-w-[180px]">[{att.type.toUpperCase()}] {att.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setChatPendingAttachments(chatPendingAttachments.filter((a) => a.id !== att.id))}
+                              className="text-red-400 font-bold"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {isChatUrlAttachOpen && (
+                      <div className="flex flex-col sm:flex-row gap-2 p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                        <select
+                          value={chatAttachTypeInput}
+                          onChange={(e) => setChatAttachTypeInput(e.target.value)}
+                          className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-2 py-1 text-xs text-white outline-none"
+                        >
+                          <option value="image">รูปภาพ (URL)</option>
+                          <option value="video">วิดีโอ (MP4/URL)</option>
+                          <option value="file">ไฟล์เอกสาร (URL)</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={chatAttachUrlInput}
+                          onChange={(e) => setChatAttachUrlInput(e.target.value)}
+                          placeholder="วางลิงก์รูปภาพ, วิดีโอ หรือไฟล์..."
+                          className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-1 text-xs text-white outline-none"
+                        />
+                        <button type="button" onClick={handleAddChatUrlAttachment} className="px-3 py-1 rounded-lg bg-white text-[#050811] text-xs font-bold">
+                          แนบลิงก์
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <input type="file" multiple ref={chatFileInputRef} onChange={handleChatFileSelect} className="hidden" />
+                      <button
+                        type="button"
+                        onClick={() => chatFileInputRef.current && chatFileInputRef.current.click()}
+                        className="px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-slate-200 font-medium"
+                      >
+                        📎 แนบรูป/วิดีโอ/ไฟล์
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsChatUrlAttachOpen(!isChatUrlAttachOpen)}
+                        className="px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-slate-200 font-medium"
+                      >
+                        🔗 แนบลิงก์สื่อ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMentionMenu(!showMentionMenu);
+                          setMentionFilter('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-white font-bold transition"
+                      >
+                        @ แท็กสมาชิก / หมวดหมู่ / everyone
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={chatInputText}
+                        onChange={handleChatInputChange}
+                        placeholder="พิมพ์ข้อความ... (พิมพ์ @ เพื่อแท็ก everyone, here, หมวดหมู่, username หรือ ID)"
+                        className="flex-1 bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none"
+                      />
+                      <button type="submit" className="px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shrink-0 shadow-lg">
+                        ส่ง
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </main>
+
+              {/* RIGHT COLLAPSIBLE DRAWER: คลิกที่สมาชิกเพื่อดูโปรไฟล์เต็ม + ส่งข้อความแรกได้ */}
+              {isRightMemberDrawerOpen && (
+                <aside className="w-72 md:w-80 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0">
+                  <div className="p-4 border-b border-[#1E3A5F] flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+                        👥 สมาชิกสมาคม ({activatedMembers.length})
+                      </h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        คลิกที่สมาชิกเพื่อดูโปรไฟล์เต็มและส่งข้อความ
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsRightMemberDrawerOpen(false)}
+                      className="px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs text-slate-300"
+                    >
+                      ย่อเก็บ ✕
+                    </button>
+                  </div>
+
+                  <div className="p-3 border-b border-[#1E3A5F] flex flex-wrap gap-1">
+                    {allFilterTags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => setRightMemberTagFilter(tag)}
+                        className={
+                          rightMemberTagFilter === tag
+                            ? 'px-2.5 py-1 rounded-full text-[10px] font-bold bg-white text-[#050811]'
+                            : 'px-2.5 py-1 rounded-full text-[10px] bg-[#050811] text-slate-300 border border-[#1E3A5F] hover:bg-[#0F2547]'
+                        }
+                      >
+                        {tag === 'ALL' ? 'ทั้งหมด' : tag}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                    {filteredRightDrawerMembers.map((m) => (
+                      <div
+                        key={m.id}
+                        onClick={() => setSelectedMemberModal(m)}
+                        className="p-3 rounded-xl bg-[#0B1325] border border-[#1E3A5F] hover:border-white/50 cursor-pointer transition"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Avatar user={m} size="md" showStatus={true} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-mono text-[11px] font-bold text-white">{m.id}</span>
+                              <span className={'text-[10px] font-semibold ' + (m.isOnline ? 'text-emerald-400' : 'text-slate-500')}>
+                                {m.isOnline ? '● Online' : '○ Offline'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-xs font-bold text-white truncate">{m.displayName}</span>
+                              <RoleBadge role={m.role} />
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-400 mb-1.5">@{m.username}</div>
+                            <TagBadgesList user={m} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </aside>
+              )}
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* VIEW 5 & 6: FEED & OWNER ADMIN                                    */}
+          {/* ================================================================= */}
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
               <aside className="lg:col-span-4 xl:col-span-3 space-y-6">
                 {currentUser ? (
                   <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl overflow-hidden shadow-xl">
-                    <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between">
+                    <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-bold text-white">{currentUser.id}</span>
                         <RoleBadge role={currentUser.role} />
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[11px] font-bold">{currentUser.memberTag}</span>
+                      <TagBadgesList user={currentUser} />
                     </div>
                     <div className="p-5">
                       <div className="flex items-center gap-3.5">
-                        <Avatar user={currentUser} size="lg" />
+                        <Avatar user={currentUser} size="lg" showStatus={true} />
                         <div className="min-w-0 flex-1">
                           <h2 className="text-base font-bold text-white truncate">{currentUser.displayName}</h2>
                           <p className="text-xs font-mono text-slate-400 truncate">@{currentUser.username}</p>
                           <button
-                            onClick={() => {
-                              setEditDisplayName(currentUser.displayName);
-                              setEditBio(currentUser.bio);
-                              setEditAvatarUrl(currentUser.avatarUrl || '');
-                              setIsEditingProfile(true);
-                            }}
+                            onClick={openProfileEditor}
                             className="mt-2 px-3 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[11px] font-semibold text-white"
                           >
-                            ✎ ตั้งค่ารูป / ชื่อ / Bio
+                            ✎ ตั้งค่าโปรไฟล์ / โซเชียล
                           </button>
                         </div>
                       </div>
-                      <div className="mt-4 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">{currentUser.bio}</div>
+                      <div className="mt-4 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">
+                        {currentUser.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}
+                      </div>
+                      {currentUser.socialLinks && currentUser.socialLinks.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {currentUser.socialLinks.map((soc) => (
+                            <a
+                              key={soc.id}
+                              href={soc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-blue-200 transition"
+                            >
+                              <span>{getSocialIcon(soc.platform)}</span>
+                              <span className="truncate max-w-[120px]">{soc.label}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-5 text-center space-y-3">
                     <div className="text-2xl">👁️</div>
                     <h3 className="text-sm font-bold text-white">โหมดผู้มาเยือน (Guest Mode)</h3>
-                    <p className="text-xs text-slate-300">หากได้รับ Member ID แล้ว กดปุ่มด้านล่างเพื่อเปิดใช้งานบัญชีและร่วมโพสต์ได้ทันที</p>
+                    <p className="text-xs text-slate-300">หากได้รับ Member ID แล้ว กดปุ่มด้านล่างเพื่อเปิดใช้งานบัญชีและร่วมโพสต์หรือแชตได้ทันที</p>
                     <button
                       onClick={() => { setAuthMode('signin'); setCurrentView('login'); }}
                       className="w-full py-2 rounded-xl bg-white text-[#050811] font-bold text-xs"
@@ -1014,6 +2394,16 @@
                   >
                     <span>📝 กระดานโพสต์ทั้งหมด</span>
                     <span>{posts.length}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!currentUser) setCurrentView('login');
+                      else setCurrentView('chat');
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]"
+                  >
+                    <span>💬 ห้องแชตสมาคม</span>
+                    <span>Comms</span>
                   </button>
                   <button
                     onClick={() => setCurrentView('members')}
@@ -1036,7 +2426,7 @@
                       onClick={() => setCurrentView('admin')}
                       className={currentView === 'admin' ? 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold bg-white text-[#050811]' : 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]'}
                     >
-                      <span>👑 ออกรหัส & ตั้งผู้ดูแล</span>
+                      <span>👑 ออกรหัส & จัดการสมาชิก</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-[#050811] font-bold">Owner</span>
                     </button>
                   )}
@@ -1046,45 +2436,71 @@
               <main className="lg:col-span-8 xl:col-span-9 space-y-6">
                 {currentView === 'admin' && currentUser && currentUser.role === 'admin' ? (
                   <div className="space-y-6">
+                    {/* ออกรหัสสมาชิกใหม่ (เลือกได้หลายหมวดหมู่) */}
                     <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 shadow-xl">
                       <h2 className="text-lg font-bold text-white mb-1">👑 ออกรหัสประจำตัวสมาชิกใหม่ (Owner Only)</h2>
                       <p className="text-xs text-slate-300 mb-5">
-                        เจ้าของเว็บไซต์ออกให้เฉพาะ <strong className="text-white">Member ID (เช่น M001) และ Tag หมวดหมู่</strong> เท่านั้น
+                        สามารถเลือกหมวดหมู่ให้สมาชิก 1 คนได้มากกว่า 1 หมวดหมู่ และสามารถกดแก้ไขหมวดหมู่เพิ่มเติมภายหลังได้ตลอดเวลา
                       </p>
-                      <form onSubmit={handleIssueNewId} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs text-slate-300 mb-1">กำหนด Member ID ใหม่</label>
-                          <input
-                            type="text"
-                            value={newMemberId}
-                            onChange={(e) => setNewMemberId(e.target.value)}
-                            className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2.5 text-sm font-mono text-white uppercase outline-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-300 mb-1">กำหนดหมวดหมู่สมาชิก (Tag)</label>
-                          <input
-                            type="text"
-                            value={newMemberTag}
-                            onChange={(e) => setNewMemberTag(e.target.value)}
-                            className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2.5 text-sm text-white outline-none"
-                            required
-                          />
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {PRESET_MEMBER_TAGS.map((t) => (
+                      <form onSubmit={handleIssueNewId} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs text-slate-300 mb-1">กำหนด Member ID ใหม่</label>
+                            <input
+                              type="text"
+                              value={newMemberId}
+                              onChange={(e) => setNewMemberId(e.target.value)}
+                              className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2.5 text-sm font-mono text-white uppercase outline-none"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-300 mb-1">เพิ่มหมวดหมู่พิเศษ (ถ้ามี)</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={customTagInput}
+                                onChange={(e) => setCustomTagInput(e.target.value)}
+                                placeholder="พิมพ์ชื่อหมวดหมู่ใหม่..."
+                                className="flex-1 bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                              />
                               <button
                                 type="button"
-                                key={t}
-                                onClick={() => setNewMemberTag(t)}
-                                className={newMemberTag === t ? 'px-2.5 py-0.5 rounded text-[11px] border bg-white text-[#050811] border-white font-bold' : 'px-2.5 py-0.5 rounded text-[11px] border bg-[#050811] text-slate-300 border-[#1E3A5F]'}
+                                onClick={handleAddCustomNewTag}
+                                className="px-3.5 py-2 rounded-xl bg-[#0F2547] border border-white/20 text-xs font-bold text-white"
                               >
-                                {t}
+                                + เพิ่ม
                               </button>
-                            ))}
+                            </div>
                           </div>
                         </div>
-                        <div className="md:col-span-2 flex justify-end pt-2">
+
+                        <div>
+                          <label className="block text-xs text-slate-300 mb-1.5">
+                            คลิกเลือกหมวดหมู่สมาชิก (เลือกได้หลายหมวดหมู่) — เลือกแล้ว: <strong className="text-white">{newMemberTags.join(', ')}</strong>
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {Array.from(new Set([...PRESET_MEMBER_TAGS, ...newMemberTags])).map((t) => {
+                              const isChecked = newMemberTags.includes(t);
+                              return (
+                                <button
+                                  type="button"
+                                  key={t}
+                                  onClick={() => toggleNewMemberTagSelection(t)}
+                                  className={
+                                    isChecked
+                                      ? 'px-3 py-1.5 rounded-xl text-xs border bg-white text-[#050811] border-white font-bold shadow'
+                                      : 'px-3 py-1.5 rounded-xl text-xs border bg-[#050811] text-slate-300 border-[#1E3A5F] hover:border-white/40'
+                                  }
+                                >
+                                  {isChecked ? '✓ ' + t : '+ ' + t}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
                           <button type="submit" className="px-6 py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200 shadow-lg">
                             + สร้างรหัส Member ID ใหม่
                           </button>
@@ -1092,17 +2508,18 @@
                       </form>
                     </div>
 
+                    {/* รายการสมาชิกทั้งหมด + ปุ่มแก้ไขหมวดหมู่ย้อนหลัง */}
                     <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 space-y-4">
-                      <h3 className="text-base font-bold text-white">จัดการรหัสสมาชิกและแต่งตั้งผู้ดูแลโพสต์ ({users.length} รายการ)</h3>
+                      <h3 className="text-base font-bold text-white">จัดการรหัสสมาชิก, แก้ไขหมวดหมู่ และแต่งตั้งผู้ดูแล ({users.length} รายการ)</h3>
                       <div className="space-y-3">
                         {users.map((u) => (
                           <div key={u.id} className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5">
-                              <Avatar user={u} size="md" />
+                              <Avatar user={u} size="md" showStatus={true} />
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-mono text-xs font-bold">{u.id}</span>
-                                  <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-xs font-semibold">{u.memberTag}</span>
+                                  <TagBadgesList user={u} />
                                   <RoleBadge role={u.role} />
                                   {u.isActivated ? (
                                     <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[10px]">✓ เปิดใช้งานแล้ว</span>
@@ -1117,6 +2534,13 @@
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => openEditTagsModal(u)}
+                                className="px-3 py-1.5 rounded-lg bg-[#0B1325] hover:bg-white hover:text-[#050811] border border-[#1E3A5F] text-xs font-semibold text-blue-200 transition"
+                              >
+                                🏷️ แก้ไขหมวดหมู่
+                              </button>
+
                               {!u.isActivated && (
                                 <button onClick={() => handleCopyInviteId(u)} className="px-3 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
                                   {copiedId === u.id ? '✓ คัดลอกแล้ว' : 'คัดลอก ID ส่งให้สมาชิก'}
@@ -1183,17 +2607,25 @@
                           const author = getAuthor(post.authorId);
                           const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
                           const isBookmarked = currentUser && (post.bookmarks || []).includes(currentUser.id);
+                          const isHighlighted = highlightedPostId === post.id;
 
                           return (
-                            <article key={post.id} className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 shadow-xl space-y-4">
+                            <article
+                              id={'post-card-' + post.id}
+                              key={post.id}
+                              className={
+                                'bg-[#0B1325] rounded-2xl p-6 shadow-xl space-y-4 transition-all duration-500 ' +
+                                (isHighlighted ? 'border-2 border-sky-400 ring-4 ring-sky-500/30' : 'border border-[#1E3A5F]')
+                              }
+                            >
                               <div className="flex items-start justify-between gap-3">
                                 <div onClick={() => setSelectedMemberModal(author)} className="flex items-center gap-3 cursor-pointer">
-                                  <Avatar user={author} size="md" />
+                                  <Avatar user={author} size="md" showStatus={true} />
                                   <div>
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="font-bold text-sm text-white hover:underline">{author.displayName}</span>
                                       <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{author.id}</span>
-                                      <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-[10px] text-white">{author.memberTag}</span>
+                                      <TagBadgesList user={author} />
                                       <RoleBadge role={author.role} />
                                     </div>
                                     <div className="text-xs text-slate-400 mt-0.5">@{author.username} • {post.createdAt}</div>
@@ -1270,12 +2702,12 @@
                                   const cAuthor = getAuthor(c.authorId);
                                   return (
                                     <div key={c.id} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs flex items-start gap-2.5">
-                                      <Avatar user={cAuthor} size="xs" />
+                                      <Avatar user={cAuthor} size="xs" showStatus={true} />
                                       <div className="flex-1">
                                         <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex flex-wrap items-center gap-2">
                                             <span className="font-bold text-white">{cAuthor.displayName}</span>
-                                            <span className="px-1.5 py-0.5 rounded bg-[#0F2547] text-[10px]">{cAuthor.memberTag}</span>
+                                            <TagBadgesList user={cAuthor} />
                                             <RoleBadge role={cAuthor.role} />
                                           </div>
                                           <div className="flex items-center gap-2">
@@ -1318,7 +2750,280 @@
             </div>
           )}
 
-          {/* MODAL: CREATE POST */}
+          {/* ================================================================= */}
+          {/* MODAL: ดูโปรไฟล์เต็มของสมาชิก + ลิงก์ Social Media + ปุ่มส่งข้อความแรก */}
+          {/* ================================================================= */}
+          {selectedMemberModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold">{selectedMemberModal.id}</span>
+                    <RoleBadge role={selectedMemberModal.role} />
+                    <span className={'text-[10px] font-semibold ' + (selectedMemberModal.isOnline ? 'text-emerald-400' : 'text-slate-400')}>
+                      {selectedMemberModal.isOnline ? '● Online' : '○ Offline'}
+                    </span>
+                  </div>
+                  <button onClick={() => setSelectedMemberModal(null)} className="text-slate-300 hover:text-white">✕</button>
+                </div>
+
+                <div className="p-6 text-center space-y-4">
+                  <div className="flex justify-center">
+                    <Avatar user={selectedMemberModal} size="xl" showStatus={true} />
+                  </div>
+                  <div>
+                    <div className="flex justify-center mb-2">
+                      <TagBadgesList user={selectedMemberModal} />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">{selectedMemberModal.displayName}</h3>
+                    {selectedMemberModal.username && (
+                      <p className="text-xs font-mono text-slate-400">@{selectedMemberModal.username}</p>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-200 bg-[#050811] p-3.5 rounded-xl border border-[#1E3A5F] leading-relaxed text-left">
+                    {selectedMemberModal.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}
+                  </p>
+
+                  {/* แสดงลิงก์ Social Media / External Link ของสมาชิก */}
+                  {selectedMemberModal.socialLinks && selectedMemberModal.socialLinks.length > 0 && (
+                    <div className="text-left space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        ช่องทางติดต่อ & Social Media
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedMemberModal.socialLinks.map((soc) => (
+                          <a
+                            key={soc.id}
+                            href={soc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs text-white font-medium transition"
+                          >
+                            <span>{getSocialIcon(soc.platform)}</span>
+                            <span>{soc.label}</span>
+                            <span className="text-[10px] text-slate-400">↗</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                    {(!currentUser || currentUser.id !== selectedMemberModal.id) && (
+                      <button
+                        onClick={() => startDirectMessageWith(selectedMemberModal)}
+                        className="w-full py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200 shadow transition"
+                      >
+                        💬 ส่งข้อความส่วนตัว (DM)
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const firstTag = getUserTags(selectedMemberModal)[0] || 'ALL';
+                        setSelectedTagFilter(firstTag);
+                        setSelectedMemberModal(null);
+                        setCurrentView('feed');
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-[#0F2547] hover:bg-[#163463] border border-white/20 text-white font-bold text-xs transition"
+                    >
+                      📝 ดูโพสต์ในหมวดหมู่เดียวกัน
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* MODAL: แก้ไขโปรไฟล์สมาชิก + เพิ่มลิงก์ Social Media / External Link */}
+          {/* ================================================================= */}
+          {isEditingProfile && currentUser && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="w-full max-w-lg bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">ตั้งค่าโปรไฟล์สมาชิก & ลิงก์โซเชียล</h3>
+                  <button onClick={() => setIsEditingProfile(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+
+                <form onSubmit={handleSaveProfile} className="space-y-4">
+                  <div className="flex flex-col items-center p-4 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <Avatar user={{ ...currentUser, displayName: editDisplayName, avatarUrl: editAvatarUrl }} size="xl" />
+                    <input type="file" accept="image/*" ref={avatarInputRef} onChange={handleAvatarUpload} className="hidden" />
+                    <div className="flex gap-2 mt-3">
+                      <button type="button" onClick={() => avatarInputRef.current && avatarInputRef.current.click()} className="px-3.5 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
+                        📁 อัปโหลดรูปจากเครื่อง
+                      </button>
+                      {editAvatarUrl && (
+                        <button type="button" onClick={() => setEditAvatarUrl('')} className="px-3 py-1.5 rounded-lg bg-[#0F2547] text-xs text-white">ลบรูป</button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">ชื่อที่แสดง (Display Name) *</label>
+                    <input
+                      type="text"
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2 text-sm text-white outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">คำอธิบายตัวตน (Bio)</label>
+                    <textarea
+                      rows={3}
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3 text-sm text-white outline-none resize-none"
+                    />
+                  </div>
+
+                  {/* ส่วนเพิ่มลิงก์ Social Media & External Links */}
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
+                    <div className="text-xs font-bold text-white">
+                      🔗 ลิงก์ Social Media หรือเว็บไซต์ของคุณ (Facebook, IG, YouTube, TikTok, External Link)
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={newSocialPlatform}
+                        onChange={(e) => setNewSocialPlatform(e.target.value)}
+                        className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-2.5 py-2 text-xs text-white outline-none"
+                      >
+                        {SOCIAL_PLATFORMS.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.icon} {p.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        value={newSocialLabel}
+                        onChange={(e) => setNewSocialLabel(e.target.value)}
+                        placeholder="ชื่อปุ่ม (เช่น IG ส่วนตัว, ช่องเพลง)"
+                        className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      />
+
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={newSocialUrl}
+                          onChange={(e) => setNewSocialUrl(e.target.value)}
+                          placeholder="วางลิงก์ URL..."
+                          className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-2 text-xs text-white outline-none min-w-0"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddSocialLink}
+                          className="px-3 py-2 rounded-lg bg-white text-[#050811] text-xs font-bold shrink-0"
+                        >
+                          เพิ่ม
+                        </button>
+                      </div>
+                    </div>
+
+                    {editSocialLinks.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        {editSocialLinks.map((soc) => (
+                          <div key={soc.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#0B1325] border border-[#1E3A5F] text-xs">
+                            <div className="truncate">
+                              <span className="mr-1.5">{getSocialIcon(soc.platform)}</span>
+                              <strong className="text-white">{soc.label}</strong>
+                              <span className="text-slate-400 ml-2 font-mono text-[10px]">{soc.url}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSocialLink(soc.id)}
+                              className="text-red-400 hover:text-red-300 ml-2 font-bold"
+                            >
+                              ลบ
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setIsEditingProfile(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกโปรไฟล์</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* MODAL: ADMIN แก้ไขหมวดหมู่สมาชิกย้อนหลัง (เลือกได้หลายหมวดหมู่)   */}
+          {/* ================================================================= */}
+          {editingTagsUser && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">
+                    🏷️ แก้ไขหมวดหมู่สมาชิก: {editingTagsUser.displayName} ({editingTagsUser.id})
+                  </h3>
+                  <button onClick={() => setEditingTagsUser(null)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+
+                <form onSubmit={handleSaveEditedMemberTags} className="space-y-4">
+                  <p className="text-xs text-slate-300">
+                    คลิกเพื่อเปิด/ปิดหมวดหมู่ของสมาชิกคนนี้ (สามารถมีได้หลายหมวดหมู่พร้อมกัน)
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(new Set([...allAvailableTags, ...editingTagsList])).map((t) => {
+                      const isChecked = editingTagsList.includes(t);
+                      return (
+                        <button
+                          type="button"
+                          key={t}
+                          onClick={() => toggleEditingTagItem(t)}
+                          className={
+                            isChecked
+                              ? 'px-3 py-1.5 rounded-xl text-xs border bg-white text-[#050811] border-white font-bold shadow'
+                              : 'px-3 py-1.5 rounded-xl text-xs border bg-[#050811] text-slate-300 border-[#1E3A5F]'
+                          }
+                        >
+                          {isChecked ? '✓ ' + t : '+ ' + t}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <input
+                      type="text"
+                      value={editingCustomTag}
+                      onChange={(e) => setEditingCustomTag(e.target.value)}
+                      placeholder="หรือพิมพ์หมวดหมู่ใหม่เพิ่มเติม..."
+                      className="flex-1 bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddEditingCustomTag}
+                      className="px-3.5 py-2 rounded-xl bg-[#0F2547] border border-white/20 text-xs font-bold text-white"
+                    >
+                      + เพิ่มแท็ก
+                    </button>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-[#1E3A5F]">
+                    <button type="button" onClick={() => setEditingTagsUser(null)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกหมวดหมู่</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* MODAL: CREATE POST                                                */}
+          {/* ================================================================= */}
           {isCreatingPost && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
@@ -1407,72 +3112,148 @@
             </div>
           )}
 
-          {/* MODAL: EDIT PROFILE */}
-          {isEditingProfile && currentUser && (
+          {/* ================================================================= */}
+          {/* MODAL: สร้างห้อง Global Chat ใหม่ (เฉพาะ Owner / Mod)              */}
+          {/* ================================================================= */}
+          {isCreateChannelOpen && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
-                  <h3 className="text-base font-bold text-white">ตั้งค่าโปรไฟล์สมาชิก</h3>
-                  <button onClick={() => setIsEditingProfile(false)} className="text-slate-400 hover:text-white">✕</button>
+                  <h3 className="text-base font-bold text-white">🛡️ สร้างห้อง Global Chat ใหม่</h3>
+                  <button onClick={() => setIsCreateChannelOpen(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div className="flex flex-col items-center p-4 rounded-xl bg-[#050811] border border-[#1E3A5F]">
-                    <Avatar user={{ ...currentUser, displayName: editDisplayName, avatarUrl: editAvatarUrl }} size="xl" />
-                    <input type="file" accept="image/*" ref={avatarInputRef} onChange={handleAvatarUpload} className="hidden" />
-                    <div className="flex gap-2 mt-3">
-                      <button type="button" onClick={() => avatarInputRef.current && avatarInputRef.current.click()} className="px-3.5 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
-                        📁 อัปโหลดรูปจากเครื่อง
-                      </button>
-                      {editAvatarUrl && (
-                        <button type="button" onClick={() => setEditAvatarUrl('')} className="px-3 py-1.5 rounded-lg bg-[#0F2547] text-xs text-white">ลบรูป</button>
-                      )}
+                <form onSubmit={handleCreateChannel} className="space-y-4">
+                  <div className="grid grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">ไอคอน</label>
+                      <input
+                        type="text"
+                        value={newChannelIcon}
+                        onChange={(e) => setNewChannelIcon(e.target.value)}
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3 py-2 text-center text-base outline-none"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-xs text-slate-300 mb-1">ชื่อห้อง (Channel Name) *</label>
+                      <input
+                        type="text"
+                        value={newChannelName}
+                        onChange={(e) => setNewChannelName(e.target.value)}
+                        placeholder="เช่น music-room"
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                        required
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">ชื่อที่แสดง (Display Name)</label>
-                    <input type="text" value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2 text-sm text-white outline-none" required />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-300 mb-1">คำอธิบายตัวตน (Bio)</label>
-                    <textarea rows={3} value={editBio} onChange={(e) => setEditBio(e.target.value)} className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3 text-sm text-white outline-none resize-none" />
+                    <label className="block text-xs text-slate-300 mb-1">คำอธิบายหัวข้อห้อง</label>
+                    <input
+                      type="text"
+                      value={newChannelDesc}
+                      onChange={(e) => setNewChannelDesc(e.target.value)}
+                      placeholder="ระบุจุดประสงค์ของห้องนี้..."
+                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                    />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setIsEditingProfile(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
-                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกโปรไฟล์</button>
+                    <button type="button" onClick={() => setIsCreateChannelOpen(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">สร้างห้องแชตรวม</button>
                   </div>
                 </form>
               </div>
             </div>
           )}
 
-          {/* MODAL: MEMBER ORBIT CARD */}
-          {selectedMemberModal && (
+          {/* ================================================================= */}
+          {/* MODAL: สร้างกลุ่มแชตย่อยด้วยตัวเอง                                  */}
+          {/* ================================================================= */}
+          {isCreateGroupOpen && currentUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="w-full max-w-sm bg-[#0B1325] border border-white/30 rounded-2xl overflow-hidden shadow-2xl">
-                <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold">{selectedMemberModal.id}</span>
-                    <RoleBadge role={selectedMemberModal.role} />
-                  </div>
-                  <button onClick={() => setSelectedMemberModal(null)} className="text-slate-300 hover:text-white">✕</button>
+              <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">👥 สร้างกลุ่มแชตใหม่ (เลือกสมาชิก)</h3>
+                  <button onClick={() => setIsCreateGroupOpen(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
-                <div className="p-6 text-center space-y-3">
-                  <div className="flex justify-center"><Avatar user={selectedMemberModal} size="xl" /></div>
+                <form onSubmit={handleCreateGroup} className="space-y-4">
                   <div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold">{selectedMemberModal.memberTag}</span>
-                    <h3 className="text-lg font-bold text-white mt-2">{selectedMemberModal.displayName}</h3>
-                    {selectedMemberModal.username && <p className="text-xs font-mono text-slate-400">@{selectedMemberModal.username}</p>}
+                    <label className="block text-xs text-slate-300 mb-1">ชื่อกลุ่มแชต *</label>
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="ตั้งชื่อกลุ่มแชตของคุณ..."
+                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                      required
+                    />
                   </div>
-                  <p className="text-xs text-slate-200 bg-[#050811] p-3.5 rounded-xl border border-[#1E3A5F]">{selectedMemberModal.bio}</p>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1.5">
+                      คลิกเลือกสมาชิกที่ต้องการดึงเข้ากลุ่ม ({selectedGroupMembers.length} คน) *
+                    </label>
+                    <div className="max-h-52 overflow-y-auto space-y-1.5 p-2 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                      {activatedMembers.filter((m) => m.id !== currentUser.id).map((m) => {
+                        const isChecked = selectedGroupMembers.includes(m.id);
+                        return (
+                          <div
+                            key={m.id}
+                            onClick={() => toggleSelectGroupMember(m.id)}
+                            className={
+                              isChecked
+                                ? 'p-2.5 rounded-xl bg-[#0F2547] border border-white flex items-center justify-between cursor-pointer'
+                                : 'p-2.5 rounded-xl bg-[#0B1325] border border-[#1E3A5F] flex items-center justify-between cursor-pointer hover:border-white/40'
+                            }
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Avatar user={m} size="xs" showStatus={true} />
+                              <div>
+                                <div className="text-xs font-bold text-white">
+                                  {m.displayName} <span className="font-mono text-blue-300">({m.id})</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400">@{m.username} • {getUserTags(m).join(', ')}</div>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold">{isChecked ? '✓ เลือกแล้ว' : '+ เลือก'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setIsCreateGroupOpen(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">สร้างกลุ่มแชต</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* MODAL: หน้าต่างยืนยันการลบห้องแชต                                 */}
+          {/* ================================================================= */}
+          {deleteConfirmTarget && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-sm bg-[#0B1325] border-2 border-red-500/60 rounded-2xl p-6 shadow-2xl text-center space-y-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-red-950 border border-red-500/40 flex items-center justify-center text-2xl">⚠️</div>
+                <div>
+                  <h3 className="text-base font-bold text-white">ยืนยันการลบห้องแชต?</h3>
+                  <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                    คุณกำลังจะลบห้อง <strong className="text-white">"{deleteConfirmTarget.name}"</strong> อย่างถาวร การกระทำนี้ไม่สามารถย้อนกลับได้
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2.5 pt-2">
                   <button
-                    onClick={() => {
-                      setSelectedTagFilter(selectedMemberModal.memberTag);
-                      setSelectedMemberModal(null);
-                      setCurrentView('feed');
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200"
+                    type="button"
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="flex-1 py-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs font-semibold text-slate-300"
                   >
-                    ดูโพสต์ในกลุ่ม {selectedMemberModal.memberTag}
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteRoom}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white shadow-lg"
+                  >
+                    🗑️ ยืนยันการลบถาวร
                   </button>
                 </div>
               </div>
