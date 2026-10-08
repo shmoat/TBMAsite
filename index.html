@@ -201,6 +201,229 @@
       const trimmed = url.trim();
       if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
       return 'https://' + trimmed;
+        // ============================================================================
+      // [เพิ่มใหม่ 1] บีบอัดรูปอัตโนมัติ + หั่นไฟล์ใหญ่ (Chunking 10MB) + ตัวเล่นวิดีโออัจฉริยะ
+      // ============================================================================
+      const MAX_CHUNK_SIZE = 700 * 1024; // 700KB ต่อชิ้น (ไม่เกินลิมิต 1MB ของ Firestore)
+      const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // รองรับไฟล์สูงสุด 10MB
+  
+      // 1. ย่อและบีบอัดรูปภาพขนาดใหญ่ให้เล็กลงอัตโนมัติ
+      function compressImageFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const MAX_DIM = 1400;
+              let w = img.width;
+              let h = img.height;
+              if (w > h && w > MAX_DIM) {
+                h *= MAX_DIM / w;
+                w = MAX_DIM;
+              } else if (h > MAX_DIM) {
+                w *= MAX_DIM / h;
+                h = MAX_DIM;
+              }
+              canvas.width = w;
+              canvas.height = h;
+              canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL('image/jpeg', 0.82));
+            };
+            img.onerror = reject;
+            img.src = event.target.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+  
+      // 2. ประมวลผลไฟล์แนบ (หากเกิน 700KB จะหั่นเป็นชิ้นเก็บลง bma_file_chunks อัตโนมัติ)
+      async function processAttachmentFile(file, dbInstance) {
+        if (file.size > MAX_TOTAL_FILE_SIZE) {
+          throw new Error('ไฟล์ "' + file.name + '" มีขนาดเกิน 10MB กรุณาแนบเป็นลิงก์ URL แทนครับ');
+        }
+  
+        let fileType = 'file';
+        if (file.type.startsWith('image/')) fileType = 'image';
+        else if (file.type.startsWith('video/')) fileType = 'video';
+  
+        let dataUrl = '';
+        if (fileType === 'image') {
+          dataUrl = await compressImageFile(file);
+        } else {
+          dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+  
+        const attId = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        const sizeLabel = (file.size / 1024).toFixed(1) + ' KB';
+  
+        // ถ้าขนาดหลังแปลงไม่เกิน 700KB เก็บในข้อความได้ทันที
+        if (dataUrl.length <= MAX_CHUNK_SIZE || !dbInstance) {
+          return {
+            id: attId,
+            name: file.name,
+            type: fileType,
+            url: dataUrl,
+            isChunked: false,
+            size: sizeLabel
+          };
+        }
+  
+        // ถ้าไฟล์ใหญ่เกิน 700KB หั่นเป็นชิ้นๆ เก็บในคอลเลกชัน bma_file_chunks
+        const chunkIds = [];
+        const totalChunks = Math.ceil(dataUrl.length / MAX_CHUNK_SIZE);
+        for (let i = 0; i < totalChunks; i++) {
+          const chunkData = dataUrl.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
+          const cId = attId + '_part' + i;
+          await dbInstance.collection('bma_file_chunks').doc(cId).set({
+            id: cId,
+            parentId: attId,
+            index: i,
+            data: chunkData
+          });
+          chunkIds.push(cId);
+        }
+  
+        return {
+          id: attId,
+          name: file.name,
+          type: fileType,
+          url: '',
+          isChunked: true,
+          chunkIds: chunkIds,
+          size: (file.size / (1024 * 1024)).toFixed(2) + ' MB'
+        };
+      }
+  
+      // 3. คอมโพเนนต์แสดงรูปภาพ วิดีโอ (รองรับ Google Drive / YouTube) และประกอบไฟล์ Chunked อัตโนมัติ
+      function SmartMediaAttachment({ att, onContextMenu }) {
+        const [resolvedUrl, setResolvedUrl] = useState(att.url || '');
+        const [loadingChunks, setLoadingChunks] = useState(false);
+  
+        useEffect(() => {
+          let isMounted = true;
+          if (att.isChunked && !resolvedUrl && Array.isArray(att.chunkIds) && db) {
+            setLoadingChunks(true);
+            Promise.all(att.chunkIds.map((cId) => db.collection('bma_file_chunks').doc(cId).get()))
+              .then((docs) => {
+                if (!isMounted) return;
+                const sorted = docs
+                  .map((d) => d.data())
+                  .filter(Boolean)
+                  .sort((a, b) => a.index - b.index);
+                setResolvedUrl(sorted.map((s) => s.data).join(''));
+                setLoadingChunks(false);
+              })
+              .catch(() => {
+                if (isMounted) setLoadingChunks(false);
+              });
+          } else if (att.url) {
+            setResolvedUrl(att.url);
+          }
+          return () => { isMounted = false; };
+        }, [att]);
+  
+        if (loadingChunks) {
+          return (
+            <div className="p-3 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-xs text-sky-300 animate-pulse">
+              ⏳ กำลังโหลดไฟล์ขนาดใหญ่ "{att.name}" ({att.size})...
+            </div>
+          );
+        }
+  
+        const rawUrl = resolvedUrl || '';
+  
+        // ตรวจสอบลิงก์ Google Drive (/file/d/FILE_ID/...)
+        const driveMatch = rawUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+        // ตรวจสอบลิงก์ YouTube
+        const ytMatch = rawUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
+  
+        if (att.type === 'video' || driveMatch || ytMatch) {
+          if (driveMatch) {
+            const previewUrl = 'https://drive.google.com/file/d/' + driveMatch[1] + '/preview';
+            return (
+              <div
+                onContextMenu={onContextMenu}
+                className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md"
+              >
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-64 border-0"
+                  allow="autoplay; fullscreen"
+                  allowFullScreen
+                />
+                <div className="px-3 py-1.5 bg-[#0B1325] flex items-center justify-between text-[11px]">
+                  <span className="truncate text-slate-300">▶️ Google Drive Media</span>
+                  <a href={rawUrl} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline shrink-0 ml-2">
+                    เปิดแท็บใหม่ ↗
+                  </a>
+                </div>
+              </div>
+            );
+          }
+  
+          if (ytMatch) {
+            const embedUrl = 'https://www.youtube.com/embed/' + ytMatch[1];
+            return (
+              <div
+                onContextMenu={onContextMenu}
+                className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md"
+              >
+                <iframe
+                  src={embedUrl}
+                  className="w-full h-64 border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            );
+          }
+  
+          if (att.type === 'video') {
+            return (
+              <div
+                onContextMenu={onContextMenu}
+                className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black max-w-md"
+              >
+                <video src={rawUrl} controls className="max-h-72 w-full" />
+              </div>
+            );
+          }
+        }
+  
+        if (att.type === 'image') {
+          return (
+            <div
+              onContextMenu={onContextMenu}
+              className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md"
+            >
+              <img src={rawUrl} alt={att.name} className="max-h-80 w-auto mx-auto object-contain" />
+            </div>
+          );
+        }
+  
+        return (
+          <a
+            href={rawUrl}
+            download={att.name}
+            target="_blank"
+            rel="noreferrer"
+            onContextMenu={onContextMenu}
+            className="flex items-center justify-between p-3 rounded-xl bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs max-w-md"
+          >
+            <span className="truncate font-semibold">📎 {att.name} ({att.size || 'File'})</span>
+            <span className="px-2.5 py-1 rounded bg-white text-[#050811] font-bold text-[10px] shrink-0 ml-2">
+              ดาวน์โหลด
+            </span>
+          </a>
+        );
+      }
     }
 
     function Avatar({ user, size = 'md', showStatus = false, className = '' }) {
