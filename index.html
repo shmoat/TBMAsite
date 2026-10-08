@@ -85,6 +85,29 @@
       console.error("Firebase Init Error:", e);
     }
 
+    // ฟังก์ชันดึงค่าเวลาจาก Server Timestamp ของ Firebase (แก้ปัญหาเวลาเครื่องผู้ใช้ไม่ตรงกัน)
+    function getOrderMillis(docData) {
+      if (!docData) return 0;
+      if (docData.serverCreatedAt && typeof docData.serverCreatedAt.toMillis === 'function') {
+        return docData.serverCreatedAt.toMillis();
+      }
+      if (docData.serverCreatedAt && docData.serverCreatedAt.seconds) {
+        return docData.serverCreatedAt.seconds * 1000;
+      }
+      return docData.timestamp || 0;
+    }
+
+    function getDisplayTime(docData) {
+      if (!docData) return '';
+      if (docData.serverCreatedAt && typeof docData.serverCreatedAt.toDate === 'function') {
+        return docData.serverCreatedAt.toDate().toLocaleTimeString('th-TH', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      return docData.time || '';
+    }
+
     const PRESET_MEMBER_TAGS = ['LCs & Pal', 'PCSHS', 'KPN', 'KMUTT', 'Instrumix', 'Others'];
 
     const SOCIAL_PLATFORMS = [
@@ -140,7 +163,6 @@
       }
     ];
 
-    // โลโก้สมาคม: รูปสามเหลี่ยมที่ด้านขวาโค้งคล้ายพระจันทร์เสี้ยว สีกรมท่า ขอบสีขาว พื้นหลังโปร่งใส
     function AssociationLogo({ size = 40, className = '' }) {
       return (
         <svg
@@ -299,17 +321,43 @@
       const [currentUser, setCurrentUser] = useState(null);
       const [dbErrorBanner, setDbErrorBanner] = useState('');
 
-      // Navigation: 'home' | 'feed' | 'members' | 'bookmarks' | 'chat' | 'admin' | 'login'
-      const [currentView, setCurrentView] = useState('home');
+      // ============================================================================
+      // PERSISTENT VIEW & ACTIVE CHAT ROOM (รีเฟรชแท็บแล้วกลับมาหน้าเดิมเสมอ)
+      // ============================================================================
+      const [currentView, setCurrentView] = useState(() => {
+        return sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home';
+      });
+
+      const [activeRoom, setActiveRoom] = useState(() => {
+        try {
+          const saved = sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room');
+          return saved ? JSON.parse(saved) : { type: 'channel', id: 'global-lobby' };
+        } catch (e) {
+          return { type: 'channel', id: 'global-lobby' };
+        }
+      });
+
+      useEffect(() => {
+        sessionStorage.setItem('tbma_last_view', currentView);
+        localStorage.setItem('tbma_last_view', currentView);
+      }, [currentView]);
+
+      useEffect(() => {
+        try {
+          const str = JSON.stringify(activeRoom);
+          sessionStorage.setItem('tbma_last_room', str);
+          localStorage.setItem('tbma_last_room', str);
+        } catch (e) {}
+      }, [activeRoom]);
+
       const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
       const [memberDirectoryTag, setMemberDirectoryTag] = useState('ALL');
       const [searchQuery, setSearchQuery] = useState('');
       const [highlightedPostId, setHighlightedPostId] = useState(null);
 
-      // Member Profile Modal
       const [selectedMemberModal, setSelectedMemberModal] = useState(null);
 
-      // Auth & Password Toggle & Remember Me
+      // Auth States
       const [authMode, setAuthMode] = useState('signin');
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
@@ -324,7 +372,7 @@
       const [showActivatePassword, setShowActivatePassword] = useState(false);
       const [activateDisplayName, setActivateDisplayName] = useState('');
 
-      // Profile Edit & Username/Password Change (จำกัดเปลี่ยน Username 2 ครั้งใน 14 วัน)
+      // Profile Edit States
       const [isEditingProfile, setIsEditingProfile] = useState(false);
       const [editDisplayName, setEditDisplayName] = useState('');
       const [editBio, setEditBio] = useState('');
@@ -350,7 +398,6 @@
       const postFileInputRef = useRef(null);
       const [commentInputs, setCommentInputs] = useState({});
 
-      // Poll Creation inside Post
       const [hasPollInNewPost, setHasPollInNewPost] = useState(false);
       const [pollQuestionInput, setPollQuestionInput] = useState('');
       const [pollOptionsInput, setPollOptionsInput] = useState(['', '']);
@@ -366,10 +413,7 @@
       const [editingTagsList, setEditingTagsList] = useState([]);
       const [editingCustomTag, setEditingCustomTag] = useState('');
 
-      // ============================================================================
-      // CHAT STATES & RIGHT-CLICK CONTEXT MENU & TYPING INDICATOR
-      // ============================================================================
-      const [activeRoom, setActiveRoom] = useState({ type: 'channel', id: 'global-lobby' });
+      // Chat & Right-Click Context Menu States
       const [openedDmPartners, setOpenedDmPartners] = useState([]);
       const [isRightMemberDrawerOpen, setIsRightMemberDrawerOpen] = useState(true);
       const [rightMemberTagFilter, setRightMemberTagFilter] = useState('ALL');
@@ -382,10 +426,9 @@
       const chatFileInputRef = useRef(null);
       const typingTimeoutRef = useRef(null);
 
-      // Context Menu (คลิกขวาที่ข้อความ / รูปภาพ / วิดีโอ / ไฟล์)
-      const [contextMenu, setContextMenu] = useState(null); // { x, y, message, mediaItem }
-      const [editingChatMsg, setEditingChatMsg] = useState(null); // ข้อความที่กำลังแก้ไข
-      const [forwardingMsg, setForwardingMsg] = useState(null); // ข้อความหรือสื่อที่กำลังส่งต่อ
+      const [contextMenu, setContextMenu] = useState(null);
+      const [editingChatMsg, setEditingChatMsg] = useState(null);
+      const [forwardingMsg, setForwardingMsg] = useState(null);
 
       const [showMentionMenu, setShowMentionMenu] = useState(false);
       const [mentionFilter, setMentionFilter] = useState('');
@@ -401,19 +444,16 @@
 
       const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
 
-      // ============================================================================
-      // NOTIFICATION CENTER & MUTE SETTINGS STATES
-      // ============================================================================
+      // Notification Center States
       const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
-      const [notifTab, setNotifTab] = useState('posts'); // 'posts' | 'messages' | 'settings'
+      const [notifTab, setNotifTab] = useState('posts');
       const [toastList, setToastList] = useState([]);
       const [browserPushPermission, setBrowserPushPermission] = useState(
         typeof Notification !== 'undefined' ? Notification.permission : 'default'
       );
       const prevNotifCountRef = useRef(0);
-      const messagesEndRef = useRef(null);
+      const chatContainerRef = useRef(null);
 
-      // ปิด Context Menu เมื่อคลิกที่อื่น
       useEffect(() => {
         const closeMenu = () => setContextMenu(null);
         window.addEventListener('click', closeMenu);
@@ -421,7 +461,7 @@
       }, []);
 
       // ============================================================================
-      // 1. REALTIME SYNC กับ FIREBASE FIRESTORE
+      // 1. REALTIME SYNC กับ FIREBASE FIRESTORE (เรียงด้วย Server Timestamp)
       // ============================================================================
       useEffect(() => {
         if (!db) return;
@@ -468,7 +508,7 @@
         const unsubPosts = db.collection('bma_posts').onSnapshot(
           (snapshot) => {
             const loadedPosts = snapshot.docs.map((doc) => doc.data());
-            loadedPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            loadedPosts.sort((a, b) => getOrderMillis(b) - getOrderMillis(a));
             setPosts(loadedPosts);
           },
           (err) => console.error(err)
@@ -488,7 +528,7 @@
               const hasAnnounce = loadedCh.some((c) => c.id === 'global-announce');
               if (!hasLobby) await db.collection('bma_channels').doc('global-lobby').set(DEFAULT_GLOBAL_CHANNELS[0]);
               if (!hasAnnounce) await db.collection('bma_channels').doc('global-announce').set(DEFAULT_GLOBAL_CHANNELS[1]);
-              loadedCh.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+              loadedCh.sort((a, b) => getOrderMillis(a) - getOrderMillis(b));
               setChannels(loadedCh);
             }
           },
@@ -498,16 +538,21 @@
         const unsubGroups = db.collection('bma_groups').onSnapshot(
           (snapshot) => {
             const loadedGrp = snapshot.docs.map((d) => d.data());
-            loadedGrp.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            loadedGrp.sort((a, b) => getOrderMillis(b) - getOrderMillis(a));
             setGroups(loadedGrp);
           },
           (err) => console.error(err)
         );
 
+        // เรียงข้อความแชตตามเวลาเซิร์ฟเวอร์ (getOrderMillis) เพื่อแก้ปัญหาเวลาเครื่องผู้ใช้ไม่ตรงกัน
         const unsubMessages = db.collection('bma_messages').onSnapshot(
           (snapshot) => {
             const loadedMsgs = snapshot.docs.map((d) => d.data());
-            loadedMsgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            loadedMsgs.sort((a, b) => {
+              const diff = getOrderMillis(a) - getOrderMillis(b);
+              if (diff !== 0) return diff;
+              return String(a.id).localeCompare(String(b.id));
+            });
             setChatMessages(loadedMsgs);
           },
           (err) => console.error(err)
@@ -515,10 +560,9 @@
 
         const unsubTyping = db.collection('bma_typing').onSnapshot(
           (snapshot) => {
-            const now = Date.now();
             const activeTypers = snapshot.docs
               .map((d) => d.data())
-              .filter((t) => t.isTyping && now - (t.updatedAt || 0) < 8000);
+              .filter((t) => t.isTyping);
             setTypingStatuses(activeTypers);
           },
           () => {}
@@ -527,7 +571,7 @@
         const unsubNotifs = db.collection('bma_notifications').onSnapshot(
           (snapshot) => {
             const loadedNotifs = snapshot.docs.map((d) => d.data());
-            loadedNotifs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            loadedNotifs.sort((a, b) => getOrderMillis(b) - getOrderMillis(a));
             setNotifications(loadedNotifs);
           },
           () => {}
@@ -544,7 +588,7 @@
         };
       }, []);
 
-      // ตรวจสอบการล็อกอินค้างไว้ (Remember Me Session)
+      // ตรวจสอบการล็อกอินค้างไว้ (Remember Me Session) โดยไม่บังคับเปลี่ยนหน้า currentView
       useEffect(() => {
         if (!currentUser && users.length > 0) {
           const savedId =
@@ -575,9 +619,7 @@
           ? getDmRoomKey(currentUser.id, activeRoom.id)
           : activeRoom.id;
 
-      // ============================================================================
-      // อัปเดตสถานะ "อ่านแล้ว" (Read Receipts) อัตโนมัติเมื่อเปิดห้องแชต
-      // ============================================================================
+      // อัปเดตสถานะ "อ่านแล้ว" อัตโนมัติเมื่อเปิดห้องแชต
       useEffect(() => {
         if (!currentUser || !db || currentView !== 'chat') return;
         const unreadInRoom = chatMessages.filter(
@@ -592,21 +634,22 @@
         });
       }, [chatMessages, currentRoomKey, currentView, currentUser]);
 
+      // เลื่อนกล่องข้อความลงล่างสุดเฉพาะเวลาเปลี่ยนห้องแชต หรือมีข้อความใหม่เข้ามา
+      const currentRoomMessages = chatMessages.filter((m) => m.roomKey === currentRoomKey);
       useEffect(() => {
-        if (currentView === 'chat' && messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (currentView === 'chat' && chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
-      }, [chatMessages, typingStatuses, currentRoomKey, currentView]);
+      }, [currentRoomKey, currentView, currentRoomMessages.length]);
 
       // ============================================================================
-      // ระบบการแจ้งเตือน (Desktop/Mobile Notification & กรองตามตั้งค่าการปิดแจ้งเตือน)
+      // ระบบการแจ้งเตือน
       // ============================================================================
       const isNotificationMutedForMe = (notif) => {
         if (!currentUser) return true;
         const prefs = currentUser.notifPrefs || {};
         if (notif.category === 'posts') {
           if (prefs.muteOwnPosts && notif.subType !== 'new_post') return true;
-          // ตรวจสอบว่าโพสต์ต้นทางถูกตั้งค่าปิดแจ้งเตือนเฉพาะโพสต์หรือไม่
           if (notif.targetPostId) {
             const p = posts.find((item) => item.id === notif.targetPostId);
             if (p && (p.mutedBy || []).includes(currentUser.id)) return true;
@@ -633,13 +676,11 @@
         (n) => !(n.readBy || []).includes(currentUser.id)
       );
 
-      // แจ้งเตือนป๊อปอัป + เสียง + Desktop/Mobile Push เมื่อมีการแจ้งเตือนใหม่เข้ามา
       useEffect(() => {
         if (!currentUser) return;
         if (myUnreadNotifs.length > prevNotifCountRef.current && prevNotifCountRef.current !== 0) {
           const latest = myUnreadNotifs[0];
           if (latest) {
-            // เสียงเตือนเบาๆ
             try {
               const ctx = new (window.AudioContext || window.webkitAudioContext)();
               const osc = ctx.createOscillator();
@@ -655,13 +696,11 @@
               osc.stop(ctx.currentTime + 0.25);
             } catch (e) {}
 
-            // Toast บนหน้าเว็บ
             setToastList((prev) => [latest, ...prev.slice(0, 2)]);
             setTimeout(() => {
               setToastList((prev) => prev.filter((t) => t.id !== latest.id));
             }, 4500);
 
-            // ส่งแจ้งเตือนไปยัง Desktop / อุปกรณ์เคลื่อนที่ (หากผู้ใช้กดอนุญาตแล้ว)
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
               try {
                 new Notification(latest.title || 'The Blue Moon Association', {
@@ -693,8 +732,8 @@
       const dispatchNotification = async ({
         recipientId,
         actorId,
-        category, // 'posts' | 'messages'
-        subType, // 'like' | 'comment' | 'vote' | 'new_post' | 'global_chat' | 'group_chat' | 'dm_chat' | 'nudge'
+        category,
+        subType,
         title,
         body,
         targetView,
@@ -718,7 +757,8 @@
           targetRoomId: targetRoomId || null,
           readBy: [],
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         try {
           await db.collection('bma_notifications').doc(notifId).set(notifObj);
@@ -981,7 +1021,6 @@
         const isUsernameChanged = cleanNewUser !== currentUser.username;
 
         if (isUsernameChanged) {
-          // ตรวจสอบว่าซ้ำกับสมาชิกคนอื่นหรือไม่
           const taken = users.some(
             (u) => u.id !== currentUser.id && u.username && u.username.toLowerCase() === cleanNewUser.toLowerCase()
           );
@@ -989,7 +1028,6 @@
             setProfileEditError('Username "' + cleanNewUser + '" มีสมาชิกท่านอื่นใช้แล้ว กรุณาใช้ชื่ออื่น');
             return;
           }
-          // ตรวจสอบโควตาเปลี่ยน Username ไม่เกิน 2 ครั้งใน 14 วัน
           if (updatedHistory.length >= 2) {
             const oldestChange = Math.min(...updatedHistory);
             const nextAvailableDate = new Date(oldestChange + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('th-TH');
@@ -1128,7 +1166,7 @@
       };
 
       // ============================================================================
-      // 5. ระบบสร้างโพสต์บล็อก + โพลล์สำรวจความคิดเห็น (แสดงผลในคอมเมนต์ & Anonymous Vote)
+      // 5. ระบบสร้างโพสต์บล็อก + โพลล์สำรวจความคิดเห็น
       // ============================================================================
       const handlePostFileSelect = (e) => {
         const files = Array.from(e.target.files || []);
@@ -1233,6 +1271,7 @@
             minute: '2-digit'
           }),
           timestamp: nowTs,
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           likes: [],
           bookmarks: [],
           comments: []
@@ -1249,7 +1288,8 @@
           isSystemPostAlert: true,
           readBy: [currentUser.id],
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: nowTs
+          timestamp: nowTs,
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (db) {
@@ -1302,7 +1342,6 @@
         const updatedPoll = { ...post.poll, options: updatedOptions };
         if (db) {
           await db.collection('bma_posts').doc(post.id).update({ poll: updatedPoll });
-          // แจ้งเตือนเจ้าของโพสต์ว่ามีคนร่วมโหวตโพลล์
           const voterLabel = post.poll.isAnonymous ? 'สมาชิกไม่ระบุตัวตน' : currentUser.displayName;
           await dispatchNotification({
             recipientId: post.authorId,
@@ -1424,7 +1463,7 @@
       };
 
       // ============================================================================
-      // 6. ระบบแชต + สถานะกำลังพิมพ์ + คลิกขวา (คัดลอก, ส่งต่อ, แก้ไข, ยกเลิกข้อความ)
+      // 6. ระบบแชต (บันทึกด้วย Server Timestamp แก้ปัญหาเวลาเครื่องไม่เท่ากัน)
       // ============================================================================
       const startDirectMessageWith = (targetMember) => {
         if (!currentUser) {
@@ -1461,7 +1500,6 @@
         const val = e.target.value;
         setChatInputText(val);
 
-        // อัปเดตสถานะ "กำลังพิมพ์..."
         broadcastTypingStatus(val.trim().length > 0);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => {
@@ -1586,7 +1624,6 @@
         e.preventDefault();
         if (!currentUser) return;
 
-        // กรณีอยู่ในโหมดแก้ไขข้อความของตนเอง
         if (editingChatMsg) {
           if (!chatInputText.trim()) return;
           if (db) {
@@ -1606,7 +1643,7 @@
         if (activeGroupObj && activeGroupObj.isArchived) return;
 
         const nowTs = Date.now();
-        const msgId = 'msg-' + nowTs;
+        const msgId = 'msg-' + nowTs + '-' + Math.random().toString(36).slice(2, 5);
         const text = chatInputText.trim();
 
         const newMsg = {
@@ -1621,13 +1658,14 @@
           isDeleted: false,
           isSystemPostAlert: false,
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: nowTs
+          timestamp: nowTs,
+          // ใช้เวลาจากเซิร์ฟเวอร์กลางของ Firebase เพื่อให้ลำดับข้อความถูกต้องเสมอแม้เวลาเครื่องไม่ตรงกัน
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (db) {
           await db.collection('bma_messages').doc(msgId).set(newMsg);
 
-          // ส่งแจ้งเตือนข้อความตามประเภทห้อง (Global / Group / DM)
           if (activeRoom.type === 'dm') {
             await dispatchNotification({
               recipientId: activeRoom.id,
@@ -1677,7 +1715,6 @@
         broadcastTypingStatus(false);
       };
 
-      // ส่งการสะกิด (Nudge) ในแชตส่วนตัว
       const handleSendNudge = async () => {
         if (!currentUser || activeRoom.type !== 'dm' || !db) return;
         const targetMember = getAuthor(activeRoom.id);
@@ -1697,7 +1734,8 @@
           isDeleted: false,
           isSystemPostAlert: false,
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: nowTs
+          timestamp: nowTs,
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         await db.collection('bma_messages').doc(msgId).set(nudgeMsg);
@@ -1714,9 +1752,6 @@
         });
       };
 
-      // ============================================================================
-      // คลิกขวาที่ข้อความ รูปภาพ วิดีโอ หรือไฟล์ (Context Menu Actions)
-      // ============================================================================
       const handleOpenContextMenu = (e, msg, mediaItem = null) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1730,9 +1765,7 @@
         if (!contextMenu) return;
         const { message, mediaItem } = contextMenu;
         const textToCopy = mediaItem ? mediaItem.url : message.text || '';
-        if (textToCopy) {
-          navigator.clipboard.writeText(textToCopy);
-        }
+        if (textToCopy) navigator.clipboard.writeText(textToCopy);
         setContextMenu(null);
       };
 
@@ -1783,7 +1816,8 @@
           isDeleted: false,
           isSystemPostAlert: false,
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-          timestamp: nowTs
+          timestamp: nowTs,
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         await db.collection('bma_messages').doc(msgId).set(newMsg);
@@ -1808,7 +1842,8 @@
           createdBy: currentUser.id,
           isProtected: false,
           isSystemReadOnly: false,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (db) await db.collection('bma_channels').doc(newCh.id).set(newCh);
@@ -1840,7 +1875,8 @@
           members: allMembersInGroup,
           createdBy: currentUser.id,
           isArchived: false,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         if (db) await db.collection('bma_groups').doc(newGrp.id).set(newGrp);
         setActiveRoom({ type: 'group', id: newGrp.id });
@@ -1928,7 +1964,6 @@
         : [];
 
       const myGroups = currentUser ? groups.filter((g) => (g.members || []).includes(currentUser.id)) : [];
-      const currentRoomMessages = chatMessages.filter((m) => m.roomKey === currentRoomKey);
       const currentRoomTypers = typingStatuses.filter(
         (t) => t.roomKey === currentRoomKey && (!currentUser || t.userId !== currentUser.id)
       );
@@ -1945,9 +1980,14 @@
       const unreadMsgNotifsCount = msgNotifs.filter((n) => !(n.readBy || []).includes(currentUser && currentUser.id)).length;
 
       return (
-        <div className="min-h-screen bg-[#050811] text-white flex flex-col">
+        <div
+          className={
+            'bg-[#050811] text-white flex flex-col ' +
+            (currentView === 'chat' ? 'h-screen overflow-hidden' : 'min-h-screen')
+          }
+        >
           {dbErrorBanner && (
-            <div className="bg-amber-500 text-[#050811] px-4 py-2 text-xs font-bold text-center">
+            <div className="bg-amber-500 text-[#050811] px-4 py-2 text-xs font-bold text-center shrink-0">
               ⚠️ {dbErrorBanner}
             </div>
           )}
@@ -1965,7 +2005,7 @@
               >
                 <div className="flex items-center justify-between text-[11px] font-bold text-amber-300 mb-1">
                   <span className="truncate">{toast.title}</span>
-                  <span className="font-mono shrink-0 ml-1">{toast.time}</span>
+                  <span className="font-mono shrink-0 ml-1">{getDisplayTime(toast)}</span>
                 </div>
                 <p className="text-xs text-white line-clamp-2">{toast.body}</p>
               </div>
@@ -1973,9 +2013,9 @@
           </div>
 
           {/* ================================================================= */}
-          {/* TOP NAVBAR (พร้อมโลโก้สมาคม SVG และปุ่มจัดการการแจ้งเตือนทั้งหมด) */}
+          {/* TOP NAVBAR                                                        */}
           {/* ================================================================= */}
-          <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F]">
+          <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F] shrink-0">
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-3 text-left group">
                 <AssociationLogo size={38} className="group-hover:scale-105 transition" />
@@ -2429,11 +2469,12 @@
           )}
 
           {/* ================================================================= */}
-          {/* VIEW 4: CHAT SYSTEM (พร้อมสถานะส่งแล้ว/อ่านแล้ว, กำลังพิมพ์, คลิกขวา) */}
+          {/* VIEW 4: CHAT SYSTEM (Fixed Viewport Height — เลื่อนด้วยลูกกลิ้งเฉพาะช่องข้อความ) */}
           {/* ================================================================= */}
           {currentView === 'chat' && (
-            <div className="flex-1 flex overflow-hidden h-[calc(100vh-4rem)]">
-              <aside className="w-64 md:w-72 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 overflow-y-auto">
+            <div className="flex-1 flex overflow-hidden min-h-0">
+              {/* แถบซ้ายล็อกความสูงคงที่ เลื่อนดูรายชื่อห้องแยกอิสระ */}
+              <aside className="w-64 md:w-72 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto">
                 {/* 1. Global Channels */}
                 <div className="p-3 border-b border-[#1E3A5F]">
                   <div className="px-1 mb-2 flex items-center justify-between">
@@ -2568,8 +2609,9 @@
                 </div>
               </aside>
 
-              {/* CENTER CHAT ROOM */}
-              <main className="flex-1 flex flex-col bg-[#050811] min-w-0 relative">
+              {/* CENTER CHAT ROOM (กำหนดขนาดตายตัว ใช้ลูกกลิ้งเลื่อนเฉพาะช่องข้อความตรงกลาง) */}
+              <main className="flex-1 flex flex-col bg-[#050811] min-w-0 h-full overflow-hidden relative">
+                {/* Header ห้องแชต อยู่กับที่ด้านบนเสมอ */}
                 <div className="h-16 px-4 md:px-6 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-3 shrink-0">
                   <div className="min-w-0 flex-1">
                     {activeRoom.type === 'channel' && activeChannelObj && (
@@ -2667,10 +2709,13 @@
                   </div>
                 </div>
 
-                {/* Chat Messages Feed */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {/* พื้นที่แสดงข้อความแชต (Scrollable Area เฉพาะส่วนนี้ ใช้ลูกกลิ้งเมาส์เลื่อนดูข้อความเก่าได้ทันที) */}
+                <div
+                  ref={chatContainerRef}
+                  className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4"
+                >
                   <div className="text-[11px] text-slate-500 text-center pb-2">
-                    💡 ทริค: คลิกขวาที่ข้อความ รูปภาพ วิดีโอ หรือไฟล์ เพื่อคัดลอก ส่งต่อ แก้ไข หรือยกเลิกข้อความ
+                    💡 ใช้ลูกกลิ้งเมาส์เลื่อนขึ้นเพื่อดูข้อความเก่า • คลิกขวาที่ข้อความหรือไฟล์เพื่อคัดลอก ส่งต่อ แก้ไข หรือยกเลิกข้อความ
                   </div>
 
                   {currentRoomMessages.length === 0 ? (
@@ -2680,6 +2725,7 @@
                     </div>
                   ) : (
                     currentRoomMessages.map((msg) => {
+                      const msgTimeStr = getDisplayTime(msg);
                       if (msg.isSystemPostAlert) {
                         const postAuthor = getAuthor(msg.senderId);
                         return (
@@ -2694,7 +2740,7 @@
                                   <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-[10px] font-bold text-blue-200">
                                     📝 แจ้งเตือนโพสต์ใหม่
                                   </span>
-                                  <span className="text-[11px] font-mono text-slate-400">{msg.time}</span>
+                                  <span className="text-[11px] font-mono text-slate-400">{msgTimeStr}</span>
                                 </div>
                                 <p className="text-sm font-bold text-white mt-1">{msg.text}</p>
                                 {msg.postTitle && (
@@ -2738,9 +2784,9 @@
                               <span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{sender.id}</span>
                               <span className="text-[10px] font-mono text-slate-400">@{sender.username}</span>
                               <RoleBadge role={sender.role} />
-                              <span className="text-[10px] font-mono text-slate-400">{msg.time}</span>
+                              <span className="text-[10px] font-mono text-slate-400">{msgTimeStr}</span>
 
-                              {/* สถานะข้อความ: ส่งแล้ว vs อ่านแล้ว แสดงต่อท้ายเวลาที่ส่งพร้อมแยกสี */}
+                              {/* สถานะข้อความ: ส่งแล้ว vs อ่านแล้ว */}
                               {!msg.isDeleted && (
                                 isReadByOthers ? (
                                   <span
@@ -2819,7 +2865,7 @@
                     })
                   )}
 
-                  {/* แสดงสถานะผู้ใช้กำลังพิมพ์ข้อความอยู่ ต่อจากข้อความล่าสุด */}
+                  {/* สถานะกำลังพิมพ์ข้อความ ต่อจากข้อความล่าสุด */}
                   {currentRoomTypers.length > 0 && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B1325] border border-sky-500/40 text-xs text-sky-300 animate-pulse w-fit">
                       <span>💬</span>
@@ -2828,8 +2874,6 @@
                       </span>
                     </div>
                   )}
-
-                  <div ref={messagesEndRef} />
                 </div>
 
                 {/* POPUP MENU: @Mention */}
@@ -2858,23 +2902,23 @@
                   </div>
                 )}
 
-                {/* Chat Input Area */}
+                {/* กล่องพิมพ์ข้อความ ล็อกอยู่ด้านล่างเสมอ (shrink-0) */}
                 {activeChannelObj && activeChannelObj.isSystemReadOnly ? (
-                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center">
+                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center shrink-0">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">
                       <span>📢</span>
                       <span>ห้อง <strong className="text-white">#announcements</strong> สำหรับแจ้งเตือนโพสต์ใหม่อัตโนมัติเท่านั้น</span>
                     </div>
                   </div>
                 ) : activeGroupObj && activeGroupObj.isArchived ? (
-                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center">
+                  <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center shrink-0">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#050811] border border-amber-400/40 text-xs text-amber-200">
                       <span>📦</span>
                       <span>กลุ่มแชตนี้ถูกเก็บเข้ากรุ (Archived - โหมดอ่านอย่างเดียว)</span>
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleSendChatMessage} className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2.5">
+                  <form onSubmit={handleSendChatMessage} className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2.5 shrink-0">
                     {editingChatMsg && (
                       <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-400/50 text-xs text-amber-200">
                         <span>✎ กำลังแก้ไขข้อความของคุณ: "{editingChatMsg.text}"</span>
@@ -2976,10 +3020,10 @@
                 )}
               </main>
 
-              {/* RIGHT COLLAPSIBLE DRAWER */}
+              {/* RIGHT COLLAPSIBLE DRAWER (ล็อกความสูงคงที่ เลื่อนดูสมาชิกแยกอิสระ) */}
               {isRightMemberDrawerOpen && (
-                <aside className="w-72 md:w-80 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0">
-                  <div className="p-4 border-b border-[#1E3A5F] flex items-center justify-between">
+                <aside className="w-72 md:w-80 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden">
+                  <div className="p-4 border-b border-[#1E3A5F] flex items-center justify-between shrink-0">
                     <div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                         👥 สมาชิกสมาคม ({activatedMembers.length})
@@ -2994,7 +3038,7 @@
                     </button>
                   </div>
 
-                  <div className="p-3 border-b border-[#1E3A5F] flex flex-wrap gap-1">
+                  <div className="p-3 border-b border-[#1E3A5F] flex flex-wrap gap-1 shrink-0">
                     {allFilterTags.map((tag) => (
                       <button
                         key={tag}
@@ -3010,7 +3054,7 @@
                     ))}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2.5">
                     {filteredRightDrawerMembers.map((m) => (
                       <div
                         key={m.id}
@@ -3042,9 +3086,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* RIGHT-CLICK CONTEXT MENU (คัดลอก, ส่งต่อ, แก้ไข, ยกเลิกข้อความ)   */}
-          {/* ================================================================= */}
+          {/* RIGHT-CLICK CONTEXT MENU */}
           {contextMenu && (
             <div
               style={{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }}
@@ -3089,7 +3131,7 @@
             </div>
           )}
 
-          {/* MODAL: เลือกปลายทางสำหรับส่งต่อข้อความ/ไฟล์ (Forward Modal) */}
+          {/* MODAL: Forward */}
           {forwardingMsg && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl space-y-4">
@@ -3148,7 +3190,7 @@
           )}
 
           {/* ================================================================= */}
-          {/* VIEW 5 & 6: FEED (พร้อมระบบโพลล์ & ปิดแจ้งเตือนโพสต์) & OWNER ADMIN */}
+          {/* VIEW 5 & 6: FEED & OWNER ADMIN                                    */}
           {/* ================================================================= */}
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
@@ -3472,7 +3514,6 @@
                                   {post.category && (
                                     <span className="px-3 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">{post.category}</span>
                                   )}
-                                  {/* ปุ่มปิดการแจ้งเตือนโพสต์ของตนเอง */}
                                   {currentUser && currentUser.id === post.authorId && (
                                     <button
                                       onClick={() => handleToggleMuteSpecificPost(post)}
@@ -3496,7 +3537,6 @@
                               {post.title && <h3 className="text-lg font-bold text-white">{post.title}</h3>}
                               {post.content && <p className="text-sm text-slate-200 whitespace-pre-line leading-relaxed">{post.content}</p>}
 
-                              {/* ส่วนโหวตโพลล์ในโพสต์ */}
                               {post.poll && (
                                 <div className="p-4 rounded-2xl bg-[#050811] border border-[#1E3A5F] space-y-3">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3600,7 +3640,6 @@
                                 </button>
                               </div>
 
-                              {/* ส่วนความคิดเห็น + แสดงผลโพลล์ในคอมเมนต์ตามที่กำหนด */}
                               <div className="pt-3 border-t border-[#1E3A5F]/60 space-y-2.5">
                                 {post.poll && (
                                   <div className="p-4 rounded-xl bg-[#050811] border border-sky-500/40 space-y-2.5">
@@ -3692,9 +3731,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: ศูนย์จัดการการแจ้งเตือนทั้งหมด + ปุ่มปิดการแจ้งเตือนแยกหมวด */}
-          {/* ================================================================= */}
+          {/* MODAL: ศูนย์จัดการการแจ้งเตือนทั้งหมด */}
           {isNotifModalOpen && currentUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl space-y-4">
@@ -3709,7 +3746,6 @@
                   <button onClick={() => setIsNotifModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
 
-                {/* แถบขออนุญาตแจ้งเตือนไปหาเดสก์ท็อปและอุปกรณ์เคลื่อนที่ */}
                 <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
                     <div className="font-bold text-white">📱 แจ้งเตือนไปยังเดสก์ท็อป / อุปกรณ์เคลื่อนที่</div>
@@ -3727,7 +3763,6 @@
                   )}
                 </div>
 
-                {/* แท็บแยกประเภทการแจ้งเตือน */}
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex gap-1 p-1 rounded-xl bg-[#050811] border border-[#1E3A5F]">
                     <button
@@ -3816,9 +3851,7 @@
                 ) : (
                   <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
                     {(notifTab === 'posts' ? postNotifs : msgNotifs).length === 0 ? (
-                      <div className="p-8 text-center text-xs text-slate-400">
-                        ยังไม่มีการแจ้งเตือนในหมวดหมู่นี้
-                      </div>
+                      <div className="p-8 text-center text-xs text-slate-400">ยังไม่มีการแจ้งเตือนในหมวดหมู่นี้</div>
                     ) : (
                       (notifTab === 'posts' ? postNotifs : msgNotifs).map((n) => {
                         const isRead = (n.readBy || []).includes(currentUser.id);
@@ -3837,7 +3870,7 @@
                               <div className="flex items-center gap-2">
                                 {!isRead && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
                                 <span className="text-xs font-bold text-white truncate">{n.title}</span>
-                                <span className="text-[10px] font-mono text-slate-400">{n.time}</span>
+                                <span className="text-[10px] font-mono text-slate-400">{getDisplayTime(n)}</span>
                               </div>
                               <p className="text-xs text-slate-200 mt-1 line-clamp-2">{n.body}</p>
                             </div>
@@ -3854,9 +3887,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: ดูโปรไฟล์เต็มของสมาชิก                                     */}
-          {/* ================================================================= */}
+          {/* MODAL: ดูโปรไฟล์เต็มของสมาชิก */}
           {selectedMemberModal && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl overflow-hidden shadow-2xl">
@@ -3936,9 +3967,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: แก้ไขโปรไฟล์ + เปลี่ยน Username (จำกัด 2 ครั้ง/14 วัน) & รหัสผ่าน */}
-          {/* ================================================================= */}
+          {/* MODAL: แก้ไขโปรไฟล์ */}
           {isEditingProfile && currentUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="w-full max-w-lg bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
@@ -4016,7 +4045,6 @@
                     />
                   </div>
 
-                  {/* ลิงก์ Social Media */}
                   <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
                     <div className="text-xs font-bold text-white">🔗 ลิงก์ Social Media หรือ External Link</div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -4081,9 +4109,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: ADMIN แก้ไขหมวดหมู่สมาชิกย้อนหลัง                          */}
-          {/* ================================================================= */}
+          {/* MODAL: ADMIN แก้ไขหมวดหมู่สมาชิกย้อนหลัง */}
           {editingTagsUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
@@ -4135,9 +4161,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: CREATE POST & POLL                                         */}
-          {/* ================================================================= */}
+          {/* MODAL: CREATE POST & POLL */}
           {isCreatingPost && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
@@ -4185,7 +4209,6 @@
                     />
                   </div>
 
-                  {/* ส่วนสร้างโพลล์ (Poll) */}
                   <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-white">📊 แนบโพลล์สำรวจความคิดเห็น (แสดงผลโพลล์ในคอมเมนต์)</span>
@@ -4276,7 +4299,6 @@
                     )}
                   </div>
 
-                  {/* แนบไฟล์ */}
                   <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-slate-200">📎 แนบรูปภาพ, วิดีโอ หรือไฟล์เอกสาร</span>
