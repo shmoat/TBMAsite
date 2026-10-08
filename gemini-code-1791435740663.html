@@ -70,7 +70,18 @@
     const { useState, useEffect, useRef } = React;
 
     // ============================================================================
-    // 📌 จุดใส่ค่า FIREBASE CONFIG ถาวร (หรือตั้งค่าผ่านปุ่ม "☁️ ตั้งค่า Firebase" บนหน้าเว็บก็ได้)
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
+    authDomain: "tbmasite.firebaseapp.com",
+    projectId: "tbmasite",
+    storageBucket: "tbmasite.firebasestorage.app",
+    messagingSenderId: "616851307256",
+    appId: "1:616851307256:web:15b49dfec2de521af6990d",
+    measurementId: "G-JDW0E0S138"
+  };
+
     // ============================================================================
     const HARDCODED_FIREBASE_CONFIG = {
       apiKey: "",
