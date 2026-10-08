@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Blue Moon Association</title>
+  <!-- Favicon โลโก้สามเหลี่ยมพระจันทร์เสี้ยวสีกรมท่าขอบขาว พื้นหลังโปร่งใส -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z' fill='%230F2547' stroke='%23FFFFFF' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -105,6 +107,12 @@
       bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association',
       avatarUrl: '',
       socialLinks: [],
+      usernameChangeHistory: [],
+      notifPrefs: {
+        muteOwnPosts: false,
+        muteGlobalChat: false,
+        mutePrivateChat: false
+      },
       isOnline: false,
       joinedAt: '2026-10-08'
     };
@@ -132,12 +140,31 @@
       }
     ];
 
-    // Helper ดึงหมวดหมู่ทั้งหมดของสมาชิก (รองรับทั้งรูปแบบเก่า memberTag เดียว และรูปแบบใหม่ memberTags หลายอัน)
+    // โลโก้สมาคม: รูปสามเหลี่ยมที่ด้านขวาโค้งคล้ายพระจันทร์เสี้ยว สีกรมท่า ขอบสีขาว พื้นหลังโปร่งใส
+    function AssociationLogo({ size = 40, className = '' }) {
+      return (
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 100 100"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className={'shrink-0 drop-shadow-[0_0_8px_rgba(59,130,246,0.45)] ' + className}
+        >
+          <path
+            d="M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z"
+            fill="#0F2547"
+            stroke="#FFFFFF"
+            strokeWidth="5.5"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    }
+
     function getUserTags(user) {
       if (!user) return ['Others'];
-      if (Array.isArray(user.memberTags) && user.memberTags.length > 0) {
-        return user.memberTags;
-      }
+      if (Array.isArray(user.memberTags) && user.memberTags.length > 0) return user.memberTags;
       if (user.memberTag) return [user.memberTag];
       return ['Others'];
     }
@@ -201,18 +228,14 @@
       return null;
     }
 
-    function TagBadgesList({ user, dark = false }) {
+    function TagBadgesList({ user }) {
       const tags = getUserTags(user);
       return (
         <div className="flex flex-wrap gap-1">
           {tags.map((t, i) => (
             <span
               key={i}
-              className={
-                dark
-                  ? 'px-2 py-0.5 rounded-full bg-[#050811] text-white border border-white/20 text-[10px] font-bold'
-                  : 'px-2 py-0.5 rounded-full bg-[#0F2547] border border-white/20 text-blue-100 text-[10px] font-semibold'
-              }
+              className="px-2 py-0.5 rounded-full bg-[#0F2547] border border-white/20 text-blue-100 text-[10px] font-semibold"
             >
               {t}
             </span>
@@ -221,7 +244,7 @@
       );
     }
 
-    function FormattedMessageText({ text, currentUser }) {
+    function FormattedMessageText({ text, currentUser, isEdited }) {
       if (!text) return null;
       const regex = /(@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g;
       const parts = text.split(regex);
@@ -236,9 +259,7 @@
             let highlightMe = false;
             if (currentUser) {
               const isGlobalTag = lower === '@everyone' || (lower === '@here' && currentUser.isOnline);
-              const isMyCat = myTags.some(
-                (t) => part === '@[' + t + ']' || lower === '@' + t.toLowerCase()
-              );
+              const isMyCat = myTags.some((t) => part === '@[' + t + ']' || lower === '@' + t.toLowerCase());
               const isDirectMe =
                 lower === '@' + String(currentUser.id).toLowerCase() ||
                 (currentUser.username && lower === '@' + currentUser.username.toLowerCase());
@@ -258,6 +279,9 @@
               </span>
             );
           })}
+          {isEdited && (
+            <span className="ml-2 text-[10px] italic text-slate-400 select-none">(แก้ไขแล้ว)</span>
+          )}
         </p>
       );
     }
@@ -269,6 +293,8 @@
       const [channels, setChannels] = useState(DEFAULT_GLOBAL_CHANNELS);
       const [groups, setGroups] = useState([]);
       const [chatMessages, setChatMessages] = useState([]);
+      const [typingStatuses, setTypingStatuses] = useState([]);
+      const [notifications, setNotifications] = useState([]);
 
       const [currentUser, setCurrentUser] = useState(null);
       const [dbErrorBanner, setDbErrorBanner] = useState('');
@@ -280,36 +306,40 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [highlightedPostId, setHighlightedPostId] = useState(null);
 
-      // Modal ดูโปรไฟล์เต็มๆ ของสมาชิก (คลิกจากดาวบริวาร, โพสต์, หรือแถบรายชื่อในห้องแชต)
+      // Member Profile Modal
       const [selectedMemberModal, setSelectedMemberModal] = useState(null);
 
-      // Auth & Password Toggle & Remember Me States
+      // Auth & Password Toggle & Remember Me
       const [authMode, setAuthMode] = useState('signin');
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
-      const [showLoginPassword, setShowLoginPassword] = useState(false); // ปุ่มกดสลับดูรหัสผ่าน (Toggle)
-      const [rememberMe, setRememberMe] = useState(true); // ปุ่มล็อกอินค้างไว้
+      const [showLoginPassword, setShowLoginPassword] = useState(false);
+      const [rememberMe, setRememberMe] = useState(true);
       const [authError, setAuthError] = useState('');
 
       // Activate ID States
       const [activateIdInput, setActivateIdInput] = useState('');
       const [activateUsername, setActivateUsername] = useState('');
       const [activatePassword, setActivatePassword] = useState('');
-      const [showActivatePassword, setShowActivatePassword] = useState(false); // ปุ่มกดสลับดูรหัสผ่านตอนลงทะเบียน
+      const [showActivatePassword, setShowActivatePassword] = useState(false);
       const [activateDisplayName, setActivateDisplayName] = useState('');
 
-      // Profile Edit & Social Links States
+      // Profile Edit & Username/Password Change (จำกัดเปลี่ยน Username 2 ครั้งใน 14 วัน)
       const [isEditingProfile, setIsEditingProfile] = useState(false);
       const [editDisplayName, setEditDisplayName] = useState('');
       const [editBio, setEditBio] = useState('');
       const [editAvatarUrl, setEditAvatarUrl] = useState('');
+      const [editUsernameInput, setEditUsernameInput] = useState('');
+      const [editPasswordInput, setEditPasswordInput] = useState('');
+      const [showEditPassword, setShowEditPassword] = useState(false);
+      const [profileEditError, setProfileEditError] = useState('');
       const [editSocialLinks, setEditSocialLinks] = useState([]);
       const [newSocialPlatform, setNewSocialPlatform] = useState('Instagram');
       const [newSocialLabel, setNewSocialLabel] = useState('');
       const [newSocialUrl, setNewSocialUrl] = useState('');
       const avatarInputRef = useRef(null);
 
-      // Create Post States
+      // Create Post & Poll States
       const [isCreatingPost, setIsCreatingPost] = useState(false);
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
@@ -320,20 +350,27 @@
       const postFileInputRef = useRef(null);
       const [commentInputs, setCommentInputs] = useState({});
 
-      // Admin Issue ID (รองรับหลายหมวดหมู่) & Edit Member Tags Modal
+      // Poll Creation inside Post
+      const [hasPollInNewPost, setHasPollInNewPost] = useState(false);
+      const [pollQuestionInput, setPollQuestionInput] = useState('');
+      const [pollOptionsInput, setPollOptionsInput] = useState(['', '']);
+      const [pollCloseTimeInput, setPollCloseTimeInput] = useState('');
+      const [pollIsAnonymousInput, setPollIsAnonymousInput] = useState(false);
+
+      // Admin Issue ID & Edit Tags
       const [newMemberId, setNewMemberId] = useState('M001');
       const [newMemberTags, setNewMemberTags] = useState(['LCs & Pal']);
       const [customTagInput, setCustomTagInput] = useState('');
       const [copiedId, setCopiedId] = useState(null);
-      const [editingTagsUser, setEditingTagsUser] = useState(null); // สมาชิกที่ Admin กำลังแก้ไขหมวดหมู่
+      const [editingTagsUser, setEditingTagsUser] = useState(null);
       const [editingTagsList, setEditingTagsList] = useState([]);
       const [editingCustomTag, setEditingCustomTag] = useState('');
 
       // ============================================================================
-      // CHAT STATES (The Blue Moon Comms V3)
+      // CHAT STATES & RIGHT-CLICK CONTEXT MENU & TYPING INDICATOR
       // ============================================================================
       const [activeRoom, setActiveRoom] = useState({ type: 'channel', id: 'global-lobby' });
-      const [openedDmPartners, setOpenedDmPartners] = useState([]); // เก็บรายชื่อคนที่กดทักแชตใหม่ในเซสชันนี้
+      const [openedDmPartners, setOpenedDmPartners] = useState([]);
       const [isRightMemberDrawerOpen, setIsRightMemberDrawerOpen] = useState(true);
       const [rightMemberTagFilter, setRightMemberTagFilter] = useState('ALL');
 
@@ -343,6 +380,12 @@
       const [chatAttachUrlInput, setChatAttachUrlInput] = useState('');
       const [chatAttachTypeInput, setChatAttachTypeInput] = useState('image');
       const chatFileInputRef = useRef(null);
+      const typingTimeoutRef = useRef(null);
+
+      // Context Menu (คลิกขวาที่ข้อความ / รูปภาพ / วิดีโอ / ไฟล์)
+      const [contextMenu, setContextMenu] = useState(null); // { x, y, message, mediaItem }
+      const [editingChatMsg, setEditingChatMsg] = useState(null); // ข้อความที่กำลังแก้ไข
+      const [forwardingMsg, setForwardingMsg] = useState(null); // ข้อความหรือสื่อที่กำลังส่งต่อ
 
       const [showMentionMenu, setShowMentionMenu] = useState(false);
       const [mentionFilter, setMentionFilter] = useState('');
@@ -357,8 +400,25 @@
       const [selectedGroupMembers, setSelectedGroupMembers] = useState([]);
 
       const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+
+      // ============================================================================
+      // NOTIFICATION CENTER & MUTE SETTINGS STATES
+      // ============================================================================
+      const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
+      const [notifTab, setNotifTab] = useState('posts'); // 'posts' | 'messages' | 'settings'
       const [toastList, setToastList] = useState([]);
+      const [browserPushPermission, setBrowserPushPermission] = useState(
+        typeof Notification !== 'undefined' ? Notification.permission : 'default'
+      );
+      const prevNotifCountRef = useRef(0);
       const messagesEndRef = useRef(null);
+
+      // ปิด Context Menu เมื่อคลิกที่อื่น
+      useEffect(() => {
+        const closeMenu = () => setContextMenu(null);
+        window.addEventListener('click', closeMenu);
+        return () => window.removeEventListener('click', closeMenu);
+      }, []);
 
       // ============================================================================
       // 1. REALTIME SYNC กับ FIREBASE FIRESTORE
@@ -366,7 +426,6 @@
       useEffect(() => {
         if (!db) return;
 
-        // 1.1 Sync สมาชิก (bma_users)
         const unsubUsers = db.collection('bma_users').onSnapshot(
           async (snapshot) => {
             setDbErrorBanner('');
@@ -402,11 +461,10 @@
             }
           },
           (err) => {
-            setDbErrorBanner('แจ้งเตือน Firebase (' + err.code + '): กรุณาตรวจสอบการตั้งค่า Firestore Database');
+            setDbErrorBanner('แจ้งเตือน Firebase (' + err.code + '): กรุณาตรวจสอบว่าอัปเดต Firestore Rules เรียบร้อยแล้ว');
           }
         );
 
-        // 1.2 Sync โพสต์บล็อก (bma_posts)
         const unsubPosts = db.collection('bma_posts').onSnapshot(
           (snapshot) => {
             const loadedPosts = snapshot.docs.map((doc) => doc.data());
@@ -416,7 +474,6 @@
           (err) => console.error(err)
         );
 
-        // 1.3 Sync ห้อง Global Chat (bma_channels)
         const unsubChannels = db.collection('bma_channels').onSnapshot(
           async (snapshot) => {
             if (snapshot.empty) {
@@ -427,12 +484,10 @@
               } catch (e) {}
             } else {
               const loadedCh = snapshot.docs.map((d) => d.data());
-              // รับประกันว่ามีห้อง lobby และ announcements เสมอ
               const hasLobby = loadedCh.some((c) => c.id === 'global-lobby');
               const hasAnnounce = loadedCh.some((c) => c.id === 'global-announce');
               if (!hasLobby) await db.collection('bma_channels').doc('global-lobby').set(DEFAULT_GLOBAL_CHANNELS[0]);
               if (!hasAnnounce) await db.collection('bma_channels').doc('global-announce').set(DEFAULT_GLOBAL_CHANNELS[1]);
-
               loadedCh.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
               setChannels(loadedCh);
             }
@@ -440,7 +495,6 @@
           (err) => console.error(err)
         );
 
-        // 1.4 Sync กลุ่มแชตย่อย (bma_groups)
         const unsubGroups = db.collection('bma_groups').onSnapshot(
           (snapshot) => {
             const loadedGrp = snapshot.docs.map((d) => d.data());
@@ -450,7 +504,6 @@
           (err) => console.error(err)
         );
 
-        // 1.5 Sync ข้อความแชตทั้งหมด (bma_messages)
         const unsubMessages = db.collection('bma_messages').onSnapshot(
           (snapshot) => {
             const loadedMsgs = snapshot.docs.map((d) => d.data());
@@ -460,16 +513,38 @@
           (err) => console.error(err)
         );
 
+        const unsubTyping = db.collection('bma_typing').onSnapshot(
+          (snapshot) => {
+            const now = Date.now();
+            const activeTypers = snapshot.docs
+              .map((d) => d.data())
+              .filter((t) => t.isTyping && now - (t.updatedAt || 0) < 8000);
+            setTypingStatuses(activeTypers);
+          },
+          () => {}
+        );
+
+        const unsubNotifs = db.collection('bma_notifications').onSnapshot(
+          (snapshot) => {
+            const loadedNotifs = snapshot.docs.map((d) => d.data());
+            loadedNotifs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            setNotifications(loadedNotifs);
+          },
+          () => {}
+        );
+
         return () => {
           unsubUsers();
           unsubPosts();
           unsubChannels();
           unsubGroups();
           unsubMessages();
+          unsubTyping();
+          unsubNotifs();
         };
       }, []);
 
-      // ตรวจสอบการล็อกอินค้างไว้ (Remember Me Session) เมื่อโหลดรายชื่อสมาชิกเสร็จ
+      // ตรวจสอบการล็อกอินค้างไว้ (Remember Me Session)
       useEffect(() => {
         if (!currentUser && users.length > 0) {
           const savedId =
@@ -490,7 +565,6 @@
         }
       }, [users]);
 
-      // เลื่อนแชตลงล่างสุดเมื่อมีข้อความใหม่ในห้องปัจจุบัน
       const getDmRoomKey = (id1, id2) => {
         const sorted = [id1, id2].sort();
         return 'dm_' + sorted[0] + '_' + sorted[1];
@@ -501,14 +575,209 @@
           ? getDmRoomKey(currentUser.id, activeRoom.id)
           : activeRoom.id;
 
+      // ============================================================================
+      // อัปเดตสถานะ "อ่านแล้ว" (Read Receipts) อัตโนมัติเมื่อเปิดห้องแชต
+      // ============================================================================
+      useEffect(() => {
+        if (!currentUser || !db || currentView !== 'chat') return;
+        const unreadInRoom = chatMessages.filter(
+          (m) =>
+            m.roomKey === currentRoomKey &&
+            m.senderId !== currentUser.id &&
+            !(m.readBy || []).includes(currentUser.id)
+        );
+        unreadInRoom.forEach((m) => {
+          const nextReadBy = Array.from(new Set([...(m.readBy || []), currentUser.id]));
+          db.collection('bma_messages').doc(m.id).update({ readBy: nextReadBy }).catch(() => {});
+        });
+      }, [chatMessages, currentRoomKey, currentView, currentUser]);
+
       useEffect(() => {
         if (currentView === 'chat' && messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-      }, [chatMessages, currentRoomKey, currentView]);
+      }, [chatMessages, typingStatuses, currentRoomKey, currentView]);
 
       // ============================================================================
-      // 2. ระบบเข้าสู่ระบบ (พร้อมตัวเลือกล็อกอินค้างไว้ & ปุ่มดูรหัสผ่าน)
+      // ระบบการแจ้งเตือน (Desktop/Mobile Notification & กรองตามตั้งค่าการปิดแจ้งเตือน)
+      // ============================================================================
+      const isNotificationMutedForMe = (notif) => {
+        if (!currentUser) return true;
+        const prefs = currentUser.notifPrefs || {};
+        if (notif.category === 'posts') {
+          if (prefs.muteOwnPosts && notif.subType !== 'new_post') return true;
+          // ตรวจสอบว่าโพสต์ต้นทางถูกตั้งค่าปิดแจ้งเตือนเฉพาะโพสต์หรือไม่
+          if (notif.targetPostId) {
+            const p = posts.find((item) => item.id === notif.targetPostId);
+            if (p && (p.mutedBy || []).includes(currentUser.id)) return true;
+          }
+        }
+        if (notif.category === 'messages') {
+          if (notif.subType === 'global_chat' && prefs.muteGlobalChat) return true;
+          if ((notif.subType === 'group_chat' || notif.subType === 'dm_chat' || notif.subType === 'nudge') && prefs.mutePrivateChat) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const myNotifications = currentUser
+        ? notifications.filter(
+            (n) =>
+              (n.recipientId === currentUser.id || (n.recipientId === 'ALL' && n.actorId !== currentUser.id)) &&
+              !isNotificationMutedForMe(n)
+          )
+        : [];
+
+      const myUnreadNotifs = myNotifications.filter(
+        (n) => !(n.readBy || []).includes(currentUser.id)
+      );
+
+      // แจ้งเตือนป๊อปอัป + เสียง + Desktop/Mobile Push เมื่อมีการแจ้งเตือนใหม่เข้ามา
+      useEffect(() => {
+        if (!currentUser) return;
+        if (myUnreadNotifs.length > prevNotifCountRef.current && prevNotifCountRef.current !== 0) {
+          const latest = myUnreadNotifs[0];
+          if (latest) {
+            // เสียงเตือนเบาๆ
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+              osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+              gain.gain.setValueAtTime(0.06, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              osc.stop(ctx.currentTime + 0.25);
+            } catch (e) {}
+
+            // Toast บนหน้าเว็บ
+            setToastList((prev) => [latest, ...prev.slice(0, 2)]);
+            setTimeout(() => {
+              setToastList((prev) => prev.filter((t) => t.id !== latest.id));
+            }, 4500);
+
+            // ส่งแจ้งเตือนไปยัง Desktop / อุปกรณ์เคลื่อนที่ (หากผู้ใช้กดอนุญาตแล้ว)
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              try {
+                new Notification(latest.title || 'The Blue Moon Association', {
+                  body: latest.body || ''
+                });
+              } catch (e) {}
+            }
+          }
+        }
+        prevNotifCountRef.current = myUnreadNotifs.length;
+      }, [myUnreadNotifs.length, currentUser]);
+
+      const requestDeviceNotificationPermission = async () => {
+        if (typeof Notification === 'undefined') {
+          alert('เบราว์เซอร์หรืออุปกรณ์ของคุณไม่รองรับ Web Notification API');
+          return;
+        }
+        const perm = await Notification.requestPermission();
+        setBrowserPushPermission(perm);
+        if (perm === 'granted') {
+          try {
+            new Notification('The Blue Moon Association', {
+              body: 'เปิดรับการแจ้งเตือนไปยังเดสก์ท็อปและอุปกรณ์เคลื่อนที่เรียบร้อยแล้ว!'
+            });
+          } catch (e) {}
+        }
+      };
+
+      const dispatchNotification = async ({
+        recipientId,
+        actorId,
+        category, // 'posts' | 'messages'
+        subType, // 'like' | 'comment' | 'vote' | 'new_post' | 'global_chat' | 'group_chat' | 'dm_chat' | 'nudge'
+        title,
+        body,
+        targetView,
+        targetPostId,
+        targetRoomType,
+        targetRoomId
+      }) => {
+        if (!db || recipientId === actorId) return;
+        const notifId = 'notif-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        const notifObj = {
+          id: notifId,
+          recipientId,
+          actorId,
+          category,
+          subType,
+          title,
+          body,
+          targetView: targetView || 'feed',
+          targetPostId: targetPostId || null,
+          targetRoomType: targetRoomType || null,
+          targetRoomId: targetRoomId || null,
+          readBy: [],
+          time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now()
+        };
+        try {
+          await db.collection('bma_notifications').doc(notifId).set(notifObj);
+        } catch (e) {}
+      };
+
+      const handleMarkAllNotificationsRead = async () => {
+        if (!currentUser || !db) return;
+        const targetList = myUnreadNotifs.filter((n) =>
+          notifTab === 'posts' ? n.category === 'posts' : notifTab === 'messages' ? n.category === 'messages' : true
+        );
+        for (const n of targetList) {
+          const nextReadBy = Array.from(new Set([...(n.readBy || []), currentUser.id]));
+          await db.collection('bma_notifications').doc(n.id).update({ readBy: nextReadBy }).catch(() => {});
+        }
+      };
+
+      const handleClickNotificationItem = async (notif) => {
+        if (!currentUser) return;
+        if (db && !(notif.readBy || []).includes(currentUser.id)) {
+          const nextReadBy = Array.from(new Set([...(notif.readBy || []), currentUser.id]));
+          db.collection('bma_notifications').doc(notif.id).update({ readBy: nextReadBy }).catch(() => {});
+        }
+        setIsNotifModalOpen(false);
+        if (notif.targetPostId) {
+          handleJumpToOriginPost(notif.targetPostId);
+        } else if (notif.targetRoomType && notif.targetRoomId) {
+          setActiveRoom({ type: notif.targetRoomType, id: notif.targetRoomId });
+          setCurrentView('chat');
+        } else if (notif.targetView) {
+          setCurrentView(notif.targetView);
+        }
+      };
+
+      const handleToggleNotifPref = async (prefKey) => {
+        if (!currentUser || !db) return;
+        const currentPrefs = currentUser.notifPrefs || {
+          muteOwnPosts: false,
+          muteGlobalChat: false,
+          mutePrivateChat: false
+        };
+        const updatedPrefs = {
+          ...currentPrefs,
+          [prefKey]: !currentPrefs[prefKey]
+        };
+        await db.collection('bma_users').doc(currentUser.id).update({ notifPrefs: updatedPrefs });
+      };
+
+      const handleToggleMuteSpecificPost = async (post) => {
+        if (!currentUser || !db) return;
+        const mutedBy = post.mutedBy || [];
+        const nextMuted = mutedBy.includes(currentUser.id)
+          ? mutedBy.filter((id) => id !== currentUser.id)
+          : [...mutedBy, currentUser.id];
+        await db.collection('bma_posts').doc(post.id).update({ mutedBy: nextMuted });
+      };
+
+      // ============================================================================
+      // 2. ระบบเข้าสู่ระบบ & เปิดใช้งาน ID
       // ============================================================================
       const saveLoginSession = (userObj, keepLoggedIn) => {
         if (keepLoggedIn) {
@@ -599,6 +868,12 @@
           isActivated: true,
           isOnline: true,
           socialLinks: targetAccount.socialLinks || [],
+          usernameChangeHistory: [],
+          notifPrefs: {
+            muteOwnPosts: false,
+            muteGlobalChat: false,
+            mutePrivateChat: false
+          },
           memberTags: getUserTags(targetAccount),
           memberTag: getUserTags(targetAccount)[0] || 'Others',
           joinedAt: new Date().toISOString().split('T')[0]
@@ -621,130 +896,24 @@
       };
 
       // ============================================================================
-      // 3. ระบบ ADMIN: ออกรหัสหลายหมวดหมู่ & แก้ไขหมวดหมู่ย้อนหลังได้
+      // 3. ระบบโปรไฟล์ & การเปลี่ยน Username (จำกัด 2 ครั้งใน 14 วัน) และเปลี่ยนรหัสผ่าน
       // ============================================================================
-      const toggleNewMemberTagSelection = (tag) => {
-        if (newMemberTags.includes(tag)) {
-          if (newMemberTags.length > 1) {
-            setNewMemberTags(newMemberTags.filter((t) => t !== tag));
-          }
-        } else {
-          setNewMemberTags([...newMemberTags, tag]);
-        }
+      const getRecentUsernameChanges = (user) => {
+        if (!user || !Array.isArray(user.usernameChangeHistory)) return [];
+        const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        return user.usernameChangeHistory.filter((ts) => now - ts < fourteenDaysMs);
       };
 
-      const handleAddCustomNewTag = () => {
-        const clean = customTagInput.trim();
-        if (!clean) return;
-        if (!newMemberTags.includes(clean)) {
-          setNewMemberTags([...newMemberTags, clean]);
-        }
-        setCustomTagInput('');
-      };
-
-      const handleIssueNewId = async (e) => {
-        e.preventDefault();
-        if (!currentUser || currentUser.role !== 'admin') return;
-        const cleanId = newMemberId.trim().toUpperCase();
-        if (!cleanId || newMemberTags.length === 0) return;
-
-        if (users.some((u) => String(u.id).toUpperCase() === cleanId)) {
-          alert('รหัส ' + cleanId + ' มีอยู่ในระบบแล้ว');
-          return;
-        }
-
-        const newSlot = {
-          id: cleanId,
-          memberTag: newMemberTags[0],
-          memberTags: newMemberTags,
-          role: 'member',
-          isActivated: false,
-          isOnline: false,
-          username: '',
-          password: '',
-          displayName: 'รออนุมัติตัวตน (' + cleanId + ')',
-          bio: 'สมาชิกใหม่ (รอเจ้าตัวเข้ามากำหนด Username และโปรไฟล์)',
-          avatarUrl: '',
-          socialLinks: [],
-          joinedAt: new Date().toISOString().split('T')[0]
-        };
-
-        if (db) await db.collection('bma_users').doc(cleanId).set(newSlot);
-      };
-
-      // เปิดหน้าต่างแก้ไขหมวดหมู่ของสมาชิก (หลังจากออก ID ไปแล้ว)
-      const openEditTagsModal = (targetUser) => {
-        setEditingTagsUser(targetUser);
-        setEditingTagsList(getUserTags(targetUser));
-        setEditingCustomTag('');
-      };
-
-      const toggleEditingTagItem = (tag) => {
-        if (editingTagsList.includes(tag)) {
-          if (editingTagsList.length > 1) {
-            setEditingTagsList(editingTagsList.filter((t) => t !== tag));
-          }
-        } else {
-          setEditingTagsList([...editingTagsList, tag]);
-        }
-      };
-
-      const handleAddEditingCustomTag = () => {
-        const clean = editingCustomTag.trim();
-        if (!clean) return;
-        if (!editingTagsList.includes(clean)) {
-          setEditingTagsList([...editingTagsList, clean]);
-        }
-        setEditingCustomTag('');
-      };
-
-      const handleSaveEditedMemberTags = async (e) => {
-        e.preventDefault();
-        if (!editingTagsUser || editingTagsList.length === 0) return;
-        if (db) {
-          await db.collection('bma_users').doc(editingTagsUser.id).update({
-            memberTags: editingTagsList,
-            memberTag: editingTagsList[0]
-          });
-        }
-        setEditingTagsUser(null);
-      };
-
-      const handleToggleModerator = async (targetUser) => {
-        if (!currentUser || currentUser.role !== 'admin' || targetUser.role === 'admin') return;
-        const nextRole = targetUser.role === 'mod' ? 'member' : 'mod';
-        if (db) await db.collection('bma_users').doc(targetUser.id).update({ role: nextRole });
-      };
-
-      const handleDeleteUser = async (userId) => {
-        if (!currentUser || currentUser.role !== 'admin' || userId === 'M000') return;
-        if (!confirm('ยืนยันการลบบัญชีรหัส ' + userId + ' ?')) return;
-        if (db) await db.collection('bma_users').doc(userId).delete();
-      };
-
-      const handleCopyInviteId = (user) => {
-        const tagsStr = getUserTags(user).join(', ');
-        const text =
-          '[The Blue Moon Association]\nบัตรเชิญเข้าสู่สมาคมของคุณ:\n- Member ID: ' +
-          user.id +
-          '\n- หมวดหมู่ (Tags): ' +
-          tagsStr +
-          '\n\nวิธีเข้าใช้งานครั้งแรก:\n1. กดปุ่ม "เข้าสู่ระบบ / เปิดใช้งาน ID"\n2. เลือกแท็บ "เปิดใช้งาน Member ID"\n3. กรอกรหัส ' +
-          user.id +
-          ' เพื่อตั้ง Username และ Password ของคุณเอง';
-        navigator.clipboard.writeText(text);
-        setCopiedId(user.id);
-        setTimeout(() => setCopiedId(null), 2500);
-      };
-
-      // ============================================================================
-      // 4. ระบบโปรไฟล์ & ลิงก์ SOCIAL MEDIA / EXTERNAL LINKS
-      // ============================================================================
       const openProfileEditor = () => {
         if (!currentUser) return;
         setEditDisplayName(currentUser.displayName);
         setEditBio(currentUser.bio || '');
         setEditAvatarUrl(currentUser.avatarUrl || '');
+        setEditUsernameInput(currentUser.username || '');
+        setEditPasswordInput(currentUser.password || '');
+        setShowEditPassword(false);
+        setProfileEditError('');
         setEditSocialLinks(Array.isArray(currentUser.socialLinks) ? currentUser.socialLinks : []);
         setNewSocialUrl('');
         setNewSocialLabel('');
@@ -798,21 +967,168 @@
 
       const handleSaveProfile = async (e) => {
         e.preventDefault();
+        setProfileEditError('');
         if (!editDisplayName.trim() || !currentUser) return;
+
+        const cleanNewUser = editUsernameInput.trim();
+        const cleanNewPass = editPasswordInput.trim();
+        if (!cleanNewUser || !cleanNewPass) {
+          setProfileEditError('Username และ Password ห้ามเว้นว่าง');
+          return;
+        }
+
+        let updatedHistory = getRecentUsernameChanges(currentUser);
+        const isUsernameChanged = cleanNewUser !== currentUser.username;
+
+        if (isUsernameChanged) {
+          // ตรวจสอบว่าซ้ำกับสมาชิกคนอื่นหรือไม่
+          const taken = users.some(
+            (u) => u.id !== currentUser.id && u.username && u.username.toLowerCase() === cleanNewUser.toLowerCase()
+          );
+          if (taken) {
+            setProfileEditError('Username "' + cleanNewUser + '" มีสมาชิกท่านอื่นใช้แล้ว กรุณาใช้ชื่ออื่น');
+            return;
+          }
+          // ตรวจสอบโควตาเปลี่ยน Username ไม่เกิน 2 ครั้งใน 14 วัน
+          if (updatedHistory.length >= 2) {
+            const oldestChange = Math.min(...updatedHistory);
+            const nextAvailableDate = new Date(oldestChange + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('th-TH');
+            setProfileEditError(
+              'คุณเปลี่ยน Username ครบ 2 ครั้งในรอบ 14 วันแล้ว สามารถเปลี่ยนได้อีกครั้งในวันที่ ' + nextAvailableDate
+            );
+            return;
+          }
+          updatedHistory = [...updatedHistory, Date.now()];
+        }
+
         const updatedUser = {
           ...currentUser,
           displayName: editDisplayName.trim(),
           bio: editBio.trim(),
           avatarUrl: editAvatarUrl.trim(),
+          username: cleanNewUser,
+          password: cleanNewPass,
+          usernameChangeHistory: updatedHistory,
           socialLinks: editSocialLinks
         };
+
         if (db) await db.collection('bma_users').doc(updatedUser.id).set(updatedUser);
         setCurrentUser(updatedUser);
         setIsEditingProfile(false);
       };
 
       // ============================================================================
-      // 5. ระบบสร้างโพสต์บล็อก + ส่งแจ้งเตือนอัตโนมัติเข้าห้อง #announcements พร้อมปุ่มลิงก์ไปโพสต์ต้นทาง
+      // 4. ระบบ ADMIN
+      // ============================================================================
+      const toggleNewMemberTagSelection = (tag) => {
+        if (newMemberTags.includes(tag)) {
+          if (newMemberTags.length > 1) setNewMemberTags(newMemberTags.filter((t) => t !== tag));
+        } else {
+          setNewMemberTags([...newMemberTags, tag]);
+        }
+      };
+
+      const handleAddCustomNewTag = () => {
+        const clean = customTagInput.trim();
+        if (!clean) return;
+        if (!newMemberTags.includes(clean)) setNewMemberTags([...newMemberTags, clean]);
+        setCustomTagInput('');
+      };
+
+      const handleIssueNewId = async (e) => {
+        e.preventDefault();
+        if (!currentUser || currentUser.role !== 'admin') return;
+        const cleanId = newMemberId.trim().toUpperCase();
+        if (!cleanId || newMemberTags.length === 0) return;
+
+        if (users.some((u) => String(u.id).toUpperCase() === cleanId)) {
+          alert('รหัส ' + cleanId + ' มีอยู่ในระบบแล้ว');
+          return;
+        }
+
+        const newSlot = {
+          id: cleanId,
+          memberTag: newMemberTags[0],
+          memberTags: newMemberTags,
+          role: 'member',
+          isActivated: false,
+          isOnline: false,
+          username: '',
+          password: '',
+          displayName: 'รออนุมัติตัวตน (' + cleanId + ')',
+          bio: 'สมาชิกใหม่ (รอเจ้าตัวเข้ามากำหนด Username และโปรไฟล์)',
+          avatarUrl: '',
+          socialLinks: [],
+          usernameChangeHistory: [],
+          notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false },
+          joinedAt: new Date().toISOString().split('T')[0]
+        };
+
+        if (db) await db.collection('bma_users').doc(cleanId).set(newSlot);
+      };
+
+      const openEditTagsModal = (targetUser) => {
+        setEditingTagsUser(targetUser);
+        setEditingTagsList(getUserTags(targetUser));
+        setEditingCustomTag('');
+      };
+
+      const toggleEditingTagItem = (tag) => {
+        if (editingTagsList.includes(tag)) {
+          if (editingTagsList.length > 1) setEditingTagsList(editingTagsList.filter((t) => t !== tag));
+        } else {
+          setEditingTagsList([...editingTagsList, tag]);
+        }
+      };
+
+      const handleAddEditingCustomTag = () => {
+        const clean = editingCustomTag.trim();
+        if (!clean) return;
+        if (!editingTagsList.includes(clean)) setEditingTagsList([...editingTagsList, clean]);
+        setEditingCustomTag('');
+      };
+
+      const handleSaveEditedMemberTags = async (e) => {
+        e.preventDefault();
+        if (!editingTagsUser || editingTagsList.length === 0) return;
+        if (db) {
+          await db.collection('bma_users').doc(editingTagsUser.id).update({
+            memberTags: editingTagsList,
+            memberTag: editingTagsList[0]
+          });
+        }
+        setEditingTagsUser(null);
+      };
+
+      const handleToggleModerator = async (targetUser) => {
+        if (!currentUser || currentUser.role !== 'admin' || targetUser.role === 'admin') return;
+        const nextRole = targetUser.role === 'mod' ? 'member' : 'mod';
+        if (db) await db.collection('bma_users').doc(targetUser.id).update({ role: nextRole });
+      };
+
+      const handleDeleteUser = async (userId) => {
+        if (!currentUser || currentUser.role !== 'admin' || userId === 'M000') return;
+        if (!confirm('ยืนยันการลบบัญชีรหัส ' + userId + ' ?')) return;
+        if (db) await db.collection('bma_users').doc(userId).delete();
+      };
+
+      const handleCopyInviteId = (user) => {
+        const tagsStr = getUserTags(user).join(', ');
+        const text =
+          '[The Blue Moon Association]\nบัตรเชิญเข้าสู่สมาคมของคุณ:\n- Member ID: ' +
+          user.id +
+          '\n- หมวดหมู่ (Tags): ' +
+          tagsStr +
+          '\n\nวิธีเข้าใช้งานครั้งแรก:\n1. กดปุ่ม "เข้าสู่ระบบ / เปิดใช้งาน ID"\n2. เลือกแท็บ "เปิดใช้งาน Member ID"\n3. กรอกรหัส ' +
+          user.id +
+          ' เพื่อตั้ง Username และ Password ของคุณเอง';
+        navigator.clipboard.writeText(text);
+        setCopiedId(user.id);
+        setTimeout(() => setCopiedId(null), 2500);
+      };
+
+      // ============================================================================
+      // 5. ระบบสร้างโพสต์บล็อก + โพลล์สำรวจความคิดเห็น (แสดงผลในคอมเมนต์ & Anonymous Vote)
       // ============================================================================
       const handlePostFileSelect = (e) => {
         const files = Array.from(e.target.files || []);
@@ -857,10 +1173,47 @@
         setAttachmentUrlInput('');
       };
 
+      const handleAddPollOptionField = () => {
+        setPollOptionsInput([...pollOptionsInput, '']);
+      };
+
+      const handleRemovePollOptionField = (idx) => {
+        if (pollOptionsInput.length <= 2) return;
+        setPollOptionsInput(pollOptionsInput.filter((_, i) => i !== idx));
+      };
+
       const handleCreatePost = async (e) => {
         e.preventDefault();
         if (!currentUser) return;
-        if (!newPostContent.trim() && !newPostTitle.trim() && newPostAttachments.length === 0) return;
+
+        let pollData = null;
+        if (hasPollInNewPost) {
+          const validOptions = pollOptionsInput.map((o) => o.trim()).filter(Boolean);
+          if (!pollQuestionInput.trim() || validOptions.length < 2) {
+            alert('กรุณาระบุหัวข้อโพลล์และตัวเลือกอย่างน้อย 2 ตัวเลือกครับ');
+            return;
+          }
+          pollData = {
+            question: pollQuestionInput.trim(),
+            isAnonymous: pollIsAnonymousInput,
+            closesAt: pollCloseTimeInput ? new Date(pollCloseTimeInput).getTime() : null,
+            closesAtFormatted: pollCloseTimeInput
+              ? new Date(pollCloseTimeInput).toLocaleString('th-TH', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })
+              : null,
+            options: validOptions.map((text, idx) => ({
+              id: 'opt-' + idx + '-' + Date.now(),
+              text,
+              votes: []
+            }))
+          };
+        }
+
+        if (!newPostContent.trim() && !newPostTitle.trim() && newPostAttachments.length === 0 && !pollData) return;
 
         const nowTs = Date.now();
         const postId = 'post-' + nowTs;
@@ -871,6 +1224,8 @@
           content: newPostContent.trim(),
           category: newPostCategory,
           attachments: newPostAttachments,
+          poll: pollData,
+          mutedBy: [],
           createdAt: new Date().toLocaleDateString('th-TH', {
             day: 'numeric',
             month: 'short',
@@ -883,16 +1238,16 @@
           comments: []
         };
 
-        // ข้อความแจ้งเตือนอัตโนมัติในห้อง #announcements (ไม่แท็กใคร และแนบ linkedPostId เพื่อให้กดไปดูโพสต์ต้นทางได้)
         const announceMsgId = 'ann-' + nowTs;
         const announceMsgObj = {
           id: announceMsgId,
           roomKey: 'global-announce',
           senderId: currentUser.id,
           text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่',
-          postTitle: postObj.title || (postObj.content ? postObj.content.slice(0, 60) : 'โพสต์แนบไฟล์สื่อ'),
+          postTitle: postObj.title || (pollData ? '📊 โพลล์: ' + pollData.question : postObj.content.slice(0, 60)),
           linkedPostId: postId,
           isSystemPostAlert: true,
+          readBy: [currentUser.id],
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
           timestamp: nowTs
         };
@@ -900,16 +1255,68 @@
         if (db) {
           await db.collection('bma_posts').doc(postId).set(postObj);
           await db.collection('bma_messages').doc(announceMsgId).set(announceMsgObj);
+          await dispatchNotification({
+            recipientId: 'ALL',
+            actorId: currentUser.id,
+            category: 'posts',
+            subType: 'new_post',
+            title: '📝 โพสต์ใหม่ในสมาคม',
+            body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่: ' + (postObj.title || 'คลิกเพื่อดูเนื้อหา'),
+            targetView: 'feed',
+            targetPostId: postId
+          });
         }
 
         setNewPostTitle('');
         setNewPostContent('');
         setNewPostCategory('');
         setNewPostAttachments([]);
+        setHasPollInNewPost(false);
+        setPollQuestionInput('');
+        setPollOptionsInput(['', '']);
+        setPollCloseTimeInput('');
+        setPollIsAnonymousInput(false);
         setIsCreatingPost(false);
       };
 
-      // กดปุ่มจากห้อง #announcements เพื่อกระโดดไปหาโพสต์ต้นทางบนเว็บ
+      const handleVotePoll = async (post, optionId) => {
+        if (!currentUser) {
+          setCurrentView('login');
+          return;
+        }
+        if (!post.poll) return;
+        const isClosed = post.poll.closesAt && Date.now() > post.poll.closesAt;
+        if (isClosed) {
+          alert('โพลล์นี้ปิดรับการโหวตแล้วครับ');
+          return;
+        }
+
+        const updatedOptions = post.poll.options.map((opt) => {
+          const cleanVotes = (opt.votes || []).filter((uid) => uid !== currentUser.id);
+          if (opt.id === optionId) {
+            return { ...opt, votes: [...cleanVotes, currentUser.id] };
+          }
+          return { ...opt, votes: cleanVotes };
+        });
+
+        const updatedPoll = { ...post.poll, options: updatedOptions };
+        if (db) {
+          await db.collection('bma_posts').doc(post.id).update({ poll: updatedPoll });
+          // แจ้งเตือนเจ้าของโพสต์ว่ามีคนร่วมโหวตโพลล์
+          const voterLabel = post.poll.isAnonymous ? 'สมาชิกไม่ระบุตัวตน' : currentUser.displayName;
+          await dispatchNotification({
+            recipientId: post.authorId,
+            actorId: currentUser.id,
+            category: 'posts',
+            subType: 'vote',
+            title: '📊 มีผู้ร่วมโหวตโพลล์ของคุณ',
+            body: voterLabel + ' ได้ลงคะแนนในโพลล์ "' + post.poll.question + '"',
+            targetView: 'feed',
+            targetPostId: post.id
+          });
+        }
+      };
+
       const handleJumpToOriginPost = (postId) => {
         setSelectedTagFilter('ALL');
         setSearchQuery('');
@@ -917,13 +1324,9 @@
         setHighlightedPostId(postId);
         setTimeout(() => {
           const el = document.getElementById('post-card-' + postId);
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 180);
-        setTimeout(() => {
-          setHighlightedPostId(null);
-        }, 4000);
+        setTimeout(() => setHighlightedPostId(null), 4000);
       };
 
       const canManagePostOrComment = (authorId) => {
@@ -951,10 +1354,25 @@
         const target = posts.find((p) => p.id === postId);
         if (!target) return;
         const likes = target.likes || [];
-        const updatedLikes = likes.includes(currentUser.id)
+        const isAlreadyLiked = likes.includes(currentUser.id);
+        const updatedLikes = isAlreadyLiked
           ? likes.filter((id) => id !== currentUser.id)
           : [...likes, currentUser.id];
-        if (db) await db.collection('bma_posts').doc(postId).update({ likes: updatedLikes });
+        if (db) {
+          await db.collection('bma_posts').doc(postId).update({ likes: updatedLikes });
+          if (!isAlreadyLiked) {
+            await dispatchNotification({
+              recipientId: target.authorId,
+              actorId: currentUser.id,
+              category: 'posts',
+              subType: 'like',
+              title: '♥ มีคนกดถูกใจโพสต์ของคุณ',
+              body: currentUser.displayName + ' กดถูกใจโพสต์ "' + (target.title || target.content.slice(0, 40)) + '"',
+              targetView: 'feed',
+              targetPostId: target.id
+            });
+          }
+        }
       };
 
       const toggleBookmark = async (postId) => {
@@ -989,12 +1407,24 @@
         };
 
         const updatedComments = [...(target.comments || []), newComment];
-        if (db) await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
+        if (db) {
+          await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
+          await dispatchNotification({
+            recipientId: target.authorId,
+            actorId: currentUser.id,
+            category: 'posts',
+            subType: 'comment',
+            title: '💬 ความคิดเห็นใหม่ในโพสต์ของคุณ',
+            body: currentUser.displayName + ': ' + text.trim(),
+            targetView: 'feed',
+            targetPostId: target.id
+          });
+        }
         setCommentInputs({ ...commentInputs, [postId]: '' });
       };
 
       // ============================================================================
-      // 6. ระบบแชต (The Blue Moon Comms V3)
+      // 6. ระบบแชต + สถานะกำลังพิมพ์ + คลิกขวา (คัดลอก, ส่งต่อ, แก้ไข, ยกเลิกข้อความ)
       // ============================================================================
       const startDirectMessageWith = (targetMember) => {
         if (!currentUser) {
@@ -1011,9 +1441,33 @@
         setCurrentView('chat');
       };
 
+      const broadcastTypingStatus = (isTypingNow) => {
+        if (!currentUser || !db) return;
+        const docId = currentRoomKey + '_' + currentUser.id;
+        db.collection('bma_typing')
+          .doc(docId)
+          .set({
+            id: docId,
+            roomKey: currentRoomKey,
+            userId: currentUser.id,
+            displayName: currentUser.displayName,
+            isTyping: isTypingNow,
+            updatedAt: Date.now()
+          })
+          .catch(() => {});
+      };
+
       const handleChatInputChange = (e) => {
         const val = e.target.value;
         setChatInputText(val);
+
+        // อัปเดตสถานะ "กำลังพิมพ์..."
+        broadcastTypingStatus(val.trim().length > 0);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          broadcastTypingStatus(false);
+        }, 3500);
+
         const words = val.split(/\s+/);
         const lastWord = words[words.length - 1] || '';
         if (lastWord.startsWith('@')) {
@@ -1039,21 +1493,13 @@
       };
 
       const activatedMembers = users.filter((u) => u.isActivated);
-
-      // รวบรวมแท็กทั้งหมดที่มีในระบบ
-      const allAvailableTags = Array.from(
-        new Set([
-          ...PRESET_MEMBER_TAGS,
-          ...users.flatMap((u) => getUserTags(u))
-        ])
-      );
+      const allAvailableTags = Array.from(new Set([...PRESET_MEMBER_TAGS, ...users.flatMap((u) => getUserTags(u))]));
 
       const getMentionSuggestions = () => {
         const list = [
           { token: '@everyone', label: '@everyone', sub: 'แจ้งเตือนสมาชิกทุกคนในห้อง', type: 'Global' },
           { token: '@here', label: '@here', sub: 'แจ้งเตือนเฉพาะคนที่ออนไลน์อยู่ตอนนี้', type: 'Online' }
         ];
-
         allAvailableTags.forEach((t) => {
           list.push({
             token: '@[' + t + ']',
@@ -1062,7 +1508,6 @@
             type: 'หมวดหมู่ (Tag)'
           });
         });
-
         activatedMembers.forEach((m) => {
           list.push({
             token: '@' + m.id,
@@ -1081,7 +1526,6 @@
             });
           }
         });
-
         if (!mentionFilter) return list;
         return list.filter(
           (item) =>
@@ -1141,6 +1585,22 @@
       const handleSendChatMessage = async (e) => {
         e.preventDefault();
         if (!currentUser) return;
+
+        // กรณีอยู่ในโหมดแก้ไขข้อความของตนเอง
+        if (editingChatMsg) {
+          if (!chatInputText.trim()) return;
+          if (db) {
+            await db.collection('bma_messages').doc(editingChatMsg.id).update({
+              text: chatInputText.trim(),
+              isEdited: true
+            });
+          }
+          setEditingChatMsg(null);
+          setChatInputText('');
+          broadcastTypingStatus(false);
+          return;
+        }
+
         if (!chatInputText.trim() && chatPendingAttachments.length === 0) return;
         if (activeChannelObj && activeChannelObj.isSystemReadOnly) return;
         if (activeGroupObj && activeGroupObj.isArchived) return;
@@ -1156,6 +1616,9 @@
           receiverId: activeRoom.type === 'dm' ? activeRoom.id : null,
           text,
           attachments: chatPendingAttachments,
+          readBy: [currentUser.id],
+          isEdited: false,
+          isDeleted: false,
           isSystemPostAlert: false,
           time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
           timestamp: nowTs
@@ -1163,11 +1626,172 @@
 
         if (db) {
           await db.collection('bma_messages').doc(msgId).set(newMsg);
+
+          // ส่งแจ้งเตือนข้อความตามประเภทห้อง (Global / Group / DM)
+          if (activeRoom.type === 'dm') {
+            await dispatchNotification({
+              recipientId: activeRoom.id,
+              actorId: currentUser.id,
+              category: 'messages',
+              subType: 'dm_chat',
+              title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName,
+              body: text || '[ส่งไฟล์แนบ]',
+              targetView: 'chat',
+              targetRoomType: 'dm',
+              targetRoomId: currentUser.id
+            });
+          } else if (activeRoom.type === 'group' && activeGroupObj) {
+            for (const memberId of activeGroupObj.members || []) {
+              if (memberId !== currentUser.id) {
+                await dispatchNotification({
+                  recipientId: memberId,
+                  actorId: currentUser.id,
+                  category: 'messages',
+                  subType: 'group_chat',
+                  title: '👥 ข้อความในกลุ่ม ' + activeGroupObj.name,
+                  body: currentUser.displayName + ': ' + (text || '[ส่งไฟล์แนบ]'),
+                  targetView: 'chat',
+                  targetRoomType: 'group',
+                  targetRoomId: activeGroupObj.id
+                });
+              }
+            }
+          } else if (activeRoom.type === 'channel' && activeChannelObj) {
+            await dispatchNotification({
+              recipientId: 'ALL',
+              actorId: currentUser.id,
+              category: 'messages',
+              subType: 'global_chat',
+              title: '🌐 ข้อความในช่อง #' + activeChannelObj.name,
+              body: currentUser.displayName + ': ' + (text || '[ส่งไฟล์แนบ]'),
+              targetView: 'chat',
+              targetRoomType: 'channel',
+              targetRoomId: activeChannelObj.id
+            });
+          }
         }
 
         setChatInputText('');
         setChatPendingAttachments([]);
         setShowMentionMenu(false);
+        broadcastTypingStatus(false);
+      };
+
+      // ส่งการสะกิด (Nudge) ในแชตส่วนตัว
+      const handleSendNudge = async () => {
+        if (!currentUser || activeRoom.type !== 'dm' || !db) return;
+        const targetMember = getAuthor(activeRoom.id);
+        const nowTs = Date.now();
+        const msgId = 'msg-' + nowTs;
+        const nudgeText = '🔔 [ส่งการสะกิดเรียกตัว ' + targetMember.displayName + '!]';
+
+        const nudgeMsg = {
+          id: msgId,
+          roomKey: currentRoomKey,
+          senderId: currentUser.id,
+          receiverId: targetMember.id,
+          text: nudgeText,
+          attachments: [],
+          readBy: [currentUser.id],
+          isEdited: false,
+          isDeleted: false,
+          isSystemPostAlert: false,
+          time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: nowTs
+        };
+
+        await db.collection('bma_messages').doc(msgId).set(nudgeMsg);
+        await dispatchNotification({
+          recipientId: targetMember.id,
+          actorId: currentUser.id,
+          category: 'messages',
+          subType: 'nudge',
+          title: '🔔 ' + currentUser.displayName + ' ส่งการสะกิดถึงคุณ!',
+          body: nudgeText,
+          targetView: 'chat',
+          targetRoomType: 'dm',
+          targetRoomId: currentUser.id
+        });
+      };
+
+      // ============================================================================
+      // คลิกขวาที่ข้อความ รูปภาพ วิดีโอ หรือไฟล์ (Context Menu Actions)
+      // ============================================================================
+      const handleOpenContextMenu = (e, msg, mediaItem = null) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (msg.isDeleted || msg.isSystemPostAlert) return;
+        const x = Math.min(e.clientX, window.innerWidth - 220);
+        const y = Math.min(e.clientY, window.innerHeight - 220);
+        setContextMenu({ x, y, message: msg, mediaItem });
+      };
+
+      const handleCopyFromContextMenu = () => {
+        if (!contextMenu) return;
+        const { message, mediaItem } = contextMenu;
+        const textToCopy = mediaItem ? mediaItem.url : message.text || '';
+        if (textToCopy) {
+          navigator.clipboard.writeText(textToCopy);
+        }
+        setContextMenu(null);
+      };
+
+      const handleStartEditMessage = () => {
+        if (!contextMenu || !currentUser) return;
+        const { message } = contextMenu;
+        if (message.senderId !== currentUser.id) return;
+        setEditingChatMsg(message);
+        setChatInputText(message.text || '');
+        setContextMenu(null);
+      };
+
+      const handleCancelDeleteMessage = async () => {
+        if (!contextMenu || !currentUser || !db) return;
+        const { message } = contextMenu;
+        if (message.senderId !== currentUser.id) return;
+        await db.collection('bma_messages').doc(message.id).update({
+          isDeleted: true,
+          text: '',
+          attachments: []
+        });
+        setContextMenu(null);
+      };
+
+      const handleForwardToTarget = async (targetRoomType, targetId) => {
+        if (!forwardingMsg || !currentUser || !db) return;
+        const destRoomKey = targetRoomType === 'dm' ? getDmRoomKey(currentUser.id, targetId) : targetId;
+        const nowTs = Date.now();
+        const msgId = 'msg-' + nowTs;
+
+        const forwardedAttachments = forwardingMsg.mediaItem
+          ? [forwardingMsg.mediaItem]
+          : forwardingMsg.message.attachments || [];
+
+        const forwardedText = forwardingMsg.mediaItem
+          ? '↪️ [ส่งต่อไฟล์: ' + forwardingMsg.mediaItem.name + ']'
+          : '↪️ [ข้อความที่ส่งต่อ]: ' + (forwardingMsg.message.text || '');
+
+        const newMsg = {
+          id: msgId,
+          roomKey: destRoomKey,
+          senderId: currentUser.id,
+          receiverId: targetRoomType === 'dm' ? targetId : null,
+          text: forwardedText,
+          attachments: forwardedAttachments,
+          readBy: [currentUser.id],
+          isEdited: false,
+          isDeleted: false,
+          isSystemPostAlert: false,
+          time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: nowTs
+        };
+
+        await db.collection('bma_messages').doc(msgId).set(newMsg);
+        if (targetRoomType === 'dm' && !openedDmPartners.includes(targetId)) {
+          setOpenedDmPartners([...openedDmPartners, targetId]);
+        }
+        setForwardingMsg(null);
+        setActiveRoom({ type: targetRoomType, id: targetId });
       };
 
       const handleCreateChannel = async (e) => {
@@ -1209,7 +1833,6 @@
           alert('กรุณาตั้งชื่อกลุ่มและเลือกสมาชิกอย่างน้อย 1 คนครับ');
           return;
         }
-
         const allMembersInGroup = Array.from(new Set([currentUser.id, ...selectedGroupMembers]));
         const newGrp = {
           id: 'grp-' + Date.now(),
@@ -1219,7 +1842,6 @@
           isArchived: false,
           timestamp: Date.now()
         };
-
         if (db) await db.collection('bma_groups').doc(newGrp.id).set(newGrp);
         setActiveRoom({ type: 'group', id: newGrp.id });
         setNewGroupName('');
@@ -1229,14 +1851,11 @@
 
       const handleToggleArchiveGroup = async (groupObj) => {
         if (!currentUser || !groupObj || groupObj.createdBy !== currentUser.id) return;
-        if (db) {
-          await db.collection('bma_groups').doc(groupObj.id).update({ isArchived: !groupObj.isArchived });
-        }
+        if (db) await db.collection('bma_groups').doc(groupObj.id).update({ isArchived: !groupObj.isArchived });
       };
 
       const handleConfirmDeleteRoom = async () => {
         if (!deleteConfirmTarget || !currentUser || !db) return;
-
         if (deleteConfirmTarget.roomType === 'channel') {
           const targetCh = channels.find((c) => c.id === deleteConfirmTarget.id);
           if (targetCh && !targetCh.isProtected && (currentUser.role === 'admin' || currentUser.role === 'mod')) {
@@ -1298,7 +1917,6 @@
         ];
       };
 
-      // คัดกรองเฉพาะคนที่เคยสนทนาส่วนตัว (DM) ด้วยเท่านั้น
       const conversedDmMembers = currentUser
         ? activatedMembers.filter((m) => {
             if (m.id === currentUser.id) return false;
@@ -1311,12 +1929,20 @@
 
       const myGroups = currentUser ? groups.filter((g) => (g.members || []).includes(currentUser.id)) : [];
       const currentRoomMessages = chatMessages.filter((m) => m.roomKey === currentRoomKey);
+      const currentRoomTypers = typingStatuses.filter(
+        (t) => t.roomKey === currentRoomKey && (!currentUser || t.userId !== currentUser.id)
+      );
       const activeDmPartner = activeRoom.type === 'dm' ? getAuthor(activeRoom.id) : null;
       const isModOrAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod');
 
       const filteredRightDrawerMembers = activatedMembers.filter((m) =>
         rightMemberTagFilter === 'ALL' ? true : getUserTags(m).includes(rightMemberTagFilter)
       );
+
+      const postNotifs = myNotifications.filter((n) => n.category === 'posts');
+      const msgNotifs = myNotifications.filter((n) => n.category === 'messages');
+      const unreadPostNotifsCount = postNotifs.filter((n) => !(n.readBy || []).includes(currentUser && currentUser.id)).length;
+      const unreadMsgNotifsCount = msgNotifs.filter((n) => !(n.readBy || []).includes(currentUser && currentUser.id)).length;
 
       return (
         <div className="min-h-screen bg-[#050811] text-white flex flex-col">
@@ -1326,15 +1952,33 @@
             </div>
           )}
 
+          {/* FLOATING TOAST NOTIFICATIONS */}
+          <div className="fixed top-16 right-4 z-50 space-y-2 w-80 pointer-events-none">
+            {toastList.map((toast) => (
+              <div
+                key={toast.id}
+                onClick={() => {
+                  handleClickNotificationItem(toast);
+                  setToastList((prev) => prev.filter((t) => t.id !== toast.id));
+                }}
+                className="pointer-events-auto cursor-pointer bg-[#0F2547] border-2 border-white/80 rounded-2xl p-3.5 shadow-2xl"
+              >
+                <div className="flex items-center justify-between text-[11px] font-bold text-amber-300 mb-1">
+                  <span className="truncate">{toast.title}</span>
+                  <span className="font-mono shrink-0 ml-1">{toast.time}</span>
+                </div>
+                <p className="text-xs text-white line-clamp-2">{toast.body}</p>
+              </div>
+            ))}
+          </div>
+
           {/* ================================================================= */}
-          {/* TOP NAVBAR                                                        */}
+          {/* TOP NAVBAR (พร้อมโลโก้สมาคม SVG และปุ่มจัดการการแจ้งเตือนทั้งหมด) */}
           {/* ================================================================= */}
           <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F]">
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-3 text-left group">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-[#0F2547] to-[#050811] border border-white/40 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                  <span className="text-lg">🌙</span>
-                </div>
+                <AssociationLogo size={38} className="group-hover:scale-105 transition" />
                 <div>
                   <h1 className="text-sm md:text-base font-bold tracking-wider uppercase text-white leading-tight">
                     The Blue Moon Association
@@ -1388,6 +2032,22 @@
               </nav>
 
               <div className="flex items-center gap-2">
+                {currentUser && (
+                  <button
+                    onClick={() => setIsNotifModalOpen(true)}
+                    className="relative px-3 py-1.5 rounded-xl bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs font-semibold flex items-center gap-1.5 transition"
+                    title="จัดการการแจ้งเตือนทั้งหมด"
+                  >
+                    <span>🔔</span>
+                    <span className="hidden sm:inline">แจ้งเตือน</span>
+                    {myUnreadNotifs.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                        {myUnreadNotifs.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+
                 {currentUser ? (
                   <div className="flex items-center gap-2">
                     <button
@@ -1395,14 +2055,14 @@
                       className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B1325] border border-[#1E3A5F] hover:border-white/40"
                     >
                       <Avatar user={currentUser} size="xs" showStatus={true} />
-                      <span className="text-xs font-semibold hidden sm:inline max-w-[110px] truncate">
+                      <span className="text-xs font-semibold hidden sm:inline max-w-[100px] truncate">
                         {currentUser.displayName}
                       </span>
                       <RoleBadge role={currentUser.role} />
                     </button>
                     <button
                       onClick={handleLogout}
-                      className="px-3 py-1.5 rounded-lg bg-[#050811] hover:bg-red-950/60 border border-[#1E3A5F] text-xs text-slate-300"
+                      className="px-2.5 py-1.5 rounded-lg bg-[#050811] hover:bg-red-950/60 border border-[#1E3A5F] text-xs text-slate-300"
                     >
                       ออก
                     </button>
@@ -1467,9 +2127,9 @@
                     boxShadow: '0 0 60px rgba(37, 99, 235, 0.65), inset -12px -12px 24px rgba(5, 8, 17, 0.85)'
                   }}
                 >
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-blue-100 font-mono">Core</span>
-                  <span className="text-xs md:text-sm font-bold tracking-wider uppercase text-white mt-0.5">Blue Moon</span>
-                  <span className="text-[10px] text-blue-200 mt-1">{activatedMembers.length} Satellites</span>
+                  <AssociationLogo size={36} className="mb-1" />
+                  <span className="text-[11px] font-bold tracking-wider uppercase text-white">Blue Moon</span>
+                  <span className="text-[10px] text-blue-200">{activatedMembers.length} Satellites</span>
                 </div>
 
                 {getOrbitRings().map((ring, rIdx) => (
@@ -1517,10 +2177,10 @@
                 </button>
                 {currentUser ? (
                   <button
-                    onClick={() => setCurrentView('chat')}
+                    onClick={() => setIsNotifModalOpen(true)}
                     className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shadow-lg text-center"
                   >
-                    💬 เข้าสู่ห้องแชตสมาคม
+                    🔔 จัดการการแจ้งเตือนทั้งหมด ({myUnreadNotifs.length})
                   </button>
                 ) : (
                   <button
@@ -1539,15 +2199,17 @@
           )}
 
           {/* ================================================================= */}
-          {/* VIEW 2: LOGIN & ACTIVATE ID (พร้อมปุ่มดูรหัสผ่าน Toggle & ล็อกอินค้างไว้) */}
+          {/* VIEW 2: LOGIN & ACTIVATE ID                                       */}
           {/* ================================================================= */}
           {currentView === 'login' && (
             <div className="flex-1 flex flex-col justify-center items-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-8 shadow-2xl">
                 <div className="text-center mb-6">
-                  <div className="w-14 h-14 mx-auto rounded-full bg-[#0F2547] border border-white/25 flex items-center justify-center text-2xl mb-3">🌙</div>
+                  <div className="flex justify-center mb-3">
+                    <AssociationLogo size={54} />
+                  </div>
                   <h2 className="text-xl font-bold uppercase tracking-wider text-white">The Blue Moon Portal</h2>
-                  <p className="text-xs text-slate-400 mt-1">เข้าสู่ระบบ หรือกรอก Member ID (เช่น M000, M001) เพื่อสร้างบัญชี</p>
+                  <p className="text-xs text-slate-400 mt-1">เข้าสู่ระบบ หรือกรอก Member ID เพื่อสร้างบัญชีของคุณ</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#050811] border border-[#1E3A5F] mb-6">
@@ -1594,14 +2256,13 @@
                         <button
                           type="button"
                           onClick={() => setShowLoginPassword(!showLoginPassword)}
-                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold transition"
+                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold"
                         >
                           {showLoginPassword ? '🙈 ซ่อน' : '👁️ ดูรหัส'}
                         </button>
                       </div>
                     </div>
 
-                    {/* ปุ่มกดเลือกการล็อกอินค้างไว้ */}
                     <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
                       <input
                         type="checkbox"
@@ -1609,9 +2270,7 @@
                         onChange={(e) => setRememberMe(e.target.checked)}
                         className="w-4 h-4 rounded border-[#1E3A5F] bg-[#050811]"
                       />
-                      <span className="text-xs text-slate-300">
-                        จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)
-                      </span>
+                      <span className="text-xs text-slate-300">จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)</span>
                     </label>
 
                     {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
@@ -1621,8 +2280,13 @@
                   </form>
                 ) : (
                   <form onSubmit={handleActivateMemberId} className="space-y-4">
-                    <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-300">
-                      กรอก <strong className="text-white">Member ID</strong> ที่ได้รับ (เช่น <strong className="text-white">M000</strong> สำหรับเจ้าของเว็บ หรือ <strong className="text-white">M001</strong> สำหรับสมาชิก) เพื่อตั้ง Username และ Password ของคุณเอง
+                    <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-300 space-y-1">
+                      <p>
+                        กรอก <strong className="text-white">Member ID</strong> ที่ได้รับเพื่อตั้ง Username และ Password ของคุณเอง
+                      </p>
+                      <p className="text-sky-300 font-medium">
+                        💡 หมายเหตุ: ทั้ง Username และรหัสผ่านสามารถเปลี่ยนแปลงในภายหลังได้ที่หน้าตั้งค่าโปรไฟล์ (จำกัดการเปลี่ยน Username 2 ครั้งใน 14 วัน)
+                      </p>
                     </div>
                     <div>
                       <label className="block text-xs uppercase text-slate-300 mb-1">Member ID ที่ได้รับ *</label>
@@ -1671,7 +2335,7 @@
                         <button
                           type="button"
                           onClick={() => setShowActivatePassword(!showActivatePassword)}
-                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold transition"
+                          className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold"
                         >
                           {showActivatePassword ? '🙈 ซ่อน' : '👁️ ดูรหัส'}
                         </button>
@@ -1685,9 +2349,7 @@
                         onChange={(e) => setRememberMe(e.target.checked)}
                         className="w-4 h-4 rounded border-[#1E3A5F] bg-[#050811]"
                       />
-                      <span className="text-xs text-slate-300">
-                        จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)
-                      </span>
+                      <span className="text-xs text-slate-300">จดจำการเข้าสู่ระบบไว้ในเครื่องนี้ (ล็อกอินค้างไว้)</span>
                     </label>
 
                     {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
@@ -1752,19 +2414,6 @@
                               <p className="text-xs text-slate-200 mt-2.5 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] line-clamp-2">
                                 {member.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}
                               </p>
-                              {member.socialLinks && member.socialLinks.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2.5">
-                                  {member.socialLinks.map((soc) => (
-                                    <span
-                                      key={soc.id}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#050811] border border-[#1E3A5F] text-[10px] text-blue-200"
-                                    >
-                                      <span>{getSocialIcon(soc.platform)}</span>
-                                      <span className="truncate max-w-[90px]">{soc.label}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -1780,11 +2429,10 @@
           )}
 
           {/* ================================================================= */}
-          {/* VIEW 4: CHAT SYSTEM (The Blue Moon Comms V3)                      */}
+          {/* VIEW 4: CHAT SYSTEM (พร้อมสถานะส่งแล้ว/อ่านแล้ว, กำลังพิมพ์, คลิกขวา) */}
           {/* ================================================================= */}
           {currentView === 'chat' && (
             <div className="flex-1 flex overflow-hidden h-[calc(100vh-4rem)]">
-              {/* LEFT SIDEBAR: Global Channels + Group Chats + Conversed DMs Only */}
               <aside className="w-64 md:w-72 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 overflow-y-auto">
                 {/* 1. Global Channels */}
                 <div className="p-3 border-b border-[#1E3A5F]">
@@ -1793,7 +2441,7 @@
                     {isModOrAdmin && (
                       <button
                         onClick={() => setIsCreateChannelOpen(true)}
-                        className="px-2 py-0.5 rounded bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[10px] font-bold text-sky-300 transition"
+                        className="px-2 py-0.5 rounded bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[10px] font-bold text-sky-300"
                       >
                         + สร้างห้อง
                       </button>
@@ -1838,7 +2486,7 @@
                         setSelectedGroupMembers([]);
                         setIsCreateGroupOpen(true);
                       }}
-                      className="px-2 py-0.5 rounded bg-white text-[#050811] hover:bg-slate-200 text-[10px] font-bold transition"
+                      className="px-2 py-0.5 rounded bg-white text-[#050811] hover:bg-slate-200 text-[10px] font-bold"
                     >
                       + สร้างกลุ่ม
                     </button>
@@ -1875,12 +2523,10 @@
                   </div>
                 </div>
 
-                {/* 3. Direct Messages (แสดงเฉพาะคนที่เคยสนทนาด้วยเท่านั้น) */}
+                {/* 3. Direct Messages (เฉพาะคนที่เคยคุย) */}
                 <div className="p-3 flex-1">
                   <div className="px-1 mb-2 flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      แชตส่วนตัว (ที่เคยคุย)
-                    </span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">แชตส่วนตัว (ที่เคยคุย)</span>
                   </div>
                   {conversedDmMembers.length === 0 ? (
                     <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-400 leading-relaxed">
@@ -1911,7 +2557,7 @@
                                 <span className="font-mono text-[10px] opacity-80">{member.id}</span>
                               </div>
                               <div className="text-[10px] opacity-70 truncate">
-                                {lastMsg ? lastMsg.text : 'เริ่มการสนทนา...'}
+                                {lastMsg ? (lastMsg.isDeleted ? 'ข้อความถูกยกเลิก' : lastMsg.text) : 'เริ่มการสนทนา...'}
                               </div>
                             </div>
                           </button>
@@ -1924,7 +2570,6 @@
 
               {/* CENTER CHAT ROOM */}
               <main className="flex-1 flex flex-col bg-[#050811] min-w-0 relative">
-                {/* Chat Room Header */}
                 <div className="h-16 px-4 md:px-6 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-3 shrink-0">
                   <div className="min-w-0 flex-1">
                     {activeRoom.type === 'channel' && activeChannelObj && (
@@ -1956,10 +2601,7 @@
                     )}
 
                     {activeRoom.type === 'dm' && activeDmPartner && (
-                      <div
-                        onClick={() => setSelectedMemberModal(activeDmPartner)}
-                        className="flex items-center gap-3 cursor-pointer"
-                      >
+                      <div onClick={() => setSelectedMemberModal(activeDmPartner)} className="flex items-center gap-3 cursor-pointer">
                         <Avatar user={activeDmPartner} size="sm" showStatus={true} />
                         <div>
                           <div className="flex items-center gap-2">
@@ -1972,8 +2614,16 @@
                     )}
                   </div>
 
-                  {/* ปุ่มจัดการห้อง & ปุ่มย่อ/เรียกคืนหน้าต่างสมาชิกด้านขวา */}
                   <div className="flex items-center gap-2 shrink-0">
+                    {activeRoom.type === 'dm' && activeDmPartner && (
+                      <button
+                        onClick={handleSendNudge}
+                        className="px-3 py-1.5 rounded-xl bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/25 text-xs font-bold text-amber-300 transition"
+                      >
+                        🔔 สะกิด
+                      </button>
+                    )}
+
                     {activeRoom.type === 'channel' && activeChannelObj && isModOrAdmin && !activeChannelObj.isProtected && (
                       <button
                         onClick={() => setDeleteConfirmTarget({ roomType: 'channel', id: activeChannelObj.id, name: '#' + activeChannelObj.name })}
@@ -2019,15 +2669,17 @@
 
                 {/* Chat Messages Feed */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                  <div className="text-[11px] text-slate-500 text-center pb-2">
+                    💡 ทริค: คลิกขวาที่ข้อความ รูปภาพ วิดีโอ หรือไฟล์ เพื่อคัดลอก ส่งต่อ แก้ไข หรือยกเลิกข้อความ
+                  </div>
+
                   {currentRoomMessages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 space-y-2">
+                    <div className="h-48 flex flex-col items-center justify-center text-center text-slate-400 space-y-2">
                       <div className="text-3xl">💬</div>
                       <p className="text-sm font-bold text-white">ยังไม่มีข้อความในห้องนี้</p>
-                      <p className="text-xs max-w-xs">เริ่มต้นส่งข้อความ รูปภาพ วิดีโอ หรือไฟล์เอกสารได้เลย</p>
                     </div>
                   ) : (
                     currentRoomMessages.map((msg) => {
-                      // กรณีข้อความแจ้งเตือนโพสต์ใหม่ในห้อง #announcements (พร้อมปุ่มกดไปหาโพสต์ต้นทาง)
                       if (msg.isSystemPostAlert) {
                         const postAuthor = getAuthor(msg.senderId);
                         return (
@@ -2050,11 +2702,10 @@
                                 )}
                               </div>
                             </div>
-
                             {msg.linkedPostId && (
                               <button
                                 onClick={() => handleJumpToOriginPost(msg.linkedPostId)}
-                                className="px-4 py-2 rounded-xl bg-white text-[#050811] hover:bg-slate-200 text-xs font-bold shrink-0 shadow transition"
+                                className="px-4 py-2 rounded-xl bg-white text-[#050811] hover:bg-slate-200 text-xs font-bold shrink-0 shadow"
                               >
                                 🔗 เปิดดูโพสต์ต้นทาง →
                               </button>
@@ -2064,8 +2715,15 @@
                       }
 
                       const sender = getAuthor(msg.senderId);
+                      const otherReaders = (msg.readBy || []).filter((uid) => uid !== msg.senderId);
+                      const isReadByOthers = otherReaders.length > 0;
+
                       return (
-                        <div key={msg.id} className="flex items-start gap-3.5">
+                        <div
+                          key={msg.id}
+                          onContextMenu={(e) => handleOpenContextMenu(e, msg, null)}
+                          className="flex items-start gap-3.5 p-2 -mx-2 rounded-xl hover:bg-[#0B1325]/60 transition"
+                        >
                           <div onClick={() => setSelectedMemberModal(sender)} className="cursor-pointer">
                             <Avatar user={sender} size="md" showStatus={true} />
                           </div>
@@ -2079,51 +2737,98 @@
                               </span>
                               <span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{sender.id}</span>
                               <span className="text-[10px] font-mono text-slate-400">@{sender.username}</span>
-                              <TagBadgesList user={sender} />
                               <RoleBadge role={sender.role} />
-                              <span className="text-[10px] font-mono text-slate-500">{msg.time}</span>
+                              <span className="text-[10px] font-mono text-slate-400">{msg.time}</span>
+
+                              {/* สถานะข้อความ: ส่งแล้ว vs อ่านแล้ว แสดงต่อท้ายเวลาที่ส่งพร้อมแยกสี */}
+                              {!msg.isDeleted && (
+                                isReadByOthers ? (
+                                  <span
+                                    className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded"
+                                    title={'อ่านแล้วโดย: ' + otherReaders.join(', ')}
+                                  >
+                                    ✓✓ อ่านแล้ว {activeRoom.type !== 'dm' && otherReaders.length > 0 ? '(' + otherReaders.length + ')' : ''}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-sky-300 bg-sky-950/50 border border-sky-500/30 px-1.5 py-0.5 rounded">
+                                    ✓ ส่งแล้ว
+                                  </span>
+                                )
+                              )}
                             </div>
 
-                            <FormattedMessageText text={msg.text} currentUser={currentUser} />
+                            {msg.isDeleted ? (
+                              <p className="text-xs italic text-slate-500 mt-1.5 px-3 py-1.5 rounded-lg bg-[#0B1325]/50 border border-[#1E3A5F]/50 inline-block">
+                                🚫 ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง
+                              </p>
+                            ) : (
+                              <>
+                                <FormattedMessageText
+                                  text={msg.text}
+                                  currentUser={currentUser}
+                                  isEdited={msg.isEdited}
+                                />
 
-                            {msg.attachments && msg.attachments.length > 0 && (
-                              <div className="mt-2.5 space-y-2 max-w-md">
-                                {msg.attachments.map((att) => {
-                                  if (att.type === 'image') {
-                                    return (
-                                      <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325]">
-                                        <img src={att.url} alt={att.name} className="max-h-72 w-auto object-contain" />
-                                      </div>
-                                    );
-                                  }
-                                  if (att.type === 'video') {
-                                    return (
-                                      <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black">
-                                        <video src={att.url} controls className="max-h-72 w-full" />
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <a
-                                      key={att.id}
-                                      href={att.url}
-                                      download={att.name}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="flex items-center justify-between p-3 rounded-xl bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
-                                    >
-                                      <span className="truncate font-semibold">📎 {att.name} ({att.size})</span>
-                                      <span className="px-2.5 py-1 rounded bg-white text-[#050811] font-bold text-[10px] shrink-0 ml-2">ดาวน์โหลด</span>
-                                    </a>
-                                  );
-                                })}
-                              </div>
+                                {msg.attachments && msg.attachments.length > 0 && (
+                                  <div className="mt-2.5 space-y-2 max-w-md">
+                                    {msg.attachments.map((att) => {
+                                      if (att.type === 'image') {
+                                        return (
+                                          <div
+                                            key={att.id}
+                                            onContextMenu={(e) => handleOpenContextMenu(e, msg, att)}
+                                            className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325]"
+                                          >
+                                            <img src={att.url} alt={att.name} className="max-h-72 w-auto object-contain" />
+                                          </div>
+                                        );
+                                      }
+                                      if (att.type === 'video') {
+                                        return (
+                                          <div
+                                            key={att.id}
+                                            onContextMenu={(e) => handleOpenContextMenu(e, msg, att)}
+                                            className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black"
+                                          >
+                                            <video src={att.url} controls className="max-h-72 w-full" />
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <a
+                                          key={att.id}
+                                          href={att.url}
+                                          download={att.name}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onContextMenu={(e) => handleOpenContextMenu(e, msg, att)}
+                                          className="flex items-center justify-between p-3 rounded-xl bg-[#0B1325] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
+                                        >
+                                          <span className="truncate font-semibold">📎 {att.name} ({att.size})</span>
+                                          <span className="px-2.5 py-1 rounded bg-white text-[#050811] font-bold text-[10px] shrink-0 ml-2">ดาวน์โหลด</span>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
                       );
                     })
                   )}
+
+                  {/* แสดงสถานะผู้ใช้กำลังพิมพ์ข้อความอยู่ ต่อจากข้อความล่าสุด */}
+                  {currentRoomTypers.length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B1325] border border-sky-500/40 text-xs text-sky-300 animate-pulse w-fit">
+                      <span>💬</span>
+                      <span>
+                        <strong>{currentRoomTypers.map((t) => t.displayName).join(', ')}</strong> กำลังพิมพ์ข้อความอยู่...
+                      </span>
+                    </div>
+                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -2158,7 +2863,7 @@
                   <div className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">
                       <span>📢</span>
-                      <span>ห้อง <strong className="text-white">#announcements</strong> สำหรับแจ้งเตือนโพสต์ใหม่อัตโนมัติเท่านั้น (ไม่อนุญาตให้พิมพ์)</span>
+                      <span>ห้อง <strong className="text-white">#announcements</strong> สำหรับแจ้งเตือนโพสต์ใหม่อัตโนมัติเท่านั้น</span>
                     </div>
                   </div>
                 ) : activeGroupObj && activeGroupObj.isArchived ? (
@@ -2170,6 +2875,22 @@
                   </div>
                 ) : (
                   <form onSubmit={handleSendChatMessage} className="p-4 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2.5">
+                    {editingChatMsg && (
+                      <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-400/50 text-xs text-amber-200">
+                        <span>✎ กำลังแก้ไขข้อความของคุณ: "{editingChatMsg.text}"</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingChatMsg(null);
+                            setChatInputText('');
+                          }}
+                          className="text-white font-bold ml-2"
+                        >
+                          ยกเลิกแก้ไข ✕
+                        </button>
+                      </div>
+                    )}
+
                     {chatPendingAttachments.length > 0 && (
                       <div className="flex flex-wrap gap-2 pb-1">
                         {chatPendingAttachments.map((att) => (
@@ -2233,7 +2954,7 @@
                           setShowMentionMenu(!showMentionMenu);
                           setMentionFilter('');
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-white font-bold transition"
+                        className="px-2.5 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-white font-bold"
                       >
                         @ แท็กสมาชิก / หมวดหมู่ / everyone
                       </button>
@@ -2244,18 +2965,18 @@
                         type="text"
                         value={chatInputText}
                         onChange={handleChatInputChange}
-                        placeholder="พิมพ์ข้อความ... (พิมพ์ @ เพื่อแท็ก everyone, here, หมวดหมู่, username หรือ ID)"
+                        placeholder="พิมพ์ข้อความ... (พิมพ์ @ เพื่อแท็ก หรือคลิกขวาที่ข้อความเพื่อจัดการ)"
                         className="flex-1 bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none"
                       />
                       <button type="submit" className="px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shrink-0 shadow-lg">
-                        ส่ง
+                        {editingChatMsg ? 'บันทึกแก้ไข' : 'ส่ง'}
                       </button>
                     </div>
                   </form>
                 )}
               </main>
 
-              {/* RIGHT COLLAPSIBLE DRAWER: คลิกที่สมาชิกเพื่อดูโปรไฟล์เต็ม + ส่งข้อความแรกได้ */}
+              {/* RIGHT COLLAPSIBLE DRAWER */}
               {isRightMemberDrawerOpen && (
                 <aside className="w-72 md:w-80 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0">
                   <div className="p-4 border-b border-[#1E3A5F] flex items-center justify-between">
@@ -2263,9 +2984,7 @@
                       <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                         👥 สมาชิกสมาคม ({activatedMembers.length})
                       </h3>
-                      <p className="text-[10px] text-slate-400 mt-0.5">
-                        คลิกที่สมาชิกเพื่อดูโปรไฟล์เต็มและส่งข้อความ
-                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">คลิกเพื่อดูโปรไฟล์เต็มและส่งข้อความ</p>
                     </div>
                     <button
                       onClick={() => setIsRightMemberDrawerOpen(false)}
@@ -2324,7 +3043,112 @@
           )}
 
           {/* ================================================================= */}
-          {/* VIEW 5 & 6: FEED & OWNER ADMIN                                    */}
+          {/* RIGHT-CLICK CONTEXT MENU (คัดลอก, ส่งต่อ, แก้ไข, ยกเลิกข้อความ)   */}
+          {/* ================================================================= */}
+          {contextMenu && (
+            <div
+              style={{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }}
+              onClick={(e) => e.stopPropagation()}
+              className="fixed z-50 w-52 bg-[#0B1325] border-2 border-white/40 rounded-xl shadow-2xl py-1.5 text-xs overflow-hidden"
+            >
+              <button
+                onClick={handleCopyFromContextMenu}
+                className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex items-center gap-2 text-white"
+              >
+                <span>📋</span>
+                <span>{contextMenu.mediaItem ? 'คัดลอกลิงก์ไฟล์/สื่อ' : 'คัดลอกข้อความ'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  setForwardingMsg(contextMenu);
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex items-center gap-2 text-white"
+              >
+                <span>↪️</span>
+                <span>ส่งต่อ (Forward)...</span>
+              </button>
+              {currentUser && contextMenu.message.senderId === currentUser.id && !contextMenu.mediaItem && (
+                <button
+                  onClick={handleStartEditMessage}
+                  className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex items-center gap-2 text-amber-300 border-t border-[#1E3A5F]"
+                >
+                  <span>✎</span>
+                  <span>แก้ไขข้อความ</span>
+                </button>
+              )}
+              {currentUser && contextMenu.message.senderId === currentUser.id && (
+                <button
+                  onClick={handleCancelDeleteMessage}
+                  className="w-full px-4 py-2 text-left hover:bg-red-950/80 flex items-center gap-2 text-red-400"
+                >
+                  <span>🚫</span>
+                  <span>ยกเลิกข้อความ (ลบ)</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* MODAL: เลือกปลายทางสำหรับส่งต่อข้อความ/ไฟล์ (Forward Modal) */}
+          {forwardingMsg && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">↪️ ส่งต่อข้อความ / ไฟล์ไปยัง...</h3>
+                  <button onClick={() => setForwardingMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">ห้องแชตรวม (Global Channels)</div>
+                  {channels.filter((c) => !c.isSystemReadOnly).map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => handleForwardToTarget('channel', c.id)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
+                    >
+                      <span>{c.icon} # {c.name}</span>
+                      <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-bold text-[10px]">ส่งต่อ</span>
+                    </button>
+                  ))}
+
+                  {myGroups.filter((g) => !g.isArchived).length > 0 && (
+                    <>
+                      <div className="text-[10px] font-bold uppercase text-slate-400 pt-2">กลุ่มแชต (Groups)</div>
+                      {myGroups.filter((g) => !g.isArchived).map((g) => (
+                        <button
+                          key={g.id}
+                          onClick={() => handleForwardToTarget('group', g.id)}
+                          className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
+                        >
+                          <span>👥 {g.name}</span>
+                          <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-bold text-[10px]">ส่งต่อ</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  <div className="text-[10px] font-bold uppercase text-slate-400 pt-2">สมาชิก (Direct Messages)</div>
+                  {activatedMembers
+                    .filter((m) => currentUser && m.id !== currentUser.id)
+                    .map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => handleForwardToTarget('dm', m.id)}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar user={m} size="xs" />
+                          <span>{m.displayName} ({m.id})</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-bold text-[10px]">ส่งต่อ</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* VIEW 5 & 6: FEED (พร้อมระบบโพลล์ & ปิดแจ้งเตือนโพสต์) & OWNER ADMIN */}
           {/* ================================================================= */}
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
@@ -2348,7 +3172,7 @@
                             onClick={openProfileEditor}
                             className="mt-2 px-3 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[11px] font-semibold text-white"
                           >
-                            ✎ ตั้งค่าโปรไฟล์ / โซเชียล
+                            ✎ ตั้งค่าโปรไฟล์ / รหัสผ่าน
                           </button>
                         </div>
                       </div>
@@ -2363,7 +3187,7 @@
                               href={soc.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-blue-200 transition"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-[11px] text-blue-200"
                             >
                               <span>{getSocialIcon(soc.platform)}</span>
                               <span className="truncate max-w-[120px]">{soc.label}</span>
@@ -2375,9 +3199,9 @@
                   </div>
                 ) : (
                   <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-5 text-center space-y-3">
-                    <div className="text-2xl">👁️</div>
+                    <div className="flex justify-center"><AssociationLogo size={42} /></div>
                     <h3 className="text-sm font-bold text-white">โหมดผู้มาเยือน (Guest Mode)</h3>
-                    <p className="text-xs text-slate-300">หากได้รับ Member ID แล้ว กดปุ่มด้านล่างเพื่อเปิดใช้งานบัญชีและร่วมโพสต์หรือแชตได้ทันที</p>
+                    <p className="text-xs text-slate-300">หากได้รับ Member ID แล้ว กดปุ่มด้านล่างเพื่อเปิดใช้งานบัญชีและร่วมโพสต์หรือโหวตโพลล์ได้ทันที</p>
                     <button
                       onClick={() => { setAuthMode('signin'); setCurrentView('login'); }}
                       className="w-full py-2 rounded-xl bg-white text-[#050811] font-bold text-xs"
@@ -2395,6 +3219,17 @@
                     <span>📝 กระดานโพสต์ทั้งหมด</span>
                     <span>{posts.length}</span>
                   </button>
+                  {currentUser && (
+                    <button
+                      onClick={() => setIsNotifModalOpen(true)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]"
+                    >
+                      <span>🔔 จัดการการแจ้งเตือนทั้งหมด</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#0F2547] text-amber-300 font-bold">
+                        {myUnreadNotifs.length} ใหม่
+                      </span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       if (!currentUser) setCurrentView('login');
@@ -2436,11 +3271,10 @@
               <main className="lg:col-span-8 xl:col-span-9 space-y-6">
                 {currentView === 'admin' && currentUser && currentUser.role === 'admin' ? (
                   <div className="space-y-6">
-                    {/* ออกรหัสสมาชิกใหม่ (เลือกได้หลายหมวดหมู่) */}
                     <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 shadow-xl">
                       <h2 className="text-lg font-bold text-white mb-1">👑 ออกรหัสประจำตัวสมาชิกใหม่ (Owner Only)</h2>
                       <p className="text-xs text-slate-300 mb-5">
-                        สามารถเลือกหมวดหมู่ให้สมาชิก 1 คนได้มากกว่า 1 หมวดหมู่ และสามารถกดแก้ไขหมวดหมู่เพิ่มเติมภายหลังได้ตลอดเวลา
+                        สามารถเลือกหมวดหมู่ให้สมาชิก 1 คนได้มากกว่า 1 หมวดหมู่ และแก้ไขหมวดหมู่เพิ่มเติมภายหลังได้ตลอดเวลา
                       </p>
                       <form onSubmit={handleIssueNewId} className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2477,7 +3311,7 @@
 
                         <div>
                           <label className="block text-xs text-slate-300 mb-1.5">
-                            คลิกเลือกหมวดหมู่สมาชิก (เลือกได้หลายหมวดหมู่) — เลือกแล้ว: <strong className="text-white">{newMemberTags.join(', ')}</strong>
+                            คลิกเลือกหมวดหมู่สมาชิก — เลือกแล้ว: <strong className="text-white">{newMemberTags.join(', ')}</strong>
                           </label>
                           <div className="flex flex-wrap gap-2">
                             {Array.from(new Set([...PRESET_MEMBER_TAGS, ...newMemberTags])).map((t) => {
@@ -2490,7 +3324,7 @@
                                   className={
                                     isChecked
                                       ? 'px-3 py-1.5 rounded-xl text-xs border bg-white text-[#050811] border-white font-bold shadow'
-                                      : 'px-3 py-1.5 rounded-xl text-xs border bg-[#050811] text-slate-300 border-[#1E3A5F] hover:border-white/40'
+                                      : 'px-3 py-1.5 rounded-xl text-xs border bg-[#050811] text-slate-300 border-[#1E3A5F]'
                                   }
                                 >
                                   {isChecked ? '✓ ' + t : '+ ' + t}
@@ -2508,7 +3342,6 @@
                       </form>
                     </div>
 
-                    {/* รายการสมาชิกทั้งหมด + ปุ่มแก้ไขหมวดหมู่ย้อนหลัง */}
                     <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 space-y-4">
                       <h3 className="text-base font-bold text-white">จัดการรหัสสมาชิก, แก้ไขหมวดหมู่ และแต่งตั้งผู้ดูแล ({users.length} รายการ)</h3>
                       <div className="space-y-3">
@@ -2536,11 +3369,10 @@
                             <div className="flex flex-wrap items-center gap-2 shrink-0">
                               <button
                                 onClick={() => openEditTagsModal(u)}
-                                className="px-3 py-1.5 rounded-lg bg-[#0B1325] hover:bg-white hover:text-[#050811] border border-[#1E3A5F] text-xs font-semibold text-blue-200 transition"
+                                className="px-3 py-1.5 rounded-lg bg-[#0B1325] hover:bg-white hover:text-[#050811] border border-[#1E3A5F] text-xs font-semibold text-blue-200"
                               >
                                 🏷️ แก้ไขหมวดหมู่
                               </button>
-
                               {!u.isActivated && (
                                 <button onClick={() => handleCopyInviteId(u)} className="px-3 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
                                   {copiedId === u.id ? '✓ คัดลอกแล้ว' : 'คัดลอก ID ส่งให้สมาชิก'}
@@ -2573,12 +3405,12 @@
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="ค้นหาโพสต์, ชื่อสมาชิก, รหัส M001..."
+                          placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก, รหัส M001..."
                           className="flex-1 bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
                         />
                         {currentUser && (
                           <button onClick={() => setIsCreatingPost(true)} className="px-5 py-2.5 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shrink-0">
-                            + เขียนโพสต์ / แนบไฟล์
+                            + เขียนโพสต์ / สร้างโพลล์
                           </button>
                         )}
                       </div>
@@ -2600,7 +3432,7 @@
                       {filteredPosts.length === 0 ? (
                         <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-12 text-center">
                           <p className="text-base font-semibold text-white">ยังไม่มีโพสต์ในหน้านี้</p>
-                          <p className="text-xs text-slate-400 mt-1">สมาชิกสามารถกดปุ่ม "+ เขียนโพสต์ / แนบไฟล์" เพื่อเริ่มต้นแบ่งปันเรื่องราวได้เลย</p>
+                          <p className="text-xs text-slate-400 mt-1">สมาชิกสามารถกดปุ่ม "+ เขียนโพสต์ / สร้างโพลล์" เพื่อเริ่มต้นแบ่งปันเรื่องราวได้เลย</p>
                         </div>
                       ) : (
                         filteredPosts.map((post) => {
@@ -2608,6 +3440,11 @@
                           const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
                           const isBookmarked = currentUser && (post.bookmarks || []).includes(currentUser.id);
                           const isHighlighted = highlightedPostId === post.id;
+                          const isMutedPost = currentUser && (post.mutedBy || []).includes(currentUser.id);
+                          const isPollClosed = post.poll && post.poll.closesAt && Date.now() > post.poll.closesAt;
+                          const totalPollVotes = post.poll
+                            ? (post.poll.options || []).reduce((sum, o) => sum + ((o.votes && o.votes.length) || 0), 0)
+                            : 0;
 
                           return (
                             <article
@@ -2631,9 +3468,22 @@
                                     <div className="text-xs text-slate-400 mt-0.5">@{author.username} • {post.createdAt}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   {post.category && (
                                     <span className="px-3 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">{post.category}</span>
+                                  )}
+                                  {/* ปุ่มปิดการแจ้งเตือนโพสต์ของตนเอง */}
+                                  {currentUser && currentUser.id === post.authorId && (
+                                    <button
+                                      onClick={() => handleToggleMuteSpecificPost(post)}
+                                      className={
+                                        isMutedPost
+                                          ? 'px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-400/50 text-[11px] text-amber-200'
+                                          : 'px-2.5 py-1 rounded-lg bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-300 hover:text-white'
+                                      }
+                                    >
+                                      {isMutedPost ? '🔕 ปิดแจ้งเตือนโพสต์นี้แล้ว' : '🔔 แจ้งเตือนโพสต์นี้'}
+                                    </button>
                                   )}
                                   {canManagePostOrComment(post.authorId) && (
                                     <button onClick={() => handleDeletePost(post.id)} className="px-2.5 py-1 rounded-lg bg-black hover:bg-red-950 border border-[#1E3A5F] text-[11px] text-slate-400 hover:text-red-300">
@@ -2645,6 +3495,59 @@
 
                               {post.title && <h3 className="text-lg font-bold text-white">{post.title}</h3>}
                               {post.content && <p className="text-sm text-slate-200 whitespace-pre-line leading-relaxed">{post.content}</p>}
+
+                              {/* ส่วนโหวตโพลล์ในโพสต์ */}
+                              {post.poll && (
+                                <div className="p-4 rounded-2xl bg-[#050811] border border-[#1E3A5F] space-y-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-base">📊</span>
+                                      <h4 className="text-sm font-bold text-white">{post.poll.question}</h4>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {post.poll.isAnonymous ? (
+                                        <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-[10px] text-blue-200">
+                                          🕵️ โหวตไม่แสดงชื่อ (Anonymous)
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded bg-[#0B1325] border border-[#1E3A5F] text-[10px] text-slate-300">
+                                          👁️ แสดงรายชื่อผู้โหวตในคอมเมนต์
+                                        </span>
+                                      )}
+                                      {post.poll.closesAtFormatted && (
+                                        <span className={'px-2 py-0.5 rounded text-[10px] font-bold ' + (isPollClosed ? 'bg-red-950 text-red-300 border border-red-500/40' : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40')}>
+                                          {isPollClosed ? '🔒 ปิดโพลล์แล้ว' : '⏳ ปิดโพลล์: ' + post.poll.closesAtFormatted}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    {(post.poll.options || []).map((opt) => {
+                                      const myVoted = currentUser && (opt.votes || []).includes(currentUser.id);
+                                      return (
+                                        <button
+                                          key={opt.id}
+                                          disabled={isPollClosed}
+                                          onClick={() => handleVotePoll(post, opt.id)}
+                                          className={
+                                            'w-full flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs transition ' +
+                                            (myVoted
+                                              ? 'bg-white text-[#050811] border-white font-bold shadow'
+                                              : 'bg-[#0B1325] hover:bg-[#0F2547] text-white border-[#1E3A5F]') +
+                                            (isPollClosed ? ' opacity-60 cursor-not-allowed' : '')
+                                          }
+                                        >
+                                          <span>{myVoted ? '✓ ' + opt.text : opt.text}</span>
+                                          <span className="font-mono text-[11px]">
+                                            {myVoted ? 'เลือกตัวเลือกนี้แล้ว' : 'คลิกเพื่อโหวต'}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
 
                               {post.attachments && post.attachments.length > 0 && (
                                 <div className="space-y-3 pt-2">
@@ -2697,7 +3600,46 @@
                                 </button>
                               </div>
 
+                              {/* ส่วนความคิดเห็น + แสดงผลโพลล์ในคอมเมนต์ตามที่กำหนด */}
                               <div className="pt-3 border-t border-[#1E3A5F]/60 space-y-2.5">
+                                {post.poll && (
+                                  <div className="p-4 rounded-xl bg-[#050811] border border-sky-500/40 space-y-2.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="font-bold text-sky-300">
+                                        📊 สรุปผลการโหวตโพลล์ในคอมเมนต์ (รวม {totalPollVotes} โหวต)
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">
+                                        {post.poll.isAnonymous ? '🕵️ โหมดไม่แสดงชื่อผู้โหวต' : '👁️ โหมดแสดงชื่อผู้โหวต'}
+                                      </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {(post.poll.options || []).map((opt) => {
+                                        const count = (opt.votes && opt.votes.length) || 0;
+                                        const pct = totalPollVotes > 0 ? Math.round((count / totalPollVotes) * 100) : 0;
+                                        return (
+                                          <div key={opt.id} className="space-y-1 text-xs">
+                                            <div className="flex justify-between font-medium">
+                                              <span className="text-white">{opt.text}</span>
+                                              <span className="font-mono text-blue-200">{count} โหวต ({pct}%)</span>
+                                            </div>
+                                            <div className="w-full h-2 rounded-full bg-[#0B1325] overflow-hidden border border-[#1E3A5F]">
+                                              <div
+                                                className="h-full bg-gradient-to-r from-blue-500 to-white transition-all duration-300"
+                                                style={{ width: pct + '%' }}
+                                              />
+                                            </div>
+                                            {!post.poll.isAnonymous && count > 0 && (
+                                              <div className="text-[10px] text-slate-400">
+                                                ผู้โหวต: {opt.votes.map((uid) => getAuthor(uid).displayName + ' (' + uid + ')').join(', ')}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
                                 {(post.comments || []).map((c) => {
                                   const cAuthor = getAuthor(c.authorId);
                                   return (
@@ -2751,7 +3693,169 @@
           )}
 
           {/* ================================================================= */}
-          {/* MODAL: ดูโปรไฟล์เต็มของสมาชิก + ลิงก์ Social Media + ปุ่มส่งข้อความแรก */}
+          {/* MODAL: ศูนย์จัดการการแจ้งเตือนทั้งหมด + ปุ่มปิดการแจ้งเตือนแยกหมวด */}
+          {/* ================================================================= */}
+          {isNotifModalOpen && currentUser && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#1E3A5F]">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🔔</span>
+                    <div>
+                      <h3 className="text-base font-bold text-white">ศูนย์จัดการการแจ้งเตือนทั้งหมด</h3>
+                      <p className="text-[11px] text-slate-400">แยกหมวดหมู่แจ้งเตือนโพสต์ แจ้งเตือนข้อความ และตั้งค่าการปิดเสียง</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsNotifModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+
+                {/* แถบขออนุญาตแจ้งเตือนไปหาเดสก์ท็อปและอุปกรณ์เคลื่อนที่ */}
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <div className="font-bold text-white">📱 แจ้งเตือนไปยังเดสก์ท็อป / อุปกรณ์เคลื่อนที่</div>
+                    <div className="text-[11px] text-slate-400">
+                      สถานะปัจจุบัน: {browserPushPermission === 'granted' ? '✓ อนุญาตแล้ว' : 'ยังไม่ได้เปิดใช้งาน'}
+                    </div>
+                  </div>
+                  {browserPushPermission !== 'granted' && (
+                    <button
+                      onClick={requestDeviceNotificationPermission}
+                      className="px-3.5 py-1.5 rounded-xl bg-white text-[#050811] font-bold text-xs shrink-0"
+                    >
+                      ขออนุญาตเปิดการแจ้งเตือนอุปกรณ์
+                    </button>
+                  )}
+                </div>
+
+                {/* แท็บแยกประเภทการแจ้งเตือน */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex gap-1 p-1 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <button
+                      onClick={() => setNotifTab('posts')}
+                      className={notifTab === 'posts' ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#050811]' : 'px-3 py-1.5 rounded-lg text-xs text-slate-300'}
+                    >
+                      📝 แจ้งเตือนโพสต์ ({unreadPostNotifsCount})
+                    </button>
+                    <button
+                      onClick={() => setNotifTab('messages')}
+                      className={notifTab === 'messages' ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#050811]' : 'px-3 py-1.5 rounded-lg text-xs text-slate-300'}
+                    >
+                      💬 แจ้งเตือนข้อความ ({unreadMsgNotifsCount})
+                    </button>
+                    <button
+                      onClick={() => setNotifTab('settings')}
+                      className={notifTab === 'settings' ? 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#050811]' : 'px-3 py-1.5 rounded-lg text-xs text-slate-300'}
+                    >
+                      🔕 ตั้งค่าปิดแจ้งเตือน
+                    </button>
+                  </div>
+
+                  {notifTab !== 'settings' && (
+                    <button
+                      onClick={handleMarkAllNotificationsRead}
+                      className="px-3 py-1.5 rounded-xl bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-xs font-bold text-white transition"
+                    >
+                      ✓ เปลี่ยนเป็นอ่านแล้วทั้งหมด
+                    </button>
+                  )}
+                </div>
+
+                {notifTab === 'settings' ? (
+                  <div className="space-y-3 py-2">
+                    <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-white">ปิดการแจ้งเตือนโพสต์ของตนเอง</div>
+                        <div className="text-[11px] text-slate-400">ซ่อนแจ้งเตือนเมื่อมีคนกดถูกใจ คอมเมนต์ หรือโหวตโพลล์ในโพสต์ของคุณ</div>
+                      </div>
+                      <button
+                        onClick={() => handleToggleNotifPref('muteOwnPosts')}
+                        className={
+                          currentUser.notifPrefs && currentUser.notifPrefs.muteOwnPosts
+                            ? 'px-3.5 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold'
+                            : 'px-3.5 py-1.5 rounded-xl bg-[#0F2547] text-white text-xs font-semibold'
+                        }
+                      >
+                        {currentUser.notifPrefs && currentUser.notifPrefs.muteOwnPosts ? '🔕 ปิดอยู่ (คลิกเพื่อเปิด)' : '🔔 เปิดอยู่ (คลิกเพื่อปิด)'}
+                      </button>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-white">ปิดการแจ้งเตือนข้อความในช่องหลัก (Global Channels)</div>
+                        <div className="text-[11px] text-slate-400">ซ่อนแจ้งเตือนข้อความใหม่จากห้องแชตรวมทั้งหมด</div>
+                      </div>
+                      <button
+                        onClick={() => handleToggleNotifPref('muteGlobalChat')}
+                        className={
+                          currentUser.notifPrefs && currentUser.notifPrefs.muteGlobalChat
+                            ? 'px-3.5 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold'
+                            : 'px-3.5 py-1.5 rounded-xl bg-[#0F2547] text-white text-xs font-semibold'
+                        }
+                      >
+                        {currentUser.notifPrefs && currentUser.notifPrefs.muteGlobalChat ? '🔕 ปิดอยู่ (คลิกเพื่อเปิด)' : '🔔 เปิดอยู่ (คลิกเพื่อปิด)'}
+                      </button>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-white">ปิดการแจ้งเตือนข้อความในแชต (แชตกลุ่ม / แชตส่วนตัว / สะกิด)</div>
+                        <div className="text-[11px] text-slate-400">ซ่อนแจ้งเตือนข้อความส่วนตัว แชตกลุ่ม และการสะกิด</div>
+                      </div>
+                      <button
+                        onClick={() => handleToggleNotifPref('mutePrivateChat')}
+                        className={
+                          currentUser.notifPrefs && currentUser.notifPrefs.mutePrivateChat
+                            ? 'px-3.5 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold'
+                            : 'px-3.5 py-1.5 rounded-xl bg-[#0F2547] text-white text-xs font-semibold'
+                        }
+                      >
+                        {currentUser.notifPrefs && currentUser.notifPrefs.mutePrivateChat ? '🔕 ปิดอยู่ (คลิกเพื่อเปิด)' : '🔔 เปิดอยู่ (คลิกเพื่อปิด)'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                    {(notifTab === 'posts' ? postNotifs : msgNotifs).length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400">
+                        ยังไม่มีการแจ้งเตือนในหมวดหมู่นี้
+                      </div>
+                    ) : (
+                      (notifTab === 'posts' ? postNotifs : msgNotifs).map((n) => {
+                        const isRead = (n.readBy || []).includes(currentUser.id);
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => handleClickNotificationItem(n)}
+                            className={
+                              'p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-3 ' +
+                              (isRead
+                                ? 'bg-[#050811] border-[#1E3A5F] opacity-75 hover:opacity-100'
+                                : 'bg-[#0F2547]/70 border-sky-400 shadow')
+                            }
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                {!isRead && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />}
+                                <span className="text-xs font-bold text-white truncate">{n.title}</span>
+                                <span className="text-[10px] font-mono text-slate-400">{n.time}</span>
+                              </div>
+                              <p className="text-xs text-slate-200 mt-1 line-clamp-2">{n.body}</p>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-lg bg-white text-[#050811] font-bold text-[10px] shrink-0">
+                              ไปที่ต้นทาง →
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* MODAL: ดูโปรไฟล์เต็มของสมาชิก                                     */}
           {/* ================================================================= */}
           {selectedMemberModal && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2785,12 +3889,9 @@
                     {selectedMemberModal.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}
                   </p>
 
-                  {/* แสดงลิงก์ Social Media / External Link ของสมาชิก */}
                   {selectedMemberModal.socialLinks && selectedMemberModal.socialLinks.length > 0 && (
                     <div className="text-left space-y-1.5">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        ช่องทางติดต่อ & Social Media
-                      </div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ช่องทางติดต่อ & Social Media</div>
                       <div className="flex flex-wrap gap-2">
                         {selectedMemberModal.socialLinks.map((soc) => (
                           <a
@@ -2798,7 +3899,7 @@
                             href={soc.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs text-white font-medium transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-xs text-white font-medium"
                           >
                             <span>{getSocialIcon(soc.platform)}</span>
                             <span>{soc.label}</span>
@@ -2813,7 +3914,7 @@
                     {(!currentUser || currentUser.id !== selectedMemberModal.id) && (
                       <button
                         onClick={() => startDirectMessageWith(selectedMemberModal)}
-                        className="w-full py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200 shadow transition"
+                        className="w-full py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200 shadow"
                       >
                         💬 ส่งข้อความส่วนตัว (DM)
                       </button>
@@ -2825,7 +3926,7 @@
                         setSelectedMemberModal(null);
                         setCurrentView('feed');
                       }}
-                      className="w-full py-2.5 rounded-xl bg-[#0F2547] hover:bg-[#163463] border border-white/20 text-white font-bold text-xs transition"
+                      className="w-full py-2.5 rounded-xl bg-[#0F2547] hover:bg-[#163463] border border-white/20 text-white font-bold text-xs"
                     >
                       📝 ดูโพสต์ในหมวดหมู่เดียวกัน
                     </button>
@@ -2836,13 +3937,13 @@
           )}
 
           {/* ================================================================= */}
-          {/* MODAL: แก้ไขโปรไฟล์สมาชิก + เพิ่มลิงก์ Social Media / External Link */}
+          {/* MODAL: แก้ไขโปรไฟล์ + เปลี่ยน Username (จำกัด 2 ครั้ง/14 วัน) & รหัสผ่าน */}
           {/* ================================================================= */}
           {isEditingProfile && currentUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="w-full max-w-lg bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
-                  <h3 className="text-base font-bold text-white">ตั้งค่าโปรไฟล์สมาชิก & ลิงก์โซเชียล</h3>
+                  <h3 className="text-base font-bold text-white">ตั้งค่าโปรไฟล์, Username, รหัสผ่าน & โซเชียล</h3>
                   <button onClick={() => setIsEditingProfile(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
 
@@ -2860,33 +3961,64 @@
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">ชื่อที่แสดง (Display Name) *</label>
+                      <input
+                        type="text"
+                        value={editDisplayName}
+                        onChange={(e) => setEditDisplayName(e.target.value)}
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">
+                        Username (เหลือสิทธิ์เปลี่ยน {Math.max(0, 2 - getRecentUsernameChanges(currentUser).length)}/2 ครั้งใน 14 วัน)
+                      </label>
+                      <input
+                        type="text"
+                        value={editUsernameInput}
+                        onChange={(e) => setEditUsernameInput(e.target.value)}
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm font-mono text-white outline-none"
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1">ชื่อที่แสดง (Display Name) *</label>
-                    <input
-                      type="text"
-                      value={editDisplayName}
-                      onChange={(e) => setEditDisplayName(e.target.value)}
-                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2 text-sm text-white outline-none"
-                      required
-                    />
+                    <label className="block text-xs text-slate-300 mb-1">รหัสผ่าน (Password) *</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showEditPassword ? 'text' : 'password'}
+                        value={editPasswordInput}
+                        onChange={(e) => setEditPasswordInput(e.target.value)}
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl pl-3.5 pr-20 py-2 text-sm font-mono text-white outline-none"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute right-2.5 px-2 py-1 rounded-lg bg-[#0B1325] border border-[#1E3A5F] text-[11px] text-slate-200 font-semibold"
+                      >
+                        {showEditPassword ? '🙈 ซ่อน' : '👁️ ดูรหัส'}
+                      </button>
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs text-slate-300 mb-1">คำอธิบายตัวตน (Bio)</label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={editBio}
                       onChange={(e) => setEditBio(e.target.value)}
                       className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3 text-sm text-white outline-none resize-none"
                     />
                   </div>
 
-                  {/* ส่วนเพิ่มลิงก์ Social Media & External Links */}
+                  {/* ลิงก์ Social Media */}
                   <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
-                    <div className="text-xs font-bold text-white">
-                      🔗 ลิงก์ Social Media หรือเว็บไซต์ของคุณ (Facebook, IG, YouTube, TikTok, External Link)
-                    </div>
-
+                    <div className="text-xs font-bold text-white">🔗 ลิงก์ Social Media หรือ External Link</div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <select
                         value={newSocialPlatform}
@@ -2894,33 +4026,25 @@
                         className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-2.5 py-2 text-xs text-white outline-none"
                       >
                         {SOCIAL_PLATFORMS.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.icon} {p.label}
-                          </option>
+                          <option key={p.id} value={p.id}>{p.icon} {p.label}</option>
                         ))}
                       </select>
-
                       <input
                         type="text"
                         value={newSocialLabel}
                         onChange={(e) => setNewSocialLabel(e.target.value)}
-                        placeholder="ชื่อปุ่ม (เช่น IG ส่วนตัว, ช่องเพลง)"
+                        placeholder="ชื่อปุ่ม..."
                         className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-2 text-xs text-white outline-none"
                       />
-
                       <div className="flex gap-1.5">
                         <input
                           type="text"
                           value={newSocialUrl}
                           onChange={(e) => setNewSocialUrl(e.target.value)}
-                          placeholder="วางลิงก์ URL..."
+                          placeholder="วาง URL..."
                           className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-2 text-xs text-white outline-none min-w-0"
                         />
-                        <button
-                          type="button"
-                          onClick={handleAddSocialLink}
-                          className="px-3 py-2 rounded-lg bg-white text-[#050811] text-xs font-bold shrink-0"
-                        >
+                        <button type="button" onClick={handleAddSocialLink} className="px-3 py-2 rounded-lg bg-white text-[#050811] text-xs font-bold shrink-0">
                           เพิ่ม
                         </button>
                       </div>
@@ -2935,22 +4059,22 @@
                               <strong className="text-white">{soc.label}</strong>
                               <span className="text-slate-400 ml-2 font-mono text-[10px]">{soc.url}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSocialLink(soc.id)}
-                              className="text-red-400 hover:text-red-300 ml-2 font-bold"
-                            >
-                              ลบ
-                            </button>
+                            <button type="button" onClick={() => handleRemoveSocialLink(soc.id)} className="text-red-400 font-bold ml-2">ลบ</button>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
 
+                  {profileEditError && (
+                    <div className="p-3 rounded-xl bg-red-950/70 border border-red-400 text-xs text-red-200">
+                      {profileEditError}
+                    </div>
+                  )}
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setIsEditingProfile(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
-                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกโปรไฟล์</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกการเปลี่ยนแปลง</button>
                   </div>
                 </form>
               </div>
@@ -2958,7 +4082,7 @@
           )}
 
           {/* ================================================================= */}
-          {/* MODAL: ADMIN แก้ไขหมวดหมู่สมาชิกย้อนหลัง (เลือกได้หลายหมวดหมู่)   */}
+          {/* MODAL: ADMIN แก้ไขหมวดหมู่สมาชิกย้อนหลัง                          */}
           {/* ================================================================= */}
           {editingTagsUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2971,10 +4095,6 @@
                 </div>
 
                 <form onSubmit={handleSaveEditedMemberTags} className="space-y-4">
-                  <p className="text-xs text-slate-300">
-                    คลิกเพื่อเปิด/ปิดหมวดหมู่ของสมาชิกคนนี้ (สามารถมีได้หลายหมวดหมู่พร้อมกัน)
-                  </p>
-
                   <div className="flex flex-wrap gap-2">
                     {Array.from(new Set([...allAvailableTags, ...editingTagsList])).map((t) => {
                       const isChecked = editingTagsList.includes(t);
@@ -2994,24 +4114,18 @@
                       );
                     })}
                   </div>
-
                   <div className="flex gap-2 pt-2">
                     <input
                       type="text"
                       value={editingCustomTag}
                       onChange={(e) => setEditingCustomTag(e.target.value)}
-                      placeholder="หรือพิมพ์หมวดหมู่ใหม่เพิ่มเติม..."
+                      placeholder="หรือพิมพ์หมวดหมู่ใหม่..."
                       className="flex-1 bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
                     />
-                    <button
-                      type="button"
-                      onClick={handleAddEditingCustomTag}
-                      className="px-3.5 py-2 rounded-xl bg-[#0F2547] border border-white/20 text-xs font-bold text-white"
-                    >
+                    <button type="button" onClick={handleAddEditingCustomTag} className="px-3.5 py-2 rounded-xl bg-[#0F2547] border border-white/20 text-xs font-bold text-white">
                       + เพิ่มแท็ก
                     </button>
                   </div>
-
                   <div className="flex justify-end gap-2 pt-3 border-t border-[#1E3A5F]">
                     <button type="button" onClick={() => setEditingTagsUser(null)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
                     <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกหมวดหมู่</button>
@@ -3022,13 +4136,13 @@
           )}
 
           {/* ================================================================= */}
-          {/* MODAL: CREATE POST                                                */}
+          {/* MODAL: CREATE POST & POLL                                         */}
           {/* ================================================================= */}
           {isCreatingPost && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
-                  <h3 className="text-base font-bold text-white">เขียนโพสต์ใหม่ลงใน The Blue Moon Association</h3>
+                  <h3 className="text-base font-bold text-white">เขียนโพสต์ใหม่ / สร้างโพลล์สำรวจความคิดเห็น</h3>
                   <button onClick={() => setIsCreatingPost(false)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
                 <form onSubmit={handleCreatePost} className="space-y-4">
@@ -3059,16 +4173,110 @@
                       </select>
                     </div>
                   </div>
+
                   <div>
                     <label className="block text-xs text-slate-300 mb-1">เนื้อหาโพสต์</label>
                     <textarea
-                      rows={4}
+                      rows={3}
                       value={newPostContent}
                       onChange={(e) => setNewPostContent(e.target.value)}
                       placeholder="เขียนสิ่งที่คุณอยากแชร์กับสมาคม..."
                       className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3.5 text-sm text-white outline-none resize-none"
                     />
                   </div>
+
+                  {/* ส่วนสร้างโพลล์ (Poll) */}
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">📊 แนบโพลล์สำรวจความคิดเห็น (แสดงผลโพลล์ในคอมเมนต์)</span>
+                      <button
+                        type="button"
+                        onClick={() => setHasPollInNewPost(!hasPollInNewPost)}
+                        className={
+                          hasPollInNewPost
+                            ? 'px-3 py-1 rounded-lg bg-white text-[#050811] text-xs font-bold'
+                            : 'px-3 py-1 rounded-lg bg-[#0F2547] text-white text-xs font-semibold'
+                        }
+                      >
+                        {hasPollInNewPost ? '✓ เปิดใช้งานโพลล์แล้ว' : '+ เพิ่มโพลล์'}
+                      </button>
+                    </div>
+
+                    {hasPollInNewPost && (
+                      <div className="space-y-3 pt-2 border-t border-[#1E3A5F]">
+                        <div>
+                          <label className="block text-xs text-slate-300 mb-1">หัวข้อคำถามโพลล์ *</label>
+                          <input
+                            type="text"
+                            value={pollQuestionInput}
+                            onChange={(e) => setPollQuestionInput(e.target.value)}
+                            placeholder="ตั้งคำถามโพลล์..."
+                            className="w-full bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-2 text-xs text-white outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs text-slate-300">ตัวเลือกโพลล์ *</label>
+                          {pollOptionsInput.map((optVal, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={optVal}
+                                onChange={(e) => {
+                                  const next = [...pollOptionsInput];
+                                  next[idx] = e.target.value;
+                                  setPollOptionsInput(next);
+                                }}
+                                placeholder={'ตัวเลือกที่ ' + (idx + 1)}
+                                className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-1.5 text-xs text-white outline-none"
+                              />
+                              {pollOptionsInput.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePollOptionField(idx)}
+                                  className="text-red-400 text-xs font-bold px-2"
+                                >
+                                  ลบ
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={handleAddPollOptionField}
+                            className="px-3 py-1 rounded-lg bg-[#0F2547] text-xs text-blue-200 font-semibold"
+                          >
+                            + เพิ่มตัวเลือก
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-xs text-slate-300 mb-1">ตั้งเวลาปิดโพลล์ (ไม่บังคับ)</label>
+                            <input
+                              type="datetime-local"
+                              value={pollCloseTimeInput}
+                              onChange={(e) => setPollCloseTimeInput(e.target.value)}
+                              className="w-full bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-1.5 text-xs text-white outline-none"
+                            />
+                          </div>
+                          <div className="flex items-end pb-1">
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={pollIsAnonymousInput}
+                                onChange={(e) => setPollIsAnonymousInput(e.target.checked)}
+                                className="w-4 h-4 rounded"
+                              />
+                              <span>🕵️ โหวตแบบไม่แสดงชื่อ (Anonymous Vote)</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* แนบไฟล์ */}
                   <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-slate-200">📎 แนบรูปภาพ, วิดีโอ หรือไฟล์เอกสาร</span>
@@ -3097,12 +4305,13 @@
                         {newPostAttachments.map((att) => (
                           <div key={att.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#0B1325] border border-[#1E3A5F] text-xs">
                             <span className="truncate max-w-xs">[{att.type.toUpperCase()}] {att.name}</span>
-                            <button type="button" onClick={() => setNewPostAttachments(newPostAttachments.filter((a) => a.id !== att.id))} className="text-red-400 hover:text-red-300 ml-2">ลบ</button>
+                            <button type="button" onClick={() => setNewPostAttachments(newPostAttachments.filter((a) => a.id !== att.id))} className="text-red-400 ml-2">ลบ</button>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
+
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setIsCreatingPost(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
                     <button type="submit" className="px-6 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">เผยแพร่โพสต์</button>
@@ -3112,9 +4321,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: สร้างห้อง Global Chat ใหม่ (เฉพาะ Owner / Mod)              */}
-          {/* ================================================================= */}
+          {/* MODAL: สร้างห้อง Global Chat ใหม่ */}
           {isCreateChannelOpen && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
@@ -3126,34 +4333,16 @@
                   <div className="grid grid-cols-4 gap-3">
                     <div>
                       <label className="block text-xs text-slate-300 mb-1">ไอคอน</label>
-                      <input
-                        type="text"
-                        value={newChannelIcon}
-                        onChange={(e) => setNewChannelIcon(e.target.value)}
-                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3 py-2 text-center text-base outline-none"
-                      />
+                      <input type="text" value={newChannelIcon} onChange={(e) => setNewChannelIcon(e.target.value)} className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3 py-2 text-center text-base outline-none" />
                     </div>
                     <div className="col-span-3">
                       <label className="block text-xs text-slate-300 mb-1">ชื่อห้อง (Channel Name) *</label>
-                      <input
-                        type="text"
-                        value={newChannelName}
-                        onChange={(e) => setNewChannelName(e.target.value)}
-                        placeholder="เช่น music-room"
-                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
-                        required
-                      />
+                      <input type="text" value={newChannelName} onChange={(e) => setNewChannelName(e.target.value)} placeholder="เช่น music-room" className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none" required />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs text-slate-300 mb-1">คำอธิบายหัวข้อห้อง</label>
-                    <input
-                      type="text"
-                      value={newChannelDesc}
-                      onChange={(e) => setNewChannelDesc(e.target.value)}
-                      placeholder="ระบุจุดประสงค์ของห้องนี้..."
-                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
-                    />
+                    <input type="text" value={newChannelDesc} onChange={(e) => setNewChannelDesc(e.target.value)} placeholder="ระบุจุดประสงค์ของห้องนี้..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none" />
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setIsCreateChannelOpen(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
@@ -3164,9 +4353,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: สร้างกลุ่มแชตย่อยด้วยตัวเอง                                  */}
-          {/* ================================================================= */}
+          {/* MODAL: สร้างกลุ่มแชตย่อย */}
           {isCreateGroupOpen && currentUser && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
@@ -3177,19 +4364,10 @@
                 <form onSubmit={handleCreateGroup} className="space-y-4">
                   <div>
                     <label className="block text-xs text-slate-300 mb-1">ชื่อกลุ่มแชต *</label>
-                    <input
-                      type="text"
-                      value={newGroupName}
-                      onChange={(e) => setNewGroupName(e.target.value)}
-                      placeholder="ตั้งชื่อกลุ่มแชตของคุณ..."
-                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
-                      required
-                    />
+                    <input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="ตั้งชื่อกลุ่มแชตของคุณ..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none" required />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-300 mb-1.5">
-                      คลิกเลือกสมาชิกที่ต้องการดึงเข้ากลุ่ม ({selectedGroupMembers.length} คน) *
-                    </label>
+                    <label className="block text-xs text-slate-300 mb-1.5">คลิกเลือกสมาชิกที่ต้องการดึงเข้ากลุ่ม ({selectedGroupMembers.length} คน) *</label>
                     <div className="max-h-52 overflow-y-auto space-y-1.5 p-2 rounded-xl bg-[#050811] border border-[#1E3A5F]">
                       {activatedMembers.filter((m) => m.id !== currentUser.id).map((m) => {
                         const isChecked = selectedGroupMembers.includes(m.id);
@@ -3197,18 +4375,12 @@
                           <div
                             key={m.id}
                             onClick={() => toggleSelectGroupMember(m.id)}
-                            className={
-                              isChecked
-                                ? 'p-2.5 rounded-xl bg-[#0F2547] border border-white flex items-center justify-between cursor-pointer'
-                                : 'p-2.5 rounded-xl bg-[#0B1325] border border-[#1E3A5F] flex items-center justify-between cursor-pointer hover:border-white/40'
-                            }
+                            className={isChecked ? 'p-2.5 rounded-xl bg-[#0F2547] border border-white flex items-center justify-between cursor-pointer' : 'p-2.5 rounded-xl bg-[#0B1325] border border-[#1E3A5F] flex items-center justify-between cursor-pointer hover:border-white/40'}
                           >
                             <div className="flex items-center gap-2.5">
                               <Avatar user={m} size="xs" showStatus={true} />
                               <div>
-                                <div className="text-xs font-bold text-white">
-                                  {m.displayName} <span className="font-mono text-blue-300">({m.id})</span>
-                                </div>
+                                <div className="text-xs font-bold text-white">{m.displayName} <span className="font-mono text-blue-300">({m.id})</span></div>
                                 <div className="text-[10px] text-slate-400">@{m.username} • {getUserTags(m).join(', ')}</div>
                               </div>
                             </div>
@@ -3227,9 +4399,7 @@
             </div>
           )}
 
-          {/* ================================================================= */}
-          {/* MODAL: หน้าต่างยืนยันการลบห้องแชต                                 */}
-          {/* ================================================================= */}
+          {/* MODAL: หน้าต่างยืนยันการลบห้องแชต */}
           {deleteConfirmTarget && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="w-full max-w-sm bg-[#0B1325] border-2 border-red-500/60 rounded-2xl p-6 shadow-2xl text-center space-y-4">
@@ -3241,20 +4411,8 @@
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirmTarget(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs font-semibold text-slate-300"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmDeleteRoom}
-                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white shadow-lg"
-                  >
-                    🗑️ ยืนยันการลบถาวร
-                  </button>
+                  <button type="button" onClick={() => setDeleteConfirmTarget(null)} className="flex-1 py-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs font-semibold text-slate-300">ยกเลิก</button>
+                  <button type="button" onClick={handleConfirmDeleteRoom} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-bold text-white shadow-lg">🗑️ ยืนยันการลบถาวร</button>
                 </div>
               </div>
             </div>
