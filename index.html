@@ -4,17 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Blue Moon Association</title>
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
     body {
@@ -23,11 +18,7 @@
       color: #ffffff;
       overflow-x: hidden;
     }
-    .font-mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* Orbit Animations */
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
     @keyframes orbit-cw {
       from { transform: translate(-50%, -50%) rotate(0deg); }
       to { transform: translate(-50%, -50%) rotate(360deg); }
@@ -44,15 +35,12 @@
       from { transform: translate(-50%, -50%) rotate(-360deg); }
       to { transform: translate(-50%, -50%) rotate(0deg); }
     }
-
     .orbit-ring-1 { animation: orbit-cw 38s linear infinite; }
     .orbit-ring-2 { animation: orbit-ccw 55s linear infinite; }
     .orbit-ring-3 { animation: orbit-cw 75s linear infinite; }
-
     .counter-ring-1 { animation: counter-rotate-cw 38s linear infinite; }
     .counter-ring-2 { animation: counter-rotate-ccw 55s linear infinite; }
     .counter-ring-3 { animation: counter-rotate-cw 75s linear infinite; }
-
     .orbit-system:hover .orbit-ring-1,
     .orbit-system:hover .orbit-ring-2,
     .orbit-system:hover .orbit-ring-3,
@@ -69,9 +57,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // ============================================================================
-    // FIREBASE CONFIGURATION (เชื่อมต่อกับโปรเจกต์ tbmasite ถาวร)
-    // ============================================================================
     const firebaseConfig = {
       apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
       authDomain: "tbmasite.firebaseapp.com",
@@ -82,25 +67,22 @@
       measurementId: "G-JDW0E0S138"
     };
 
-    const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
-    const db = firebase.firestore(app);
+    let db = null;
+    try {
+      const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+      db = firebase.firestore(app);
+    } catch (e) {
+      console.error("Firebase Init Error:", e);
+    }
 
-    const PRESET_MEMBER_TAGS = [
-      'LCs & Pal',
-      'PCSHS',
-      'KPN',
-      'KMUTT',
-      'Instrumix',
-      'Others'
-    ];
+    const PRESET_MEMBER_TAGS = ['LCs & Pal', 'PCSHS', 'KPN', 'KMUTT', 'Instrumix', 'Others'];
 
-    // บัญชีตั้งต้นรหัส M000 สำหรับเจ้าของเว็บ (Owner/Admin) รอให้เจ้าของเว็บมาตั้ง Username/Password เองในครั้งแรก
     const INITIAL_OWNER_SEED = {
       id: 'M000',
       username: '',
       password: '',
       isActivated: false,
-      role: 'admin', // 'admin' (เจ้าของเว็บ) | 'mod' (ผู้ดูแลโพสต์) | 'member' (สมาชิกทั่วไป)
+      role: 'admin',
       memberTag: 'LCs & Pal',
       displayName: 'Founder (M000)',
       bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association',
@@ -109,85 +91,69 @@
     };
 
     function Avatar({ user, size = 'md', className = '' }) {
-      const sizeClasses = {
+      const sizeMap = {
         xs: 'w-6 h-6 text-[10px]',
         sm: 'w-8 h-8 text-xs',
         md: 'w-11 h-11 text-xs',
         lg: 'w-16 h-16 text-base',
         xl: 'w-20 h-20 text-lg'
-      }[size];
+      };
+      const sc = sizeMap[size] || sizeMap.md;
 
-      if (user?.avatarUrl) {
+      if (user && user.avatarUrl) {
         return (
           <img
             src={user.avatarUrl}
-            alt={user.displayName}
-            className={`${sizeClasses} rounded-full object-cover border-2 border-white/40 bg-[#0F2547] shrink-0 ${className}`}
+            alt={user.displayName || 'Avatar'}
+            className={sc + ' rounded-full object-cover border-2 border-white/40 bg-[#0F2547] shrink-0 ' + className}
           />
         );
       }
-
       return (
-        <div
-          className={`${sizeClasses} rounded-full bg-[#0F2547] border-2 border-white/30 flex items-center justify-center font-mono font-bold text-white shrink-0 ${className}`}
-        >
-          {user?.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}
+        <div className={sc + ' rounded-full bg-[#0F2547] border-2 border-white/30 flex items-center justify-center font-mono font-bold text-white shrink-0 ' + className}>
+          {user && user.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}
         </div>
       );
     }
 
     function RoleBadge({ role }) {
       if (role === 'admin') {
-        return (
-          <span className="px-2 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase tracking-wider">
-            👑 Owner
-          </span>
-        );
+        return <span className="px-2 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase">👑 Owner</span>;
       }
       if (role === 'mod') {
-        return (
-          <span className="px-2 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase tracking-wider">
-            🛡️ ผู้ดูแล (Mod)
-          </span>
-        );
+        return <span className="px-2 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase">🛡️ ผู้ดูแล (Mod)</span>;
       }
       return null;
     }
 
     function App() {
-      const [users, setUsers] = useState([]);
+      const [users, setUsers] = useState([INITIAL_OWNER_SEED]);
       const [posts, setPosts] = useState([]);
       const [currentUser, setCurrentUser] = useState(null);
-      const [isLoadingData, setIsLoadingData] = useState(true);
+      const [dbErrorBanner, setDbErrorBanner] = useState('');
 
-      // Views: 'home' | 'feed' | 'members' | 'bookmarks' | 'admin' | 'login'
       const [currentView, setCurrentView] = useState('home');
       const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
       const [memberDirectoryTag, setMemberDirectoryTag] = useState('ALL');
       const [searchQuery, setSearchQuery] = useState('');
       const [selectedMemberModal, setSelectedMemberModal] = useState(null);
 
-      // Auth Tab: 'signin' (เข้าสู่ระบบด้วย Username/Pass) | 'activate' (กรอก ID เพื่อสร้าง Username/Pass ครั้งแรก)
       const [authMode, setAuthMode] = useState('signin');
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
       const [authError, setAuthError] = useState('');
-      const [authSuccess, setAuthSuccess] = useState('');
 
-      // Activate ID States (สมาชิกกรอก ID เพื่อสร้าง Username & Password เอง)
       const [activateIdInput, setActivateIdInput] = useState('');
       const [activateUsername, setActivateUsername] = useState('');
       const [activatePassword, setActivatePassword] = useState('');
       const [activateDisplayName, setActivateDisplayName] = useState('');
 
-      // Profile Edit States
       const [isEditingProfile, setIsEditingProfile] = useState(false);
       const [editDisplayName, setEditDisplayName] = useState('');
       const [editBio, setEditBio] = useState('');
       const [editAvatarUrl, setEditAvatarUrl] = useState('');
       const avatarInputRef = useRef(null);
 
-      // Post Creation States
       const [isCreatingPost, setIsCreatingPost] = useState(false);
       const [newPostTitle, setNewPostTitle] = useState('');
       const [newPostContent, setNewPostContent] = useState('');
@@ -197,78 +163,60 @@
       const [attachmentTypeInput, setAttachmentTypeInput] = useState('image');
       const postFileInputRef = useRef(null);
 
-      // Admin Issue ID States (ออกเฉพาะ ID แพตเทิร์น M001 และ Tag)
       const [newMemberId, setNewMemberId] = useState('M001');
       const [newMemberTag, setNewMemberTag] = useState('LCs & Pal');
       const [copiedId, setCopiedId] = useState(null);
-
-      // Comment Input
       const [commentInputs, setCommentInputs] = useState({});
 
-      // ============================================================================
-      // 1. REALTIME SYNC กับ FIREBASE FIRESTORE (โปรเจกต์ tbmasite)
-      // ============================================================================
       useEffect(() => {
-        // ดึงข้อมูลสมาชิก
+        if (!db) return;
+
         const unsubUsers = db.collection('bma_users').onSnapshot(
           async (snapshot) => {
+            setDbErrorBanner('');
             if (snapshot.empty) {
-              // ถ้าฐานข้อมูลยังว่างเปล่า ให้สร้างรหัส M000 (Owner) ไว้รอให้เจ้าของเว็บมาเปิดใช้งาน
-              await db.collection('bma_users').doc(INITIAL_OWNER_SEED.id).set(INITIAL_OWNER_SEED);
+              try {
+                await db.collection('bma_users').doc(INITIAL_OWNER_SEED.id).set(INITIAL_OWNER_SEED);
+              } catch (e) {}
             } else {
-              // ล้างรหัส BMA-000 เก่าที่ยังไม่ได้เปิดใช้งานออก (ถ้ามี) และเปลี่ยนมาใช้ M000 แทน
               const allDocs = snapshot.docs.map((doc) => doc.data());
-              const oldUnactivatedOwner = allDocs.find((u) => u.id === 'BMA-000' && !u.isActivated);
-              if (oldUnactivatedOwner) {
-                await db.collection('bma_users').doc('BMA-000').delete();
-              }
-
               const loadedUsers = allDocs.filter(
-                (u) =>
-                  u.id !== 'BMA-000' &&
-                  u.password !== 'bma-root-password' &&
-                  u.password !== 'moon-8842'
+                (u) => u.id !== 'BMA-000' && u.password !== 'bma-root-password' && u.password !== 'moon-8842'
               );
 
-              // หากยังไม่มี M000 ในระบบเลย ให้สร้าง M000 ให้อัตโนมัติ
               if (!loadedUsers.some((u) => u.id === 'M000')) {
-                await db.collection('bma_users').doc(INITIAL_OWNER_SEED.id).set(INITIAL_OWNER_SEED);
+                try {
+                  await db.collection('bma_users').doc(INITIAL_OWNER_SEED.id).set(INITIAL_OWNER_SEED);
+                } catch (e) {}
                 return;
               }
 
-              loadedUsers.sort((a, b) => a.id.localeCompare(b.id));
+              loadedUsers.sort((a, b) => String(a.id).localeCompare(String(b.id)));
               setUsers(loadedUsers);
 
-              // คำนวณเลข ID ถัดไปในรูปแบบ M001, M002, ...
               const maxNum = loadedUsers.reduce((max, u) => {
-                const match = String(u.id).match(/^M(\d+)$/i);
-                if (match) {
-                  const num = parseInt(match[1], 10);
+                const m = String(u.id).match(/^M(\d+)$/i);
+                if (m) {
+                  const num = parseInt(m[1], 10);
                   return num > max ? num : max;
                 }
                 return max;
               }, 0);
-              const nextNum = String(maxNum + 1).padStart(3, '0');
-              setNewMemberId(`M${nextNum}`);
+              setNewMemberId('M' + String(maxNum + 1).padStart(3, '0'));
             }
-            setIsLoadingData(false);
           },
           (err) => {
-            console.error('Firestore Users Error:', err);
-            setIsLoadingData(false);
+            setDbErrorBanner('แจ้งเตือน Firebase (' + err.code + '): กรุณาตรวจสอบว่าได้สร้าง Firestore Database (Start in test mode) แล้ว');
           }
         );
 
-        // ดึงข้อมูลโพสต์
         const unsubPosts = db.collection('bma_posts').onSnapshot(
           (snapshot) => {
             const loadedPosts = snapshot.docs.map((doc) => doc.data());
             loadedPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             setPosts(loadedPosts);
           },
-          (err) => {
-            console.error('Firestore Posts Error:', err);
-          }
+          (err) => console.error(err)
         );
 
         return () => {
@@ -277,21 +225,13 @@
         };
       }, []);
 
-      // ซิงค์ข้อมูล currentUser ให้เป็นปัจจุบันเสมอเมื่อฐานข้อมูลอัปเดต
       useEffect(() => {
         if (currentUser && users.length > 0) {
           const latestMe = users.find((u) => u.id === currentUser.id);
-          if (latestMe) {
-            setCurrentUser(latestMe);
-          } else {
-            setCurrentUser(null);
-          }
+          if (latestMe) setCurrentUser(latestMe);
         }
       }, [users]);
 
-      // ============================================================================
-      // 2. ระบบเข้าสู่ระบบ (Sign In) & เปิดใช้งานรหัสสมาชิก (Activate ID)
-      // ============================================================================
       const handleSignIn = (e) => {
         e.preventDefault();
         setAuthError('');
@@ -302,50 +242,44 @@
             u.username.toLowerCase() === loginUsername.trim().toLowerCase() &&
             u.password === loginPassword
         );
-
         if (found) {
           setCurrentUser(found);
           setLoginUsername('');
           setLoginPassword('');
           setCurrentView('feed');
         } else {
-          setAuthError('Username หรือ Password ไม่ถูกต้อง (หากเพิ่งได้รับ Member ID กรุณากดแท็บ "เปิดใช้งาน Member ID" ด้านบน)');
+          setAuthError('Username หรือ Password ไม่ถูกต้อง (หากเพิ่งได้รับรหัส เช่น M000 หรือ M001 กรุณากดแท็บ "เปิดใช้งาน Member ID" ด้านบน)');
         }
       };
 
       const handleActivateMemberId = async (e) => {
         e.preventDefault();
         setAuthError('');
-        setAuthSuccess('');
-
         const cleanId = activateIdInput.trim().toUpperCase();
         const cleanUser = activateUsername.trim();
         const cleanPass = activatePassword.trim();
-        const cleanName = activateDisplayName.trim() || `Member #${cleanId}`;
+        const cleanName = activateDisplayName.trim() || ('Member #' + cleanId);
 
         if (!cleanId || !cleanUser || !cleanPass) {
           setAuthError('กรุณากรอกข้อมูลให้ครบทุกช่อง');
           return;
         }
 
-        // ค้นหาว่ามี Member ID ที่ Admin ออกไว้ให้หรือไม่
-        const targetAccount = users.find((u) => u.id.toUpperCase() === cleanId);
+        const targetAccount = users.find((u) => String(u.id).toUpperCase() === cleanId);
         if (!targetAccount) {
-          setAuthError(`ไม่พบรหัสประจำตัว "${cleanId}" ในระบบ กรุณาติดต่อเจ้าของเว็บไซต์เพื่อขอรับ Member ID`);
+          setAuthError('ไม่พบรหัสประจำตัว "' + cleanId + '" ในระบบ กรุณาติดต่อเจ้าของเว็บไซต์');
           return;
         }
-
         if (targetAccount.isActivated) {
-          setAuthError(`รหัส "${cleanId}" ถูกเปิดใช้งานและตั้ง Username ไปเรียบร้อยแล้ว กรุณาเข้าสู่ระบบตามปกติ`);
+          setAuthError('รหัส "' + cleanId + '" ถูกเปิดใช้งานไปแล้ว กรุณาเข้าสู่ระบบตามปกติ');
           return;
         }
 
-        // ตรวจสอบว่า Username ซ้ำกับคนอื่นหรือไม่
         const usernameTaken = users.some(
           (u) => u.id !== targetAccount.id && u.username && u.username.toLowerCase() === cleanUser.toLowerCase()
         );
         if (usernameTaken) {
-          setAuthError('Username นี้มีสมาชิกท่านอื่นใช้งานแล้ว กรุณาตั้ง Username อื่น');
+          setAuthError('Username นี้มีผู้ใช้งานแล้ว กรุณาตั้งชื่ออื่น');
           return;
         }
 
@@ -359,7 +293,8 @@
         };
 
         try {
-          await db.collection('bma_users').doc(targetAccount.id).set(updatedAccount);
+          if (db) await db.collection('bma_users').doc(targetAccount.id).set(updatedAccount);
+          setUsers(users.map((u) => (u.id === targetAccount.id ? updatedAccount : u)));
           setCurrentUser(updatedAccount);
           setActivateIdInput('');
           setActivateUsername('');
@@ -367,23 +302,19 @@
           setActivateDisplayName('');
           setCurrentView('feed');
         } catch (err) {
-          setAuthError('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message);
+          setAuthError('บันทึกข้อมูลไม่สำเร็จ: ' + err.message);
         }
       };
 
-      // ============================================================================
-      // 3. ระบบ ADMIN: ออกรหัส (ID + Tag) และแต่งตั้งผู้ดูแลโพสต์ (Moderator)
-      // ============================================================================
       const handleIssueNewId = async (e) => {
         e.preventDefault();
-        if (currentUser?.role !== 'admin') return;
-
+        if (!currentUser || currentUser.role !== 'admin') return;
         const cleanId = newMemberId.trim().toUpperCase();
         const cleanTag = newMemberTag.trim();
         if (!cleanId || !cleanTag) return;
 
-        if (users.some((u) => u.id.toUpperCase() === cleanId)) {
-          alert(`รหัส ${cleanId} มีอยู่ในระบบแล้ว กรุณาระบุรหัสอื่น`);
+        if (users.some((u) => String(u.id).toUpperCase() === cleanId)) {
+          alert('รหัส ' + cleanId + ' มีอยู่ในระบบแล้ว');
           return;
         }
 
@@ -394,64 +325,60 @@
           isActivated: false,
           username: '',
           password: '',
-          displayName: `รออนุมัติตัวตน (${cleanId})`,
+          displayName: 'รออนุมัติตัวตน (' + cleanId + ')',
           bio: 'สมาชิกใหม่ (รอเจ้าตัวเข้ามากำหนด Username และโปรไฟล์)',
           avatarUrl: '',
           joinedAt: new Date().toISOString().split('T')[0]
         };
 
-        await db.collection('bma_users').doc(cleanId).set(newSlot);
+        if (db) await db.collection('bma_users').doc(cleanId).set(newSlot);
       };
 
-      // สลับตำแหน่ง Member <-> Moderator (ผู้ดูแลโพสต์)
       const handleToggleModerator = async (targetUser) => {
-        if (currentUser?.role !== 'admin' || targetUser.role === 'admin') return;
+        if (!currentUser || currentUser.role !== 'admin' || targetUser.role === 'admin') return;
         const nextRole = targetUser.role === 'mod' ? 'member' : 'mod';
-        await db.collection('bma_users').doc(targetUser.id).update({ role: nextRole });
+        if (db) await db.collection('bma_users').doc(targetUser.id).update({ role: nextRole });
       };
 
       const handleDeleteUser = async (userId) => {
-        if (currentUser?.role !== 'admin' || userId === 'M000') return;
-        if (!confirm(`ยืนยันการลบบัญชีรหัส ${userId} ออกจากระบบ?`)) return;
-        await db.collection('bma_users').doc(userId).delete();
+        if (!currentUser || currentUser.role !== 'admin' || userId === 'M000') return;
+        if (!confirm('ยืนยันการลบบัญชีรหัส ' + userId + ' ?')) return;
+        if (db) await db.collection('bma_users').doc(userId).delete();
       };
 
       const handleCopyInviteId = (user) => {
-        const text = `[The Blue Moon Association]\nบัตรเชิญเข้าสู่สมาคมของคุณ:\n- Member ID: ${user.id}\n- หมวดหมู่ (Tag): ${user.memberTag}\n\nวิธีเข้าใช้งานครั้งแรก:\n1. เข้าเว็บไซต์สมาคม แล้วกดปุ่ม "เข้าสู่ระบบ / เปิดใช้งาน ID"\n2. เลือกแท็บ "เปิดใช้งาน Member ID"\n3. กรอกรหัส ${user.id} เพื่อตั้ง Username และ Password ของคุณเองได้ทันที`;
+        const text =
+          '[The Blue Moon Association]\nบัตรเชิญเข้าสู่สมาคมของคุณ:\n- Member ID: ' +
+          user.id +
+          '\n- หมวดหมู่ (Tag): ' +
+          user.memberTag +
+          '\n\nวิธีเข้าใช้งานครั้งแรก:\n1. กดปุ่ม "เข้าสู่ระบบ / เปิดใช้งาน ID"\n2. เลือกแท็บ "เปิดใช้งาน Member ID"\n3. กรอกรหัส ' +
+          user.id +
+          ' เพื่อตั้ง Username และ Password ของคุณเอง';
         navigator.clipboard.writeText(text);
         setCopiedId(user.id);
         setTimeout(() => setCopiedId(null), 2500);
       };
 
-      // ============================================================================
-      // 4. ระบบจัดการโพสต์และคอมเมนต์ (สำหรับเจ้าของโพสต์, ผู้ดูแล Mod, และ Admin)
-      // ============================================================================
       const canManagePostOrComment = (authorId) => {
         if (!currentUser) return false;
-        return (
-          currentUser.role === 'admin' ||
-          currentUser.role === 'mod' ||
-          currentUser.id === authorId
-        );
+        return currentUser.role === 'admin' || currentUser.role === 'mod' || currentUser.id === authorId;
       };
 
       const handleDeletePost = async (postId) => {
-        if (!confirm('ยืนยันการลบโพสต์นี้ออกจากกระดานสมาคม?')) return;
-        await db.collection('bma_posts').doc(postId).delete();
+        if (!confirm('ยืนยันการลบโพสต์นี้?')) return;
+        if (db) await db.collection('bma_posts').doc(postId).delete();
       };
 
       const handleDeleteComment = async (postId, commentId) => {
         const targetPost = posts.find((p) => p.id === postId);
         if (!targetPost) return;
         const updatedComments = (targetPost.comments || []).filter((c) => c.id !== commentId);
-        await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
+        if (db) await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
       };
 
-      // ============================================================================
-      // 5. ระบบโปรไฟล์และการสร้างโพสต์ใหม่
-      // ============================================================================
       const handleAvatarUpload = (e) => {
-        const file = e.target.files?.[0];
+        const file = e.target.files && e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -459,19 +386,18 @@
           img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_SIZE = 300;
-            let width = img.width;
-            let height = img.height;
-            if (width > height && width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            } else if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
+            let w = img.width;
+            let h = img.height;
+            if (w > h && w > MAX_SIZE) {
+              h *= MAX_SIZE / w;
+              w = MAX_SIZE;
+            } else if (h > MAX_SIZE) {
+              w *= MAX_SIZE / h;
+              h = MAX_SIZE;
             }
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.85));
           };
           img.src = event.target.result;
@@ -482,15 +408,13 @@
       const handleSaveProfile = async (e) => {
         e.preventDefault();
         if (!editDisplayName.trim() || !currentUser) return;
-
         const updatedUser = {
           ...currentUser,
           displayName: editDisplayName.trim(),
           bio: editBio.trim(),
           avatarUrl: editAvatarUrl.trim()
         };
-
-        await db.collection('bma_users').doc(updatedUser.id).set(updatedUser);
+        if (db) await db.collection('bma_users').doc(updatedUser.id).set(updatedUser);
         setCurrentUser(updatedUser);
         setIsEditingProfile(false);
       };
@@ -499,7 +423,7 @@
         const files = Array.from(e.target.files || []);
         files.forEach((file) => {
           if (file.size > 850 * 1024) {
-            alert(`ไฟล์ "${file.name}" มีขนาดเกิน 850KB กรุณาใช้ไฟล์ขนาดเล็กลง หรือแนบเป็นลิงก์ URL ด้านล่างแทนครับ`);
+            alert('ไฟล์ "' + file.name + '" มีขนาดเกิน 850KB กรุณาใช้ไฟล์ขนาดเล็กลง หรือแนบเป็นลิงก์ URL แทนครับ');
             return;
           }
           const reader = new FileReader();
@@ -507,7 +431,6 @@
             let fileType = 'file';
             if (file.type.startsWith('image/')) fileType = 'image';
             else if (file.type.startsWith('video/')) fileType = 'video';
-
             setNewPostAttachments((prev) => [
               ...prev,
               {
@@ -545,7 +468,7 @@
         if (!newPostContent.trim() && !newPostTitle.trim() && newPostAttachments.length === 0) return;
 
         const postObj = {
-          id: `post-${Date.now()}`,
+          id: 'post-' + Date.now(),
           authorId: currentUser.id,
           title: newPostTitle.trim(),
           content: newPostContent.trim(),
@@ -563,7 +486,7 @@
           comments: []
         };
 
-        await db.collection('bma_posts').doc(postObj.id).set(postObj);
+        if (db) await db.collection('bma_posts').doc(postObj.id).set(postObj);
         setNewPostTitle('');
         setNewPostContent('');
         setNewPostCategory('');
@@ -579,12 +502,10 @@
         const target = posts.find((p) => p.id === postId);
         if (!target) return;
         const likes = target.likes || [];
-        const hasLiked = likes.includes(currentUser.id);
-        const updatedLikes = hasLiked
+        const updatedLikes = likes.includes(currentUser.id)
           ? likes.filter((id) => id !== currentUser.id)
           : [...likes, currentUser.id];
-
-        await db.collection('bma_posts').doc(postId).update({ likes: updatedLikes });
+        if (db) await db.collection('bma_posts').doc(postId).update({ likes: updatedLikes });
       };
 
       const toggleBookmark = async (postId) => {
@@ -595,12 +516,10 @@
         const target = posts.find((p) => p.id === postId);
         if (!target) return;
         const bookmarks = target.bookmarks || [];
-        const hasBookmarked = bookmarks.includes(currentUser.id);
-        const updatedBookmarks = hasBookmarked
+        const updatedBookmarks = bookmarks.includes(currentUser.id)
           ? bookmarks.filter((id) => id !== currentUser.id)
           : [...bookmarks, currentUser.id];
-
-        await db.collection('bma_posts').doc(postId).update({ bookmarks: updatedBookmarks });
+        if (db) await db.collection('bma_posts').doc(postId).update({ bookmarks: updatedBookmarks });
       };
 
       const handleAddComment = async (postId) => {
@@ -614,14 +533,14 @@
         if (!target) return;
 
         const newComment = {
-          id: `c-${Date.now()}`,
+          id: 'c-' + Date.now(),
           authorId: currentUser.id,
           text: text.trim(),
           createdAt: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
         };
 
         const updatedComments = [...(target.comments || []), newComment];
-        await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
+        if (db) await db.collection('bma_posts').doc(postId).update({ comments: updatedComments });
         setCommentInputs({ ...commentInputs, [postId]: '' });
       };
 
@@ -629,7 +548,7 @@
         return (
           users.find((u) => u.id === authorId) || {
             id: authorId,
-            displayName: `Member (${authorId})`,
+            displayName: 'Member (' + authorId + ')',
             memberTag: 'Others',
             username: 'member',
             role: 'member',
@@ -639,51 +558,48 @@
       };
 
       const allFilterTags = ['ALL', ...PRESET_MEMBER_TAGS];
-
       const activatedMembers = users.filter((u) => u.isActivated);
 
       const filteredPosts = posts.filter((post) => {
         const author = getAuthor(post.authorId);
-        const matchesBookmark = currentView === 'bookmarks' ? post.bookmarks?.includes(currentUser?.id) : true;
+        const matchesBookmark = currentView === 'bookmarks' ? (post.bookmarks || []).includes(currentUser && currentUser.id) : true;
         const matchesTag = selectedTagFilter === 'ALL' ? true : author.memberTag === selectedTagFilter;
         const matchesSearch =
           (post.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           (post.content || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           author.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          author.id.toLowerCase().includes(searchQuery.toLowerCase());
+          String(author.id).toLowerCase().includes(searchQuery.toLowerCase());
         return matchesBookmark && matchesTag && matchesSearch;
       });
 
       const getOrbitRings = () => {
-        const ring1 = [];
-        const ring2 = [];
-        const ring3 = [];
-        const displayOrbitUsers = activatedMembers.length > 0 ? activatedMembers : users;
-        displayOrbitUsers.forEach((u, idx) => {
-          if (idx % 3 === 0) ring1.push(u);
-          else if (idx % 3 === 1) ring2.push(u);
-          else ring3.push(u);
+        const r1 = [], r2 = [], r3 = [];
+        const list = activatedMembers.length > 0 ? activatedMembers : users;
+        list.forEach((u, i) => {
+          if (i % 3 === 0) r1.push(u);
+          else if (i % 3 === 1) r2.push(u);
+          else r3.push(u);
         });
         return [
-          { radius: 135, items: ring1, ringClass: 'orbit-ring-1', counterClass: 'counter-ring-1' },
-          { radius: 210, items: ring2, ringClass: 'orbit-ring-2', counterClass: 'counter-ring-2' },
-          { radius: 285, items: ring3, ringClass: 'orbit-ring-3', counterClass: 'counter-ring-3' }
+          { radius: 135, items: r1, ringClass: 'orbit-ring-1', counterClass: 'counter-ring-1' },
+          { radius: 210, items: r2, ringClass: 'orbit-ring-2', counterClass: 'counter-ring-2' },
+          { radius: 285, items: r3, ringClass: 'orbit-ring-3', counterClass: 'counter-ring-3' }
         ];
       };
 
       return (
         <div className="min-h-screen bg-[#050811] text-white flex flex-col">
-          {/* ================================================================= */}
-          {/* TOP NAVBAR                                                        */}
-          {/* ================================================================= */}
+          {dbErrorBanner && (
+            <div className="bg-amber-500 text-[#050811] px-4 py-2 text-xs font-bold text-center">
+              ⚠️ {dbErrorBanner}
+            </div>
+          )}
+
+          {/* NAVBAR */}
           <header className="sticky top-0 z-40 bg-[#070C18]/90 backdrop-blur-md border-b border-[#1E3A5F]">
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-              {/* Brand */}
-              <button
-                onClick={() => setCurrentView('home')}
-                className="flex items-center gap-3 text-left group"
-              >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-[#0F2547] to-[#050811] border border-white/40 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)] group-hover:scale-105 transition">
+              <button onClick={() => setCurrentView('home')} className="flex items-center gap-3 text-left group">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-[#0F2547] to-[#050811] border border-white/40 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)]">
                   <span className="text-lg">🌙</span>
                 </div>
                 <div>
@@ -696,8 +612,878 @@
                 </div>
               </button>
 
-              {/* Center Navigation Links */}
               <nav className="hidden md:flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1">
                 <button
                   onClick={() => setCurrentView('home')}
-                  className={`px-4 py-1
+                  className={currentView === 'home' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                >
+                  🪐 หน้าแรก (Orbit)
+                </button>
+                <button
+                  onClick={() => setCurrentView('feed')}
+                  className={currentView === 'feed' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                >
+                  📝 กระดานโพสต์
+                </button>
+                <button
+                  onClick={() => setCurrentView('members')}
+                  className={currentView === 'members' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                >
+                  👥 สมาชิก ({activatedMembers.length})
+                </button>
+                {currentUser && currentUser.role === 'admin' && (
+                  <button
+                    onClick={() => setCurrentView('admin')}
+                    className={currentView === 'admin' ? 'px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-4 py-1.5 rounded-full text-xs font-semibold text-slate-300 hover:text-white'}
+                  >
+                    👑 จัดการรหัสสมาชิก (Owner)
+                  </button>
+                )}
+              </nav>
+
+              <div className="flex items-center gap-2">
+                {currentUser ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditDisplayName(currentUser.displayName);
+                        setEditBio(currentUser.bio);
+                        setEditAvatarUrl(currentUser.avatarUrl || '');
+                        setIsEditingProfile(true);
+                      }}
+                      className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B1325] border border-[#1E3A5F] hover:border-white/40"
+                    >
+                      <Avatar user={currentUser} size="xs" />
+                      <span className="text-xs font-semibold hidden sm:inline max-w-[110px] truncate">
+                        {currentUser.displayName}
+                      </span>
+                      <RoleBadge role={currentUser.role} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCurrentUser(null);
+                        setCurrentView('home');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#050811] hover:bg-red-950/60 border border-[#1E3A5F] text-xs text-slate-300"
+                    >
+                      ออก
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setAuthMode('signin');
+                      setAuthError('');
+                      setCurrentView('login');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white text-[#050811] hover:bg-slate-200 text-xs font-bold shadow"
+                  >
+                    เข้าสู่ระบบ / เปิดใช้งาน ID
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex md:hidden items-center justify-around border-t border-[#1E3A5F] bg-[#050811] py-2 px-2 text-xs">
+              <button onClick={() => setCurrentView('home')} className={currentView === 'home' ? 'text-white font-bold' : 'text-slate-400'}>🪐 หน้าแรก</button>
+              <button onClick={() => setCurrentView('feed')} className={currentView === 'feed' ? 'text-white font-bold' : 'text-slate-400'}>📝 โพสต์</button>
+              <button onClick={() => setCurrentView('members')} className={currentView === 'members' ? 'text-white font-bold' : 'text-slate-400'}>👥 สมาชิก</button>
+              {currentUser && currentUser.role === 'admin' && (
+                <button onClick={() => setCurrentView('admin')} className={currentView === 'admin' ? 'text-white font-bold' : 'text-slate-400'}>👑 Owner</button>
+              )}
+            </div>
+          </header>
+
+          {/* VIEW 1: HOME ORBIT */}
+          {currentView === 'home' && (
+            <div className="relative flex-1 flex flex-col items-center justify-between py-8 px-4 overflow-hidden min-h-[calc(100vh-4rem)]">
+              <div className="relative z-10 text-center space-y-2 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[11px] text-slate-300">
+                  <span>✦</span> ระบบสุริยะและดาวบริวารแห่งสมาคมพระจันทร์สีน้ำเงิน
+                </div>
+                <h2 className="text-2xl md:text-4xl font-bold tracking-wider uppercase text-white">
+                  The Blue Moon Association
+                </h2>
+                <p className="text-xs md:text-sm text-slate-300">
+                  คลิกที่ดาวบริวารเพื่อดูข้อมูลสมาชิก หรือเลือกเข้าสู่กระดานโพสต์ด้านล่าง
+                </p>
+              </div>
+
+              <div className="relative w-full max-w-[640px] h-[540px] md:h-[600px] flex items-center justify-center my-2 orbit-system select-none">
+                <div
+                  onClick={() => setCurrentView('feed')}
+                  className="relative z-20 w-28 h-28 md:w-36 md:h-36 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 transition-transform duration-500 hover:scale-105"
+                  style={{
+                    background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)',
+                    boxShadow: '0 0 60px rgba(37, 99, 235, 0.65), inset -12px -12px 24px rgba(5, 8, 17, 0.85)'
+                  }}
+                >
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-blue-100 font-mono">Core</span>
+                  <span className="text-xs md:text-sm font-bold tracking-wider uppercase text-white mt-0.5">Blue Moon</span>
+                  <span className="text-[10px] text-blue-200 mt-1">{activatedMembers.length} Satellites</span>
+                </div>
+
+                {getOrbitRings().map((ring, rIdx) => (
+                  <div
+                    key={rIdx}
+                    className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.ringClass}
+                    style={{ width: (ring.radius * 2) + 'px', height: (ring.radius * 2) + 'px' }}
+                  >
+                    {ring.items.map((member, mIdx) => {
+                      const angleDeg = (360 / Math.max(1, ring.items.length)) * mIdx;
+                      const angleRad = (angleDeg * Math.PI) / 180;
+                      const x = ring.radius + ring.radius * Math.cos(angleRad);
+                      const y = ring.radius + ring.radius * Math.sin(angleRad);
+
+                      return (
+                        <div
+                          key={member.id}
+                          style={{ left: x + 'px', top: y + 'px' }}
+                          className={'absolute pointer-events-auto ' + ring.counterClass}
+                        >
+                          <button onClick={() => setSelectedMemberModal(member)} className="group flex flex-col items-center">
+                            <div className="p-0.5 rounded-full bg-gradient-to-tr from-blue-500 to-white shadow-lg transition transform group-hover:scale-125">
+                              <Avatar user={member} size="md" />
+                            </div>
+                            <div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] font-medium text-white whitespace-nowrap">
+                              {member.displayName}
+                            </div>
+                            <span className="text-[9px] font-mono text-blue-300">{member.memberTag}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              <div className="relative z-20 flex flex-col sm:flex-row items-center gap-3 w-full max-w-md justify-center">
+                <button
+                  onClick={() => setCurrentView('feed')}
+                  className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-[#0F2547] hover:bg-[#163463] border border-white/25 text-white font-bold text-sm shadow-lg text-center"
+                >
+                  📖 อ่านโพสต์ (โหมดผู้มาเยือน)
+                </button>
+                {currentUser ? (
+                  <button
+                    onClick={() => setCurrentView('members')}
+                    className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shadow-lg text-center"
+                  >
+                    👥 ดูทำเนียบสมาชิก
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setAuthMode('signin');
+                      setAuthError('');
+                      setCurrentView('login');
+                    }}
+                    className="w-full sm:w-auto flex-1 px-6 py-3 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shadow-lg text-center"
+                  >
+                    🔑 เข้าสู่ระบบ / เปิดใช้งาน ID
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 2: LOGIN & ACTIVATE ID */}
+          {currentView === 'login' && (
+            <div className="flex-1 flex flex-col justify-center items-center p-4">
+              <div className="w-full max-w-md bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-8 shadow-2xl">
+                <div className="text-center mb-6">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-[#0F2547] border border-white/25 flex items-center justify-center text-2xl mb-3">🌙</div>
+                  <h2 className="text-xl font-bold uppercase tracking-wider text-white">The Blue Moon Portal</h2>
+                  <p className="text-xs text-slate-400 mt-1">เข้าสู่ระบบ หรือกรอก Member ID (เช่น M000, M001) เพื่อสร้างบัญชี</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#050811] border border-[#1E3A5F] mb-6">
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('signin'); setAuthError(''); }}
+                    className={authMode === 'signin' ? 'py-2 rounded-lg text-xs font-bold bg-white text-[#050811]' : 'py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white'}
+                  >
+                    เข้าสู่ระบบ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthMode('activate'); setAuthError(''); }}
+                    className={authMode === 'activate' ? 'py-2 rounded-lg text-xs font-bold bg-white text-[#050811]' : 'py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white'}
+                  >
+                    เปิดใช้งาน Member ID
+                  </button>
+                </div>
+
+                {authMode === 'signin' ? (
+                  <form onSubmit={handleSignIn} className="space-y-4">
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1.5">Username</label>
+                      <input
+                        type="text"
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        placeholder="ระบุ Username ของคุณ..."
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1.5">Password</label>
+                      <input
+                        type="password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        required
+                      />
+                    </div>
+                    {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
+                    <button type="submit" className="w-full bg-white text-[#050811] hover:bg-slate-200 font-bold py-2.5 rounded-xl text-sm shadow-lg">
+                      เข้าสู่ระบบ (Sign In)
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleActivateMemberId} className="space-y-4">
+                    <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-[11px] text-slate-300">
+                      กรอก <strong className="text-white">Member ID</strong> ที่ได้รับ (เช่น <strong className="text-white">M000</strong> สำหรับเจ้าของเว็บ หรือ <strong className="text-white">M001</strong> สำหรับสมาชิก) เพื่อตั้ง Username และ Password ของคุณเอง
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1">Member ID ที่ได้รับ *</label>
+                      <input
+                        type="text"
+                        value={activateIdInput}
+                        onChange={(e) => setActivateIdInput(e.target.value)}
+                        placeholder="เช่น M000 หรือ M001"
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm font-mono text-white uppercase outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1">ตั้งชื่อที่แสดง (Display Name) *</label>
+                      <input
+                        type="text"
+                        value={activateDisplayName}
+                        onChange={(e) => setActivateDisplayName(e.target.value)}
+                        placeholder="ชื่อเล่น หรือฉายาของคุณ..."
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1">ตั้ง Username สำหรับล็อกอิน *</label>
+                      <input
+                        type="text"
+                        value={activateUsername}
+                        onChange={(e) => setActivateUsername(e.target.value)}
+                        placeholder="ตั้ง Username ภาษาอังกฤษ..."
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm font-mono text-white outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs uppercase text-slate-300 mb-1">ตั้ง Password ของคุณเอง *</label>
+                      <input
+                        type="password"
+                        value={activatePassword}
+                        onChange={(e) => setActivatePassword(e.target.value)}
+                        placeholder="ตั้งรหัสผ่าน..."
+                        className="w-full bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        required
+                      />
+                    </div>
+                    {authError && <div className="p-3 rounded-xl bg-red-950/60 border border-red-400/40 text-xs text-red-200">{authError}</div>}
+                    <button type="submit" className="w-full bg-white text-[#050811] hover:bg-slate-200 font-bold py-2.5 rounded-xl text-sm shadow-lg">
+                      ยืนยันและสร้างบัญชีสมาชิก
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 3: MEMBERS DIRECTORY */}
+          {currentView === 'members' && (
+            <div className="max-w-7xl mx-auto w-full px-4 py-8 space-y-6 flex-1">
+              <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">ทำเนียบสมาชิก The Blue Moon Association</h2>
+                  <p className="text-xs text-slate-300 mt-1">แสดงโปรไฟล์ของสมาชิกทั้งหมดแยกตามหมวดหมู่</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {allFilterTags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setMemberDirectoryTag(tag)}
+                      className={memberDirectoryTag === tag ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold border bg-white text-[#050811] border-white' : 'px-3.5 py-1.5 rounded-full text-xs font-semibold border bg-[#050811] text-slate-300 border-[#1E3A5F] hover:bg-[#0F2547]'}
+                    >
+                      {tag === 'ALL' ? 'ดูรวมทั้งหมด (' + activatedMembers.length + ')' : tag + ' (' + activatedMembers.filter((u) => u.memberTag === tag).length + ')'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {activatedMembers
+                  .filter((u) => (memberDirectoryTag === 'ALL' ? true : u.memberTag === memberDirectoryTag))
+                  .map((member) => {
+                    const count = posts.filter((p) => p.authorId === member.id).length;
+                    return (
+                      <div key={member.id} className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between">
+                        <div>
+                          <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3 border-b border-[#1E3A5F] flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-white">{member.id}</span>
+                              <RoleBadge role={member.role} />
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold">{member.memberTag}</span>
+                          </div>
+                          <div className="p-5 flex items-start gap-4">
+                            <Avatar user={member} size="lg" />
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-base font-bold text-white truncate">{member.displayName}</h3>
+                              <p className="text-xs font-mono text-slate-400">@{member.username}</p>
+                              <p className="text-xs text-slate-200 mt-2.5 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">{member.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-5 py-3 bg-[#050811]/60 border-t border-[#1E3A5F] flex items-center justify-between text-[11px] text-slate-400">
+                          <span>เข้าร่วม: {member.joinedAt}</span>
+                          <span>โพสต์: {count}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4 & 5: FEED & OWNER ADMIN */}
+          {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
+            <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+              <aside className="lg:col-span-4 xl:col-span-3 space-y-6">
+                {currentUser ? (
+                  <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl overflow-hidden shadow-xl">
+                    <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-white">{currentUser.id}</span>
+                        <RoleBadge role={currentUser.role} />
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[11px] font-bold">{currentUser.memberTag}</span>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex items-center gap-3.5">
+                        <Avatar user={currentUser} size="lg" />
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-base font-bold text-white truncate">{currentUser.displayName}</h2>
+                          <p className="text-xs font-mono text-slate-400 truncate">@{currentUser.username}</p>
+                          <button
+                            onClick={() => {
+                              setEditDisplayName(currentUser.displayName);
+                              setEditBio(currentUser.bio);
+                              setEditAvatarUrl(currentUser.avatarUrl || '');
+                              setIsEditingProfile(true);
+                            }}
+                            className="mt-2 px-3 py-1 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-[11px] font-semibold text-white"
+                          >
+                            ✎ ตั้งค่ารูป / ชื่อ / Bio
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">{currentUser.bio}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-5 text-center space-y-3">
+                    <div className="text-2xl">👁️</div>
+                    <h3 className="text-sm font-bold text-white">โหมดผู้มาเยือน (Guest Mode)</h3>
+                    <p className="text-xs text-slate-300">หากได้รับ Member ID แล้ว กดปุ่มด้านล่างเพื่อเปิดใช้งานบัญชีและร่วมโพสต์ได้ทันที</p>
+                    <button
+                      onClick={() => { setAuthMode('signin'); setCurrentView('login'); }}
+                      className="w-full py-2 rounded-xl bg-white text-[#050811] font-bold text-xs"
+                    >
+                      เข้าสู่ระบบ / เปิดใช้งาน ID
+                    </button>
+                  </div>
+                )}
+
+                <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-2 space-y-1">
+                  <button
+                    onClick={() => setCurrentView('feed')}
+                    className={currentView === 'feed' ? 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold bg-white text-[#050811]' : 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]'}
+                  >
+                    <span>📝 กระดานโพสต์ทั้งหมด</span>
+                    <span>{posts.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('members')}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]"
+                  >
+                    <span>👥 ทำเนียบสมาชิก</span>
+                    <span>{activatedMembers.length}</span>
+                  </button>
+                  {currentUser && (
+                    <button
+                      onClick={() => setCurrentView('bookmarks')}
+                      className={currentView === 'bookmarks' ? 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold bg-white text-[#050811]' : 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]'}
+                    >
+                      <span>★ โพสต์ที่บันทึกไว้</span>
+                      <span>{posts.filter((p) => (p.bookmarks || []).includes(currentUser.id)).length}</span>
+                    </button>
+                  )}
+                  {currentUser && currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => setCurrentView('admin')}
+                      className={currentView === 'admin' ? 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold bg-white text-[#050811]' : 'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:bg-[#0F2547]'}
+                    >
+                      <span>👑 ออกรหัส & ตั้งผู้ดูแล</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-[#050811] font-bold">Owner</span>
+                    </button>
+                  )}
+                </div>
+              </aside>
+
+              <main className="lg:col-span-8 xl:col-span-9 space-y-6">
+                {currentView === 'admin' && currentUser && currentUser.role === 'admin' ? (
+                  <div className="space-y-6">
+                    <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 shadow-xl">
+                      <h2 className="text-lg font-bold text-white mb-1">👑 ออกรหัสประจำตัวสมาชิกใหม่ (Owner Only)</h2>
+                      <p className="text-xs text-slate-300 mb-5">
+                        เจ้าของเว็บไซต์ออกให้เฉพาะ <strong className="text-white">Member ID (เช่น M001) และ Tag หมวดหมู่</strong> เท่านั้น
+                      </p>
+                      <form onSubmit={handleIssueNewId} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-slate-300 mb-1">กำหนด Member ID ใหม่</label>
+                          <input
+                            type="text"
+                            value={newMemberId}
+                            onChange={(e) => setNewMemberId(e.target.value)}
+                            className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2.5 text-sm font-mono text-white uppercase outline-none"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-300 mb-1">กำหนดหมวดหมู่สมาชิก (Tag)</label>
+                          <input
+                            type="text"
+                            value={newMemberTag}
+                            onChange={(e) => setNewMemberTag(e.target.value)}
+                            className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                            required
+                          />
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {PRESET_MEMBER_TAGS.map((t) => (
+                              <button
+                                type="button"
+                                key={t}
+                                onClick={() => setNewMemberTag(t)}
+                                className={newMemberTag === t ? 'px-2.5 py-0.5 rounded text-[11px] border bg-white text-[#050811] border-white font-bold' : 'px-2.5 py-0.5 rounded text-[11px] border bg-[#050811] text-slate-300 border-[#1E3A5F]'}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="md:col-span-2 flex justify-end pt-2">
+                          <button type="submit" className="px-6 py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200 shadow-lg">
+                            + สร้างรหัส Member ID ใหม่
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 space-y-4">
+                      <h3 className="text-base font-bold text-white">จัดการรหัสสมาชิกและแต่งตั้งผู้ดูแลโพสต์ ({users.length} รายการ)</h3>
+                      <div className="space-y-3">
+                        {users.map((u) => (
+                          <div key={u.id} className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3.5">
+                              <Avatar user={u} size="md" />
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-mono text-xs font-bold">{u.id}</span>
+                                  <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-xs font-semibold">{u.memberTag}</span>
+                                  <RoleBadge role={u.role} />
+                                  {u.isActivated ? (
+                                    <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[10px]">✓ เปิดใช้งานแล้ว</span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded bg-amber-950 border border-amber-500/40 text-amber-300 text-[10px]">⏳ รอสมาชิกมากรอก ID</span>
+                                  )}
+                                </div>
+                                <div className="text-sm font-bold text-white mt-1">
+                                  {u.displayName} {u.username && <span className="text-xs font-mono text-slate-400 font-normal ml-1">(@{u.username})</span>}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                              {!u.isActivated && (
+                                <button onClick={() => handleCopyInviteId(u)} className="px-3 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
+                                  {copiedId === u.id ? '✓ คัดลอกแล้ว' : 'คัดลอก ID ส่งให้สมาชิก'}
+                                </button>
+                              )}
+                              {u.role !== 'admin' && u.isActivated && (
+                                <button
+                                  onClick={() => handleToggleModerator(u)}
+                                  className={u.role === 'mod' ? 'px-3 py-1.5 rounded-lg text-xs font-semibold border bg-sky-950 border-sky-400 text-sky-200' : 'px-3 py-1.5 rounded-lg text-xs font-semibold border bg-[#0F2547] border-white/20 text-white hover:bg-white hover:text-[#050811]'}
+                                >
+                                  {u.role === 'mod' ? 'ปลดจากผู้ดูแล (Mod)' : '🛡️ ตั้งเป็นผู้ดูแลโพสต์ (Mod)'}
+                                </button>
+                              )}
+                              {u.role !== 'admin' && (
+                                <button onClick={() => handleDeleteUser(u.id)} className="px-2.5 py-1.5 rounded-lg bg-black border border-[#1E3A5F] text-xs text-slate-400 hover:text-red-400">
+                                  ลบ
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-4 space-y-4 shadow-xl">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="ค้นหาโพสต์, ชื่อสมาชิก, รหัส M001..."
+                          className="flex-1 bg-[#050811] border border-[#1E3A5F] focus:border-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        />
+                        {currentUser && (
+                          <button onClick={() => setIsCreatingPost(true)} className="px-5 py-2.5 rounded-xl bg-white text-[#050811] hover:bg-slate-200 font-bold text-sm shrink-0">
+                            + เขียนโพสต์ / แนบไฟล์
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                        <span className="text-xs text-slate-400 shrink-0 mr-1">กรองตามแท็กสมาชิก:</span>
+                        {allFilterTags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => setSelectedTagFilter(tag)}
+                            className={selectedTagFilter === tag ? 'px-3 py-1 rounded-full text-xs font-bold border bg-white text-[#050811] border-white shrink-0' : 'px-3 py-1 rounded-full text-xs font-medium border bg-[#050811] text-slate-300 border-[#1E3A5F] shrink-0'}
+                          >
+                            {tag === 'ALL' ? 'ทั้งหมด' : tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-5">
+                      {filteredPosts.length === 0 ? (
+                        <div className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-12 text-center">
+                          <p className="text-base font-semibold text-white">ยังไม่มีโพสต์ในหน้านี้</p>
+                          <p className="text-xs text-slate-400 mt-1">สมาชิกสามารถกดปุ่ม "+ เขียนโพสต์ / แนบไฟล์" เพื่อเริ่มต้นแบ่งปันเรื่องราวได้เลย</p>
+                        </div>
+                      ) : (
+                        filteredPosts.map((post) => {
+                          const author = getAuthor(post.authorId);
+                          const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
+                          const isBookmarked = currentUser && (post.bookmarks || []).includes(currentUser.id);
+
+                          return (
+                            <article key={post.id} className="bg-[#0B1325] border border-[#1E3A5F] rounded-2xl p-6 shadow-xl space-y-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div onClick={() => setSelectedMemberModal(author)} className="flex items-center gap-3 cursor-pointer">
+                                  <Avatar user={author} size="md" />
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-bold text-sm text-white hover:underline">{author.displayName}</span>
+                                      <span className="px-2 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{author.id}</span>
+                                      <span className="px-2 py-0.5 rounded bg-[#0F2547] border border-white/20 text-[10px] text-white">{author.memberTag}</span>
+                                      <RoleBadge role={author.role} />
+                                    </div>
+                                    <div className="text-xs text-slate-400 mt-0.5">@{author.username} • {post.createdAt}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {post.category && (
+                                    <span className="px-3 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] text-xs text-slate-200">{post.category}</span>
+                                  )}
+                                  {canManagePostOrComment(post.authorId) && (
+                                    <button onClick={() => handleDeletePost(post.id)} className="px-2.5 py-1 rounded-lg bg-black hover:bg-red-950 border border-[#1E3A5F] text-[11px] text-slate-400 hover:text-red-300">
+                                      ลบโพสต์
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {post.title && <h3 className="text-lg font-bold text-white">{post.title}</h3>}
+                              {post.content && <p className="text-sm text-slate-200 whitespace-pre-line leading-relaxed">{post.content}</p>}
+
+                              {post.attachments && post.attachments.length > 0 && (
+                                <div className="space-y-3 pt-2">
+                                  {post.attachments.map((att) => {
+                                    if (att.type === 'image') {
+                                      return (
+                                        <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#050811]">
+                                          <img src={att.url} alt={att.name} className="max-h-96 w-auto mx-auto object-contain" />
+                                        </div>
+                                      );
+                                    }
+                                    if (att.type === 'video') {
+                                      return (
+                                        <div key={att.id} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black">
+                                          <video src={att.url} controls className="w-full max-h-96" />
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <a key={att.id} href={att.url} download={att.name} target="_blank" rel="noreferrer" className="flex items-center justify-between p-3.5 rounded-xl bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F]">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <span className="text-xl">📎</span>
+                                          <div className="min-w-0">
+                                            <div className="text-xs font-bold text-white truncate">{att.name}</div>
+                                            <div className="text-[10px] text-slate-400">ไฟล์แนบ ({att.size || 'File'})</div>
+                                          </div>
+                                        </div>
+                                        <span className="px-3 py-1 rounded-lg bg-white text-[#050811] text-xs font-bold shrink-0">ดาวน์โหลด</span>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              <div className="flex items-center justify-between pt-3 border-t border-[#1E3A5F]">
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => toggleLike(post.id)}
+                                    className={isLiked ? 'px-3 py-1.5 rounded-lg text-xs font-bold border bg-white text-[#050811] border-white' : 'px-3 py-1.5 rounded-lg text-xs font-medium border bg-[#050811] text-slate-300 border-[#1E3A5F]'}
+                                  >
+                                    ♥ ถูกใจ ({(post.likes && post.likes.length) || 0})
+                                  </button>
+                                  <span className="text-xs text-slate-400">💬 ความคิดเห็น ({(post.comments && post.comments.length) || 0})</span>
+                                </div>
+                                <button
+                                  onClick={() => toggleBookmark(post.id)}
+                                  className={isBookmarked ? 'px-3 py-1.5 rounded-lg text-xs font-bold border bg-white text-[#050811] border-white' : 'px-3 py-1.5 rounded-lg text-xs border bg-[#050811] text-slate-300 border-[#1E3A5F]'}
+                                >
+                                  {isBookmarked ? '★ บันทึกแล้ว' : '☆ บันทึก'}
+                                </button>
+                              </div>
+
+                              <div className="pt-3 border-t border-[#1E3A5F]/60 space-y-2.5">
+                                {(post.comments || []).map((c) => {
+                                  const cAuthor = getAuthor(c.authorId);
+                                  return (
+                                    <div key={c.id} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs flex items-start gap-2.5">
+                                      <Avatar user={cAuthor} size="xs" />
+                                      <div className="flex-1">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-bold text-white">{cAuthor.displayName}</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-[#0F2547] text-[10px]">{cAuthor.memberTag}</span>
+                                            <RoleBadge role={cAuthor.role} />
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-500">{c.createdAt}</span>
+                                            {canManagePostOrComment(c.authorId) && (
+                                              <button onClick={() => handleDeleteComment(post.id, c.id)} className="text-[10px] text-slate-500 hover:text-red-400">ลบ</button>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <p className="text-slate-200 mt-1">{c.text}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {currentUser && (
+                                  <div className="flex gap-2 pt-1">
+                                    <input
+                                      type="text"
+                                      value={commentInputs[post.id] || ''}
+                                      onChange={(e) => setCommentInputs({ ...commentInputs, [post.id]: e.target.value })}
+                                      onKeyDown={(e) => e.key === 'Enter' && handleAddComment(post.id)}
+                                      placeholder="แสดงความคิดเห็น..."
+                                      className="flex-1 bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-xs text-white outline-none"
+                                    />
+                                    <button onClick={() => handleAddComment(post.id)} className="px-4 py-2 rounded-xl bg-[#0F2547] hover:bg-white hover:text-[#050811] text-xs font-bold">
+                                      ส่ง
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
+              </main>
+            </div>
+          )}
+
+          {/* MODAL: CREATE POST */}
+          {isCreatingPost && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="w-full max-w-xl bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl my-8">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">เขียนโพสต์ใหม่ลงใน The Blue Moon Association</h3>
+                  <button onClick={() => setIsCreatingPost(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <form onSubmit={handleCreatePost} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">หัวข้อเรื่อง (ไม่บังคับ)</label>
+                      <input
+                        type="text"
+                        value={newPostTitle}
+                        onChange={(e) => setNewPostTitle(e.target.value)}
+                        placeholder="เว้นว่างไว้ได้หากไม่มีหัวข้อ..."
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-300 mb-1">หมวดหมู่บทความ (ไม่บังคับ)</label>
+                      <select
+                        value={newPostCategory}
+                        onChange={(e) => setNewPostCategory(e.target.value)}
+                        className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-3.5 py-2 text-sm text-white outline-none"
+                      >
+                        <option value="">โปรดเลือก... (ไม่ต้องมีหมวดหมู่)</option>
+                        <option value="General">General (ทั่วไป)</option>
+                        <option value="Music & Art">Music & Art (ดนตรีและศิลปะ)</option>
+                        <option value="Night Log">Night Log (บันทึกยามดึก)</option>
+                        <option value="Engineering & Tech">Engineering & Tech</option>
+                        <option value="Announcement">Announcement (ประกาศ)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">เนื้อหาโพสต์</label>
+                    <textarea
+                      rows={4}
+                      value={newPostContent}
+                      onChange={(e) => setNewPostContent(e.target.value)}
+                      placeholder="เขียนสิ่งที่คุณอยากแชร์กับสมาคม..."
+                      className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3.5 text-sm text-white outline-none resize-none"
+                    />
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-200">📎 แนบรูปภาพ, วิดีโอ หรือไฟล์เอกสาร</span>
+                      <input type="file" multiple ref={postFileInputRef} onChange={handlePostFileSelect} className="hidden" />
+                      <button type="button" onClick={() => postFileInputRef.current && postFileInputRef.current.click()} className="px-3 py-1.5 rounded-lg bg-[#0F2547] hover:bg-white hover:text-[#050811] border border-white/20 text-xs font-semibold">
+                        + เลือกไฟล์จากเครื่อง
+                      </button>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <select value={attachmentTypeInput} onChange={(e) => setAttachmentTypeInput(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-2.5 py-1.5 text-xs text-white outline-none">
+                        <option value="image">รูปภาพ (URL)</option>
+                        <option value="video">วิดีโอ (MP4/URL)</option>
+                        <option value="file">ไฟล์เอกสาร (URL)</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={attachmentUrlInput}
+                        onChange={(e) => setAttachmentUrlInput(e.target.value)}
+                        placeholder="หรือวางลิงก์รูปภาพ / วิดีโอ / ไฟล์..."
+                        className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded-lg px-3 py-1.5 text-xs text-white outline-none"
+                      />
+                      <button type="button" onClick={handleAddUrlAttachment} className="px-3 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold shrink-0">เพิ่มลิงก์</button>
+                    </div>
+                    {newPostAttachments.length > 0 && (
+                      <div className="space-y-1.5 pt-2">
+                        {newPostAttachments.map((att) => (
+                          <div key={att.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#0B1325] border border-[#1E3A5F] text-xs">
+                            <span className="truncate max-w-xs">[{att.type.toUpperCase()}] {att.name}</span>
+                            <button type="button" onClick={() => setNewPostAttachments(newPostAttachments.filter((a) => a.id !== att.id))} className="text-red-400 hover:text-red-300 ml-2">ลบ</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setIsCreatingPost(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-6 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">เผยแพร่โพสต์</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: EDIT PROFILE */}
+          {isEditingProfile && currentUser && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0B1325] border border-white/30 rounded-2xl p-6 shadow-2xl">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
+                  <h3 className="text-base font-bold text-white">ตั้งค่าโปรไฟล์สมาชิก</h3>
+                  <button onClick={() => setIsEditingProfile(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <form onSubmit={handleSaveProfile} className="space-y-4">
+                  <div className="flex flex-col items-center p-4 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <Avatar user={{ ...currentUser, displayName: editDisplayName, avatarUrl: editAvatarUrl }} size="xl" />
+                    <input type="file" accept="image/*" ref={avatarInputRef} onChange={handleAvatarUpload} className="hidden" />
+                    <div className="flex gap-2 mt-3">
+                      <button type="button" onClick={() => avatarInputRef.current && avatarInputRef.current.click()} className="px-3.5 py-1.5 rounded-lg bg-white text-[#050811] text-xs font-bold">
+                        📁 อัปโหลดรูปจากเครื่อง
+                      </button>
+                      {editAvatarUrl && (
+                        <button type="button" onClick={() => setEditAvatarUrl('')} className="px-3 py-1.5 rounded-lg bg-[#0F2547] text-xs text-white">ลบรูป</button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">ชื่อที่แสดง (Display Name)</label>
+                    <input type="text" value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl px-4 py-2 text-sm text-white outline-none" required />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-300 mb-1">คำอธิบายตัวตน (Bio)</label>
+                    <textarea rows={3} value={editBio} onChange={(e) => setEditBio(e.target.value)} className="w-full bg-[#050811] border border-[#1E3A5F] rounded-xl p-3 text-sm text-white outline-none resize-none" />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setIsEditingProfile(false)} className="px-4 py-2 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs text-slate-300">ยกเลิก</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs">บันทึกโปรไฟล์</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: MEMBER ORBIT CARD */}
+          {selectedMemberModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-sm bg-[#0B1325] border border-white/30 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="bg-gradient-to-r from-[#0F2547] to-[#081226] px-5 py-3.5 border-b border-[#1E3A5F] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold">{selectedMemberModal.id}</span>
+                    <RoleBadge role={selectedMemberModal.role} />
+                  </div>
+                  <button onClick={() => setSelectedMemberModal(null)} className="text-slate-300 hover:text-white">✕</button>
+                </div>
+                <div className="p-6 text-center space-y-3">
+                  <div className="flex justify-center"><Avatar user={selectedMemberModal} size="xl" /></div>
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold">{selectedMemberModal.memberTag}</span>
+                    <h3 className="text-lg font-bold text-white mt-2">{selectedMemberModal.displayName}</h3>
+                    {selectedMemberModal.username && <p className="text-xs font-mono text-slate-400">@{selectedMemberModal.username}</p>}
+                  </div>
+                  <p className="text-xs text-slate-200 bg-[#050811] p-3.5 rounded-xl border border-[#1E3A5F]">{selectedMemberModal.bio}</p>
+                  <button
+                    onClick={() => {
+                      setSelectedTagFilter(selectedMemberModal.memberTag);
+                      setSelectedMemberModal(null);
+                      setCurrentView('feed');
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-white text-[#050811] font-bold text-xs hover:bg-slate-200"
+                  >
+                    ดูโพสต์ในกลุ่ม {selectedMemberModal.memberTag}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
