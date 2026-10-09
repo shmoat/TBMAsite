@@ -12,21 +12,29 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
-    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; touch-action: manipulation; }
+    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; touch-action: manipulation; overflow: hidden; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
     .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; }
     .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; }
+    .btn-d { background: #050811; color: #cbd5e1; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.4rem 0.75rem; }
+    
+    ::-webkit-scrollbar { width: 4px; height: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 99px; }
+
+    /* Custom CSS for Solitaire & Games */
     .notes-grid { display: flex; flex-wrap: wrap; width: 100%; height: 100%; padding: 1px; }
-    .note-item { width: 33.33%; height: 33.33%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #94A3B8; font-weight: 400; line-height: 1; }
+    .note-item { width: 33.33%; height: 33.33%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #94A3B8; font-weight: 400; line-height: 1; pointer-events: none; }
+    
+    .card-ui { border-radius: 0.35rem; display: flex; flex-direction: column; justify-content: space-between; padding: 0.15rem; background: #fff; border: 1px solid #cbd5e1; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .card-ui.face-down { background: repeating-linear-gradient(45deg, #1E3A5F, #1E3A5F 5px, #0F2547 5px, #0F2547 10px); border-color: #0F2547; }
+    .text-red { color: #EF4444; } .text-black { color: #050811; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
     
-    // --- FIREBASE SETUP ---
     const firebaseConfig = {
       apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
       authDomain: "tbmasite.firebaseapp.com",
@@ -40,9 +48,13 @@
     const db = firebase.firestore(app);
 
     const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
-    const GAME_NAMES = ["Sudoku (9x9)", "Minesweeper", "Flag Guesser"];
+    const GAMES = [
+      { id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" },
+      { id: 'minesweeper', name: "Minesweeper", icon: "💣" },
+      { id: 'flag', name: "Flag Guesser", icon: "🏳️" },
+      { id: 'solitaire', name: "Solitaire", icon: "🃏" }
+    ];
 
-    // --- ROBUST PRNG GENERATOR ---
     class PRNG {
       constructor(seedStr) {
         let h = 2166136261 >>> 0;
@@ -63,16 +75,26 @@
       }
     }
 
+    const Modal = ({ title, children, onClose }) => (
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="w-full max-w-sm card p-6 shadow-2xl animate-fade-in text-center space-y-4 relative">
+          {onClose && <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>}
+          <h3 className="text-xl font-bold">{title}</h3>
+          {children}
+        </div>
+      </div>
+    );
+
     // ==========================================
-    // 1. SUDOKU COMPONENT
+    // 1. SUDOKU
     // ==========================================
-    function SudokuGame({ dateSeed, onWin }) {
+    function SudokuGame({ dateSeed, onEnd }) {
       const [board, setBoard] = useState(null);
       const [selectedCell, setSelectedCell] = useState(null);
       const [noteMode, setNoteMode] = useState(false);
 
       useEffect(() => {
-        const rng = new PRNG(dateSeed + '_sudoku_fixed');
+        const rng = new PRNG(dateSeed + '_sudoku');
         let base = [
           [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
           [2,3,4,5,6,7,8,9,1],[5,6,7,8,9,1,2,3,4],[8,9,1,2,3,4,5,6,7],
@@ -87,16 +109,13 @@
         }
         const mapVals = rng.shuffle([1,2,3,4,5,6,7,8,9]);
         const fullGrid = base.map(row => row.map(val => mapVals[val-1]));
-        
         const puzzle = fullGrid.map(r => [...r]);
         let cellsToRemove = rng.nextInt(38, 48);
         while(cellsToRemove > 0) {
           const r = rng.nextInt(0,8), c = rng.nextInt(0,8);
           if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
         }
-
-        const initBoard = puzzle.map(r => r.map(val => ({ val: val, fixed: val !== '', notes: [] })));
-        setBoard(initBoard);
+        setBoard(puzzle.map(r => r.map(val => ({ val, fixed: val !== '', notes: [] }))));
         setSelectedCell(null);
       }, [dateSeed]);
 
@@ -112,7 +131,16 @@
           }
           if(rSet.size !== 9 || cSet.size !== 9 || bSet.size !== 9) return false;
         }
-        onWin();
+        onEnd('win');
+      };
+
+      const cleanNotes = (b, r, c, num) => {
+        for(let i=0; i<9; i++) {
+          b[r][i].notes = b[r][i].notes.filter(n => n !== num);
+          b[i][c].notes = b[i][c].notes.filter(n => n !== num);
+        }
+        const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+        for(let i=0; i<3; i++) for(let j=0; j<3; j++) b[br+i][bc+j].notes = b[br+i][bc+j].notes.filter(n => n !== num);
       };
 
       const handleNumpad = (num) => {
@@ -120,65 +148,62 @@
         const [r, c] = selectedCell;
         if(board[r][c].fixed) return;
 
-        const newBoard = board.map(row => row.map(cell => ({...cell, notes: [...cell.notes]})));
+        const newB = board.map(row => row.map(cell => ({...cell, notes: [...cell.notes]})));
         
         if(num === 'DEL') {
-          newBoard[r][c].val = ''; newBoard[r][c].notes = [];
+          newB[r][c].val = ''; newB[r][c].notes = [];
         } else if(noteMode) {
-          const nSet = new Set(newBoard[r][c].notes);
+          const nSet = new Set(newB[r][c].notes);
           if(nSet.has(num)) nSet.delete(num); else nSet.add(num);
-          newBoard[r][c].notes = Array.from(nSet).sort();
-          newBoard[r][c].val = '';
+          newB[r][c].notes = Array.from(nSet).sort();
+          newB[r][c].val = '';
         } else {
-          newBoard[r][c].val = num; newBoard[r][c].notes = [];
+          newB[r][c].val = num; newB[r][c].notes = [];
+          cleanNotes(newB, r, c, num);
         }
-        setBoard(newBoard);
-        if(num !== 'DEL' && !noteMode) checkWin(newBoard);
+        setBoard(newB);
+        if(num !== 'DEL' && !noteMode) checkWin(newB);
       };
 
-      if(!board) return <div className="animate-pulse py-10">Loading Grid...</div>;
-
+      if(!board) return <div className="py-10 animate-pulse text-sky-400 font-mono">กำลังสร้างกระดาน...</div>;
       const selVal = selectedCell ? board[selectedCell[0]][selectedCell[1]].val : null;
 
       return (
-        <div className="flex flex-col items-center space-y-5 w-full">
-          {/* HARDCODED GRID FOR IPAD SAFARI */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 36px)', gap: '1px', backgroundColor: '#3B82F6', border: '2px solid #3B82F6', margin: '0 auto', width: 'max-content' }}>
-            {board.flatMap((row, r) => row.map((cell, c) => {
-              const isSel = selectedCell && selectedCell[0] === r && selectedCell[1] === c;
-              const isHi = !isSel && selVal && cell.val === selVal;
-              const borderR = c % 3 === 2 && c !== 8 ? '2px' : '0px';
-              const borderB = r % 3 === 2 && r !== 8 ? '2px' : '0px';
-              
-              let bgClass = cell.fixed ? '#0B1325' : '#050811';
-              let txtClass = cell.fixed ? '#60A5FA' : '#ffffff';
-              if (isSel) bgClass = 'rgba(59, 130, 246, 0.5)';
-              else if (isHi) bgClass = 'rgba(59, 130, 246, 0.2)';
-
-              return (
-                <div 
-                  key={`${r}-${c}`} 
-                  onClick={() => setSelectedCell([r, c])}
-                  style={{ width: '36px', height: '36px', backgroundColor: bgClass, color: txtClass, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginRight: borderR, marginBottom: borderB }}
-                >
-                  {cell.val ? cell.val : (
-                    <div className="notes-grid">
-                      {[1,2,3,4,5,6,7,8,9].map(n => <div key={n} className="note-item">{cell.notes.includes(n) ? n : ''}</div>)}
+        <div className="flex flex-col items-center space-y-4 w-full h-full justify-center">
+          <div className="bg-[#1E3A5F] p-[2px] rounded border-2 border-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+            {board.map((row, r) => (
+              <div key={r} className="flex">
+                {row.map((cell, c) => {
+                  const isSel = selectedCell && selectedCell[0] === r && selectedCell[1] === c;
+                  const isHi = !isSel && selVal && cell.val === selVal;
+                  const brR = c%3===2 && c!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
+                  const brB = r%3===2 && r!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
+                  let bg = cell.fixed ? '#0B1325' : '#050811';
+                  let txt = cell.fixed ? '#60A5FA' : '#ffffff';
+                  if(isSel) bg = 'rgba(59,130,246,0.6)'; else if(isHi) bg = 'rgba(59,130,246,0.2)';
+                  
+                  return (
+                    <div 
+                      key={c} onClick={() => setSelectedCell([r, c])}
+                      style={{ width:'34px', height:'34px', backgroundColor:bg, color:txt, borderRight:brR, borderBottom:brB }}
+                      className="flex items-center justify-center text-lg font-bold cursor-pointer sm:w-10 sm:h-10"
+                    >
+                      {cell.val ? cell.val : <div className="notes-grid">{[1,2,3,4,5,6,7,8,9].map(n => <div key={n} className="note-item">{cell.notes.includes(n)?n:''}</div>)}</div>}
                     </div>
-                  )}
-                </div>
-              );
-            }))}
+                  );
+                })}
+              </div>
+            ))}
           </div>
 
-          <div className="w-full max-w-[340px] space-y-2">
-            <div className="flex justify-between items-center bg-[#050811] p-1.5 rounded-xl border border-[#1E3A5F]">
-              <button onClick={() => setNoteMode(false)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
-              <button onClick={() => setNoteMode(true)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
+          <div className="w-full max-w-[340px] space-y-2 mt-2">
+            <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+              <button onClick={() => setNoteMode(false)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
+              <button onClick={() => setNoteMode(true)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
             </div>
             <div className="grid grid-cols-5 gap-1.5">
-              {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-12 text-lg font-bold">{n}</button>)}
-              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 active:text-white text-red-300 border border-red-900/50 rounded-lg h-12 text-sm font-bold">DEL</button>
+              {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-10 sm:h-12 text-lg font-bold">{n}</button>)}
+              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 text-red-300 border border-red-900/50 rounded-lg h-10 sm:h-12 text-xs font-bold">DEL</button>
             </div>
           </div>
         </div>
@@ -186,129 +211,172 @@
     }
 
     // ==========================================
-    // 2. MINESWEEPER COMPONENT
+    // 2. MINESWEEPER
     // ==========================================
-    function MinesweeperGame({ dateSeed, onWin }) {
-      const COLS = 9, ROWS = 9, MINES = 10;
+    function MinesweeperGame({ dateSeed, onEnd }) {
+      const COLS = 9, ROWS = 9;
+      const [numMines, setNumMines] = useState(10);
       const [grid, setGrid] = useState([]);
       const [revealed, setRevealed] = useState([]);
       const [flagged, setFlagged] = useState([]);
-      const [gameOver, setGameOver] = useState(false);
-      const [minesLeft, setMinesLeft] = useState(MINES);
-      const [retryCount, setRetryCount] = useState(0);
-      const [mode, setMode] = useState('dig');
+      const [minesLeft, setMinesLeft] = useState(10);
+      const [isFirst, setIsFirst] = useState(true);
+      const [mode, setMode] = useState('dig'); 
+      const pressTimer = useRef(null);
 
-      const initGrid = () => {
-        const rng = new PRNG(dateSeed + '_ms_fixed_' + retryCount);
-        let g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
-        let mPlaced = 0;
-        while(mPlaced < MINES) {
-          const r = rng.nextInt(0, ROWS-1), c = rng.nextInt(0, COLS-1);
-          if(g[r][c] !== 'M') { g[r][c] = 'M'; mPlaced++; }
-        }
-        for(let r=0; r<ROWS; r++) {
-          for(let c=0; c<COLS; c++) {
-            if(g[r][c] === 'M') continue;
-            let count = 0;
-            for(let dr=-1; dr<=1; dr++) {
-              for(let dc=-1; dc<=1; dc++) {
-                if(r+dr>=0 && r+dr<ROWS && c+dc>=0 && c+dc<COLS && g[r+dr][c+dc] === 'M') count++;
-              }
-            }
-            g[r][c] = count;
-          }
-        }
-        setGrid(g);
+      useEffect(() => {
+        const rng = new PRNG(dateSeed + '_msConfig');
+        const m = rng.nextInt(10, 20);
+        setNumMines(m); setMinesLeft(m);
+        setGrid(Array(ROWS).fill().map(()=>Array(COLS).fill(0)));
         setRevealed(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
         setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
-        setGameOver(false); setMinesLeft(MINES);
+        setIsFirst(true);
+      }, [dateSeed]);
+
+      const handlePressStart = (e, r, c) => {
+        if(e.cancelable) e.preventDefault();
+        pressTimer.current = setTimeout(() => {
+          handleAction(r, c, 'flag');
+          pressTimer.current = null;
+        }, 350);
       };
 
-      useEffect(() => { initGrid(); }, [dateSeed, retryCount]);
-
-      const handleFlag = (r, c) => {
-        if(gameOver || revealed[r][c]) return;
-        const newF = [...flagged]; newF[r] = [...newF[r]]; newF[r][c] = !newF[r][c];
-        setFlagged(newF);
-        let fCount = 0; newF.forEach(row => row.forEach(v => { if(v) fCount++; }));
-        setMinesLeft(MINES - fCount);
-      };
-
-      const handleDig = (r, c) => {
-        if(gameOver || flagged[r][c] || revealed[r][c]) return;
-        if(grid[r][c] === 'M') { 
-          setGameOver(true); alert('โดนระเบิด! 💥 เริ่มกระดานใหม่นะ'); setRetryCount(rc => rc+1); return; 
+      const handlePressEnd = (e, r, c) => {
+        if(e.cancelable) e.preventDefault();
+        if(pressTimer.current) {
+          clearTimeout(pressTimer.current);
+          pressTimer.current = null;
+          handleAction(r, c, mode);
         }
+      };
+
+      const handleAction = (r, c, act) => {
+        if(revealed[r][c]) return;
+        
+        if(act === 'flag') {
+          const newF = [...flagged.map(row=>[...row])];
+          newF[r][c] = !newF[r][c];
+          setFlagged(newF);
+          let fc = 0; newF.forEach(row => row.forEach(v => { if(v) fc++; }));
+          setMinesLeft(numMines - fc);
+          return;
+        }
+
+        if(flagged[r][c]) return;
+
+        let g = grid;
+        if(isFirst) {
+          const rng = new PRNG(dateSeed + '_ms_' + Date.now());
+          g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+          let placed = 0;
+          while(placed < numMines) {
+            let rr = rng.nextInt(0,8), cc = rng.nextInt(0,8);
+            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; // Safe zone
+            if(g[rr][cc] !== 'M') { g[rr][cc] = 'M'; placed++; }
+          }
+          for(let i=0; i<ROWS; i++) {
+            for(let j=0; j<COLS; j++) {
+              if(g[i][j] === 'M') continue;
+              let cnt = 0;
+              for(let di=-1; di<=1; di++) for(let dj=-1; dj<=1; dj++) {
+                if(i+di>=0 && i+di<ROWS && j+dj>=0 && j+dj<COLS && g[i+di][j+dj] === 'M') cnt++;
+              }
+              g[i][j] = cnt;
+            }
+          }
+          setGrid(g); setIsFirst(false);
+        }
+
+        if(g[r][c] === 'M') {
+          const newR = [...revealed.map(row=>[...row])];
+          for(let i=0;i<ROWS;i++) for(let j=0;j<COLS;j++) if(g[i][j]==='M') newR[i][j] = true;
+          setRevealed(newR);
+          setTimeout(() => onEnd('bomb'), 800);
+          return;
+        }
+
         const newR = [...revealed.map(row=>[...row])];
-        const floodFill = (rr, cc) => {
+        const flood = (rr, cc) => {
           if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
           newR[rr][cc] = true;
-          if(grid[rr][cc] === 0) {
-            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) floodFill(rr+dr, cc+dc);
+          if(g[rr][cc] === 0) {
+            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) flood(rr+dr, cc+dc);
           }
         };
-        floodFill(r, c); setRevealed(newR);
+        flood(r, c); setRevealed(newR);
         let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
-        if(revCount === ROWS*COLS - MINES) { setGameOver(true); onWin(); }
+        if(revCount === ROWS*COLS - numMines) onEnd('win');
       };
 
-      if(!grid.length) return <div className="animate-pulse py-10">Loading Grid...</div>;
       const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-amber-400','text-cyan-400','text-pink-400','text-gray-400'];
 
       return (
-        <div className="flex flex-col items-center space-y-4 w-full">
-          <div className="font-bold text-amber-300 text-lg">💣 ระเบิดที่เหลือ: {minesLeft}</div>
-          <div className="flex gap-2 w-full max-w-[280px]">
-            <button onClick={() => setMode('dig')} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === 'dig' ? 'bg-sky-500 text-white shadow-lg' : 'bg-[#0F2547] text-slate-400'}`}>⛏️ ขุด</button>
-            <button onClick={() => setMode('flag')} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white shadow-lg' : 'bg-[#0F2547] text-slate-400'}`}>🚩 ปักธง</button>
+        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full">
+          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">💣 ระเบิด: {minesLeft}</div>
+          
+          <div className="flex gap-2 w-full max-w-[260px]">
+            <button onClick={() => setMode('dig')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'dig' ? 'bg-sky-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>⛏️ ขุด</button>
+            <button onClick={() => setMode('flag')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>🚩 ปักธง</button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 36px)', gap: '1px', backgroundColor: '#3B82F6', border: '2px solid #3B82F6', margin: '0 auto', width: 'max-content' }}>
-            {grid.flatMap((row, r) => row.map((val, c) => {
-              const isRev = revealed[r][c], isFlg = flagged[r][c];
-              let bgClass = isRev ? '#050811' : '#0F2547';
-              return (
-                <div
-                  key={`${r}-${c}`}
-                  onClick={() => mode === 'dig' ? handleDig(r,c) : handleFlag(r,c)}
-                  className={isRev && val ? colors[val] : ''}
-                  style={{ width: '36px', height: '36px', backgroundColor: bgClass, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
-                >
-                  {isFlg ? '🚩' : (isRev ? (val === 0 ? '' : val) : '')}
-                </div>
-              );
-            }))}
+          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10">
+            {grid.map((row, r) => (
+              <div key={r} className="flex">
+                {row.map((val, c) => {
+                  const isRev = revealed[r][c], isFlg = flagged[r][c];
+                  let bg = isRev ? (val==='M' ? '#7F1D1D' : '#050811') : '#0F2547';
+                  let content = isFlg ? '🚩' : (isRev ? (val==='M' ? '💣' : (val===0?'':val)) : '');
+                  return (
+                    <div
+                      key={c}
+                      onTouchStart={(e) => handlePressStart(e, r, c)}
+                      onTouchEnd={(e) => handlePressEnd(e, r, c)}
+                      onMouseDown={(e) => handlePressStart(e, r, c)}
+                      onMouseUp={(e) => handlePressEnd(e, r, c)}
+                      onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }}
+                      className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer ${isRev && val !== 'M' ? colors[val] : ''}`}
+                      style={{ backgroundColor: bg }}
+                    >
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
-          <div className="text-[11px] text-slate-400">💡 เลือกโหมด "ขุด" หรือ "ปักธง" ก่อนแตะที่ช่องตาราง</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 เลือกโหมด หรือ <b>กดค้าง</b> เพื่อปักธง/ขุด</div>
         </div>
       );
     }
 
     // ==========================================
-    // 3. FLAG GUESSER COMPONENT
+    // 3. FLAG GUESSER
     // ==========================================
-    function FlagGuesserGame({ dateSeed, onWin }) {
+    function FlagGuesserGame({ dateSeed, onEnd }) {
       const ALL_FLAGS = [
-        {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'United States'},
-        {c:'gb',n:'United Kingdom'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
+        {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'USA'},
+        {c:'gb',n:'UK'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
         {c:'it',n:'Italy'},{c:'br',n:'Brazil'},{c:'ar',n:'Argentina'},{c:'au',n:'Australia'},
         {c:'ca',n:'Canada'},{c:'vn',n:'Vietnam'},{c:'sg',n:'Singapore'},{c:'ru',n:'Russia'},
         {c:'in',n:'India'},{c:'za',n:'South Africa'},{c:'mx',n:'Mexico'},{c:'es',n:'Spain'},
-        {c:'fi',n:'Finland'},{c:'se',n:'Sweden'},{c:'no',n:'Norway'},{c:'ch',n:'Switzerland'}
+        {c:'fi',n:'Finland'},{c:'se',n:'Sweden'},{c:'no',n:'Norway'},{c:'ch',n:'Switzerland'},
+        {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
+        {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
+        {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'}
       ];
       const [rounds, setRounds] = useState([]);
       const [currentRound, setCurrentRound] = useState(0);
 
       useEffect(() => {
-        const rng = new PRNG(dateSeed + '_flag');
+        const rng = new PRNG(dateSeed + '_flag4');
         const shuffled = rng.shuffle([...ALL_FLAGS]);
         const rds = [];
         for(let i=0; i<3; i++) {
           const target = shuffled[i];
-          let options = [target];
           let others = rng.shuffle(ALL_FLAGS.filter(f => f.c !== target.c));
-          options.push(others[0], others[1], others[2]);
-          rds.push({ target, options: rng.shuffle(options) });
+          let options = rng.shuffle([target, others[0], others[1], others[2]]);
+          rds.push({ target, options });
         }
         setRounds(rds);
       }, [dateSeed]);
@@ -317,16 +385,18 @@
 
       const handleGuess = (code) => {
         if(code === rounds[currentRound].target.c) {
-          if(currentRound === 2) onWin(); else setCurrentRound(c => c+1);
-        } else { alert('ผิดครับ! โดนบวกเวลาทดเจ็บ 5 วินาที!'); }
+          if(currentRound === 2) onEnd('win'); else setCurrentRound(c => c+1);
+        } else {
+          alert('ผิดครับ! +5 วินาที!');
+        }
       };
 
       const rd = rounds[currentRound];
       return (
-        <div className="flex flex-col items-center my-4 space-y-6 w-full">
-          <div className="font-bold text-amber-300 text-lg">ด่านที่ {currentRound + 1} / 3</div>
-          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-44 sm:h-52 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-sm mt-4">
+        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
+          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">ด่านที่ {currentRound + 1} / 3</div>
+          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-32 sm:h-44 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
+          <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-4">
             {rd.options.map(opt => <button key={opt.c} onClick={() => handleGuess(opt.c)} className="btn-w text-sm py-3 active:scale-95 transition-transform shadow-lg">{opt.n}</button>)}
           </div>
         </div>
@@ -334,19 +404,149 @@
     }
 
     // ==========================================
-    // MAIN DAILY GAME WRAPPER
+    // 4. DAILY SOLITAIRE (Miniature Auto-Move Version)
     // ==========================================
-    function DailyGameApp() {
-      const currentUser = { id: 'M999', displayName: 'Tester (iPad)' };
+    function SolitaireGame({ dateSeed, onEnd }) {
+      const [st, setSt] = useState(null);
+      
+      useEffect(() => {
+        const rng = new PRNG(dateSeed + '_solitaire');
+        let deck = [];
+        const suits = ['♠','♥','♣','♦'];
+        const colors = ['B','R','B','R'];
+        const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+        for(let s=0; s<4; s++) for(let r=0; r<13; r++) deck.push({ s: suits[s], r: r+1, rs: ranks[r], c: colors[s], id: `${s}-${r}`, up: false });
+        deck = rng.shuffle(deck);
+        
+        let tab = [[],[],[],[],[],[],[]];
+        for(let i=0; i<7; i++) {
+          for(let j=i; j<7; j++) {
+            let card = deck.pop();
+            if(i===j) card.up = true;
+            tab[j].push(card);
+          }
+        }
+        setSt({ stock: deck, waste: [], fnd: [[],[],[],[]], tab });
+      }, [dateSeed]);
+
+      const checkWin = (ns) => {
+        if(ns.fnd.every(f => f.length === 13)) onEnd('win');
+      };
+
+      const handleStock = () => {
+        let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
+        if(ns.stock.length) {
+          let c = ns.stock.pop(); c.up = true; ns.waste.push(c);
+        } else {
+          ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = [];
+        }
+        setSt(ns);
+      };
+
+      const handleCardClick = (area, colIdx, cardIdx) => {
+        let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
+        let stack = [];
+        if(area === 'waste') { if(!ns.waste.length) return; stack = [ns.waste.pop()]; }
+        else if(area === 'tab') {
+          if(cardIdx < 0 || !ns.tab[colIdx][cardIdx].up) return;
+          stack = ns.tab[colIdx].splice(cardIdx);
+        } else return;
+
+        let c = stack[0];
+        // Try Foundation
+        if(stack.length === 1) {
+          let fIdx = ['♠','♥','♣','♦'].indexOf(c.s);
+          let f = ns.fnd[fIdx];
+          if((f.length === 0 && c.r === 1) || (f.length > 0 && f[f.length-1].r === c.r - 1)) {
+            f.push(c);
+            if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
+            setSt(ns); checkWin(ns); return;
+          }
+        }
+        // Try Tableau
+        for(let i=0; i<7; i++) {
+          if(area === 'tab' && i === colIdx) continue;
+          let t = ns.tab[i];
+          if(t.length === 0) {
+            if(c.r === 13) {
+              t.push(...stack);
+              if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
+              setSt(ns); return;
+            }
+          } else {
+            let top = t[t.length-1];
+            if(top.c !== c.c && top.r === c.r + 1) {
+              t.push(...stack);
+              if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
+              setSt(ns); return;
+            }
+          }
+        }
+        // Revert
+        if(area === 'waste') ns.waste.push(...stack);
+        else if(area === 'tab') ns.tab[colIdx].push(...stack);
+      };
+
+      if(!st) return <div className="py-10 animate-pulse">Shuffling...</div>;
+
+      const renderCard = (c, onClick) => {
+        if(!c) return <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-[#050811] opacity-50 shrink-0" />;
+        if(!c.up) return <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0" />;
+        return (
+          <div onClick={onClick} className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'}`}>
+            <div className="text-[10px] sm:text-xs font-bold leading-none">{c.rs}</div>
+            <div className="text-sm sm:text-base text-center leading-none flex-1 flex items-center justify-center">{c.s}</div>
+          </div>
+        );
+      };
+
+      return (
+        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto">
+          {/* Top Row: Stock, Waste, Foundations */}
+          <div className="flex justify-between mb-6">
+            <div className="flex gap-2">
+              <div onClick={handleStock} className="cursor-pointer">{st.stock.length > 0 ? <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0 flex items-center justify-center text-[10px] text-white/50">{st.stock.length}</div> : <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-black flex items-center justify-center text-[10px] text-slate-500">↺</div>}</div>
+              <div>{renderCard(st.waste[st.waste.length-1], () => handleCardClick('waste', 0, 0))}</div>
+            </div>
+            <div className="flex gap-1.5">
+              {st.fnd.map((f, i) => <div key={i}>{renderCard(f[f.length-1], null)}</div>)}
+            </div>
+          </div>
+          {/* Tableaus */}
+          <div className="flex justify-between flex-1 relative">
+            {st.tab.map((col, i) => (
+              <div key={i} className="flex flex-col w-10 sm:w-12">
+                {col.length === 0 ? renderCard(null) : col.map((c, j) => (
+                  <div key={c.id} style={{ marginTop: j > 0 ? '-2.5rem' : '0', zIndex: j }} className="relative">
+                    {renderCard(c, () => handleCardClick('tab', i, j))}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-400 text-center mt-6">💡 แตะที่การ์ดเพื่อย้ายอัตโนมัติ (ขยับไป Foundation หรือแถวอื่นให้เอง)</div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // MAIN APP
+    // ==========================================
+    function App() {
+      const currentUser = { id: 'M999', displayName: 'Tester (UI Update)' };
       const todayStr = new Date().toLocaleDateString('en-CA');
-      const [activeTab, setActiveTab] = useState(0);
+      
+      const [isLeftOpen, setIsLeftOpen] = useState(true);
+      const [isRightOpen, setIsRightOpen] = useState(true);
+      const [activeTab, setActiveTab] = useState(0); 
+      
       const [isPlaying, setIsPlaying] = useState(false);
       const [time, setTime] = useState(0);
-      const [isWon, setIsWon] = useState(false);
+      const [gameStatus, setGameStatus] = useState('pending'); // pending, won, lost_bomb
       const [scores, setScores] = useState([]);
 
-      useEffect(() => { setIsPlaying(false); setIsWon(false); setTime(0); }, [activeTab]);
-      useEffect(() => { let intv; if(isPlaying && !isWon) intv = setInterval(() => setTime(t=>t+1), 1000); return () => clearInterval(intv); }, [isPlaying, isWon]);
+      useEffect(() => { setIsPlaying(false); setGameStatus('pending'); setTime(0); }, [activeTab]);
+      useEffect(() => { let intv; if(isPlaying && gameStatus === 'pending') intv = setInterval(() => setTime(t=>t+1), 1000); return () => clearInterval(intv); }, [isPlaying, gameStatus]);
 
       useEffect(() => {
         if(!db) return;
@@ -355,70 +555,120 @@
         });
       }, [todayStr, activeTab]);
 
-      const handleWin = async () => {
-        setIsWon(true); setIsPlaying(false);
+      const handleGameEnd = async (result) => {
+        setIsPlaying(false);
+        setGameStatus(result === 'bomb' ? 'lost_bomb' : 'won');
+        
+        const finalTime = result === 'bomb' ? Infinity : time;
         const existing = scores.find(s => s.userId === currentUser.id);
-        if(!existing || time < existing.timeMs) {
-          await db.collection('bma_daily_scores').doc(`${todayStr}_${activeTab}_${currentUser.id}`).set({ userId: currentUser.id, displayName: currentUser.displayName, date: todayStr, timeMs: time, gameIndex: activeTab, timestamp: Date.now() });
+        
+        if(!existing || finalTime < existing.timeMs) {
+          await db.collection('bma_daily_scores').doc(`${todayStr}_${activeTab}_${currentUser.id}`).set({
+            userId: currentUser.id, displayName: currentUser.displayName,
+            date: todayStr, timeMs: finalTime, status: result, gameIndex: activeTab, timestamp: Date.now()
+          });
         }
       };
 
+      const handleShare = () => {
+        const msg = gameStatus === 'lost_bomb' ? `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣` : `ทำเวลาไปได้ ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+        alert(`แชร์ไปที่กระดานโพสต์!\n\n${msg}`);
+        setGameStatus('viewing_board');
+      };
+
       return (
-        <div className="min-h-screen pt-4 pb-12 px-4 max-w-xl mx-auto flex flex-col">
-          <div className="text-center mb-5 mt-2">
-            <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-wider text-amber-300">🎮 Daily Challenge</h1>
-            <p className="text-xs text-slate-400 mt-1">ประจำวันที่ {todayStr}</p>
-          </div>
-
-          <div className="flex gap-1.5 p-1.5 bg-[#0B1325] rounded-xl border border-[#1E3A5F] mb-6 shadow-lg">
-            {GAME_NAMES.map((name, idx) => (
-              <button key={idx} onClick={() => setActiveTab(idx)} className={`flex-1 py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-colors ${activeTab === idx ? 'bg-white text-[#050811] shadow' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'}`}>
-                <span className="hidden sm:inline">{name}</span><span className="sm:hidden">{name.split(' ')[0]}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="card p-4 sm:p-6 text-center flex-1 flex flex-col justify-center relative overflow-hidden shadow-2xl">
-            <div className="font-mono text-4xl sm:text-5xl font-bold text-white mb-5 drop-shadow-md">{fmtTime(time)}</div>
-
-            {!isPlaying && !isWon ? (
-              <div className="py-16">
-                <button onClick={() => setIsPlaying(true)} className="btn-w text-lg sm:text-xl px-10 py-4 animate-pulse shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform">
-                  ▶ เริ่มจับเวลาเล่นเกม
-                </button>
-              </div>
-            ) : (
-              <div className="bg-[#050811] rounded-xl p-3 sm:p-5 min-h-[400px] flex flex-col items-center justify-center border border-[#1E3A5F] w-full">
-                {activeTab === 0 && <SudokuGame dateSeed={todayStr} onWin={handleWin} />}
-                {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onWin={handleWin} />}
-                {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onWin={handleWin} />}
-              </div>
-            )}
-
-            {isWon && (
-              <div className="mt-6 pt-5 border-t border-[#1E3A5F] space-y-4">
-                <div className="text-xl sm:text-2xl font-bold text-emerald-400">🎉 เคลียร์เกมสำเร็จ!</div>
-                <button onClick={() => alert(`จำลองการแชร์ไปกระดานโพสต์!\nเกม: ${GAME_NAMES[activeTab]}\nเวลา: ${fmtTime(time)} นาที`)} className="btn-w w-full py-3 shadow-lg hover:bg-slate-200">
-                  📤 แชร์สถิติให้เพื่อนรู้
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="card p-5 sm:p-6 mt-6 shadow-xl">
-            <h3 className="font-bold text-base sm:text-lg mb-4 flex items-center gap-2">🏆 อันดับของวันนี้ ({GAME_NAMES[activeTab]})</h3>
-            <div className="space-y-2.5">
-              {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-6 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีใครทำเวลาได้ในเกมนี้ของวันนี้ เป็นคนแรกเลยสิ!</div> : 
-               scores.map((s, i) => (
-                <div key={s.userId} className="flex justify-between items-center p-3 sm:p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] shadow-sm">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <span className={`font-bold w-6 sm:w-8 text-center text-sm sm:text-base ${i===0?'text-yellow-400 text-lg drop-shadow-md':i===1?'text-slate-300':i===2?'text-amber-600':'text-slate-500'}`}>#{i+1}</span>
-                    <span className="font-bold text-sm sm:text-base truncate max-w-[150px] sm:max-w-[200px]">{s.displayName}</span>
-                  </div>
-                  <span className="font-mono text-sky-300 font-bold text-base sm:text-lg bg-sky-950/30 px-3 py-1 rounded-lg">{fmtTime(s.timeMs)}</span>
-                </div>
-              ))}
+        <div className="flex flex-col h-screen overflow-hidden bg-[#050811] text-white text-sm">
+          {/* Header */}
+          <header className="h-14 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between px-4 shrink-0 shadow-md z-20">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs">☰ เกม</button>
+              <div className="font-bold text-amber-300">🎮 Daily Challenge</div>
             </div>
+            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs">🏆 อันดับ</button>
+          </header>
+
+          <div className="flex-1 flex overflow-hidden relative">
+            {/* LEFT SIDEBAR: Game Selection */}
+            <aside className={`absolute md:relative z-10 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-all duration-300 ${isLeftOpen ? 'left-0' : '-left-64 md:hidden md:w-0'}`}>
+              <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px]">เลือกมินิเกมประจำวัน</div>
+              <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                {GAMES.map((g, idx) => (
+                  <button key={g.id} onClick={() => { setActiveTab(idx); setIsLeftOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
+                    <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            {/* CENTER: Game Area */}
+            <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
+              {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
+              {isRightOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
+              
+              <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
+                <div className="text-center mb-4">
+                  <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeTab].icon} {GAMES[activeTab].name}</h2>
+                  <p className="text-xs text-slate-400 mt-1">วันที่: {todayStr}</p>
+                </div>
+
+                <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
+                  <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">{fmtTime(time)}</div>
+
+                  {!isPlaying && gameStatus === 'pending' ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <button onClick={() => setIsPlaying(true)} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col justify-center">
+                      {activeTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={handleGameEnd} />}
+                      {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={handleGameEnd} />}
+                      {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={handleGameEnd} />}
+                      {activeTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={handleGameEnd} />}
+                    </div>
+                  )}
+
+                  {/* GAME OVER MODAL POP-UP */}
+                  {(gameStatus === 'won' || gameStatus === 'lost_bomb') && (
+                    <Modal title={gameStatus === 'won' ? '🎉 ยินดีด้วย!' : '💥 บึ้มมม! โดนระเบิด'} onClose={() => setGameStatus('viewing_board')}>
+                      <div className="space-y-4">
+                        <p className="text-slate-300 text-sm">
+                          {gameStatus === 'won' ? `คุณเคลียร์เกม ${GAMES[activeTab].name} สำเร็จ` : `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ`}
+                        </p>
+                        <div className="text-3xl font-mono font-bold text-amber-300 my-2">
+                          {gameStatus === 'won' ? fmtTime(time) : 'GAME OVER'}
+                        </div>
+                        <button onClick={handleShare} className="btn-b w-full py-3 shadow">📤 แชร์สถิติลงกระดานโพสต์</button>
+                      </div>
+                    </Modal>
+                  )}
+                </div>
+              </div>
+            </main>
+
+            {/* RIGHT SIDEBAR: Leaderboard */}
+            <aside className={`absolute md:relative z-10 w-64 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-all duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:hidden md:w-0'}`}>
+              <div className="p-4 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between">
+                <span>🏆 อันดับ {GAMES[activeTab].name}</span>
+                <button onClick={() => setIsRightOpen(false)} className="md:hidden text-slate-400">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนเคลียร์ได้วันนี้</div> : 
+                 scores.map((s, i) => {
+                  const isBomb = s.status === 'bomb' || s.timeMs === Infinity;
+                  return (
+                    <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb?'text-yellow-400':i===1&&!isBomb?'text-slate-300':i===2&&!isBomb?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
+                        <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
+                      </div>
+                      <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
+                        {isBomb ? '💥 Bomb' : fmtTime(s.timeMs)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
           </div>
         </div>
       );
