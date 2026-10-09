@@ -72,10 +72,11 @@
 
     const PRESET_TAGS = ['LCs & Pal', 'PCSHS', 'KPN', 'KMUTT', 'Instrumix', 'Others'];
     const SOCIALS = [{ id: 'Facebook', icon: '📘' }, { id: 'Instagram', icon: '📸' }, { id: 'YouTube', icon: '▶️' }, { id: 'TikTok', icon: '🎵' }, { id: 'External Link', icon: '🔗' }];
-    const OWNER_SEED = { id: 'M000', username: '', password: '', isActivated: false, role: 'admin', memberTag: 'LCs & Pal', memberTags: ['LCs & Pal'], displayName: 'Founder (M000)', bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, isOnline: false, lastActive: 0, joinedAt: '2026-10-08' };
+    const OWNER_SEED = { id: 'M000', username: '', password: '', isActivated: false, role: 'admin', memberTag: 'LCs & Pal', memberTags: ['LCs & Pal'], displayName: 'Founder (M000)', bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, isOnline: false, lastActive: 0, joinedAt: '2026-10-08', birthDate: '' };
     const DEF_CH = [
       { id: 'global-lobby', name: 'blue-moon-lobby', icon: '🌐', desc: 'โถงหลักสำหรับสมาชิกทุกคนในสมาคม', createdBy: 'M000', isProtected: true, isSystemReadOnly: false, timestamp: 1000 },
-      { id: 'global-announce', name: 'announcements', icon: '📢', desc: 'ห้องแจ้งเตือนอัตโนมัติเมื่อมีโพสต์ใหม่ในเว็บไซต์ (ไม่อนุญาตให้พิมพ์)', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: true, timestamp: 2000 }
+      { id: 'global-announce', name: 'announcements', icon: '📢', desc: 'ห้องแจ้งเตือนอัตโนมัติเมื่อมีโพสต์ใหม่ในเว็บไซต์ (ไม่อนุญาตให้พิมพ์)', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: true, timestamp: 2000 },
+      { id: 'happy-birthday-dear', name: 'happy-birthday-dear', icon: '🎂', desc: 'ห้องสำหรับส่งคำอวยพรวันเกิดให้สมาชิก', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: false, timestamp: 3000 }
     ];
     const GAMES = [{ id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" }, { id: 'minesweeper', name: "Minesweeper", icon: "💣" }, { id: 'flag', name: "Flag Guesser", icon: "🏳️" }, { id: 'solitaire', name: "Solitaire", icon: "🃏" }, { id: 'wordle', name: "Wordle", icon: "🔤" }];
 
@@ -874,7 +875,7 @@
       const [actId, setActId] = useState(''); const [actU, setActU] = useState(''); const [actP, setActP] = useState(''); const [actN, setActN] = useState('');
 
       const [editProf, setEditProf] = useState(false);
-      const [eName, setEName] = useState(''); const [eBio, setEBio] = useState(''); const [eAv, setEAv] = useState('');
+      const [eName, setEName] = useState(''); const [eBio, setEBio] = useState(''); const [eAv, setEAv] = useState(''); const [eBd, setEBd] = useState('');
       const [eUser, setEUser] = useState(''); const [ePass, setEPass] = useState(''); const [profErr, setProfErr] = useState('');
       const [eSocs, setESocs] = useState([]); const [sPlat, setSPlat] = useState('Instagram'); const [sLbl, setSLbl] = useState(''); const [sUrl, setSUrl] = useState('');
       const avRef = useRef(null);
@@ -899,6 +900,8 @@
       const [delTgt, setDelTgt] = useState(null);
 
       const [notifOpen, setNotifOpen] = useState(false); const [notifTab, setNotifTab] = useState('posts'); const [toasts, setToasts] = useState([]);
+      const [postMenu, setPostMenu] = useState(null);
+      const [editPostData, setEditPostData] = useState(null);
       const [pushPerm, setPushPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'default');
       const prevNLen = useRef(0); const chatBoxRef = useRef(null);
 
@@ -911,6 +914,36 @@
       const [gameScores, setGameScores] = useState([]);
       const [lbTab, setLbTab] = useState('daily');
       const [monthlyScores, setMonthlyScores] = useState([]);
+      // Birthday Check
+      useEffect(() => {
+        if(!currentUser) return;
+        const checkBday = () => {
+          if(!currentUser.birthDate) return;
+          const now = new Date();
+          if(now.getHours() === 19 && now.getMinutes() === 0) {
+            const todayStr = now.toISOString().split('T')[0].substring(5); // MM-DD
+            if(currentUser.birthDate.substring(5) === todayStr) {
+               // Post to Happy Birthday Dear channel
+               const bdayId = 'bday-' + now.getFullYear() + '-' + currentUser.id;
+               db.collection('bma_messages').doc(bdayId).get().then(doc => {
+                  if(!doc.exists) {
+                     db.collection('bma_messages').doc(bdayId).set({
+                        id: bdayId, roomKey: 'happy-birthday-dear', senderId: 'SYSTEM',
+                        text: `🎉 สุขสันต์วันเกิดคุณ ${currentUser.displayName}! 🎂 ขอให้ปีนี้เป็นปีที่ยอดเยี่ยม มีความสุขมากๆ มาร่วมอวยพรวันเกิดให้ ${currentUser.displayName} กันเถอะ!`,
+                        isSystemPostAlert: false, attachments: [], likes: [], readBy: [], 
+                        targetUserId: currentUser.id, bdayDate: now.toISOString().split('T')[0],
+                        time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: svrTs()
+                     });
+                  }
+               });
+            }
+          }
+        };
+        const intv = setInterval(checkBday, 60000); // check every minute
+        checkBday();
+        return () => clearInterval(intv);
+      }, [currentUser]);
+
 
       useEffect(() => { const fn = () => { setCtxMenu(null); setCommMenu(null); }; window.addEventListener('click', fn); return () => window.removeEventListener('click', fn); }, []);
 
@@ -1065,8 +1098,15 @@
           if (hist.length >= 2) return setProfErr('เปลี่ยน Username ครบ 2 ครั้งใน 14 วันแล้ว');
           hist = [...hist, Date.now()];
         }
-        const up = { ...currentUser, displayName: eName.trim(), bio: eBio.trim(), avatarUrl: eAv, username: uName, password: pass, usernameChangeHistory: hist, socialLinks: eSocs };
+        const up = { ...currentUser, displayName: eName.trim(), bio: eBio.trim(), avatarUrl: eAv, username: uName, password: pass, usernameChangeHistory: hist, socialLinks: eSocs, birthDate: eBd };
         await db.collection('bma_users').doc(up.id).set(up); setCurrentUser(up); setEditProf(false);
+      };
+
+      const handleEditPostReq = (post) => {
+        setPTitle(post.title || ''); setPCont(post.content || ''); setPGuest(post.isGuestAllowed); setPAtts(post.attachments || []); 
+        if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
+        else { setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setPollClose(''); }
+        setEditPostData(post.id); setCreatePost(true);
       };
 
       const handleCreatePost = async (e) => {
@@ -1078,12 +1118,17 @@
           poll = { question: pollQ.trim(), isAnonymous: pollAnon, closesAt: pollClose ? new Date(pollClose).getTime() : null, closesAtFormatted: pollClose ? new Date(pollClose).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : null, options: opts.map((text, i) => ({ id: 'opt-' + i + '-' + Date.now(), text, votes: [] })) };
         }
         if (!pCont.trim() && !pTitle.trim() && !pAtts.length && !poll) return;
-        const now = Date.now(), postId = 'post-' + now;
-        const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, poll, mutedBy: [], createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
-        setPTitle(''); setPCont(''); setPGuest(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
-        await db.collection('bma_posts').doc(postId).set(postObj);
-        await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
-        await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
+        if(editPostData) {
+          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts });
+          setPTitle(''); setPCont(''); setPGuest(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
+        } else {
+          const now = Date.now(), postId = 'post-' + now;
+          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, poll, mutedBy: [], createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
+          setPTitle(''); setPCont(''); setPGuest(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
+          await db.collection('bma_posts').doc(postId).set(postObj);
+          await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
+          await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
+        }
       };
 
       const handleAddComment = async (postId) => {
@@ -1266,7 +1311,7 @@
                 {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
                 {currentUser ? (
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline max-w-[90px] truncate">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
+                    <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline max-w-[90px] truncate">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
                     <button onClick={async () => { await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="btn-d text-xs">ออก</button>
                   </div>
                 ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); setCurrentView('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
@@ -1412,11 +1457,17 @@
                           {msg.isDeleted ? <p className="text-xs italic text-slate-500 mt-1">🚫 ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง</p> : (
                             <>
                               {msg.replyTo && <div className="mt-1 px-2.5 py-1 rounded bg-[#0B1325] border-l-2 border-sky-400 text-[11px] text-slate-300"><strong className="text-sky-300">↩️ {msg.replyTo.senderName}:</strong> {msg.replyTo.text}</div>}
-                              <FormattedText text={msg.text} currentUser={currentUser} isEdited={msg.isEdited} />
+                              {msg.roomKey === 'happy-birthday-dear' && msg.replyTo && msg.replyTo.senderName === 'SYSTEM' && currentUser?.id !== getAuthor(msg.replyTo.targetUserId)?.id && currentUser?.id !== msg.senderId ? (
+                                <div className="text-xs text-slate-500 italic">คำอวยพรนี้ถูกซ่อนไว้ (เฉพาะเจ้าของวันเกิดและผู้ส่งเท่านั้นที่เห็นได้) 🔒</div>
+                              ) : (
+                                <FormattedText text={msg.text} currentUser={currentUser} isEdited={msg.isEdited} />
+                              )}
                               {msg.attachments?.length > 0 && <div className="mt-2 space-y-2">{msg.attachments.map((att) => <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />)}</div>}
                               <div className="flex gap-2 mt-1 items-center">
                                 <LikeButton likes={msg.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_messages').doc(msg.id).update({ likes: (msg.likes||[]).includes(currentUser?.id) ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} />
-                                <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">↩️ ตอบกลับ</button>
+                                {!(msg.roomKey === 'happy-birthday-dear' && msg.targetUserId && Date.now() - msg.timestamp > 86400000) && (
+                                  <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">↩️ ตอบกลับ</button>
+                                )}
                               </div>
                             </>
                           )}
@@ -1607,8 +1658,8 @@
           )}
 
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
-            <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-y-auto">
-              <aside className="lg:col-span-4 xl:col-span-3 space-y-4">
+            <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+              <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
                 {!currentUser && <div className="card p-4 text-xs text-slate-300"><div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>แสดงเฉพาะโพสต์ที่อนุญาตให้อ่านได้</div>}
                 <div className="card p-2 space-y-1 text-xs">
                   <button onClick={() => setCurrentView('feed')} className={currentView === 'feed' ? 'w-full flex justify-between px-4 py-2 rounded-xl font-bold bg-white text-[#050811]' : 'w-full flex justify-between px-4 py-2 rounded-xl hover:bg-[#0F2547]'}><span>📝 กระดานโพสต์</span><span>{filteredPosts.length}</span></button>
@@ -1618,7 +1669,7 @@
                 </div>
               </aside>
 
-              <main className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10">
+              <main className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2">
                 {currentView === 'admin' && currentUser?.role === 'admin' ? (
                   <div className="space-y-5 text-xs">
                     <div className="card p-5 space-y-3">
@@ -1663,13 +1714,20 @@
                         <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 ' + (hiPostId === post.id ? 'border-2 border-sky-400' : '')}>
                           <div className="flex justify-between items-start gap-2">
                             <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
-                            <div className="flex items-center gap-2">
-                              {canManage(post.authorId) ? (
-                                <button onClick={() => db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed })} className={post.isGuestAllowed ? 'px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-400/50 text-[10px] text-emerald-300 font-bold' : 'px-2.5 py-0.5 rounded-full bg-[#050811] border border-[#1E3A5F] text-[10px] text-slate-400'}>
-                                  {post.isGuestAllowed ? '🌐 Guest อ่านได้' : '🔒 เฉพาะสมาชิก'}
-                                </button>
-                              ) : <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest อ่านได้' : '🔒 เฉพาะสมาชิก'}</span>}
-                              {canManage(post.authorId) && <button onClick={() => confirm('ลบโพสต์นี้?') && db.collection('bma_posts').doc(post.id).delete()} className="text-xs text-slate-400 hover:text-red-400">ลบ</button>}
+                            <div className="flex items-center gap-2 relative">
+                              {!canManage(post.authorId) && <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
+                              {canManage(post.authorId) && (
+                                <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold">⋮</button>
+                              )}
+                              {postMenu === post.id && (
+                                <div className="absolute top-6 right-0 w-48 card border border-white/20 shadow-2xl py-1 z-30 flex flex-col text-left">
+                                  <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
+                                    <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
+                                  </button>
+                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไขโพสต์</button>
+                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) db.collection('bma_posts').doc(post.id).delete(); }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400">🗑️ ลบโพสต์</button>
+                                </div>
+                              )}
                             </div>
                           </div>
                           {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
@@ -1804,7 +1862,10 @@
                   <div><label className="block mb-1">ชื่อที่แสดง *</label><input type="text" value={eName} onChange={(e) => setEName(e.target.value)} className="w-full inp" required /></div>
                   <div><label className="block mb-1">Username ({Math.max(0, 2 - recentChg(currentUser).length)}/2 ใน 14 วัน)</label><input type="text" value={eUser} onChange={(e) => setEUser(e.target.value)} className="w-full inp font-mono" required /></div>
                 </div>
-                <div className="relative flex items-center"><input type={showPass ? 'text' : 'password'} value={ePass} onChange={(e) => setEPass(e.target.value)} className="w-full inp pr-16 font-mono" required /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325]">{showPass ? '🙈 ซ่อน' : '👁️ ดู'}</button></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative flex items-center"><input type={showPass ? 'text' : 'password'} value={ePass} onChange={(e) => setEPass(e.target.value)} className="w-full inp pr-16 font-mono" placeholder="Password *" required /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325] text-[10px]">{showPass ? '🙈 ซ่อน' : '👁️ ดู'}</button></div>
+                  <div><input type="date" value={eBd} onChange={(e) => setEBd(e.target.value)} className="w-full inp font-mono text-slate-300" title="วันเกิด" /></div>
+                </div>
                 <textarea rows={2} value={eBio} onChange={(e) => setEBio(e.target.value)} placeholder="Bio..." className="w-full inp" />
                 <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
                   <div className="flex gap-1"><select value={sPlat} onChange={(e) => setSPlat(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] rounded px-1.5 py-1">{SOCIALS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.id}</option>)}</select><input type="text" value={sLbl} onChange={(e) => setSLbl(e.target.value)} placeholder="ชื่อปุ่ม..." className="w-24 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1" /><input type="text" value={sUrl} onChange={(e) => setSUrl(e.target.value)} placeholder="URL..." className="flex-1 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1" /><button type="button" onClick={() => { if (sUrl.trim()) { setESocs([...eSocs, { id: 's-' + Date.now(), platform: sPlat, label: sLbl.trim() || sPlat, url: safeUrl(sUrl) }]); setSUrl(''); setSLbl(''); } }} className="btn-w py-1">เพิ่ม</button></div>
@@ -1817,7 +1878,7 @@
           )}
 
           {createPost && (
-            <Modal title="เขียนโพสต์ใหม่ / สร้างโพลล์" onClose={() => setCreatePost(false)} maxW="max-w-xl">
+            <Modal title={editPostData ? "✎ แก้ไขโพสต์" : "เขียนโพสต์ใหม่ / สร้างโพลล์"} onClose={() => { setCreatePost(false); setEditPostData(null); }} maxW="max-w-xl">
               <form onSubmit={handleCreatePost} className="space-y-3 text-xs text-left">
                 <input type="text" value={pTitle} onChange={(e) => setPTitle(e.target.value)} placeholder="หัวข้อเรื่อง (ไม่บังคับ)..." className="w-full inp text-sm" />
                 <textarea rows={3} value={pCont} onChange={(e) => setPCont(e.target.value)} placeholder="เนื้อหาโพสต์..." className="w-full inp text-sm" />
@@ -1846,7 +1907,7 @@
                   <div className="flex gap-1.5"><select value={aType} onChange={(e) => setAType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="file">ไฟล์</option></select><input type="text" value={aUrl} onChange={(e) => setAUrl(e.target.value)} placeholder="วางลิงก์เว็บ, .gif, .mp4..." className="flex-1 inp py-1" /><button type="button" onClick={() => { if (aUrl.trim()) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: aType, url: aUrl.trim(), size: 'URL' }]); setAUrl(''); } }} className="btn-w py-1">🔗 แนบลิงก์</button></div>
                   {pAtts.map((a) => <div key={a.id} className="flex justify-between px-2 py-1 rounded bg-[#0B1325]"><span>{a.name}</span><button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">ลบ</button></div>)}
                 </div>
-                <button type="submit" className="w-full btn-w py-2.5">เผยแพร่โพสต์</button>
+                <button type="submit" className="w-full btn-w py-2.5">{editPostData ? 'บันทึกการแก้ไข' : 'เผยแพร่โพสต์'}</button>
               </form>
             </Modal>
           )}
