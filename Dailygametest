@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Game Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
+    .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; }
+    .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; }
+    
+    /* Sudoku grid lines */
+    .sudoku-grid { border: 2px solid #3B82F6; }
+    .sudoku-cell { border: 1px solid #1E3A5F; width: 36px; height: 36px; text-align: center; font-size: 16px; font-weight: bold; background: #050811; color: #fff; outline: none; }
+    .sudoku-cell.fixed { background: #0B1325; color: #60A5FA; pointer-events: none; }
+    .sudoku-cell:focus { background: rgba(59, 130, 246, 0.2); }
+    .border-r-thick { border-right: 2px solid #3B82F6; }
+    .border-b-thick { border-bottom: 2px solid #3B82F6; }
+    
+    /* Minesweeper */
+    .ms-cell { width: 30px; height: 30px; border: 1px solid #1E3A5F; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; cursor: pointer; user-select: none; }
+    .ms-cell.hidden { background: #0F2547; }
+    .ms-cell.hidden:hover { background: #1E3A5F; }
+    .ms-cell.revealed { background: #050811; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    const firebaseConfig = {
+      apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
+      authDomain: "tbmasite.firebaseapp.com",
+      projectId: "tbmasite",
+      storageBucket: "tbmasite.firebasestorage.app",
+      messagingSenderId: "616851307256",
+      appId: "1:616851307256:web:15b49dfec2de521af6990d",
+      measurementId: "G-JDW0E0S138"
+    };
+
+    const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+    const db = firebase.firestore(app);
+    const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
+    const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+    const GAME_NAMES = ["Sudoku (9x9)", "Minesweeper", "Flag Guesser"];
+
+    class PRNG {
+      constructor(seedStr) {
+        this.h = 2166136261 >>> 0;
+        for(let i=0;i<seedStr.length;i++) { this.h ^= seedStr.charCodeAt(i); this.h = Math.imul(this.h, 16777619); }
+      }
+      next() { this.h += this.h << 10; this.h ^= this.h >>> 6; this.h += this.h << 3; this.h ^= this.h >>> 11; this.h += this.h << 15; return (this.h >>> 0); }
+      nextFloat() { return (this.next() >>> 0) / 4294967296; }
+      nextInt(min, max) { return min + Math.floor(this.nextFloat() * (max - min + 1)); }
+      shuffle(arr) { let res = [...arr]; for(let i=res.length-1; i>0; i--) { const j = this.nextInt(0, i); [res[i], res[j]] = [res[j], res[i]]; } return res; }
+    }
+
+    function generateSudoku(seedStr) {
+      const rng = new PRNG(seedStr);
+      const base = [
+        [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
+        [2,3,4,5,6,7,8,9,1],[5,6,7,8,9,1,2,3,4],[8,9,1,2,3,4,5,6,7],
+        [3,4,5,6,7,8,9,1,2],[6,7,8,9,1,2,3,4,5],[9,1,2,3,4,5,6,7,8]
+      ];
+      for(let block=0; block<3; block++) {
+        for(let i=0; i<3; i++) {
+          const r1 = block*3+i, r2 = block*3+rng.nextInt(0,2);
+          const temp = base[r1]; base[r1] = base[r2]; base[r2] = temp;
+        }
+      }
+      const map = rng.shuffle([1,2,3,4,5,6,7,8,9]);
+      const mapped = base.map(row => row.map(val => map[val-1]));
+      const puzzle = mapped.map(r => [...r]);
+      let cellsToRemove = rng.nextInt(35, 45);
+      while(cellsToRemove > 0) {
+        const r = rng.nextInt(0,8), c = rng.nextInt(0,8);
+        if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
+      }
+      return { solution: mapped, puzzle };
+    }
+
+    function SudokuGame({ todayStr, onWin }) {
+      const [board, setBoard] = useState(null);
+      const [fixed, setFixed] = useState(null);
+      useEffect(() => {
+        const { puzzle } = generateSudoku(todayStr);
+        setBoard(puzzle.map(r => [...r]));
+        setFixed(puzzle.map(r => r.map(c => c !== '')));
+      }, [todayStr]);
+
+      const checkWin = (b) => {
+        for(let r=0; r<9; r++) {
+          const rowSet = new Set(), colSet = new Set();
+          for(let c=0; c<9; c++) {
+            if(b[r][c]==='') return false;
+            rowSet.add(b[r][c]); colSet.add(b[c][r]);
+          }
+          if(rowSet.size !== 9 || colSet.size !== 9) return false;
+        }
+        onWin();
+      };
+
+      const handleChange = (r, c, val) => {
+        if(fixed[r][c]) return;
+        const v = val.replace(/[^1-9]/g, '').slice(-1);
+        const newB = [...board]; newB[r] = [...newB[r]]; newB[r][c] = v ? parseInt(v) : '';
+        setBoard(newB); checkWin(newB);
+      };
+
+      if(!board) return <div>Loading...</div>;
+      return (
+        <div className="flex justify-center my-4">
+          <div className="sudoku-grid flex flex-col">
+            {board.map((row, r) => (
+              <div key={r} className={`flex ${r%3===2 && r!==8 ? 'border-b-thick' : ''}`}>
+                {row.map((val, c) => (
+                  <input key={c} value={val} onChange={(e) => handleChange(r, c, e.target.value)} className={`sudoku-cell ${fixed[r][c] ? 'fixed' : ''} ${c%3===2 && c!==8 ? 'border-r-thick' : ''}`} maxLength={1} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function MinesweeperGame({ todayStr, onWin }) {
+      const COLS = 9, ROWS = 9, MINES = 10;
+      const [grid, setGrid] = useState([]);
+      const [revealed, setRevealed] = useState([]);
+      const [flagged, setFlagged] = useState([]);
+      const [gameOver, setGameOver] = useState(false);
+      const [minesLeft, setMinesLeft] = useState(MINES);
+
+      const initGrid = () => {
+        const rng = new PRNG(todayStr + Date.now());
+        let g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+        let mPlaced = 0;
+        while(mPlaced < MINES) {
+          const r = rng.nextInt(0, ROWS-1), c = rng.nextInt(0, COLS-1);
+          if(g[r][c] !== 'M') { g[r][c] = 'M'; mPlaced++; }
+        }
+        for(let r=0; r<ROWS; r++) {
+          for(let c=0; c<COLS; c++) {
+            if(g[r][c] === 'M') continue;
+            let count = 0;
+            for(let dr=-1; dr<=1; dr++) {
+              for(let dc=-1; dc<=1; dc++) {
+                if(r+dr>=0 && r+dr<ROWS && c+dc>=0 && c+dc<COLS && g[r+dr][c+dc] === 'M') count++;
+              }
+            }
+            g[r][c] = count;
+          }
+        }
+        setGrid(g);
+        setRevealed(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
+        setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
+        setGameOver(false); setMinesLeft(MINES);
+      };
+
+      useEffect(() => { initGrid(); }, [todayStr]);
+
+      const handleRightClick = (e, r, c) => {
+        e.preventDefault();
+        if(gameOver || revealed[r][c]) return;
+        const newF = [...flagged]; newF[r] = [...newF[r]]; newF[r][c] = !newF[r][c];
+        setFlagged(newF); setMinesLeft(MINES - newF.flat().filter(Boolean).length);
+      };
+
+      const handleLeftClick = (r, c) => {
+        if(gameOver || flagged[r][c] || revealed[r][c]) return;
+        if(grid[r][c] === 'M') { setGameOver(true); alert('โดนระเบิด! ลองใหม่นะ'); initGrid(); return; }
+        const newR = [...revealed.map(row=>[...row])];
+        const floodFill = (rr, cc) => {
+          if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
+          newR[rr][cc] = true;
+          if(grid[rr][cc] === 0) {
+            for(let dr=-1; dr<=1; dr++) { for(let dc=-1; dc<=1; dc++) floodFill(rr+dr, cc+dc); }
+          }
+        };
+        floodFill(r, c); setRevealed(newR);
+        let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
+        if(revCount === ROWS*COLS - MINES) { setGameOver(true); onWin(); }
+      };
+
+      if(!grid.length) return null;
+      const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-yellow-400','text-cyan-400','text-black','text-gray-400'];
+
+      return (
+        <div className="flex flex-col items-center my-4 space-y-4">
+          <div className="font-bold text-amber-300">💣 ระเบิดที่เหลือ: {minesLeft}</div>
+          <div className="border-2 border-[#1E3A5F] bg-[#050811] p-1">
+            {grid.map((row, r) => (
+              <div key={r} className="flex">
+                {row.map((val, c) => (
+                  <div key={c} onClick={() => handleLeftClick(r,c)} onContextMenu={(e) => handleRightClick(e,r,c)} className={`ms-cell ${revealed[r][c] ? 'revealed' : 'hidden'} ${revealed[r][c] && val ? colors[val] : ''}`}>
+                    {flagged[r][c] ? '🚩' : (revealed[r][c] ? (val === 0 ? '' : val) : '')}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function FlagGuesserGame({ todayStr, onWin }) {
+      const ALL_FLAGS = [
+        {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'United States'},
+        {c:'gb',n:'United Kingdom'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
+        {c:'it',n:'Italy'},{c:'br',n:'Brazil'},{c:'ar',n:'Argentina'},{c:'au',n:'Australia'},
+        {c:'ca',n:'Canada'},{c:'vn',n:'Vietnam'},{c:'sg',n:'Singapore'},{c:'ru',n:'Russia'},
+        {c:'in',n:'India'},{c:'za',n:'South Africa'},{c:'mx',n:'Mexico'},{c:'es',n:'Spain'}
+      ];
+      const [rounds, setRounds] = useState([]);
+      const [currentRound, setCurrentRound] = useState(0);
+
+      useEffect(() => {
+        const rng = new PRNG(todayStr);
+        const shuffled = rng.shuffle([...ALL_FLAGS]);
+        const rds = [];
+        for(let i=0; i<3; i++) {
+          const target = shuffled[i];
+          let options = [target];
+          let others = rng.shuffle(ALL_FLAGS.filter(f => f.c !== target.c));
+          options.push(others[0], others[1], others[2]);
+          rds.push({ target, options: rng.shuffle(options) });
+        }
+        setRounds(rds);
+      }, [todayStr]);
+
+      if(!rounds.length) return null;
+
+      const handleGuess = (code) => {
+        if(code === rounds[currentRound].target.c) {
+          if(currentRound === 2) onWin(); else setCurrentRound(c => c+1);
+        } else {
+          alert('ผิดครับ! ลองเลือกใหม่');
+        }
+      };
+
+      const rd = rounds[currentRound];
+      return (
+        <div className="flex flex-col items-center my-4 space-y-4">
+          <div className="font-bold text-amber-300">ด่านที่ {currentRound + 1} / 3</div>
+          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-40 border-2 border-white/20 rounded shadow-lg" />
+          <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+            {rd.options.map(opt => <button key={opt.c} onClick={() => handleGuess(opt.c)} className="btn-w text-sm py-2">{opt.n}</button>)}
+          </div>
+        </div>
+      );
+    }
+
+    function DailyGame() {
+      const [currentUser, setCurrentUser] = useState({ id: 'M999', displayName: 'Tester (ผู้ทดสอบ)' });
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const rng = new PRNG(todayStr);
+      const gameIdx = rng.nextInt(0, 2);
+      
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [time, setTime] = useState(0);
+      const [isWon, setIsWon] = useState(false);
+      const [scores, setScores] = useState([]);
+
+      useEffect(() => {
+        let intv;
+        if(isPlaying && !isWon) intv = setInterval(() => setTime(t=>t+1), 1000);
+        return () => clearInterval(intv);
+      }, [isPlaying, isWon]);
+
+      useEffect(() => {
+        if(!db) return;
+        return db.collection('bma_daily_scores').where('date', '==', todayStr).onSnapshot(s => {
+          const l = s.docs.map(d => d.data()).sort((a,b) => a.timeMs - b.timeMs);
+          setScores(l);
+        });
+      }, [todayStr]);
+
+      const handleWin = async () => {
+        setIsWon(true); setIsPlaying(false);
+        const existing = scores.find(s => s.userId === currentUser.id);
+        if(!existing || time < existing.timeMs) {
+          await db.collection('bma_daily_scores').doc(todayStr + '_' + currentUser.id).set({
+            userId: currentUser.id, displayName: currentUser.displayName,
+            date: todayStr, timeMs: time, gameIndex: gameIdx, timestamp: Date.now()
+          });
+        }
+      };
+
+      const handleShare = () => alert(`จำลองการแชร์ไปกระดานโพสต์!\nข้อความ: ทำเวลาไปได้ ${fmtTime(time)} นาที! ใครว่างมาลองทำลายสถิติดูนะ 😎`);
+
+      return (
+        <div className="min-h-screen pt-10 px-4">
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="card p-6 text-center space-y-4 relative overflow-hidden">
+              <h2 className="text-2xl font-bold text-amber-300">🎯 Daily Game วันนี้: {GAME_NAMES[gameIdx]}</h2>
+              <p className="text-sm text-slate-300">ทดสอบระบบเล่นเกมและบันทึกคะแนนลง Firebase</p>
+              
+              <div className="font-mono text-3xl font-bold">{fmtTime(time)}</div>
+
+              {!isPlaying && !isWon ? (
+                <button onClick={() => setIsPlaying(true)} className="btn-w text-lg px-8 py-3 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.3)]">เริ่มเล่นเกม</button>
+              ) : (
+                <div className="bg-[#050811] rounded-xl p-4 min-h-[300px] flex items-center justify-center border border-[#1E3A5F]">
+                  {gameIdx === 0 && <SudokuGame todayStr={todayStr} onWin={handleWin} />}
+                  {gameIdx === 1 && <MinesweeperGame todayStr={todayStr} onWin={handleWin} />}
+                  {gameIdx === 2 && <FlagGuesserGame todayStr={todayStr} onWin={handleWin} />}
+                </div>
+              )}
+
+              {isWon && (
+                <div className="space-y-3 pt-4 border-t border-[#1E3A5F]">
+                  <div className="text-xl font-bold text-emerald-400">🎉 ยินดีด้วย! คุณเคลียร์เกมสำเร็จ</div>
+                  <button onClick={handleShare} className="btn-b text-sm">📤 จำลองการแชร์สถิติ</button>
+                </div>
+              )}
+            </div>
+
+            <div className="card p-5">
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">🏆 Leaderboard ประจำวัน</h3>
+              <div className="space-y-2">
+                {scores.length === 0 ? <div className="text-center text-slate-400 text-sm py-4">ยังไม่มีใครเคลียร์เกมได้ในวันนี้</div> : 
+                 scores.map((s, i) => (
+                  <div key={s.userId} className="flex justify-between items-center p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <div className="flex items-center gap-3">
+                      <span className={`font-bold w-6 text-center ${i===0?'text-yellow-400':i===1?'text-slate-300':i===2?'text-amber-600':'text-slate-500'}`}>#{i+1}</span>
+                      <span className="font-bold text-sm">{s.displayName}</span>
+                    </div>
+                    <span className="font-mono text-sky-300 font-bold">{fmtTime(s.timeMs)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<DailyGame />);
+  </script>
+</body>
+</html>
