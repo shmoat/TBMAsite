@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>The Blue Moon Association</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z' fill='%230F2547' stroke='%23FFFFFF' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,7 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
-    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; overflow-x: hidden; }
+    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; overflow-x: hidden; touch-action: manipulation; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
     ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { background: #050811; } ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 99px; }
     @keyframes ocw { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
@@ -21,47 +21,75 @@
     .or1 { animation: ocw 38s linear infinite; } .or2 { animation: occw 55s linear infinite; } .or3 { animation: ocw 75s linear infinite; }
     .cr1 { animation: occw 38s linear infinite; } .cr2 { animation: ocw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
     .orbit-sys:hover div { animation-play-state: paused; }
+    
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem 0.85rem; color: #fff; outline: none; }
-    .inp:focus { border-color: #fff; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
-    .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; }
-    .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; }
-    .btn-d { background: #050811; color: #cbd5e1; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.4rem 0.75rem; }
+    .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; cursor: pointer; }
+    .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; cursor: pointer; }
+    .btn-d { background: #050811; color: #cbd5e1; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.4rem 0.75rem; cursor: pointer; }
+
+    /* Daily Game Custom CSS */
+    .notes-grid { display: flex; flex-wrap: wrap; width: 100%; height: 100%; padding: 1px; }
+    .note-item { width: 33.33%; height: 33.33%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #94A3B8; font-weight: 400; line-height: 1; pointer-events: none; }
+    .card-ui { border-radius: 0.35rem; display: flex; flex-direction: column; justify-content: space-between; padding: 0.15rem; background: #fff; border: 1px solid #cbd5e1; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); touch-action: none; }
+    .card-ui.face-down { background: repeating-linear-gradient(45deg, #1E3A5F, #1E3A5F 5px, #0F2547 5px, #0F2547 10px); border-color: #0F2547; }
+    .text-red { color: #EF4444; } .text-black { color: #050811; }
   </style>
 </head>
 <body class="bg-[#050811] text-white">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
-    const firebaseConfig = {
-      apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
-      authDomain: "tbmasite.firebaseapp.com",
-      projectId: "tbmasite",
-      storageBucket: "tbmasite.firebasestorage.app",
-      messagingSenderId: "616851307256",
-      appId: "1:616851307256:web:15b49dfec2de521af6990d",
-      measurementId: "G-JDW0E0S138"
-    };
+    const { useState, useEffect, useRef, useCallback } = React;
+    const firebaseConfig = { apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI", authDomain: "tbmasite.firebaseapp.com", projectId: "tbmasite", storageBucket: "tbmasite.firebasestorage.app", messagingSenderId: "616851307256", appId: "1:616851307256:web:15b49dfec2de521af6990d", measurementId: "G-JDW0E0S138" };
     const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
     const db = firebase.firestore(app);
     const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
     let openZoom = () => {};
 
+    // Base utilities
     const getMs = (d) => d?.serverCreatedAt?.toMillis ? d.serverCreatedAt.toMillis() : (d?.serverCreatedAt?.seconds ? d.serverCreatedAt.seconds * 1000 : (d?.timestamp || 0));
     const getTimeStr = (d) => d?.serverCreatedAt?.toDate ? d.serverCreatedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : (d?.time || '');
     const getTags = (u) => Array.isArray(u?.memberTags) && u.memberTags.length ? u.memberTags : [u?.memberTag || 'Others'];
     const safeUrl = (u) => (!u ? '#' : /^https?:\/\//i.test(u.trim()) ? u.trim() : 'https://' + u.trim());
+    const fmtTime = (s) => (!isFinite(s) || s === Infinity) ? "Bomb" : `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+    
+    function getGameDateStr() {
+      const now = new Date();
+      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const bkkDate = new Date(utcMs + (7 * 3600000));
+      if (bkkDate.getHours() < 6) bkkDate.setDate(bkkDate.getDate() - 1);
+      return `${bkkDate.getFullYear()}-${(bkkDate.getMonth()+1).toString().padStart(2,'0')}-${bkkDate.getDate().toString().padStart(2,'0')}`;
+    }
+
+    function useStickyState(defaultValue, key) {
+      const [value, setValue] = useState(() => {
+        try { const v = window.localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } 
+        catch (e) { return defaultValue; }
+      });
+      useEffect(() => { window.localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
+      return [value, setValue];
+    }
 
     const PRESET_TAGS = ['LCs & Pal', 'PCSHS', 'KPN', 'KMUTT', 'Instrumix', 'Others'];
     const SOCIALS = [{ id: 'Facebook', icon: '📘' }, { id: 'Instagram', icon: '📸' }, { id: 'YouTube', icon: '▶️' }, { id: 'TikTok', icon: '🎵' }, { id: 'External Link', icon: '🔗' }];
-    const OWNER_SEED = { id: 'M000', username: '', password: '', isActivated: false, role: 'admin', memberTag: 'LCs & Pal', memberTags: ['LCs & Pal'], displayName: 'Founder (M000)', bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, isOnline: false, joinedAt: '2026-10-08' };
+    const OWNER_SEED = { id: 'M000', username: '', password: '', isActivated: false, role: 'admin', memberTag: 'LCs & Pal', memberTags: ['LCs & Pal'], displayName: 'Founder (M000)', bio: 'ผู้ก่อตั้งและผู้ดูแลสูงสุดแห่ง The Blue Moon Association', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, isOnline: false, lastActive: 0, joinedAt: '2026-10-08' };
     const DEF_CH = [
       { id: 'global-lobby', name: 'blue-moon-lobby', icon: '🌐', desc: 'โถงหลักสำหรับสมาชิกทุกคนในสมาคม', createdBy: 'M000', isProtected: true, isSystemReadOnly: false, timestamp: 1000 },
       { id: 'global-announce', name: 'announcements', icon: '📢', desc: 'ห้องแจ้งเตือนอัตโนมัติเมื่อมีโพสต์ใหม่ในเว็บไซต์ (ไม่อนุญาตให้พิมพ์)', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: true, timestamp: 2000 }
     ];
+    const GAMES = [{ id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" }, { id: 'minesweeper', name: "Minesweeper", icon: "💣" }, { id: 'flag', name: "Flag Guesser", icon: "🏳️" }, { id: 'solitaire', name: "Solitaire", icon: "🃏" }, { id: 'wordle', name: "Wordle", icon: "🔤" }];
 
     const UpIcon = () => <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4m0 0L8 8m4-4v12"/></svg>;
     const Logo = ({ s = 38 }) => <svg width={s} height={s} viewBox="0 0 100 100" fill="none" className="shrink-0 drop-shadow-[0_0_8px_rgba(59,130,246,0.45)]"><path d="M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z" fill="#0F2547" stroke="#FFFFFF" strokeWidth="5.5" strokeLinejoin="round"/></svg>;
+
+    // PRNG
+    class PRNG {
+      constructor(seedStr) { let h = 2166136261 >>> 0; for(let i=0; i<seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); } this.a = h; }
+      next() { let t = this.a += 0x6D2B79F5; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0); }
+      nextFloat() { return this.next() / 4294967296; }
+      nextInt(min, max) { return min + Math.floor(this.nextFloat() * (max - min + 1)); }
+      shuffle(arr) { let res = [...arr]; for(let i=res.length-1; i>0; i--) { const j = this.nextInt(0, i); [res[i], res[j]] = [res[j], res[i]]; } return res; }
+    }
 
     const CHUNK_LEN = 700 * 1024;
     const compressImg = (file) => new Promise((res, rej) => {
@@ -79,7 +107,12 @@
     async function uploadChunked(file) {
       if (file.size > 10485760) throw new Error('ไฟล์ "' + file.name + '" เกิน 10MB กรุณาแนบเป็นลิงก์แทน');
       const type = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
-      const dataUrl = type === 'image' ? await compressImg(file) : await new Promise((res, rej) => { const r = new FileReader(); r.onloadend = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+      let dataUrl;
+      if (type === 'image' && file.type !== 'image/gif') {
+         dataUrl = await compressImg(file);
+      } else {
+         dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onloadend = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+      }
       const id = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
       const size = file.size > 1048576 ? (file.size / 1048576).toFixed(2) + ' MB' : (file.size / 1024).toFixed(1) + ' KB';
       if (dataUrl.length <= CHUNK_LEN) return { id, name: file.name, type, url: dataUrl, isChunked: false, size };
@@ -111,25 +144,35 @@
       if (dId) return <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md"><iframe src={'https://drive.google.com/file/d/' + dId + '/preview'} className="w-full h-60 border-0" allow="autoplay; fullscreen" allowFullScreen /><div className="px-3 py-1 bg-[#0B1325] flex justify-between text-[11px]"><span>▶️ Google Drive</span><a href={url} target="_blank" rel="noreferrer" className="text-sky-400">เปิดแท็บใหม่ ↗</a></div></div>;
       if (yId) return <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md"><iframe src={'https://www.youtube.com/embed/' + yId} className="w-full h-60 border-0" allowFullScreen /></div>;
       if (att.type === 'video') return <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black max-w-md"><video src={url} controls className="max-h-72 w-full" /></div>;
-      if (att.type === 'image') return <div onContextMenu={onContextMenu} onClick={() => openZoom(url)} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md cursor-zoom-in relative group"><img src={url} alt={att.name} className="max-h-80 w-auto mx-auto object-contain" /><span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] opacity-0 group-hover:opacity-100">🔍 คลิกเพื่อขยาย</span></div>;
+      if (att.type === 'image') return <div onContextMenu={onContextMenu} onClick={() => openZoom(url)} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md cursor-zoom-in relative group"><img src={url} alt={att.name} className="max-h-80 w-auto mx-auto object-contain" /><span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] opacity-0 group-hover:opacity-100">🔍 ขยาย</span></div>;
       return <a href={url} download={att.name} target="_blank" rel="noreferrer" onContextMenu={onContextMenu} className="flex items-center justify-between p-3 card hover:bg-[#0F2547] text-xs max-w-md"><span className="truncate font-semibold">📎 {att.name} ({att.size || 'File'})</span><span className="px-2 py-1 rounded bg-white text-[#050811] font-bold text-[10px] ml-2">ดาวน์โหลด</span></a>;
     }
 
+    const getStatusInfo = (u) => {
+      if(!u || !u.isOnline) return { c: 'bg-slate-500', t: 'Offline' };
+      const diff = Date.now() - (u.lastActive || 0);
+      if(diff < 300000) return { c: 'bg-emerald-400', t: 'Online' };
+      if(diff < 900000) return { c: 'bg-amber-400', t: 'AFK' };
+      return { c: 'bg-slate-500', t: 'Offline' };
+    };
+
     const Avatar = ({ user, size = 'md', showStatus = false }) => {
       const sc = { xs: 'w-6 h-6 text-[10px]', sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-xs', lg: 'w-14 h-14 text-sm', xl: 'w-20 h-20 text-lg' }[size] || 'w-10 h-10 text-xs';
+      const stat = getStatusInfo(user);
       return (
         <div className="relative inline-flex shrink-0">
           {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className={sc + ' rounded-full object-cover border-2 border-white/40 bg-[#0F2547]'} /> : <div className={sc + ' rounded-full bg-[#0F2547] border-2 border-white/30 flex items-center justify-center font-mono font-bold'}>{user?.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}</div>}
-          {showStatus && user && <span className={'absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#050811] ' + (user.isOnline ? 'bg-emerald-400' : 'bg-slate-500')} />}
+          {showStatus && user && <span title={stat.t} className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#050811] ${stat.c}`} />}
         </div>
       );
     };
+    
     const RoleBadge = ({ role }) => role === 'admin' ? <span className="px-1.5 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase">👑 Owner</span> : role === 'mod' ? <span className="px-1.5 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase">🛡️ Mod</span> : null;
     const TagBadges = ({ user }) => <div className="flex flex-wrap gap-1">{getTags(user).map((t, i) => <span key={i} className="px-2 py-0.5 rounded-full bg-[#0F2547] border border-white/20 text-blue-100 text-[10px] font-semibold">{t}</span>)}</div>;
     const Modal = ({ title, onClose, maxW = 'max-w-md', children }) => (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-        <div className={'w-full ' + maxW + ' card p-6 shadow-2xl my-8'}>
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]"><h3 className="text-base font-bold">{title}</h3><button onClick={onClose} className="text-slate-400 hover:text-white">✕</button></div>
+      <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div className={'w-full ' + maxW + ' card p-6 shadow-2xl my-8 animate-fade-in relative'}>
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]"><h3 className="text-base font-bold">{title}</h3>{onClose && <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>}</div>
           {children}
         </div>
       </div>
@@ -140,48 +183,629 @@
       const myTags = currentUser ? getTags(currentUser) : [];
       return (
         <p className="text-sm text-slate-100 mt-1 whitespace-pre-line leading-relaxed break-words">
-          {text.split(/(@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g).map((p, i) => {
-            if (!p.startsWith('@')) return <span key={i}>{p}</span>;
-            const lw = p.toLowerCase();
-            const hi = currentUser && (lw === '@everyone' || (lw === '@here' && currentUser.isOnline) || myTags.some((t) => p === '@[' + t + ']' || lw === '@' + t.toLowerCase()) || lw === '@' + String(currentUser.id).toLowerCase() || (currentUser.username && lw === '@' + currentUser.username.toLowerCase()));
-            return <span key={i} className={hi ? 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-amber-400 text-[#050811] font-mono text-xs font-bold' : 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#0F2547] border border-blue-400/50 text-blue-200 font-mono text-xs'}>{p}</span>;
+          {text.split(/(https?:\/\/[^\s]+|@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g).map((p, i) => {
+            if(p.startsWith('http')) return <a key={i} href={p} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline underline-offset-2 break-all">{p}</a>;
+            if (p.startsWith('@')) {
+                const lw = p.toLowerCase();
+                const hi = currentUser && (lw === '@everyone' || (lw === '@here' && currentUser.isOnline) || myTags.some((t) => p === '@[' + t + ']' || lw === '@' + t.toLowerCase()) || lw === '@' + String(currentUser.id).toLowerCase() || (currentUser.username && lw === '@' + currentUser.username.toLowerCase()));
+                return <span key={i} className={hi ? 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-amber-400 text-[#050811] font-mono text-xs font-bold' : 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#0F2547] border border-blue-400/50 text-blue-200 font-mono text-xs'}>{p}</span>;
+            }
+            return <span key={i}>{p}</span>;
           })}
           {isEdited && <span className="ml-2 text-[10px] italic text-slate-400">(แก้ไขแล้ว)</span>}
         </p>
       );
     }
 
-    function PantipThread({ c, all, lbl, postId, me, getAuthor, canManage, onDel, onLike, onReply, onCtx }) {
-      const ca = getAuthor(c.authorId), liked = me && (c.likes || []).includes(me.id);
-      const subs = all.filter((x) => (x.parentId || x.replyTo?.id) === c.id);
+    // Like Tooltip Wrapper
+    function LikeButton({ likes, currentUser, onLike, getAuthor }) {
+      const liked = currentUser && (likes || []).includes(currentUser.id);
+      const [showNames, setShowNames] = useState(false);
+      const pressTimer = useRef(null);
+      const showL = (e) => { if(likes?.length) setShowNames({ x: e.clientX, y: e.clientY }); };
+      const hideL = () => setShowNames(false);
+
       return (
-        <div className="space-y-2">
-          <div onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onCtx({ x: e.clientX, y: e.clientY, postId, comment: c, lbl }); }} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs hover:border-white/30">
-            <div className="flex justify-between mb-1 pb-1 border-b border-[#1E3A5F]/50 text-[10px]">
-              <span className="font-mono font-bold text-sky-300">{lbl}</span>
-              <div className="flex gap-2"><span className="text-slate-500">{c.createdAt}</span>{canManage(c.authorId) && <button onClick={() => onDel(postId, c.id)} className="text-slate-500 hover:text-red-400">ลบ</button>}</div>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <Avatar user={ca} size="xs" showStatus={true} />
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5"><span className="font-bold">{ca.displayName}</span><span className="font-mono text-[10px] text-slate-400">({ca.id})</span><TagBadges user={ca} /><RoleBadge role={ca.role} /></div>
-                <p className="text-slate-100 mt-1 whitespace-pre-line break-words">{c.text}</p>
-                <div className="flex gap-2 mt-1.5">
-                  <button onClick={() => onLike(postId, c.id)} className={liked ? 'px-2 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold' : 'px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]'}>♥ ถูกใจ {c.likes?.length ? '(' + c.likes.length + ')' : ''}</button>
-                  {me && <button onClick={() => onReply(postId, c, lbl)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px] text-sky-300 font-semibold">↩️ ตอบกลับ</button>}
-                </div>
-              </div>
-            </div>
-          </div>
-          {subs.length > 0 && (
-            <div className="pl-3.5 md:pl-5 ml-2 border-l-2 border-sky-500/40 space-y-2">
-              {subs.map((s, i) => <PantipThread key={s.id} c={s} all={all} lbl={lbl + '-' + (i + 1)} postId={postId} me={me} getAuthor={getAuthor} canManage={canManage} onDel={onDel} onLike={onLike} onReply={onReply} onCtx={onCtx} />)}
+        <div className="relative inline-block">
+          <button 
+            onClick={onLike}
+            onMouseEnter={showL} onMouseLeave={hideL}
+            onTouchStart={(e) => { pressTimer.current = setTimeout(() => { if(e.touches) showL({clientX: e.touches[0].clientX, clientY: e.touches[0].clientY}); }, 400); }}
+            onTouchEnd={() => { clearTimeout(pressTimer.current); hideL(); }}
+            className={liked ? 'px-2 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold' : 'px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]'}
+          >♥ ถูกใจ {likes?.length ? '(' + likes.length + ')' : ''}</button>
+          
+          {showNames && (
+            <div className="fixed z-50 bg-black/90 text-white text-[10px] px-2 py-1.5 rounded-lg border border-[#1E3A5F] pointer-events-none transform -translate-y-full -translate-x-1/2 mt-[-10px]" style={{ left: showNames.x, top: showNames.y, width: 'max-content', maxWidth: '200px' }}>
+              👍 {likes.map(id => getAuthor(id).displayName).join(', ')}
             </div>
           )}
         </div>
       );
     }
 
+    // ==========================================
+    // DAILY GAMES COMPONENTS
+    // ==========================================
+    function SudokuGame({ dateSeed, onEnd }) {
+      const [board, setBoard] = useStickyState(null, `bma_sudoku_${dateSeed}`);
+      const [selectedCell, setSelectedCell] = useState(null);
+      const [noteMode, setNoteMode] = useState(false);
+
+      useEffect(() => {
+        if (board) return; 
+        const rng = new PRNG(dateSeed + '_sudoku');
+        let base = [
+          [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
+          [2,3,4,5,6,7,8,9,1],[5,6,7,8,9,1,2,3,4],[8,9,1,2,3,4,5,6,7],
+          [3,4,5,6,7,8,9,1,2],[6,7,8,9,1,2,3,4,5],[9,1,2,3,4,5,6,7,8]
+        ].map(r => [...r]);
+
+        for(let block=0; block<3; block++) {
+          for(let i=0; i<3; i++) {
+            const r1 = block*3+i, r2 = block*3+rng.nextInt(0,2);
+            const temp = [...base[r1]]; base[r1] = [...base[r2]]; base[r2] = temp;
+          }
+        }
+        const mapVals = rng.shuffle([1,2,3,4,5,6,7,8,9]);
+        const fullGrid = base.map(row => row.map(val => mapVals[val-1]));
+        const puzzle = fullGrid.map(r => [...r]);
+        let cellsToRemove = rng.nextInt(38, 48);
+        while(cellsToRemove > 0) {
+          const r = rng.nextInt(0,8), c = rng.nextInt(0,8);
+          if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
+        }
+        setBoard(puzzle.map(r => r.map(val => ({ val, fixed: val !== '', notes: [] }))));
+      }, [dateSeed]);
+
+      const checkWin = (b) => {
+        for(let r=0; r<9; r++) {
+          const rSet = new Set(), cSet = new Set(), bSet = new Set();
+          for(let i=0; i<9; i++) {
+            if(!b[r][i].val) return false; rSet.add(b[r][i].val);
+            if(!b[i][r].val) return false; cSet.add(b[i][r].val);
+            const br = Math.floor(r/3)*3 + Math.floor(i/3);
+            const bc = (r%3)*3 + (i%3);
+            if(!b[br][bc].val) return false; bSet.add(b[br][bc].val);
+          }
+          if(rSet.size !== 9 || cSet.size !== 9 || bSet.size !== 9) return false;
+        }
+        onEnd('win');
+      };
+
+      const cleanNotes = (b, r, c, num) => {
+        for(let i=0; i<9; i++) {
+          b[r][i].notes = b[r][i].notes.filter(n => n !== num);
+          b[i][c].notes = b[i][c].notes.filter(n => n !== num);
+        }
+        const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+        for(let i=0; i<3; i++) for(let j=0; j<3; j++) b[br+i][bc+j].notes = b[br+i][bc+j].notes.filter(n => n !== num);
+      };
+
+      const handleNumpad = (num) => {
+        if(!selectedCell) return;
+        const [r, c] = selectedCell;
+        if(board[r][c].fixed) return;
+
+        const newB = board.map(row => row.map(cell => ({...cell, notes: [...cell.notes]})));
+        
+        if(num === 'DEL') {
+          newB[r][c].val = ''; newB[r][c].notes = [];
+        } else if(noteMode) {
+          const nSet = new Set(newB[r][c].notes);
+          if(nSet.has(num)) nSet.delete(num); else nSet.add(num);
+          newB[r][c].notes = Array.from(nSet).sort();
+          newB[r][c].val = '';
+        } else {
+          newB[r][c].val = num; newB[r][c].notes = [];
+          cleanNotes(newB, r, c, num);
+        }
+        setBoard(newB);
+        if(num !== 'DEL' && !noteMode) checkWin(newB);
+      };
+
+      if(!board) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+      const selVal = selectedCell ? board[selectedCell[0]][selectedCell[1]].val : null;
+
+      return (
+        <div className="flex flex-col items-center space-y-4 w-full h-full justify-center">
+          <div className="bg-[#1E3A5F] p-[2px] rounded border-2 border-[#3B82F6] shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+            {board.map((row, r) => (
+              <div key={r} className="flex">
+                {row.map((cell, c) => {
+                  const isSel = selectedCell && selectedCell[0] === r && selectedCell[1] === c;
+                  const isHi = !isSel && selVal && cell.val === selVal;
+                  const brR = c%3===2 && c!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
+                  const brB = r%3===2 && r!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
+                  let bg = cell.fixed ? '#0B1325' : '#050811';
+                  let txt = cell.fixed ? '#60A5FA' : '#ffffff';
+                  if(isSel) bg = 'rgba(59,130,246,0.6)'; else if(isHi) bg = 'rgba(59,130,246,0.2)';
+                  
+                  return (
+                    <div key={c} onClick={() => setSelectedCell([r, c])} style={{ width:'34px', height:'34px', backgroundColor:bg, color:txt, borderRight:brR, borderBottom:brB }} className="flex items-center justify-center text-lg font-bold cursor-pointer sm:w-10 sm:h-10">
+                      {cell.val ? cell.val : <div className="notes-grid">{[1,2,3,4,5,6,7,8,9].map(n => <div key={n} className="note-item">{cell.notes.includes(n)?n:''}</div>)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="w-full max-w-[340px] space-y-2 mt-2">
+            <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+              <button onClick={() => setNoteMode(false)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
+              <button onClick={() => setNoteMode(true)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
+            </div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-10 sm:h-12 text-lg font-bold">{n}</button>)}
+              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 text-red-300 border border-red-900/50 rounded-lg h-10 sm:h-12 text-xs font-bold">DEL</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function MinesweeperGame({ dateSeed, onEnd }) {
+      const COLS = 9, ROWS = 9;
+      const [numMines, setNumMines] = useStickyState(10, `bma_ms_mines_${dateSeed}`);
+      const [grid, setGrid] = useStickyState(null, `bma_ms_grid_${dateSeed}`);
+      const [revealed, setRevealed] = useStickyState(null, `bma_ms_rev_${dateSeed}`);
+      const [flagged, setFlagged] = useStickyState(null, `bma_ms_flag_${dateSeed}`);
+      const [isFirst, setIsFirst] = useStickyState(true, `bma_ms_first_${dateSeed}`);
+      const [mode, setMode] = useState('dig'); 
+
+      useEffect(() => {
+        if (grid) return;
+        const rng = new PRNG(dateSeed + '_msConfig');
+        const m = rng.nextInt(10, 20);
+        setNumMines(m);
+        setGrid(Array(ROWS).fill().map(()=>Array(COLS).fill(0)));
+        setRevealed(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
+        setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
+        setIsFirst(true);
+      }, [dateSeed]);
+
+      const handleAction = (r, c, act) => {
+        if(revealed[r][c]) return;
+        if(act === 'flag') {
+          const newF = [...flagged.map(row=>[...row])];
+          newF[r][c] = !newF[r][c];
+          setFlagged(newF); return;
+        }
+        if(flagged[r][c]) return; 
+
+        let g = grid;
+        if(isFirst) {
+          const rng = new PRNG(dateSeed + '_ms_' + Date.now()); 
+          g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+          let placed = 0;
+          while(placed < numMines) {
+            let rr = rng.nextInt(0,ROWS-1), cc = rng.nextInt(0,COLS-1);
+            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; 
+            if(g[rr][cc] !== 'M') { g[rr][cc] = 'M'; placed++; }
+          }
+          for(let i=0; i<ROWS; i++) {
+            for(let j=0; j<COLS; j++) {
+              if(g[i][j] === 'M') continue;
+              let cnt = 0;
+              for(let di=-1; di<=1; di++) for(let dj=-1; dj<=1; dj++) {
+                if(i+di>=0 && i+di<ROWS && j+dj>=0 && j+dj<COLS && g[i+di][j+dj] === 'M') cnt++;
+              }
+              g[i][j] = cnt;
+            }
+          }
+          setGrid(g); setIsFirst(false);
+        }
+
+        if(g[r][c] === 'M') {
+          const newR = [...revealed.map(row=>[...row])];
+          for(let i=0;i<ROWS;i++) for(let j=0;j<COLS;j++) if(g[i][j]==='M') newR[i][j] = true;
+          setRevealed(newR);
+          setTimeout(() => onEnd('bomb'), 800);
+          return;
+        }
+
+        const newR = [...revealed.map(row=>[...row])];
+        const flood = (rr, cc) => {
+          if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
+          newR[rr][cc] = true;
+          if(g[rr][cc] === 0) {
+            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) flood(rr+dr, cc+dc);
+          }
+        };
+        flood(r, c); setRevealed(newR);
+        
+        let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
+        if(revCount === ROWS*COLS - numMines) onEnd('win');
+      };
+
+      if(!grid) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+      
+      const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-amber-400','text-cyan-400','text-pink-400','text-gray-400'];
+      const fCount = flagged ? flagged.flat().filter(Boolean).length : 0;
+      const minesLeft = numMines - fCount;
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none">
+          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">💣 ระเบิด: {minesLeft}</div>
+          <div className="flex gap-2 w-full max-w-[260px]">
+            <button onClick={() => setMode('dig')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'dig' ? 'bg-sky-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>⛏️ ขุด</button>
+            <button onClick={() => setMode('flag')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>🚩 ปักธง</button>
+          </div>
+          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10" onContextMenu={(e)=>e.preventDefault()}>
+            {grid.map((row, r) => (
+              <div key={r} className="flex">
+                {row.map((val, c) => {
+                  const isRev = revealed[r][c], isFlg = flagged[r][c];
+                  let bg = isRev ? (val==='M' ? '#7F1D1D' : '#050811') : '#0F2547';
+                  let content = isFlg ? '🚩' : (isRev ? (val==='M' ? '💥' : (val===0?'':val)) : '');
+                  return (
+                    <div key={c} onClick={() => handleAction(r, c, mode)} onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }} className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer ${isRev && val !== 'M' ? colors[val] : ''}`} style={{ backgroundColor: bg }}>
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: กดปุ่มเลือกโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
+        </div>
+      );
+    }
+
+    function FlagGuesserGame({ dateSeed, onEnd }) {
+      const ALL_FLAGS = [
+        {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'USA'},
+        {c:'gb',n:'UK'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
+        {c:'it',n:'Italy'},{c:'br',n:'Brazil'},{c:'ar',n:'Argentina'},{c:'au',n:'Australia'},
+        {c:'ca',n:'Canada'},{c:'vn',n:'Vietnam'},{c:'sg',n:'Singapore'},{c:'ru',n:'Russia'},
+        {c:'in',n:'India'},{c:'za',n:'South Africa'},{c:'mx',n:'Mexico'},{c:'es',n:'Spain'},
+        {c:'fi',n:'Finland'},{c:'se',n:'Sweden'},{c:'no',n:'Norway'},{c:'ch',n:'Switzerland'},
+        {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
+        {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
+        {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'},
+        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'}
+      ];
+      
+      const [rounds, setRounds] = useStickyState([], `bma_fg_rds_${dateSeed}`);
+      const [currentRound, setCurrentRound] = useStickyState(0, `bma_fg_curr_${dateSeed}`);
+      const [wrongGuess, setWrongGuess] = useStickyState(null, `bma_fg_wrong_${dateSeed}`);
+
+      useEffect(() => {
+        if (rounds.length > 0) return;
+        const rng = new PRNG(dateSeed + '_flag5');
+        const shuffled = rng.shuffle([...ALL_FLAGS]);
+        const rds = [];
+        for(let i=0; i<3; i++) {
+          const target = shuffled[i];
+          let others = rng.shuffle(ALL_FLAGS.filter(f => f.c !== target.c));
+          let options = rng.shuffle([target, others[0], others[1], others[2]]);
+          rds.push({ target, options });
+        }
+        setRounds(rds);
+      }, [dateSeed]);
+
+      if(!rounds.length) return null;
+      const rd = rounds[currentRound];
+
+      const handleGuess = (code) => {
+        if(wrongGuess) return;
+        if(code === rd.target.c) {
+          if(currentRound === 2) onEnd('win', { score: 3 }); 
+          else setCurrentRound(c => c+1);
+        } else {
+          setWrongGuess(code);
+          setTimeout(() => onEnd('lost', { score: currentRound }), 2500);
+        }
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
+          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">ด่านที่ {currentRound + 1} / 3</div>
+          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-32 sm:h-44 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
+          <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-4">
+            {rd.options.map(opt => {
+              let bg = "bg-white text-[#050811]";
+              if (wrongGuess) {
+                if (opt.c === rd.target.c) bg = "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]";
+                else if (opt.c === wrongGuess) bg = "bg-red-500 text-white";
+                else bg = "bg-white/10 text-white/50";
+              }
+              return <button key={opt.c} onClick={() => handleGuess(opt.c)} className={`font-bold rounded-xl text-sm py-3 transition-all shadow-lg ${bg}`}>{opt.n}</button>;
+            })}
+          </div>
+          {wrongGuess && <div className="text-red-400 font-bold animate-pulse">❌ ผิดครับ! เกมจบลงทันที</div>}
+        </div>
+      );
+    }
+
+    function SolitaireGame({ dateSeed, onEnd }) {
+      const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
+      const [drag, setDrag] = useState(null);
+
+      useEffect(() => {
+        if(st) return;
+        const rng = new PRNG(dateSeed + '_solitaire_v3');
+        let deck = [];
+        const suits = ['♠','♥','♣','♦']; const colors = ['B','R','B','R'];
+        const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+        for(let s=0; s<4; s++) for(let r=0; r<13; r++) deck.push({ s: suits[s], r: r+1, rs: ranks[r], c: colors[s], id: `${s}-${r}`, up: false });
+        deck = rng.shuffle(deck);
+        
+        let tab = [[],[],[],[],[],[],[]];
+        for(let i=0; i<7; i++) {
+          for(let j=i; j<7; j++) {
+            let card = deck.pop(); if(i===j) card.up = true;
+            tab[j].push(card);
+          }
+        }
+        setSt({ stock: deck, waste: [], fnd: [[],[],[],[]], tab });
+      }, [dateSeed]);
+
+      const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('win'); };
+
+      const handleStock = () => {
+        let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
+        if(ns.stock.length) { let c = ns.stock.pop(); c.up = true; ns.waste.push(c); } 
+        else { ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = []; }
+        setSt(ns);
+      };
+
+      const tryMove = (ns, stack, srcArea, srcCol, tgtArea, tgtCol) => {
+        let c = stack[0];
+        if (tgtArea === 'fnd' && stack.length === 1) {
+            let f = ns.fnd[tgtCol];
+            if ((f.length === 0 && c.r === 1 && tgtCol === ['♠','♥','♣','♦'].indexOf(c.s)) || 
+                (f.length > 0 && f[f.length-1].s === c.s && f[f.length-1].r === c.r - 1)) {
+                f.push(c); return true;
+            }
+        } else if (tgtArea === 'tab') {
+            let t = ns.tab[tgtCol];
+            if (t.length === 0) { if (c.r === 13) { t.push(...stack); return true; } } 
+            else {
+                let top = t[t.length-1];
+                if (top.c !== c.c && top.r === c.r + 1) { t.push(...stack); return true; }
+            }
+        }
+        return false;
+      };
+
+      const handleAutoMove = (area, colIdx, cardIdx) => {
+        let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
+        let stack = [];
+        if(area === 'waste') { if(!ns.waste.length) return; stack = [ns.waste.pop()]; }
+        else if(area === 'tab') { if(cardIdx < 0 || !ns.tab[colIdx][cardIdx].up) return; stack = ns.tab[colIdx].splice(cardIdx); } 
+        else return;
+
+        let moved = false;
+        if(stack.length === 1) {
+          let fIdx = ['♠','♥','♣','♦'].indexOf(stack[0].s);
+          moved = tryMove(ns, stack, area, colIdx, 'fnd', fIdx);
+        }
+        if(!moved) {
+          for(let i=0; i<7; i++) {
+            if(area === 'tab' && i === colIdx) continue;
+            moved = tryMove(ns, stack, area, colIdx, 'tab', i);
+            if(moved) break;
+          }
+        }
+        
+        if(moved) {
+          if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
+          setSt(ns); checkWin(ns);
+        } else {
+          if(area === 'waste') setSt({...st}); else setSt({...st}); 
+        }
+      };
+
+      useEffect(() => {
+        const handleMove = e => { 
+            if(drag) {
+                let clientX = e.clientX; let clientY = e.clientY;
+                if(e.touches) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+                setDrag(p => ({...p, dx: clientX - p.startX, dy: clientY - p.startY})); 
+            }
+        };
+        const handleUp = e => {
+           if(drag) {
+              let clientX = e.clientX; let clientY = e.clientY;
+              if(e.changedTouches) { clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY; }
+              
+              let dropTarget = null;
+              try { dropTarget = document.elementFromPoint(clientX, clientY)?.closest('[data-drop]'); } catch(e){}
+              const isTap = Math.abs(clientX - drag.startX) < 10 && Math.abs(clientY - drag.startY) < 10;
+              
+              if (isTap) {
+                 handleAutoMove(drag.area, drag.colIdx, drag.cardIdx);
+              } else if (dropTarget) {
+                 const tArea = dropTarget.getAttribute('data-drop');
+                 const tIdx = parseInt(dropTarget.getAttribute('data-idx') || '0', 10);
+                 
+                 let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
+                 let stack = drag.area === 'waste' ? [ns.waste.pop()] : ns.tab[drag.colIdx].splice(drag.cardIdx);
+                 
+                 if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
+                    if(drag.area === 'tab' && ns.tab[drag.colIdx].length) ns.tab[drag.colIdx][ns.tab[drag.colIdx].length-1].up = true;
+                    setSt(ns); checkWin(ns);
+                 } else { setSt({...st}); } 
+              }
+              setDrag(null);
+           }
+        };
+        if(drag) { 
+          window.addEventListener('pointermove', handleMove); window.addEventListener('pointerup', handleUp); 
+          window.addEventListener('touchmove', handleMove, {passive:false}); window.addEventListener('touchend', handleUp); 
+        }
+        return () => { 
+          window.removeEventListener('pointermove', handleMove); window.removeEventListener('pointerup', handleUp); 
+          window.removeEventListener('touchmove', handleMove); window.removeEventListener('touchend', handleUp); 
+        }
+      }, [drag, st]);
+
+      if(!st) return <div className="py-10 animate-pulse text-sky-400 font-mono">Shuffling...</div>;
+
+      const renderCard = (c, area, col, idx) => {
+        if(!c) return <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-[#050811] opacity-50 shrink-0" />;
+        if(!c.up) return <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0" />;
+        
+        let isDragging = drag && drag.area === area && drag.colIdx === col && idx >= drag.cardIdx;
+        
+        return (
+          <div 
+            onPointerDown={(e) => {
+              if (e.button && e.button !== 0) return;
+              e.stopPropagation(); e.preventDefault();
+              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              const rect = e.currentTarget.getBoundingClientRect();
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              const rect = e.currentTarget.getBoundingClientRect();
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.touches[0].clientX, startY: e.touches[0].clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
+            }}
+            className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'} ${isDragging ? 'opacity-0' : 'opacity-100'}`}
+          >
+            <div className="text-[10px] sm:text-xs font-bold leading-none">{c.rs}</div>
+            <div className="text-sm sm:text-base text-center leading-none flex-1 flex items-center justify-center">{c.s}</div>
+          </div>
+        );
+      };
+
+      return (
+        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center relative touch-none">
+          {drag && (
+            <div className="fixed inset-0 z-50 pointer-events-none">
+               <div style={{ position: 'fixed', left: drag.baseX + drag.dx, top: drag.baseY + drag.dy }}>
+                  {drag.cards.map((c, i) => (
+                    <div key={c.id} style={{ marginTop: i > 0 ? '-2.5rem' : '0', zIndex: 100+i }} className="relative">
+                      {renderCard(c, null, null, null)}
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
+          <div className="flex justify-between mb-6">
+            <div className="flex gap-2">
+              <div onClick={handleStock} className="cursor-pointer">{st.stock.length > 0 ? <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0 flex items-center justify-center text-[10px] text-white/50">{st.stock.length}</div> : <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-black flex items-center justify-center text-[10px] text-slate-500">↺</div>}</div>
+              <div data-drop="waste" data-idx="0">{renderCard(st.waste[st.waste.length-1], 'waste', 0, st.waste.length-1)}</div>
+            </div>
+            <div className="flex gap-1.5">
+              {st.fnd.map((f, i) => <div key={i} data-drop="fnd" data-idx={i}>{renderCard(f[f.length-1], 'fnd', i, f.length-1)}</div>)}
+            </div>
+          </div>
+          
+          <div className="flex justify-between flex-1 relative min-h-[220px]">
+            {st.tab.map((col, i) => (
+              <div key={i} data-drop="tab" data-idx={i} className="flex flex-col w-10 sm:w-12 min-h-[4rem]">
+                {col.length === 0 ? renderCard(null) : col.map((c, j) => (
+                  <div key={c.id} style={{ marginTop: j > 0 ? '-2.5rem' : '0', zIndex: j }} className="relative">
+                    {renderCard(c, 'tab', i, j)}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-400 text-center mt-6">💡 ลากไพ่ไปวาง หรือ แตะที่ไพ่เพื่อย้ายอัตโนมัติ</div>
+        </div>
+      );
+    }
+
+    function WordleGame({ dateSeed, onEnd }) {
+      const WORDS = ["APPLE","BRAIN","CRANE","DREAM","EAGLE","FLAME","GHOST","HEART","IMAGE","JUICE","KNIFE","LEMON","MOUSE","NIGHT","OCEAN","PLANT","QUEEN","RIVER","SNAKE","TRAIN","UNION","VOICE","WATER","YOUTH","ZEBRA","ALIEN","BREAD","CHAIR","DANCE","EARTH","FRUIT","GRAPE","HOUSE","JUMBO","KINGS","LIGHT","MONEY","NURSE","ONION","PAPER","QUIET","RIGHT","SUGAR","TABLE","UNCLE","VIDEO","WATCH","YACHT","STORM","WORLD"];
+      const [target, setTarget] = useState("");
+      const [guesses, setGuesses] = useStickyState([], `bma_wdl_g_${dateSeed}`);
+      const [curr, setCurr] = useStickyState("", `bma_wdl_c_${dateSeed}`);
+
+      useEffect(() => {
+        const rng = new PRNG(dateSeed + '_wordle2');
+        setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
+      }, [dateSeed]);
+
+      const onKey = (k) => {
+        if(k === 'ENTER') {
+          if(curr.length !== 5) return;
+          const newG = [...guesses, curr];
+          setGuesses(newG);
+          setCurr("");
+          if(curr === target) onEnd('win', { score: newG.length });
+          else if(newG.length >= 6) onEnd('lost', { score: 6 });
+        } else if(k === 'DEL') {
+          setCurr(c => c.slice(0, -1));
+        } else if(curr.length < 5) {
+          setCurr(c => c + k);
+        }
+      };
+
+      if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+
+      const getStatus = (char, i, guessStr) => {
+        if(target[i] === char) return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+        if(target.includes(char)) return 'bg-amber-500 text-white border-amber-500';
+        return 'bg-slate-700 text-slate-300 border-slate-700 opacity-60';
+      };
+
+      const rows = [];
+      for(let i=0; i<6; i++) {
+        if(i < guesses.length) {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {guesses[i].split('').map((char, j) => (
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${getStatus(char, j, guesses[i])}`}>{char}</div>
+              ))}
+            </div>
+          );
+        } else if(i === guesses.length) {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {[0,1,2,3,4].map(j => (
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${curr[j] ? 'border-sky-400' : 'border-[#1E3A5F]'} bg-[#050811]`}>{curr[j] || ''}</div>
+              ))}
+            </div>
+          );
+        } else {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {[0,1,2,3,4].map(j => <div key={j} className="w-10 h-10 sm:w-12 sm:h-12 rounded border-2 border-[#1E3A5F]/40 bg-[#050811]/50"></div>)}
+            </div>
+          );
+        }
+      }
+
+      const keyColor = (char) => {
+        let stat = 'bg-[#0F2547] text-white border border-[#1E3A5F]';
+        for(let g of guesses) {
+          for(let i=0; i<5; i++) {
+            if(g[i] === char) {
+              if(target[i] === char) return 'bg-emerald-500 text-white border border-emerald-400';
+              if(target.includes(char)) stat = 'bg-amber-500 text-white border border-amber-400';
+              else if(stat !== 'bg-amber-500 text-white border border-amber-400') stat = 'bg-slate-800 text-slate-500 border border-slate-700';
+            }
+          }
+        }
+        return stat;
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
+          <div className="space-y-1.5">{rows}</div>
+          <div className="w-full max-w-[360px] space-y-1.5 mt-4">
+            {[['Q','W','E','R','T','Y','U','I','O','P'],['A','S','D','F','G','H','J','K','L'],['ENTER','Z','X','C','V','B','N','M','DEL']].map((row, i) => (
+              <div key={i} className="flex justify-center gap-1">
+                {row.map(k => (
+                  <button key={k} onClick={()=>onKey(k)} className={`h-11 sm:h-12 rounded font-bold text-xs flex items-center justify-center transition-colors active:scale-95 ${k.length>1?'px-2':'flex-1'} ${keyColor(k)}`}>{k}</button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // MAIN APP
+    // ==========================================
     function App() {
       const [users, setUsers] = useState([OWNER_SEED]);
       const [posts, setPosts] = useState([]);
@@ -191,9 +815,7 @@
       const [typingStatuses, setTypingStatuses] = useState([]);
       const [notifications, setNotifications] = useState([]);
       const [currentUser, setCurrentUser] = useState(null);
-      const [zoomImg, setZoomImg] = useState(null);
-      openZoom = setZoomImg;
-
+      
       const [currentView, setCurrentView] = useState(() => sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home');
       const [activeRoom, setActiveRoom] = useState(() => { try { return JSON.parse(sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room')) || { type: 'channel', id: 'global-lobby' }; } catch { return { type: 'channel', id: 'global-lobby' }; } });
       useEffect(() => { sessionStorage.setItem('tbma_last_view', currentView); localStorage.setItem('tbma_last_view', currentView); }, [currentView]);
@@ -239,6 +861,16 @@
       const [pushPerm, setPushPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'default');
       const prevNLen = useRef(0); const chatBoxRef = useRef(null);
 
+      // DAILY GAME STATE
+      const todayStr = getGameDateStr();
+      const [activeGameTab, setActiveGameTab] = useState(0); 
+      const [gameAppSt, setGameAppSt] = useState(() => { try { return JSON.parse(localStorage.getItem('bma_gameSt_' + todayStr)) || {}; } catch { return {}; } });
+      useEffect(() => { localStorage.setItem('bma_gameSt_' + todayStr, JSON.stringify(gameAppSt)); }, [gameAppSt, todayStr]);
+      const currGameSt = gameAppSt[activeGameTab] || { status: 'pending', time: 0, isPlaying: false, isPaused: false, score: 0, showModal: false };
+      const [gameScores, setGameScores] = useState([]);
+      const [lbTab, setLbTab] = useState('daily');
+      const [monthlyScores, setMonthlyScores] = useState([]);
+
       useEffect(() => { const fn = () => { setCtxMenu(null); setCommMenu(null); }; window.addEventListener('click', fn); return () => window.removeEventListener('click', fn); }, []);
 
       useEffect(() => {
@@ -271,9 +903,24 @@
         if (!currentUser && users.length) {
           const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
           const f = id && users.find((u) => u.id === id && u.isActivated);
-          if (f) { setCurrentUser(f); if (!f.isOnline) db.collection('bma_users').doc(f.id).update({ isOnline: true }).catch(() => {}); }
+          if (f) { setCurrentUser(f); if (!f.isOnline) db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {}); }
         } else if (currentUser) { const me = users.find((u) => u.id === currentUser.id); if (me) setCurrentUser(me); }
       }, [users]);
+
+      const pingRef = useRef(0);
+      const updateActivity = useCallback(() => {
+         if(!currentUser) return;
+         const now = Date.now();
+         if(now - pingRef.current > 60000) {
+            pingRef.current = now;
+            db.collection('bma_users').doc(currentUser.id).update({ lastActive: now, isOnline: true }).catch(()=>{});
+         }
+      }, [currentUser]);
+
+      useEffect(() => {
+         window.addEventListener('pointerdown', updateActivity); window.addEventListener('keydown', updateActivity);
+         return () => { window.removeEventListener('pointerdown', updateActivity); window.removeEventListener('keydown', updateActivity); };
+      }, [updateActivity]);
 
       const dmKey = (a, b) => 'dm_' + [a, b].sort().join('_');
       const roomKey = currentUser && activeRoom.type === 'dm' ? dmKey(currentUser.id, activeRoom.id) : activeRoom.id;
@@ -349,8 +996,8 @@
         e.preventDefault(); setAuthErr('');
         const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
         if (!f) return setAuthErr('Username หรือ Password ไม่ถูกต้อง');
-        setCurrentUser({ ...f, isOnline: true }); saveSess(f);
-        await db.collection('bma_users').doc(f.id).update({ isOnline: true }).catch(() => {});
+        setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() }); saveSess(f);
+        await db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
         setLUser(''); setLPass(''); setCurrentView('feed');
       };
 
@@ -361,7 +1008,7 @@
         if (!t) return setAuthErr('ไม่พบรหัส "' + id + '" ในระบบ');
         if (t.isActivated) return setAuthErr('รหัสนี้ถูกเปิดใช้งานไปแล้ว');
         if (users.some((u) => u.id !== t.id && u.username?.toLowerCase() === uName.toLowerCase())) return setAuthErr('Username นี้มีผู้ใช้แล้ว');
-        const up = { ...t, username: uName, password: pass, displayName: dName, isActivated: true, isOnline: true, socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, joinedAt: new Date().toISOString().split('T')[0] };
+        const up = { ...t, username: uName, password: pass, displayName: dName, isActivated: true, isOnline: true, lastActive: Date.now(), socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, joinedAt: new Date().toISOString().split('T')[0] };
         await db.collection('bma_users').doc(t.id).set(up);
         setCurrentUser(up); saveSess(up); setActId(''); setActU(''); setActP(''); setActN(''); setCurrentView('feed');
       };
@@ -457,9 +1104,111 @@
         return [{ r: 135, items: r1, rc: 'or1', cc: 'cr1' }, { r: 210, items: r2, rc: 'or2', cc: 'cr2' }, { r: 285, items: r3, rc: 'or3', cc: 'cr3' }];
       };
 
+      const sortScores = (list, gIdx) => {
+        return list.sort((a,b) => {
+          if(gIdx === 2) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
+          if(gIdx === 4) return (a.score||99) - (b.score||99) || a.timeMs - b.timeMs;
+          return a.timeMs - b.timeMs;
+        });
+      };
+
+      // Game Timers & State Global Tracker
+      useEffect(() => {
+        let intv = setInterval(() => {
+          setGameAppSt(prev => {
+            const c = prev[activeGameTab] || {};
+            if(c.isPlaying && c.status === 'pending' && !c.isPaused) {
+              return { ...prev, [activeGameTab]: { ...c, time: (c.time||0) + 1 } };
+            }
+            return prev;
+          });
+        }, 1000);
+        return () => clearInterval(intv);
+      }, [activeGameTab]);
+
+      useEffect(() => {
+        if(!db) return;
+        return db.collection('bma_daily_scores')
+          .where('date', '==', todayStr)
+          .where('gameIndex', '==', activeGameTab)
+          .onSnapshot(s => setGameScores(sortScores(s.docs.map(d=>d.data()), activeGameTab)));
+      }, [todayStr, activeGameTab]);
+
+      useEffect(() => {
+        if(!db || lbTab !== 'monthly') return;
+        const prefix = todayStr.substring(0, 7);
+        db.collection('bma_daily_scores').where('gameIndex', '==', activeGameTab).get().then(s => {
+          const docs = s.docs.map(d=>d.data()).filter(d => d.date.startsWith(prefix) && d.timeMs !== Infinity);
+          let best = {};
+          docs.forEach(sc => {
+            if(!best[sc.userId]) best[sc.userId] = sc;
+            else {
+              let isB = false;
+              if(activeGameTab===2) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===4) isB = sc.score < best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
+              else isB = sc.timeMs < best[sc.userId].timeMs;
+              if(isB) best[sc.userId] = sc;
+            }
+          });
+          setMonthlyScores(sortScores(Object.values(best), activeGameTab));
+        });
+      }, [lbTab, activeGameTab, todayStr]);
+
+      const handleGameWinLose = async (result, payload = {}) => {
+        const st = result === 'bomb' ? 'lost_bomb' : result;
+        const sVal = payload.score || 0;
+        let fTime;
+        
+        setGameAppSt(prev => {
+          const c = prev[activeGameTab] || {};
+          fTime = result === 'bomb' ? Infinity : (c.time || 0);
+          
+          if(currentUser) {
+            const ext = gameScores.find(x => x.userId === currentUser.id);
+            let up = false;
+            if(!ext) up = true;
+            else if(activeGameTab===2 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
+            else if(activeGameTab===4 && (sVal < (ext.score||99) || (sVal === (ext.score||99) && fTime < ext.timeMs))) up = true;
+            else if(activeGameTab!==2 && activeGameTab!==4 && fTime < ext.timeMs) up = true;
+
+            if(up) {
+              db.collection('bma_daily_scores').doc(`${todayStr}_${activeGameTab}_${currentUser.id}`).set({
+                userId: currentUser.id, displayName: currentUser.displayName, date: todayStr,
+                timeMs: fTime, status: st, gameIndex: activeGameTab, score: sVal, timestamp: Date.now()
+              });
+            }
+          }
+          return { ...prev, [activeGameTab]: { ...c, isPlaying: false, status: st, score: sVal, time: fTime, showModal: true } };
+        });
+      };
+
+      const shareGameResult = async () => {
+        if(!currentUser) return;
+        const t = currGameSt.time;
+        let msg = '';
+        if (currGameSt.status === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
+        else if (currGameSt.status === 'lost' && activeGameTab === 2) msg = `ทายธงพลาด! ถูกไปแค่ ${currGameSt.score}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} 🏳️`;
+        else if (currGameSt.status === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
+        else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
+        else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
+        else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+
+        const postId = 'post-' + Date.now();
+        await db.collection('bma_posts').doc(postId).set({
+          id: postId, authorId: currentUser.id, title: `แชร์สถิติ Daily Game: ${GAMES[activeGameTab].name}`, content: msg,
+          dailyGameShare: { gameIndex: activeGameTab, timeMs: t, score: currGameSt.score, dateStr: todayStr },
+          isGuestAllowed: true, category: 'General', attachments: [], mutedBy: [], 
+          createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
+          timestamp: Date.now(), serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: []
+        });
+        alert('แชร์ไปที่กระดานโพสต์เรียบร้อย!');
+        setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab]||{}), showModal: false, status: 'viewing_board' } }));
+        setCurrentView('feed');
+      };
+
       return (
-        <div className={'bg-[#050811] text-white flex flex-col ' + (currentView === 'chat' ? 'h-screen overflow-hidden' : 'min-h-screen')}>
-          {zoomImg && <div onClick={() => setZoomImg(null)} className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"><img src={zoomImg} alt="" className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl" /><button className="fixed top-5 right-5 w-10 h-10 rounded-full card font-bold">✕</button></div>}
+        <div className={'bg-[#050811] text-white flex flex-col ' + (currentView === 'chat' || currentView === 'daily_game' ? 'h-screen overflow-hidden' : 'min-h-screen')}>
+          {zoomImg && <div onClick={() => setZoomImg(null)} className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"><img src={zoomImg} alt="" className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl" /><button className="fixed top-5 right-5 w-10 h-10 rounded-full card font-bold">✕</button></div>}
 
           <div className="fixed top-16 right-4 z-40 space-y-2 w-80 pointer-events-none">
             {toasts.map((t) => <div key={t.id} onClick={() => { setNotifOpen(false); if (t.targetPostId) jumpToPost(t.targetPostId); else if (t.targetRoomType) { setActiveRoom({ type: t.targetRoomType, id: t.targetRoomId }); setCurrentView('chat'); } setToasts((p) => p.filter((x) => x.id !== t.id)); }} className="pointer-events-auto cursor-pointer bg-[#0F2547] border-2 border-white/80 rounded-2xl p-3 shadow-2xl text-xs"><div className="flex justify-between font-bold text-amber-300"><span>{t.title}</span><span>{getTimeStr(t)}</span></div><p className="line-clamp-2 mt-0.5">{t.body}</p></div>)}
@@ -469,7 +1218,7 @@
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-2.5 text-left"><Logo s={36} /><div><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
               <nav className="hidden md:flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1">
-                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก (' + activeMembers.length + ')']].map(([v, l]) => <button key={v} onClick={() => v === 'chat' && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white'}>{l}</button>)}
+                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game']].map(([v, l]) => <button key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white'}>{l}</button>)}
                 {currentUser?.role === 'admin' && <button onClick={() => setCurrentView('admin')} className={currentView === 'admin' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811]' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300'}>👑 Owner</button>}
               </nav>
               <div className="flex items-center gap-2">
@@ -500,7 +1249,7 @@
               </div>
               <div className="flex gap-3 w-full max-w-md justify-center z-10">
                 <button onClick={() => setCurrentView('feed')} className="flex-1 py-3 btn-b text-xs">📖 กระดานโพสต์</button>
-                <button onClick={() => currentUser ? setCurrentView('chat') : setCurrentView('login')} className="flex-1 py-3 btn-w text-xs">{currentUser ? '💬 ห้องแชตสมาคม' : '🔑 เข้าสู่ระบบ'}</button>
+                <button onClick={() => currentUser ? setCurrentView('daily_game') : setCurrentView('login')} className="flex-1 py-3 btn-w text-xs">{currentUser ? '🎮 ท้าดวล Daily Game' : '🔑 เข้าสู่ระบบ'}</button>
               </div>
             </div>
           )}
@@ -537,12 +1286,12 @@
           )}
 
           {currentView === 'members' && (
-            <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-5 flex-1">
+            <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-5 flex-1 overflow-y-auto">
               <div className="card p-5 flex flex-wrap justify-between gap-3">
                 <h2 className="text-lg font-bold">ทำเนียบสมาชิก ({activeMembers.length})</h2>
                 <div className="flex flex-wrap gap-1.5">{['ALL', ...allTags].map((t) => <button key={t} onClick={() => setDirTag(t)} className={dirTag === t ? 'px-3 py-1 rounded-full text-xs font-bold bg-white text-[#050811]' : 'px-3 py-1 rounded-full text-xs bg-[#050811] border border-[#1E3A5F]'}>{t === 'ALL' ? 'ทั้งหมด' : t}</button>)}</div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                 {activeMembers.filter((u) => dirTag === 'ALL' || getTags(u).includes(dirTag)).map((m) => (
                   <div key={m.id} onClick={() => setMemberModal(m)} className="cursor-pointer card hover:border-white/50 overflow-hidden">
                     <div className="bg-[#0F2547] px-4 py-2.5 border-b border-[#1E3A5F] flex justify-between items-center"><div className="flex items-center gap-1.5"><span className="font-mono text-xs font-bold">{m.id}</span><RoleBadge role={m.role} /></div><TagBadges user={m} /></div>
@@ -556,28 +1305,30 @@
           {currentView === 'chat' && (
             <div className="flex-1 flex overflow-hidden min-h-0">
               {leftOpen && (
-                <aside className="w-60 md:w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs">
+                <aside className="w-60 md:w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs z-10 absolute md:relative">
                   <div className="p-3 border-b border-[#1E3A5F]">
                     <div className="mb-2 flex justify-between items-center"><span className="text-[11px] font-bold uppercase text-slate-400">แชตรวม (Global)</span>{isModOrAdmin && <button onClick={() => setCChOpen(true)} className="px-2 py-0.5 rounded bg-[#0F2547] text-[10px] font-bold text-sky-300">+ สร้างห้อง</button>}</div>
                     {channels.map((ch) => (
                       <div key={ch.id} className="flex items-center gap-1 mb-1">
-                        <button onClick={() => setActiveRoom({ type: 'channel', id: ch.id })} className={activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'flex-1 px-2.5 py-1.5 rounded-xl bg-white text-[#050811] font-bold text-left truncate' : 'flex-1 px-2.5 py-1.5 rounded-xl text-slate-300 hover:bg-[#0F2547] text-left truncate'}>{ch.icon} # {ch.name}</button>
+                        <button onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'flex-1 px-2.5 py-1.5 rounded-xl bg-white text-[#050811] font-bold text-left truncate' : 'flex-1 px-2.5 py-1.5 rounded-xl text-slate-300 hover:bg-[#0F2547] text-left truncate'}>{ch.icon} # {ch.name}</button>
                         {isModOrAdmin && !ch.isProtected && <button onClick={() => setDelTgt({ roomType: 'channel', id: ch.id, name: '#' + ch.name })} className="text-slate-500 hover:text-red-400">🗑️</button>}
                       </div>
                     ))}
                   </div>
                   <div className="p-3 border-b border-[#1E3A5F]">
                     <div className="mb-2 flex justify-between items-center"><span className="text-[11px] font-bold uppercase text-slate-400">กลุ่มแชต (Groups)</span><button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold">+ สร้างกลุ่ม</button></div>
-                    {myGroups.map((g) => <button key={g.id} onClick={() => setActiveRoom({ type: 'group', id: g.id })} className={activeRoom.type === 'group' && activeRoom.id === g.id ? 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl bg-white text-[#050811] font-bold' : 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl text-slate-300 hover:bg-[#0F2547]'}><span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span><span className="text-[10px] font-mono">{(g.members || []).length}</span></button>)}
+                    {myGroups.map((g) => <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'group' && activeRoom.id === g.id ? 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl bg-white text-[#050811] font-bold' : 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl text-slate-300 hover:bg-[#0F2547]'}><span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span><span className="text-[10px] font-mono">{(g.members || []).length}</span></button>)}
                   </div>
                   <div className="p-3 flex-1">
                     <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">แชตส่วนตัว (ที่เคยคุย)</div>
-                    {conversedDms.map((m) => <button key={m.id} onClick={() => setActiveRoom({ type: 'dm', id: m.id })} className={activeRoom.type === 'dm' && activeRoom.id === m.id ? 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl bg-white text-[#050811] text-left' : 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'}><Avatar user={m} size="xs" showStatus={true} /><span className="truncate font-bold">{m.displayName}</span></button>)}
+                    {conversedDms.map((m) => <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'dm' && activeRoom.id === m.id ? 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl bg-white text-[#050811] text-left' : 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'}><Avatar user={m} size="xs" showStatus={true} /><span className="truncate font-bold">{m.displayName}</span></button>)}
                   </div>
                 </aside>
               )}
 
               <main className="flex-1 flex flex-col bg-[#050811] min-w-0 h-full overflow-hidden relative">
+                {leftOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setLeftOpen(false)}></div>}
+                
                 <div className="h-14 px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <button onClick={() => setLeftOpen(!leftOpen)} className="btn-d font-semibold">{leftOpen ? '◀ ซ่อนห้อง' : '☰ ห้อง ▶'}</button>
@@ -603,7 +1354,11 @@
                       const pa = getAuthor(msg.senderId);
                       return <div key={msg.id} className="p-3.5 card flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" /><div><div className="text-[10px] text-blue-300 font-bold">📝 โพสต์ใหม่ • {tStr}</div><div className="text-xs font-bold">{msg.text}</div>{msg.postTitle && <div className="text-xs text-slate-300">"{msg.postTitle}"</div>}</div></div>{msg.linkedPostId && <button onClick={() => jumpToPost(msg.linkedPostId)} className="btn-w text-xs shrink-0">🔗 ดูโพสต์ →</button>}</div>;
                     }
-                    const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId), liked = currentUser && (msg.likes || []).includes(currentUser.id);
+                    if (msg.dailyGameShare) {
+                      const pa = getAuthor(msg.senderId);
+                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">{msg.text}</p></div></div><button onClick={() => { setActiveGameTab(msg.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform">🎮 ท้าดวลเกมนี้เลย</button></div>;
+                    }
+                    const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
                     return (
                       <div key={msg.id} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} className="flex items-start gap-3 p-1.5 rounded-xl hover:bg-[#0B1325]/60">
                         <div onClick={() => setMemberModal(s)} className="cursor-pointer"><Avatar user={s} size="sm" showStatus={true} /></div>
@@ -618,8 +1373,8 @@
                               {msg.replyTo && <div className="mt-1 px-2.5 py-1 rounded bg-[#0B1325] border-l-2 border-sky-400 text-[11px] text-slate-300"><strong className="text-sky-300">↩️ {msg.replyTo.senderName}:</strong> {msg.replyTo.text}</div>}
                               <FormattedText text={msg.text} currentUser={currentUser} isEdited={msg.isEdited} />
                               {msg.attachments?.length > 0 && <div className="mt-2 space-y-2">{msg.attachments.map((att) => <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />)}</div>}
-                              <div className="flex gap-2 mt-1">
-                                <button onClick={() => db.collection('bma_messages').doc(msg.id).update({ likes: liked ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} className={liked ? 'px-2 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold' : 'px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]'}>♥ ถูกใจ {msg.likes?.length ? '(' + msg.likes.length + ')' : ''}</button>
+                              <div className="flex gap-2 mt-1 items-center">
+                                <LikeButton likes={msg.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_messages').doc(msg.id).update({ likes: (msg.likes||[]).includes(currentUser?.id) ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} />
                                 <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">↩️ ตอบกลับ</button>
                               </div>
                             </>
@@ -640,21 +1395,21 @@
                 {activeCh?.isSystemReadOnly || activeGrp?.isArchived ? (
                   <div className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] text-center text-xs text-slate-400 shrink-0">ห้องนี้อยู่ในโหมดอ่านอย่างเดียว</div>
                 ) : (
-                  <form onSubmit={handleSendChat} className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2 shrink-0 text-xs">
+                  <form onSubmit={handleSendChat} className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2 shrink-0 text-xs relative">
                     {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span>✎ แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}>✕</button></div>}
                     {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span>↩️ ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}>✕</button></div>}
                     {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลดไฟล์...</div>}
                     {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F]">{a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400">✕</button></span>)}</div>}
                     {cUrlOpen && (
                       <div className="flex gap-1.5">
-                        <select value={cAttType} onChange={(e) => setCAttType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="file">ไฟล์</option></select>
-                        <input type="text" value={cAttUrl} onChange={(e) => setCAttUrl(e.target.value)} placeholder="วางลิงก์..." className="flex-1 inp py-1" />
+                        <select value={cAttType} onChange={(e) => setCAttType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="file">ไฟล์</option></select>
+                        <input type="text" value={cAttUrl} onChange={(e) => setCAttUrl(e.target.value)} placeholder="วางลิงก์ .gif, .png หรือลิงก์เว็บ..." className="flex-1 inp py-1" />
                         <button type="button" onClick={() => { if (cAttUrl.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: cAttType, url: cAttUrl.trim(), size: 'URL' }]); setCAttUrl(''); setCUrlOpen(false); } }} className="btn-w py-1">แนบ</button>
                       </div>
                     )}
                     <div className="flex items-center gap-1.5">
                       <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
-                      <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1"><UpIcon />อัปโหลดไฟล์</button>
+                      <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1"><UpIcon />อัปโหลดภาพ/GIF</button>
                       <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1">🔗 แนบลิงก์</button>
                       <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold">@ แท็ก</button>
                     </div>
@@ -667,14 +1422,127 @@
               </main>
 
               {rightOpen && (
-                <aside className="w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs">
-                  <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center font-bold"><span>👥 สมาชิก ({activeMembers.length})</span><button onClick={() => setRightOpen(false)}>✕</button></div>
+                <aside className="absolute md:relative z-10 w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0">
+                  <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center font-bold"><span>👥 สมาชิก ({activeMembers.length})</span><button onClick={() => setRightOpen(false)} className="md:hidden">✕</button></div>
                   <div className="p-2 border-b border-[#1E3A5F] flex flex-wrap gap-1">{['ALL', ...allTags].map((t) => <button key={t} onClick={() => setRightTag(t)} className={rightTag === t ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#050811]' : 'px-2 py-0.5 rounded-full text-[10px] bg-[#050811] border border-[#1E3A5F]'}>{t === 'ALL' ? 'ทั้งหมด' : t}</button>)}</div>
                   <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
                     {activeMembers.filter((m) => rightTag === 'ALL' || getTags(m).includes(rightTag)).map((m) => <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2"><Avatar user={m} size="xs" showStatus={true} /><div className="min-w-0 flex-1"><div className="font-bold truncate">{m.displayName} ({m.id})</div><TagBadges user={m} /></div></div>)}
                   </div>
                 </aside>
               )}
+            </div>
+          )}
+
+          {currentView === 'daily_game' && (
+            <div className="flex-1 flex overflow-hidden relative">
+              <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${isLeftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+                <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between items-center">
+                  <span>เลือกมินิเกมประจำวัน</span>
+                  <button onClick={() => setIsLeftOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                  {GAMES.map((g, idx) => (
+                    <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-400 hover:bg-[#0F2547]'}`}>
+                      <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
+                {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
+                {isRightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
+                
+                <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
+                  <div className="text-center mb-4">
+                    <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeTab].icon} {GAMES[activeTab].name}</h2>
+                    <p className="text-xs text-slate-400 mt-1">รีเซ็ตกระดานเวลา 6:00 AM (วันที่: {todayStr})</p>
+                  </div>
+
+                  <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
+                    <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">
+                      {fmtTime(currGameSt.time)}
+                    </div>
+
+                    {!currGameSt.isPlaying && currGameSt.status === 'pending' ? (
+                      <div className="flex-1 flex flex-col items-center justify-center">
+                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0}}))} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
+                        <div className="mt-4 text-xs text-slate-400 bg-[#0F2547] px-4 py-2 rounded-lg">จำกัดสิทธิ์ 1 เกม เล่นได้แค่วันละ 1 ครั้งเท่านั้น</div>
+                      </div>
+                    ) : currGameSt.isPaused ? (
+                      <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-dashed border-[#1E3A5F]">
+                        <div className="text-2xl font-bold text-amber-300 mb-4">⏸ เกมหยุดพักชั่วคราว</div>
+                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...(p[activeGameTab]||{}), isPaused: false}}))} className="btn-w px-8 py-3">เล่นต่อ</button>
+                      </div>
+                    ) : currGameSt.status === 'viewing_board' ? (
+                      <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-[#1E3A5F]">
+                        <div className="text-lg font-bold text-sky-300 mb-2">เกมวันนี้จบลงแล้ว 👏</div>
+                        <div className="text-xs text-slate-400 mb-6">รอเล่นกระดานใหม่ของพรุ่งนี้เวลา 6.00 น.</div>
+                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: true}}))} className="btn-b text-xs">ดูผลลัพธ์อีกครั้ง</button>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden">
+                        {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                      </div>
+                    )}
+
+                    {currGameSt.showModal && (
+                      <Modal title={currGameSt.status === 'won' ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: false, status: 'viewing_board'}}))}>
+                        <div className="space-y-4">
+                          <p className="text-slate-300 text-sm">
+                            {currGameSt.status === 'won' ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
+                             currGameSt.status === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
+                             activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไป ${currGameSt.score}/3 ประเทศ` :
+                             `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ`}
+                          </p>
+                          <div className="text-3xl font-mono font-bold text-amber-300 my-2">
+                            {currGameSt.status === 'won' ? fmtTime(currGameSt.time) : 'GAME OVER'}
+                          </div>
+                          <button onClick={shareGameResult} className="btn-b w-full py-3 shadow hover:scale-105 transition-transform">📤 แชร์สถิติลงกระดานโพสต์</button>
+                        </div>
+                      </Modal>
+                    )}
+                  </div>
+                </div>
+              </main>
+
+              <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+                <div className="p-2 border-b border-[#1E3A5F] flex">
+                  <button onClick={() => setLbTab('daily')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='daily'?'bg-white text-[#050811]':'text-slate-400'}`}>ประจำวัน</button>
+                  <button onClick={() => setLbTab('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='monthly'?'bg-amber-400 text-[#050811]':'text-slate-400'}`}>ยอดเยี่ยมประจำเดือน</button>
+                </div>
+                <div className="p-3 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between text-xs">
+                  <span>🏆 อันดับ {GAMES[activeGameTab].name}</span>
+                  <button onClick={() => setIsRightOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {(lbTab === 'daily' ? gameScores : monthlyScores).length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนมีสถิติ</div> : 
+                   (lbTab === 'daily' ? gameScores : monthlyScores).map((s, i) => {
+                    const isBomb = s.status === 'lost_bomb' || s.timeMs === Infinity;
+                    const isLost = s.status === 'lost';
+                    return (
+                      <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb||isLost ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
+                        <div className="flex items-center gap-2.5">
+                          <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb&&!isLost?'text-yellow-400':i===1&&!isBomb&&!isLost?'text-slate-300':i===2&&!isBomb&&!isLost?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
+                            {activeGameTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
+                            {activeGameTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
+                            {lbTab === 'monthly' && <span className="text-[9px] text-slate-500">{s.date}</span>}
+                          </div>
+                        </div>
+                        <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb||isLost ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
+                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : fmtTime(s.timeMs)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </aside>
             </div>
           )}
 
@@ -697,9 +1565,9 @@
           )}
 
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
-            <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+            <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-y-auto">
               <aside className="lg:col-span-4 xl:col-span-3 space-y-4">
-                {!currentUser && <div className="card p-4 text-xs text-slate-300"><div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>แสดงเฉพาะโพสต์ที่สมาชิกเปิดอนุญาตให้ผู้มาเยือนอ่านได้เท่านั้น</div>}
+                {!currentUser && <div className="card p-4 text-xs text-slate-300"><div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>แสดงเฉพาะโพสต์ที่อนุญาตให้อ่านได้</div>}
                 <div className="card p-2 space-y-1 text-xs">
                   <button onClick={() => setCurrentView('feed')} className={currentView === 'feed' ? 'w-full flex justify-between px-4 py-2 rounded-xl font-bold bg-white text-[#050811]' : 'w-full flex justify-between px-4 py-2 rounded-xl hover:bg-[#0F2547]'}><span>📝 กระดานโพสต์</span><span>{filteredPosts.length}</span></button>
                   <button onClick={() => currentUser ? setCurrentView('chat') : setCurrentView('login')} className="w-full flex justify-between px-4 py-2 rounded-xl hover:bg-[#0F2547]"><span>💬 ห้องแชตสมาคม</span><span>Comms</span></button>
@@ -708,12 +1576,12 @@
                 </div>
               </aside>
 
-              <main className="lg:col-span-8 xl:col-span-9 space-y-4">
+              <main className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10">
                 {currentView === 'admin' && currentUser?.role === 'admin' ? (
                   <div className="space-y-5 text-xs">
                     <div className="card p-5 space-y-3">
                       <h2 className="text-sm font-bold">👑 ออกรหัสประจำตัวสมาชิกใหม่</h2>
-                      <form onSubmit={async (e) => { e.preventDefault(); const id = newMId.trim().toUpperCase(); if (!id || users.some((u) => u.id === id)) return alert('รหัสซ้ำ'); await db.collection('bma_users').doc(id).set({ id, memberTag: newMTags[0], memberTags: newMTags, role: 'member', isActivated: false, isOnline: false, username: '', password: '', displayName: 'รออนุมัติ (' + id + ')', bio: '', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], joinedAt: new Date().toISOString().split('T')[0] }); }} className="space-y-3">
+                      <form onSubmit={async (e) => { e.preventDefault(); const id = newMId.trim().toUpperCase(); if (!id || users.some((u) => u.id === id)) return alert('รหัสซ้ำ'); await db.collection('bma_users').doc(id).set({ id, memberTag: newMTags[0], memberTags: newMTags, role: 'member', isActivated: false, isOnline: false, lastActive: 0, username: '', password: '', displayName: 'รออนุมัติ (' + id + ')', bio: '', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], joinedAt: new Date().toISOString().split('T')[0] }); }} className="space-y-3">
                         <div className="flex gap-2"><input type="text" value={newMId} onChange={(e) => setNewMId(e.target.value)} className="inp font-mono uppercase" required /><input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มแท็กใหม่..." className="flex-1 inp" /><button type="button" onClick={() => { if (cTag.trim() && !newMTags.includes(cTag.trim())) setNewMTags([...newMTags, cTag.trim()]); setCTag(''); }} className="btn-b">+ แท็ก</button></div>
                         <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...PRESET_TAGS, ...newMTags])).map((t) => <button type="button" key={t} onClick={() => setNewMTags(newMTags.includes(t) ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} className={newMTags.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{newMTags.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
                         <button type="submit" className="btn-w">+ สร้างรหัส Member ID</button>
@@ -763,7 +1631,17 @@
                             </div>
                           </div>
                           {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
-                          {post.content && <p className="text-sm text-slate-200 whitespace-pre-line">{post.content}</p>}
+                          {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
+                          
+                          {post.dailyGameShare && (
+                            <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
+                              <div className="text-amber-300 font-bold">🎯 {GAMES[post.dailyGameShare.gameIndex].name}</div>
+                              <div className="text-sm">ผู้โพสต์ทำสถิติได้: <span className="font-mono text-white font-bold bg-black/40 px-2 py-0.5 rounded">
+                                {post.dailyGameShare.score ? `ถูก ${post.dailyGameShare.score} ข้อ / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
+                              </span></div>
+                              <button onClick={() => { setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start mt-1 hover:scale-105 transition-transform">🎮 ตามไปเล่นเกมนี้เลย</button>
+                            </div>
+                          )}
 
                           {post.poll && (
                             <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
@@ -778,7 +1656,7 @@
                           {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
 
                           <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
-                            <button onClick={async () => { if (!currentUser) return setCurrentView('login'); const l = post.likes || []; await db.collection('bma_posts').doc(post.id).update({ likes: l.includes(currentUser.id) ? l.filter((i) => i !== currentUser.id) : [...l, currentUser.id] }); }} className={isLiked ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>♥ ถูกใจ ({post.likes?.length || 0})</button>
+                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_posts').doc(post.id).update({ likes: (post.likes||[]).includes(currentUser?.id) ? post.likes.filter((i) => i !== currentUser.id) : [...(post.likes || []), currentUser.id] })} />
                             <button onClick={async () => { if (!currentUser) return setCurrentView('login'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
                           </div>
 
@@ -795,7 +1673,7 @@
 
                             <div className="space-y-2">
                               {rootComm.map((c, idx) => (
-                                <PantipThread key={c.id} c={c} all={allComm} lbl={'ความคิดเห็นที่ ' + (idx + 1)} postId={post.id} me={currentUser} getAuthor={getAuthor} canManage={canManage} onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} onCtx={setCommMenu} />
+                                <PantipThread key={c.id} c={c} all={allComm} lbl={'ความเห็นที่ ' + (idx + 1)} postId={post.id} me={currentUser} getAuthor={getAuthor} canManage={canManage} onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} onCtx={setCommMenu} />
                               ))}
                             </div>
 
@@ -818,6 +1696,7 @@
             </div>
           )}
 
+          {/* Modal Components */}
           {addMemOpen && activeGrp && (
             <Modal title={'👥 เพิ่มสมาชิกเข้ากลุ่ม: ' + activeGrp.name} onClose={() => setAddMemOpen(false)}>
               <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
@@ -895,18 +1774,9 @@
             </Modal>
           )}
 
-          {editTagU && (
-            <Modal title={'🏷️ แก้ไขหมวดหมู่: ' + editTagU.displayName} onClose={() => setEditTagU(null)}>
-              <div className="space-y-3 text-xs">
-                <div className="flex flex-wrap gap-1.5">{allTags.map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'btn-d py-1'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
-                <button onClick={async () => { await db.collection('bma_users').doc(editTagU.id).update({ memberTags: editTagL, memberTag: editTagL[0] }); setEditTagU(null); }} className="w-full btn-w py-2">บันทึกหมวดหมู่</button>
-              </div>
-            </Modal>
-          )}
-
           {createPost && (
             <Modal title="เขียนโพสต์ใหม่ / สร้างโพลล์" onClose={() => setCreatePost(false)} maxW="max-w-xl">
-              <form onSubmit={handleCreatePost} className="space-y-3 text-xs">
+              <form onSubmit={handleCreatePost} className="space-y-3 text-xs text-left">
                 <input type="text" value={pTitle} onChange={(e) => setPTitle(e.target.value)} placeholder="หัวข้อเรื่อง (ไม่บังคับ)..." className="w-full inp text-sm" />
                 <textarea rows={3} value={pCont} onChange={(e) => setPCont(e.target.value)} placeholder="เนื้อหาโพสต์..." className="w-full inp text-sm" />
                 <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] cursor-pointer">
@@ -928,45 +1798,14 @@
                   <div className="flex justify-between items-center">
                     <span>อัปโหลดไฟล์ (สูงสุด 10MB) หรือแนบลิงก์</span>
                     <input type="file" multiple ref={pFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setPAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
-                    <button type="button" onClick={() => pFileRef.current?.click()} className="btn-b py-1 font-bold"><UpIcon />อัปโหลดไฟล์</button>
+                    <button type="button" onClick={() => pFileRef.current?.click()} className="btn-b py-1 font-bold"><UpIcon />อัปโหลดภาพ/GIF</button>
                   </div>
                   {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลด...</div>}
-                  <div className="flex gap-1.5"><select value={aType} onChange={(e) => setAType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="file">ไฟล์</option></select><input type="text" value={aUrl} onChange={(e) => setAUrl(e.target.value)} placeholder="วางลิงก์..." className="flex-1 inp py-1" /><button type="button" onClick={() => { if (aUrl.trim()) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: aType, url: aUrl.trim(), size: 'URL' }]); setAUrl(''); } }} className="btn-w py-1">🔗 แนบลิงก์</button></div>
+                  <div className="flex gap-1.5"><select value={aType} onChange={(e) => setAType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="file">ไฟล์</option></select><input type="text" value={aUrl} onChange={(e) => setAUrl(e.target.value)} placeholder="วางลิงก์เว็บ, .gif, .mp4..." className="flex-1 inp py-1" /><button type="button" onClick={() => { if (aUrl.trim()) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: aType, url: aUrl.trim(), size: 'URL' }]); setAUrl(''); } }} className="btn-w py-1">🔗 แนบลิงก์</button></div>
                   {pAtts.map((a) => <div key={a.id} className="flex justify-between px-2 py-1 rounded bg-[#0B1325]"><span>{a.name}</span><button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">ลบ</button></div>)}
                 </div>
                 <button type="submit" className="w-full btn-w py-2.5">เผยแพร่โพสต์</button>
               </form>
-            </Modal>
-          )}
-
-          {cChOpen && (
-            <Modal title="🛡️ สร้างห้อง Global Chat ใหม่" onClose={() => setCChOpen(false)}>
-              <form onSubmit={async (e) => { e.preventDefault(); const n = chName.trim().toLowerCase().replace(/\s+/g, '-'); if (!n) return; const id = 'global-' + Date.now(); await db.collection('bma_channels').doc(id).set({ id, name: n, icon: chIcon || '💬', desc: chDesc.trim() || 'ห้องสนทนากลาง', createdBy: currentUser.id, isProtected: false, isSystemReadOnly: false, timestamp: Date.now(), serverCreatedAt: svrTs() }); setActiveRoom({ type: 'channel', id }); setChName(''); setChDesc(''); setCChOpen(false); }} className="space-y-3 text-xs">
-                <div className="flex gap-2"><input type="text" value={chIcon} onChange={(e) => setChIcon(e.target.value)} className="w-14 inp text-center" /><input type="text" value={chName} onChange={(e) => setChName(e.target.value)} placeholder="ชื่อห้อง..." className="flex-1 inp" required /></div>
-                <input type="text" value={chDesc} onChange={(e) => setChDesc(e.target.value)} placeholder="คำอธิบายห้อง..." className="w-full inp" />
-                <button type="submit" className="w-full btn-w py-2">สร้างห้องแชตรวม</button>
-              </form>
-            </Modal>
-          )}
-
-          {cGrpOpen && currentUser && (
-            <Modal title="👥 สร้างกลุ่มแชตใหม่" onClose={() => setCGrpOpen(false)}>
-              <form onSubmit={async (e) => { e.preventDefault(); if (!grpName.trim() || !grpMems.length) return alert('ตั้งชื่อและเลือกสมาชิก'); const id = 'grp-' + Date.now(); await db.collection('bma_groups').doc(id).set({ id, name: grpName.trim(), members: Array.from(new Set([currentUser.id, ...grpMems])), createdBy: currentUser.id, isArchived: false, timestamp: Date.now(), serverCreatedAt: svrTs() }); setActiveRoom({ type: 'group', id }); setGrpName(''); setGrpMems([]); setCGrpOpen(false); }} className="space-y-3 text-xs">
-                <input type="text" value={grpName} onChange={(e) => setGrpName(e.target.value)} placeholder="ชื่อกลุ่มแชต *" className="w-full inp" required />
-                <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded-xl bg-[#050811] border border-[#1E3A5F]">
-                  {activeMembers.filter((m) => m.id !== currentUser.id).map((m) => <div key={m.id} onClick={() => setGrpMems(grpMems.includes(m.id) ? grpMems.filter((i) => i !== m.id) : [...grpMems, m.id])} className={grpMems.includes(m.id) ? 'p-2 rounded-xl bg-[#0F2547] border border-white flex justify-between cursor-pointer' : 'p-2 rounded-xl bg-[#0B1325] flex justify-between cursor-pointer'}><span>{m.displayName} ({m.id})</span><span className="font-bold">{grpMems.includes(m.id) ? '✓ เลือกแล้ว' : '+ เลือก'}</span></div>)}
-                </div>
-                <button type="submit" className="w-full btn-w py-2">สร้างกลุ่มแชต</button>
-              </form>
-            </Modal>
-          )}
-
-          {delTgt && (
-            <Modal title="⚠️ ยืนยันการลบห้องแชต?" onClose={() => setDelTgt(null)} maxW="max-w-sm">
-              <div className="space-y-3 text-center text-xs">
-                <p>ยืนยันการลบห้อง <strong className="text-white">"{delTgt.name}"</strong> อย่างถาวรหรือไม่?</p>
-                <div className="flex gap-2"><button onClick={() => setDelTgt(null)} className="flex-1 btn-d py-2">ยกเลิก</button><button onClick={async () => { if (delTgt.roomType === 'channel') await db.collection('bma_channels').doc(delTgt.id).delete(); else await db.collection('bma_groups').doc(delTgt.id).delete(); setActiveRoom({ type: 'channel', id: 'global-lobby' }); setDelTgt(null); }} className="flex-1 py-2 rounded-xl bg-red-600 font-bold">🗑️ ยืนยันลบ</button></div>
-              </div>
             </Modal>
           )}
         </div>
