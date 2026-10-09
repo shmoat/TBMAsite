@@ -19,7 +19,7 @@
     @keyframes ocw { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
     @keyframes occw { from { transform: translate(-50%,-50%) rotate(360deg); } to { transform: translate(-50%,-50%) rotate(0deg); } }
     .or1 { animation: ocw 38s linear infinite; } .or2 { animation: occw 55s linear infinite; } .or3 { animation: ocw 75s linear infinite; }
-    .cr1 { animation: occw 38s linear infinite; } .cr2 { animation: occw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
+    .cr1 { animation: occw 38s linear infinite; } .cr2 { animation: ocw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
     .orbit-sys:hover div { animation-play-state: paused; }
     
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem 0.85rem; color: #fff; outline: none; }
@@ -822,6 +822,8 @@
       const [typingStatuses, setTypingStatuses] = useState([]);
       const [notifications, setNotifications] = useState([]);
       const [currentUser, setCurrentUser] = useState(null);
+      const [zoomImg, setZoomImg] = useState(null);
+      openZoom = setZoomImg;
       
       const [currentView, setCurrentView] = useState(() => sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home');
       const [activeRoom, setActiveRoom] = useState(() => { try { return JSON.parse(sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room')) || { type: 'channel', id: 'global-lobby' }; } catch { return { type: 'channel', id: 'global-lobby' }; } });
@@ -1198,7 +1200,7 @@
         else if (currGameSt.status === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
         else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
         else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
-        else msg = `ทำเวลาไปได้ ${fmtTime(t)} นาที ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+        else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
 
         const postId = 'post-' + Date.now();
         await db.collection('bma_posts').doc(postId).set({
@@ -1442,10 +1444,10 @@
 
           {currentView === 'daily_game' && (
             <div className="flex-1 flex overflow-hidden relative">
-              <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${leftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+              <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${isLeftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
                 <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between items-center">
                   <span>เลือกมินิเกมประจำวัน</span>
-                  <button onClick={() => setLeftOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
+                  <button onClick={() => setIsLeftOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                   {GAMES.map((g, idx) => (
@@ -1457,8 +1459,8 @@
               </aside>
 
               <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
-                {leftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setLeftOpen(false)}></div>}
-                {rightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setRightOpen(false)}></div>}
+                {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
+                {isRightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
                 
                 <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
                   <div className="text-center mb-4">
@@ -1518,14 +1520,14 @@
                 </div>
               </main>
 
-              <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${rightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+              <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
                 <div className="p-2 border-b border-[#1E3A5F] flex">
                   <button onClick={() => setLbTab('daily')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='daily'?'bg-white text-[#050811]':'text-slate-400'}`}>ประจำวัน</button>
                   <button onClick={() => setLbTab('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='monthly'?'bg-amber-400 text-[#050811]':'text-slate-400'}`}>ยอดเยี่ยมประจำเดือน</button>
                 </div>
                 <div className="p-3 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between text-xs">
                   <span>🏆 อันดับ {GAMES[activeGameTab].name}</span>
-                  <button onClick={() => setRightOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
+                  <button onClick={() => setIsRightOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {(lbTab === 'daily' ? gameScores : monthlyScores).length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนมีสถิติ</div> : 
