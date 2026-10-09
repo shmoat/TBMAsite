@@ -234,16 +234,14 @@
         setIsFirst(true);
       }, [dateSeed]);
 
-      const handlePressStart = (e, r, c) => {
-        if(e.cancelable) e.preventDefault();
+      const handlePressStart = (r, c) => {
         pressTimer.current = setTimeout(() => {
           handleAction(r, c, 'flag');
           pressTimer.current = null;
-        }, 350);
+        }, 400); // 400ms long press to flag
       };
 
-      const handlePressEnd = (e, r, c) => {
-        if(e.cancelable) e.preventDefault();
+      const handlePressEnd = (r, c) => {
         if(pressTimer.current) {
           clearTimeout(pressTimer.current);
           pressTimer.current = null;
@@ -320,21 +318,20 @@
             <button onClick={() => setMode('flag')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>🚩 ปักธง</button>
           </div>
 
-          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10">
+          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10" onContextMenu={(e)=>e.preventDefault()}>
             {grid.map((row, r) => (
               <div key={r} className="flex">
                 {row.map((val, c) => {
                   const isRev = revealed[r][c], isFlg = flagged[r][c];
                   let bg = isRev ? (val==='M' ? '#7F1D1D' : '#050811') : '#0F2547';
-                  let content = isFlg ? '🚩' : (isRev ? (val==='M' ? '💣' : (val===0?'':val)) : '');
+                  let content = isFlg ? '🚩' : (isRev ? (val==='M' ? '💥' : (val===0?'':val)) : '');
                   return (
                     <div
                       key={c}
-                      onTouchStart={(e) => handlePressStart(e, r, c)}
-                      onTouchEnd={(e) => handlePressEnd(e, r, c)}
-                      onMouseDown={(e) => handlePressStart(e, r, c)}
-                      onMouseUp={(e) => handlePressEnd(e, r, c)}
-                      onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }}
+                      onTouchStart={() => handlePressStart(r, c)}
+                      onTouchEnd={() => handlePressEnd(r, c)}
+                      onMouseDown={() => handlePressStart(r, c)}
+                      onMouseUp={() => handlePressEnd(r, c)}
                       className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer ${isRev && val !== 'M' ? colors[val] : ''}`}
                       style={{ backgroundColor: bg }}
                     >
@@ -345,7 +342,7 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 px-4 text-center">💡 เลือกโหมด หรือ <b>กดค้าง</b> เพื่อปักธง/ขุด</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 เลือกโหมด หรือ <b>กดค้าง</b> 0.4 วินาที เพื่อปักธง/ขุด</div>
         </div>
       );
     }
@@ -363,7 +360,8 @@
         {c:'fi',n:'Finland'},{c:'se',n:'Sweden'},{c:'no',n:'Norway'},{c:'ch',n:'Switzerland'},
         {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
         {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
-        {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'}
+        {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'},
+        {c:'se',n:'Sweden'},{c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'}
       ];
       const [rounds, setRounds] = useState([]);
       const [currentRound, setCurrentRound] = useState(0);
@@ -387,7 +385,7 @@
         if(code === rounds[currentRound].target.c) {
           if(currentRound === 2) onEnd('win'); else setCurrentRound(c => c+1);
         } else {
-          alert('ผิดครับ! +5 วินาที!');
+          alert('ผิดครับ! โดนบวกเวลา 5 วินาที!');
         }
       };
 
@@ -501,7 +499,7 @@
       };
 
       return (
-        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto">
+        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center">
           {/* Top Row: Stock, Waste, Foundations */}
           <div className="flex justify-between mb-6">
             <div className="flex gap-2">
@@ -513,7 +511,7 @@
             </div>
           </div>
           {/* Tableaus */}
-          <div className="flex justify-between flex-1 relative">
+          <div className="flex justify-between flex-1 relative min-h-[220px]">
             {st.tab.map((col, i) => (
               <div key={i} className="flex flex-col w-10 sm:w-12">
                 {col.length === 0 ? renderCard(null) : col.map((c, j) => (
@@ -524,7 +522,7 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 text-center mt-6">💡 แตะที่การ์ดเพื่อย้ายอัตโนมัติ (ขยับไป Foundation หรือแถวอื่นให้เอง)</div>
+          <div className="text-[10px] text-slate-400 text-center mt-6">💡 แตะที่ไพ่เพื่อย้ายอัตโนมัติ (ขึ้น Foundation หรือเรียงแถวให้เอง)</div>
         </div>
       );
     }
@@ -532,8 +530,10 @@
     // ==========================================
     // MAIN APP
     // ==========================================
-    function App() {
-      const currentUser = { id: 'M999', displayName: 'Tester (UI Update)' };
+    function DailyGameApp() {
+      // Fake user context for testing
+      const currentUser = { id: 'M999', displayName: 'Tester (iPad)' };
+      
       const todayStr = new Date().toLocaleDateString('en-CA');
       
       const [isLeftOpen, setIsLeftOpen] = useState(true);
@@ -542,7 +542,7 @@
       
       const [isPlaying, setIsPlaying] = useState(false);
       const [time, setTime] = useState(0);
-      const [gameStatus, setGameStatus] = useState('pending'); // pending, won, lost_bomb
+      const [gameStatus, setGameStatus] = useState('pending'); // pending, won, lost_bomb, viewing_board
       const [scores, setScores] = useState([]);
 
       useEffect(() => { setIsPlaying(false); setGameStatus('pending'); setTime(0); }, [activeTab]);
@@ -572,7 +572,7 @@
 
       const handleShare = () => {
         const msg = gameStatus === 'lost_bomb' ? `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣` : `ทำเวลาไปได้ ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
-        alert(`แชร์ไปที่กระดานโพสต์!\n\n${msg}`);
+        alert(`จำลองการแชร์ไปที่กระดานโพสต์!\n\n${msg}`);
         setGameStatus('viewing_board');
       };
 
@@ -581,16 +581,19 @@
           {/* Header */}
           <header className="h-14 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between px-4 shrink-0 shadow-md z-20">
             <div className="flex items-center gap-3">
-              <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs">☰ เกม</button>
-              <div className="font-bold text-amber-300">🎮 Daily Challenge</div>
+              <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs font-bold">☰ เปลี่ยนเกม</button>
+              <div className="font-bold text-amber-300 tracking-wider">🎮 Daily Challenge</div>
             </div>
-            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs">🏆 อันดับ</button>
+            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs">🏆 กระดานคะแนน</button>
           </header>
 
           <div className="flex-1 flex overflow-hidden relative">
             {/* LEFT SIDEBAR: Game Selection */}
             <aside className={`absolute md:relative z-10 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-all duration-300 ${isLeftOpen ? 'left-0' : '-left-64 md:hidden md:w-0'}`}>
-              <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px]">เลือกมินิเกมประจำวัน</div>
+              <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between">
+                <span>เลือกมินิเกมประจำวัน</span>
+                <button onClick={() => setIsLeftOpen(false)} className="md:hidden">✕</button>
+              </div>
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                 {GAMES.map((g, idx) => (
                   <button key={g.id} onClick={() => { setActiveTab(idx); setIsLeftOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
