@@ -21,11 +21,11 @@
     
     ::-webkit-scrollbar { width: 4px; height: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 99px; }
 
-    /* Custom CSS for Solitaire & Games */
+    /* Custom CSS for Games */
     .notes-grid { display: flex; flex-wrap: wrap; width: 100%; height: 100%; padding: 1px; }
     .note-item { width: 33.33%; height: 33.33%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #94A3B8; font-weight: 400; line-height: 1; pointer-events: none; }
     
-    .card-ui { border-radius: 0.35rem; display: flex; flex-direction: column; justify-content: space-between; padding: 0.15rem; background: #fff; border: 1px solid #cbd5e1; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .card-ui { border-radius: 0.35rem; display: flex; flex-direction: column; justify-content: space-between; padding: 0.15rem; background: #fff; border: 1px solid #cbd5e1; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); touch-action: none; }
     .card-ui.face-down { background: repeating-linear-gradient(45deg, #1E3A5F, #1E3A5F 5px, #0F2547 5px, #0F2547 10px); border-color: #0F2547; }
     .text-red { color: #EF4444; } .text-black { color: #050811; }
   </style>
@@ -35,6 +35,7 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
     
+    // --- FIREBASE SETUP ---
     const firebaseConfig = {
       apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
       authDomain: "tbmasite.firebaseapp.com",
@@ -55,6 +56,32 @@
       { id: 'solitaire', name: "Solitaire", icon: "🃏" }
     ];
 
+    // --- GAME DATE CALCULATOR (Reset at 6:00 AM GMT+7) ---
+    function getGameDateStr() {
+      const now = new Date();
+      const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const bkkDate = new Date(utcMs + (7 * 3600000));
+      if (bkkDate.getHours() < 6) {
+        bkkDate.setDate(bkkDate.getDate() - 1);
+      }
+      return `${bkkDate.getFullYear()}-${(bkkDate.getMonth()+1).toString().padStart(2,'0')}-${bkkDate.getDate().toString().padStart(2,'0')}`;
+    }
+
+    // --- STICKY STATE HOOK (Persist across tabs/reloads) ---
+    function useStickyState(defaultValue, key) {
+      const [value, setValue] = useState(() => {
+        try {
+          const stickyValue = window.localStorage.getItem(key);
+          return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+        } catch (e) { return defaultValue; }
+      });
+      useEffect(() => {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      }, [key, value]);
+      return [value, setValue];
+    }
+
+    // --- PRNG ---
     class PRNG {
       constructor(seedStr) {
         let h = 2166136261 >>> 0;
@@ -76,7 +103,7 @@
     }
 
     const Modal = ({ title, children, onClose }) => (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="w-full max-w-sm card p-6 shadow-2xl animate-fade-in text-center space-y-4 relative">
           {onClose && <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>}
           <h3 className="text-xl font-bold">{title}</h3>
@@ -89,11 +116,12 @@
     // 1. SUDOKU
     // ==========================================
     function SudokuGame({ dateSeed, onEnd }) {
-      const [board, setBoard] = useState(null);
+      const [board, setBoard] = useStickyState(null, `bma_sudoku_${dateSeed}`);
       const [selectedCell, setSelectedCell] = useState(null);
       const [noteMode, setNoteMode] = useState(false);
 
       useEffect(() => {
+        if (board) return; // Only init if empty
         const rng = new PRNG(dateSeed + '_sudoku');
         let base = [
           [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
@@ -116,7 +144,6 @@
           if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
         }
         setBoard(puzzle.map(r => r.map(val => ({ val, fixed: val !== '', notes: [] }))));
-        setSelectedCell(null);
       }, [dateSeed]);
 
       const checkWin = (b) => {
@@ -211,43 +238,27 @@
     }
 
     // ==========================================
-    // 2. MINESWEEPER
+    // 2. MINESWEEPER (Safe First Click + Mouse Right Click)
     // ==========================================
     function MinesweeperGame({ dateSeed, onEnd }) {
       const COLS = 9, ROWS = 9;
-      const [numMines, setNumMines] = useState(10);
-      const [grid, setGrid] = useState([]);
-      const [revealed, setRevealed] = useState([]);
-      const [flagged, setFlagged] = useState([]);
-      const [minesLeft, setMinesLeft] = useState(10);
-      const [isFirst, setIsFirst] = useState(true);
+      const [numMines, setNumMines] = useStickyState(10, `bma_ms_mines_${dateSeed}`);
+      const [grid, setGrid] = useStickyState(null, `bma_ms_grid_${dateSeed}`);
+      const [revealed, setRevealed] = useStickyState(null, `bma_ms_rev_${dateSeed}`);
+      const [flagged, setFlagged] = useStickyState(null, `bma_ms_flag_${dateSeed}`);
+      const [isFirst, setIsFirst] = useStickyState(true, `bma_ms_first_${dateSeed}`);
       const [mode, setMode] = useState('dig'); 
-      const pressTimer = useRef(null);
 
       useEffect(() => {
+        if (grid) return; // Already init
         const rng = new PRNG(dateSeed + '_msConfig');
         const m = rng.nextInt(10, 20);
-        setNumMines(m); setMinesLeft(m);
+        setNumMines(m);
         setGrid(Array(ROWS).fill().map(()=>Array(COLS).fill(0)));
         setRevealed(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
         setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
         setIsFirst(true);
       }, [dateSeed]);
-
-      const handlePressStart = (r, c) => {
-        pressTimer.current = setTimeout(() => {
-          handleAction(r, c, 'flag');
-          pressTimer.current = null;
-        }, 400); // 400ms long press to flag
-      };
-
-      const handlePressEnd = (r, c) => {
-        if(pressTimer.current) {
-          clearTimeout(pressTimer.current);
-          pressTimer.current = null;
-          handleAction(r, c, mode);
-        }
-      };
 
       const handleAction = (r, c, act) => {
         if(revealed[r][c]) return;
@@ -256,23 +267,23 @@
           const newF = [...flagged.map(row=>[...row])];
           newF[r][c] = !newF[r][c];
           setFlagged(newF);
-          let fc = 0; newF.forEach(row => row.forEach(v => { if(v) fc++; }));
-          setMinesLeft(numMines - fc);
           return;
         }
 
-        if(flagged[r][c]) return;
+        if(flagged[r][c]) return; // Cannot dig flagged
 
         let g = grid;
         if(isFirst) {
-          const rng = new PRNG(dateSeed + '_ms_' + Date.now());
+          const rng = new PRNG(dateSeed + '_ms_' + Date.now()); // randomizing based on action time to ensure randomness
           g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
           let placed = 0;
           while(placed < numMines) {
-            let rr = rng.nextInt(0,8), cc = rng.nextInt(0,8);
-            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; // Safe zone
+            let rr = rng.nextInt(0,ROWS-1), cc = rng.nextInt(0,COLS-1);
+            // Safe 3x3 zone around first click
+            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; 
             if(g[rr][cc] !== 'M') { g[rr][cc] = 'M'; placed++; }
           }
+          // Calculate numbers
           for(let i=0; i<ROWS; i++) {
             for(let j=0; j<COLS; j++) {
               if(g[i][j] === 'M') continue;
@@ -303,14 +314,19 @@
           }
         };
         flood(r, c); setRevealed(newR);
+        
         let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
         if(revCount === ROWS*COLS - numMines) onEnd('win');
       };
 
+      if(!grid) return <div className="animate-pulse py-10">Loading Grid...</div>;
+      
       const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-amber-400','text-cyan-400','text-pink-400','text-gray-400'];
+      const fCount = flagged ? flagged.flat().filter(Boolean).length : 0;
+      const minesLeft = numMines - fCount;
 
       return (
-        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full">
+        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none">
           <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">💣 ระเบิด: {minesLeft}</div>
           
           <div className="flex gap-2 w-full max-w-[260px]">
@@ -318,7 +334,7 @@
             <button onClick={() => setMode('flag')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>🚩 ปักธง</button>
           </div>
 
-          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10" onContextMenu={(e)=>e.preventDefault()}>
+          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10">
             {grid.map((row, r) => (
               <div key={r} className="flex">
                 {row.map((val, c) => {
@@ -328,10 +344,8 @@
                   return (
                     <div
                       key={c}
-                      onTouchStart={() => handlePressStart(r, c)}
-                      onTouchEnd={() => handlePressEnd(r, c)}
-                      onMouseDown={() => handlePressStart(r, c)}
-                      onMouseUp={() => handlePressEnd(r, c)}
+                      onClick={() => handleAction(r, c, mode)}
+                      onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }}
                       className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer ${isRev && val !== 'M' ? colors[val] : ''}`}
                       style={{ backgroundColor: bg }}
                     >
@@ -342,7 +356,7 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 px-4 text-center">💡 เลือกโหมด หรือ <b>กดค้าง</b> 0.4 วินาที เพื่อปักธง/ขุด</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: เลือกโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
         </div>
       );
     }
@@ -361,12 +375,15 @@
         {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
         {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
         {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'},
-        {c:'se',n:'Sweden'},{c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'}
+        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'}
       ];
-      const [rounds, setRounds] = useState([]);
-      const [currentRound, setCurrentRound] = useState(0);
+      
+      const [rounds, setRounds] = useStickyState([], `bma_fg_rds_${dateSeed}`);
+      const [currentRound, setCurrentRound] = useStickyState(0, `bma_fg_curr_${dateSeed}`);
+      const [wrongGuess, setWrongGuess] = useStickyState(null, `bma_fg_wrong_${dateSeed}`);
 
       useEffect(() => {
+        if (rounds.length > 0) return;
         const rng = new PRNG(dateSeed + '_flag4');
         const shuffled = rng.shuffle([...ALL_FLAGS]);
         const rds = [];
@@ -380,38 +397,55 @@
       }, [dateSeed]);
 
       if(!rounds.length) return null;
+      const rd = rounds[currentRound];
 
       const handleGuess = (code) => {
-        if(code === rounds[currentRound].target.c) {
-          if(currentRound === 2) onEnd('win'); else setCurrentRound(c => c+1);
+        if(wrongGuess) return;
+        if(code === rd.target.c) {
+          if(currentRound === 2) onEnd('win', { correctCount: 3 }); 
+          else setCurrentRound(c => c+1);
         } else {
-          alert('ผิดครับ! โดนบวกเวลา 5 วินาที!');
+          setWrongGuess(code);
+          setTimeout(() => onEnd('lost', { correctCount: currentRound }), 2500);
         }
       };
 
-      const rd = rounds[currentRound];
       return (
         <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
           <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">ด่านที่ {currentRound + 1} / 3</div>
           <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-32 sm:h-44 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
           <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-4">
-            {rd.options.map(opt => <button key={opt.c} onClick={() => handleGuess(opt.c)} className="btn-w text-sm py-3 active:scale-95 transition-transform shadow-lg">{opt.n}</button>)}
+            {rd.options.map(opt => {
+              let bg = "bg-white text-[#050811]";
+              if (wrongGuess) {
+                if (opt.c === rd.target.c) bg = "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]";
+                else if (opt.c === wrongGuess) bg = "bg-red-500 text-white";
+                else bg = "bg-white/10 text-white/50"; // dim others
+              }
+              return (
+                <button key={opt.c} onClick={() => handleGuess(opt.c)} className={`font-bold rounded-xl text-sm py-3 transition-all shadow-lg ${bg}`}>
+                  {opt.n}
+                </button>
+              );
+            })}
           </div>
+          {wrongGuess && <div className="text-red-400 font-bold animate-pulse">❌ ผิดครับ! เกมจบลงทันที</div>}
         </div>
       );
     }
 
     // ==========================================
-    // 4. DAILY SOLITAIRE (Miniature Auto-Move Version)
+    // 4. DAILY SOLITAIRE (Drag & Drop + Tap)
     // ==========================================
     function SolitaireGame({ dateSeed, onEnd }) {
-      const [st, setSt] = useState(null);
-      
+      const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
+      const [drag, setDrag] = useState(null);
+
       useEffect(() => {
-        const rng = new PRNG(dateSeed + '_solitaire');
+        if(st) return;
+        const rng = new PRNG(dateSeed + '_solitaire_v3');
         let deck = [];
-        const suits = ['♠','♥','♣','♦'];
-        const colors = ['B','R','B','R'];
+        const suits = ['♠','♥','♣','♦']; const colors = ['B','R','B','R'];
         const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
         for(let s=0; s<4; s++) for(let r=0; r<13; r++) deck.push({ s: suits[s], r: r+1, rs: ranks[r], c: colors[s], id: `${s}-${r}`, up: false });
         deck = rng.shuffle(deck);
@@ -419,79 +453,119 @@
         let tab = [[],[],[],[],[],[],[]];
         for(let i=0; i<7; i++) {
           for(let j=i; j<7; j++) {
-            let card = deck.pop();
-            if(i===j) card.up = true;
+            let card = deck.pop(); if(i===j) card.up = true;
             tab[j].push(card);
           }
         }
         setSt({ stock: deck, waste: [], fnd: [[],[],[],[]], tab });
       }, [dateSeed]);
 
-      const checkWin = (ns) => {
-        if(ns.fnd.every(f => f.length === 13)) onEnd('win');
-      };
+      const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('win'); };
 
       const handleStock = () => {
         let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
-        if(ns.stock.length) {
-          let c = ns.stock.pop(); c.up = true; ns.waste.push(c);
-        } else {
-          ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = [];
-        }
+        if(ns.stock.length) { let c = ns.stock.pop(); c.up = true; ns.waste.push(c); } 
+        else { ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = []; }
         setSt(ns);
       };
 
-      const handleCardClick = (area, colIdx, cardIdx) => {
+      const tryMove = (ns, stack, srcArea, srcCol, tgtArea, tgtCol) => {
+        let c = stack[0];
+        if (tgtArea === 'fnd' && stack.length === 1) {
+            let f = ns.fnd[tgtCol];
+            if ((f.length === 0 && c.r === 1 && tgtCol === ['♠','♥','♣','♦'].indexOf(c.s)) || 
+                (f.length > 0 && f[f.length-1].s === c.s && f[f.length-1].r === c.r - 1)) {
+                f.push(c); return true;
+            }
+        } else if (tgtArea === 'tab') {
+            let t = ns.tab[tgtCol];
+            if (t.length === 0) { if (c.r === 13) { t.push(...stack); return true; } } 
+            else {
+                let top = t[t.length-1];
+                if (top.c !== c.c && top.r === c.r + 1) { t.push(...stack); return true; }
+            }
+        }
+        return false;
+      };
+
+      const handleAutoMove = (area, colIdx, cardIdx) => {
         let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
         let stack = [];
         if(area === 'waste') { if(!ns.waste.length) return; stack = [ns.waste.pop()]; }
-        else if(area === 'tab') {
-          if(cardIdx < 0 || !ns.tab[colIdx][cardIdx].up) return;
-          stack = ns.tab[colIdx].splice(cardIdx);
-        } else return;
+        else if(area === 'tab') { if(cardIdx < 0 || !ns.tab[colIdx][cardIdx].up) return; stack = ns.tab[colIdx].splice(cardIdx); } 
+        else return;
 
-        let c = stack[0];
-        // Try Foundation
+        let moved = false;
         if(stack.length === 1) {
-          let fIdx = ['♠','♥','♣','♦'].indexOf(c.s);
-          let f = ns.fnd[fIdx];
-          if((f.length === 0 && c.r === 1) || (f.length > 0 && f[f.length-1].r === c.r - 1)) {
-            f.push(c);
-            if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
-            setSt(ns); checkWin(ns); return;
+          let fIdx = ['♠','♥','♣','♦'].indexOf(stack[0].s);
+          moved = tryMove(ns, stack, area, colIdx, 'fnd', fIdx);
+        }
+        if(!moved) {
+          for(let i=0; i<7; i++) {
+            if(area === 'tab' && i === colIdx) continue;
+            moved = tryMove(ns, stack, area, colIdx, 'tab', i);
+            if(moved) break;
           }
         }
-        // Try Tableau
-        for(let i=0; i<7; i++) {
-          if(area === 'tab' && i === colIdx) continue;
-          let t = ns.tab[i];
-          if(t.length === 0) {
-            if(c.r === 13) {
-              t.push(...stack);
-              if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
-              setSt(ns); return;
-            }
-          } else {
-            let top = t[t.length-1];
-            if(top.c !== c.c && top.r === c.r + 1) {
-              t.push(...stack);
-              if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
-              setSt(ns); return;
-            }
-          }
+        
+        if(moved) {
+          if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
+          setSt(ns); checkWin(ns);
+        } else {
+          // revert
+          if(area === 'waste') setSt({...st}); else setSt({...st}); 
         }
-        // Revert
-        if(area === 'waste') ns.waste.push(...stack);
-        else if(area === 'tab') ns.tab[colIdx].push(...stack);
       };
+
+      // Pointer Event Dragging
+      useEffect(() => {
+        const handleMove = e => { if(drag) setDrag(p => ({...p, cx: e.clientX, cy: e.clientY})); };
+        const handleUp = e => {
+           if(drag) {
+              const dropTarget = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-drop]');
+              const isTap = Math.abs(e.clientX - drag.startX) < 5 && Math.abs(e.clientY - drag.startY) < 5;
+              
+              if (isTap) {
+                 handleAutoMove(drag.area, drag.colIdx, drag.cardIdx);
+              } else if (dropTarget) {
+                 const tArea = dropTarget.getAttribute('data-drop');
+                 const tIdx = parseInt(dropTarget.getAttribute('data-idx') || '0', 10);
+                 
+                 let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
+                 let stack = drag.area === 'waste' ? [ns.waste.pop()] : ns.tab[drag.colIdx].splice(drag.cardIdx);
+                 
+                 if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
+                    if(drag.area === 'tab' && ns.tab[drag.colIdx].length) ns.tab[drag.colIdx][ns.tab[drag.colIdx].length-1].up = true;
+                    setSt(ns); checkWin(ns);
+                 } else { setSt({...st}); } // revert
+              }
+              setDrag(null);
+           }
+        };
+        if(drag) { window.addEventListener('pointermove', handleMove); window.addEventListener('pointerup', handleUp); }
+        return () => { window.removeEventListener('pointermove', handleMove); window.removeEventListener('pointerup', handleUp); }
+      }, [drag, st]);
 
       if(!st) return <div className="py-10 animate-pulse">Shuffling...</div>;
 
-      const renderCard = (c, onClick) => {
+      const renderCard = (c, area, col, idx) => {
         if(!c) return <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-[#050811] opacity-50 shrink-0" />;
         if(!c.up) return <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0" />;
+        
+        // Hide card if it's currently being dragged
+        let isDragging = drag && drag.area === area && drag.colIdx === col && idx >= drag.cardIdx;
+        
         return (
-          <div onClick={onClick} className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'}`}>
+          <div 
+            onPointerDown={(e) => {
+              if (e.button && e.button !== 0) return;
+              e.stopPropagation(); e.preventDefault();
+              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              const rect = e.currentTarget.getBoundingClientRect();
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, cx: e.clientX, cy: e.clientY, ox: e.clientX - rect.left, oy: e.clientY - rect.top });
+            }}
+            className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'} ${isDragging ? 'opacity-0' : 'opacity-100'}`}
+          >
             <div className="text-[10px] sm:text-xs font-bold leading-none">{c.rs}</div>
             <div className="text-sm sm:text-base text-center leading-none flex-1 flex items-center justify-center">{c.s}</div>
           </div>
@@ -499,30 +573,42 @@
       };
 
       return (
-        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center">
-          {/* Top Row: Stock, Waste, Foundations */}
+        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center relative">
+          
+          {drag && (
+            <div className="fixed inset-0 z-50 pointer-events-none">
+               <div style={{ position: 'absolute', left: drag.cx - drag.ox, top: drag.cy - drag.oy }}>
+                  {drag.cards.map((c, i) => (
+                    <div key={c.id} style={{ marginTop: i > 0 ? '-2.5rem' : '0', zIndex: 100+i }} className="relative">
+                      {renderCard(c, null, null, null)}
+                    </div>
+                  ))}
+               </div>
+            </div>
+          )}
+
           <div className="flex justify-between mb-6">
             <div className="flex gap-2">
               <div onClick={handleStock} className="cursor-pointer">{st.stock.length > 0 ? <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0 flex items-center justify-center text-[10px] text-white/50">{st.stock.length}</div> : <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-black flex items-center justify-center text-[10px] text-slate-500">↺</div>}</div>
-              <div>{renderCard(st.waste[st.waste.length-1], () => handleCardClick('waste', 0, 0))}</div>
+              <div data-drop="waste" data-idx="0">{renderCard(st.waste[st.waste.length-1], 'waste', 0, st.waste.length-1)}</div>
             </div>
             <div className="flex gap-1.5">
-              {st.fnd.map((f, i) => <div key={i}>{renderCard(f[f.length-1], null)}</div>)}
+              {st.fnd.map((f, i) => <div key={i} data-drop="fnd" data-idx={i}>{renderCard(f[f.length-1], 'fnd', i, f.length-1)}</div>)}
             </div>
           </div>
-          {/* Tableaus */}
+          
           <div className="flex justify-between flex-1 relative min-h-[220px]">
             {st.tab.map((col, i) => (
-              <div key={i} className="flex flex-col w-10 sm:w-12">
+              <div key={i} data-drop="tab" data-idx={i} className="flex flex-col w-10 sm:w-12 min-h-[4rem]">
                 {col.length === 0 ? renderCard(null) : col.map((c, j) => (
                   <div key={c.id} style={{ marginTop: j > 0 ? '-2.5rem' : '0', zIndex: j }} className="relative">
-                    {renderCard(c, () => handleCardClick('tab', i, j))}
+                    {renderCard(c, 'tab', i, j)}
                   </div>
                 ))}
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 text-center mt-6">💡 แตะที่ไพ่เพื่อย้ายอัตโนมัติ (ขึ้น Foundation หรือเรียงแถวให้เอง)</div>
+          <div className="text-[10px] text-slate-400 text-center mt-6">💡 ลากไพ่ไปวาง หรือ แตะที่ไพ่เพื่อย้ายอัตโนมัติ</div>
         </div>
       );
     }
@@ -531,47 +617,83 @@
     // MAIN APP
     // ==========================================
     function DailyGameApp() {
-      // Fake user context for testing
-      const currentUser = { id: 'M999', displayName: 'Tester (iPad)' };
-      
-      const todayStr = new Date().toLocaleDateString('en-CA');
+      const currentUser = { id: 'M999', displayName: 'Tester (Final UI)' };
+      const todayStr = getGameDateStr();
       
       const [isLeftOpen, setIsLeftOpen] = useState(true);
       const [isRightOpen, setIsRightOpen] = useState(true);
       const [activeTab, setActiveTab] = useState(0); 
       
-      const [isPlaying, setIsPlaying] = useState(false);
-      const [time, setTime] = useState(0);
-      const [gameStatus, setGameStatus] = useState('pending'); // pending, won, lost_bomb, viewing_board
+      const [isPlaying, setIsPlaying] = useStickyState(false, `bma_isP_${todayStr}_${activeTab}`);
+      const [isPaused, setIsPaused] = useStickyState(false, `bma_isPa_${todayStr}_${activeTab}`);
+      const [time, setTime] = useStickyState(0, `bma_time_${todayStr}_${activeTab}`);
+      const [gameStatus, setGameStatus] = useStickyState('pending', `bma_stat_${todayStr}_${activeTab}`); // pending, won, lost, lost_bomb, viewing_board
       const [scores, setScores] = useState([]);
+      const [fgScore, setFgScore] = useStickyState(0, `bma_fgscore_${todayStr}_${activeTab}`); // For Flag Guesser correct count
 
-      useEffect(() => { setIsPlaying(false); setGameStatus('pending'); setTime(0); }, [activeTab]);
-      useEffect(() => { let intv; if(isPlaying && gameStatus === 'pending') intv = setInterval(() => setTime(t=>t+1), 1000); return () => clearInterval(intv); }, [isPlaying, gameStatus]);
+      // Reset menu toggle on mobile
+      useEffect(() => {
+        if(window.innerWidth < 768) { setIsLeftOpen(false); setIsRightOpen(false); }
+      }, [activeTab]);
 
+      // Timer
+      useEffect(() => {
+        let intv;
+        if(isPlaying && gameStatus === 'pending' && !isPaused) {
+          intv = setInterval(() => setTime(t=>t+1), 1000);
+        }
+        return () => clearInterval(intv);
+      }, [isPlaying, gameStatus, isPaused]);
+
+      // Fetch Leaderboard
       useEffect(() => {
         if(!db) return;
-        return db.collection('bma_daily_scores').where('date', '==', todayStr).where('gameIndex', '==', activeTab).onSnapshot(s => {
-          setScores(s.docs.map(d => d.data()).sort((a,b) => a.timeMs - b.timeMs));
-        });
+        return db.collection('bma_daily_scores')
+          .where('date', '==', todayStr)
+          .where('gameIndex', '==', activeTab)
+          .onSnapshot(s => {
+            const l = s.docs.map(d => d.data());
+            if (activeTab === 2) {
+              // Flag Guesser sorting: correct DESC, time ASC
+              l.sort((a,b) => (b.correctCount||0) - (a.correctCount||0) || a.timeMs - b.timeMs);
+            } else {
+              l.sort((a,b) => a.timeMs - b.timeMs);
+            }
+            setScores(l);
+          });
       }, [todayStr, activeTab]);
 
-      const handleGameEnd = async (result) => {
+      const handleGameEnd = async (result, payload = null) => {
         setIsPlaying(false);
-        setGameStatus(result === 'bomb' ? 'lost_bomb' : 'won');
+        setGameStatus(result === 'bomb' ? 'lost_bomb' : result); // win, lost, lost_bomb
         
-        const finalTime = result === 'bomb' ? Infinity : time;
+        let finalTime = result === 'bomb' ? Infinity : time;
+        let cCount = payload?.correctCount || 0;
+        if (activeTab === 2) setFgScore(cCount);
+        
         const existing = scores.find(s => s.userId === currentUser.id);
         
-        if(!existing || finalTime < existing.timeMs) {
+        // Update if no score, or better score (for Flag Guesser, more correct is better. For others, less time is better)
+        let shouldUpdate = false;
+        if (!existing) shouldUpdate = true;
+        else if (activeTab === 2 && (cCount > (existing.correctCount||0) || (cCount === (existing.correctCount||0) && finalTime < existing.timeMs))) shouldUpdate = true;
+        else if (activeTab !== 2 && finalTime < existing.timeMs) shouldUpdate = true;
+
+        if (shouldUpdate) {
           await db.collection('bma_daily_scores').doc(`${todayStr}_${activeTab}_${currentUser.id}`).set({
             userId: currentUser.id, displayName: currentUser.displayName,
-            date: todayStr, timeMs: finalTime, status: result, gameIndex: activeTab, timestamp: Date.now()
+            date: todayStr, timeMs: finalTime, status: result, gameIndex: activeTab, 
+            correctCount: cCount, timestamp: Date.now()
           });
         }
       };
 
       const handleShare = () => {
-        const msg = gameStatus === 'lost_bomb' ? `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣` : `ทำเวลาไปได้ ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+        let msg = '';
+        if (gameStatus === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
+        else if (activeTab === 2) msg = `ทายถูก ${fgScore}/3 ประเทศ ใช้เวลา ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! 🏳️`;
+        else msg = `ทำเวลาไปได้ ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+        
         alert(`จำลองการแชร์ไปที่กระดานโพสต์!\n\n${msg}`);
         setGameStatus('viewing_board');
       };
@@ -581,22 +703,27 @@
           {/* Header */}
           <header className="h-14 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between px-4 shrink-0 shadow-md z-20">
             <div className="flex items-center gap-3">
-              <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs font-bold">☰ เปลี่ยนเกม</button>
-              <div className="font-bold text-amber-300 tracking-wider">🎮 Daily Challenge</div>
+              <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs font-bold px-3 py-1.5">☰ เกม</button>
+              <div className="font-bold text-amber-300 tracking-wider hidden sm:block">🎮 Daily Challenge</div>
             </div>
-            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs">🏆 กระดานคะแนน</button>
+            
+            {isPlaying && gameStatus === 'pending' && (
+              <button onClick={() => setIsPaused(!isPaused)} className="btn-b text-xs px-4 animate-pulse">{isPaused ? '▶ เล่นต่อ' : '⏸ พักเบรก'}</button>
+            )}
+
+            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs px-3 py-1.5">🏆 กระดานคะแนน</button>
           </header>
 
           <div className="flex-1 flex overflow-hidden relative">
             {/* LEFT SIDEBAR: Game Selection */}
-            <aside className={`absolute md:relative z-10 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-all duration-300 ${isLeftOpen ? 'left-0' : '-left-64 md:hidden md:w-0'}`}>
-              <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between">
+            <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${isLeftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+              <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between items-center">
                 <span>เลือกมินิเกมประจำวัน</span>
-                <button onClick={() => setIsLeftOpen(false)} className="md:hidden">✕</button>
+                <button onClick={() => setIsLeftOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
               </div>
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                 {GAMES.map((g, idx) => (
-                  <button key={g.id} onClick={() => { setActiveTab(idx); setIsLeftOpen(false); }} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
+                  <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
                     <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
                   </button>
                 ))}
@@ -605,24 +732,35 @@
 
             {/* CENTER: Game Area */}
             <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
-              {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
-              {isRightOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
+              {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
+              {isRightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
               
               <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
                 <div className="text-center mb-4">
                   <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeTab].icon} {GAMES[activeTab].name}</h2>
-                  <p className="text-xs text-slate-400 mt-1">วันที่: {todayStr}</p>
+                  <p className="text-xs text-slate-400 mt-1">รีเซ็ตทุกวันเวลา 6:00 AM (วันที่: {todayStr})</p>
                 </div>
 
                 <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
                   <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">{fmtTime(time)}</div>
 
                   {!isPlaying && gameStatus === 'pending' ? (
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="flex-1 flex flex-col items-center justify-center">
                       <button onClick={() => setIsPlaying(true)} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
+                      <div className="mt-4 text-xs text-slate-400 bg-[#0F2547] px-4 py-2 rounded-lg">จำกัดสิทธิ์ 1 เกม เล่นได้แค่วันละ 1 ครั้งเท่านั้น</div>
+                    </div>
+                  ) : isPaused ? (
+                    <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-dashed border-[#1E3A5F]">
+                      <div className="text-2xl font-bold text-amber-300 mb-4">⏸ เกมถูกหยุดพักชั่วคราว</div>
+                      <button onClick={() => setIsPaused(false)} className="btn-w px-8 py-3">เล่นต่อ</button>
+                    </div>
+                  ) : gameStatus === 'viewing_board' ? (
+                    <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-[#1E3A5F]">
+                      <div className="text-lg font-bold text-sky-300 mb-2">เกมวันนี้จบลงแล้ว เล่นได้อีกครั้งพรุ่งนี้</div>
+                      <div className="text-xs text-slate-400">เลื่อนดูตารางคะแนนทางขวาได้เลย</div>
                     </div>
                   ) : (
-                    <div className="flex-1 flex flex-col justify-center">
+                    <div className="flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative">
                       {activeTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={handleGameEnd} />}
                       {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={handleGameEnd} />}
                       {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={handleGameEnd} />}
@@ -631,16 +769,18 @@
                   )}
 
                   {/* GAME OVER MODAL POP-UP */}
-                  {(gameStatus === 'won' || gameStatus === 'lost_bomb') && (
-                    <Modal title={gameStatus === 'won' ? '🎉 ยินดีด้วย!' : '💥 บึ้มมม! โดนระเบิด'} onClose={() => setGameStatus('viewing_board')}>
+                  {(gameStatus === 'won' || gameStatus === 'lost_bomb' || gameStatus === 'lost') && (
+                    <Modal title={gameStatus === 'won' ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameStatus('viewing_board')}>
                       <div className="space-y-4">
                         <p className="text-slate-300 text-sm">
-                          {gameStatus === 'won' ? `คุณเคลียร์เกม ${GAMES[activeTab].name} สำเร็จ` : `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ`}
+                          {gameStatus === 'won' ? `คุณเคลียร์เกม ${GAMES[activeTab].name} สำเร็จ` : 
+                           gameStatus === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
+                           `คุณตอบผิด! ทายถูกไป ${fgScore}/3 ประเทศ`}
                         </p>
                         <div className="text-3xl font-mono font-bold text-amber-300 my-2">
                           {gameStatus === 'won' ? fmtTime(time) : 'GAME OVER'}
                         </div>
-                        <button onClick={handleShare} className="btn-b w-full py-3 shadow">📤 แชร์สถิติลงกระดานโพสต์</button>
+                        <button onClick={handleShare} className="btn-b w-full py-3 shadow hover:scale-105 transition-transform">📤 แชร์สถิติลงกระดานโพสต์</button>
                       </div>
                     </Modal>
                   )}
@@ -649,20 +789,23 @@
             </main>
 
             {/* RIGHT SIDEBAR: Leaderboard */}
-            <aside className={`absolute md:relative z-10 w-64 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-all duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:hidden md:w-0'}`}>
+            <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
               <div className="p-4 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between">
                 <span>🏆 อันดับ {GAMES[activeTab].name}</span>
-                <button onClick={() => setIsRightOpen(false)} className="md:hidden text-slate-400">✕</button>
+                <button onClick={() => setIsRightOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนเคลียร์ได้วันนี้</div> : 
+                {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนมีสถิติวันนี้</div> : 
                  scores.map((s, i) => {
                   const isBomb = s.status === 'bomb' || s.timeMs === Infinity;
                   return (
                     <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
                       <div className="flex items-center gap-2.5">
                         <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb?'text-yellow-400':i===1&&!isBomb?'text-slate-300':i===2&&!isBomb?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
-                        <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
+                          {activeTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.correctCount||0}/3</span>}
+                        </div>
                       </div>
                       <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
                         {isBomb ? '💥 Bomb' : fmtTime(s.timeMs)}
