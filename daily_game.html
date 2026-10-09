@@ -2,8 +2,8 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daily Game Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Daily Game - The Blue Moon</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -12,25 +12,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
-    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; }
+    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; touch-action: manipulation; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
     .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; }
     .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; }
-    
-    /* Sudoku grid lines */
-    .sudoku-grid { border: 2px solid #3B82F6; }
-    .sudoku-cell { border: 1px solid #1E3A5F; width: 36px; height: 36px; text-align: center; font-size: 16px; font-weight: bold; background: #050811; color: #fff; outline: none; }
-    .sudoku-cell.fixed { background: #0B1325; color: #60A5FA; pointer-events: none; }
-    .sudoku-cell:focus { background: rgba(59, 130, 246, 0.2); }
-    .border-r-thick { border-right: 2px solid #3B82F6; }
-    .border-b-thick { border-bottom: 2px solid #3B82F6; }
-    
-    /* Minesweeper */
-    .ms-cell { width: 30px; height: 30px; border: 1px solid #1E3A5F; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; cursor: pointer; user-select: none; }
-    .ms-cell.hidden { background: #0F2547; }
-    .ms-cell.hidden:hover { background: #1E3A5F; }
-    .ms-cell.revealed { background: #050811; }
+    .notes-grid { display: flex; flex-wrap: wrap; width: 100%; height: 100%; padding: 1px; }
+    .note-item { width: 33.33%; height: 33.33%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: #94A3B8; font-weight: 400; line-height: 1; }
   </style>
 </head>
 <body>
@@ -38,6 +26,7 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
     
+    // --- FIREBASE SETUP ---
     const firebaseConfig = {
       apiKey: "AIzaSyD80Ml5mk7IGFOx0qx4HRL-D_3TEy9h0YI",
       authDomain: "tbmasite.firebaseapp.com",
@@ -47,102 +36,170 @@
       appId: "1:616851307256:web:15b49dfec2de521af6990d",
       measurementId: "G-JDW0E0S138"
     };
-
     const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
     const db = firebase.firestore(app);
-    const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
+
     const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
     const GAME_NAMES = ["Sudoku (9x9)", "Minesweeper", "Flag Guesser"];
 
+    // --- ROBUST PRNG GENERATOR ---
     class PRNG {
       constructor(seedStr) {
-        this.h = 2166136261 >>> 0;
-        for(let i=0;i<seedStr.length;i++) { this.h ^= seedStr.charCodeAt(i); this.h = Math.imul(this.h, 16777619); }
+        let h = 2166136261 >>> 0;
+        for(let i=0; i<seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); }
+        this.a = h;
       }
-      next() { this.h += this.h << 10; this.h ^= this.h >>> 6; this.h += this.h << 3; this.h ^= this.h >>> 11; this.h += this.h << 15; return (this.h >>> 0); }
-      nextFloat() { return (this.next() >>> 0) / 4294967296; }
+      next() {
+        let t = this.a += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0);
+      }
+      nextFloat() { return this.next() / 4294967296; }
       nextInt(min, max) { return min + Math.floor(this.nextFloat() * (max - min + 1)); }
-      shuffle(arr) { let res = [...arr]; for(let i=res.length-1; i>0; i--) { const j = this.nextInt(0, i); [res[i], res[j]] = [res[j], res[i]]; } return res; }
+      shuffle(arr) {
+        let res = [...arr];
+        for(let i=res.length-1; i>0; i--) { const j = this.nextInt(0, i); [res[i], res[j]] = [res[j], res[i]]; }
+        return res;
+      }
     }
 
-    function generateSudoku(seedStr) {
-      const rng = new PRNG(seedStr);
-      const base = [
-        [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
-        [2,3,4,5,6,7,8,9,1],[5,6,7,8,9,1,2,3,4],[8,9,1,2,3,4,5,6,7],
-        [3,4,5,6,7,8,9,1,2],[6,7,8,9,1,2,3,4,5],[9,1,2,3,4,5,6,7,8]
-      ];
-      for(let block=0; block<3; block++) {
-        for(let i=0; i<3; i++) {
-          const r1 = block*3+i, r2 = block*3+rng.nextInt(0,2);
-          const temp = base[r1]; base[r1] = base[r2]; base[r2] = temp;
-        }
-      }
-      const map = rng.shuffle([1,2,3,4,5,6,7,8,9]);
-      const mapped = base.map(row => row.map(val => map[val-1]));
-      const puzzle = mapped.map(r => [...r]);
-      let cellsToRemove = rng.nextInt(35, 45);
-      while(cellsToRemove > 0) {
-        const r = rng.nextInt(0,8), c = rng.nextInt(0,8);
-        if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
-      }
-      return { solution: mapped, puzzle };
-    }
-
-    function SudokuGame({ todayStr, onWin }) {
+    // ==========================================
+    // 1. SUDOKU COMPONENT
+    // ==========================================
+    function SudokuGame({ dateSeed, onWin }) {
       const [board, setBoard] = useState(null);
-      const [fixed, setFixed] = useState(null);
+      const [selectedCell, setSelectedCell] = useState(null);
+      const [noteMode, setNoteMode] = useState(false);
+
       useEffect(() => {
-        const { puzzle } = generateSudoku(todayStr);
-        setBoard(puzzle.map(r => [...r]));
-        setFixed(puzzle.map(r => r.map(c => c !== '')));
-      }, [todayStr]);
+        const rng = new PRNG(dateSeed + '_sudoku_fixed');
+        let base = [
+          [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
+          [2,3,4,5,6,7,8,9,1],[5,6,7,8,9,1,2,3,4],[8,9,1,2,3,4,5,6,7],
+          [3,4,5,6,7,8,9,1,2],[6,7,8,9,1,2,3,4,5],[9,1,2,3,4,5,6,7,8]
+        ].map(r => [...r]);
+
+        for(let block=0; block<3; block++) {
+          for(let i=0; i<3; i++) {
+            const r1 = block*3+i, r2 = block*3+rng.nextInt(0,2);
+            const temp = [...base[r1]]; base[r1] = [...base[r2]]; base[r2] = temp;
+          }
+        }
+        const mapVals = rng.shuffle([1,2,3,4,5,6,7,8,9]);
+        const fullGrid = base.map(row => row.map(val => mapVals[val-1]));
+        
+        const puzzle = fullGrid.map(r => [...r]);
+        let cellsToRemove = rng.nextInt(38, 48);
+        while(cellsToRemove > 0) {
+          const r = rng.nextInt(0,8), c = rng.nextInt(0,8);
+          if(puzzle[r][c] !== '') { puzzle[r][c] = ''; cellsToRemove--; }
+        }
+
+        const initBoard = puzzle.map(r => r.map(val => ({ val: val, fixed: val !== '', notes: [] })));
+        setBoard(initBoard);
+        setSelectedCell(null);
+      }, [dateSeed]);
 
       const checkWin = (b) => {
         for(let r=0; r<9; r++) {
-          const rowSet = new Set(), colSet = new Set();
-          for(let c=0; c<9; c++) {
-            if(b[r][c]==='') return false;
-            rowSet.add(b[r][c]); colSet.add(b[c][r]);
+          const rSet = new Set(), cSet = new Set(), bSet = new Set();
+          for(let i=0; i<9; i++) {
+            if(!b[r][i].val) return false; rSet.add(b[r][i].val);
+            if(!b[i][r].val) return false; cSet.add(b[i][r].val);
+            const br = Math.floor(r/3)*3 + Math.floor(i/3);
+            const bc = (r%3)*3 + (i%3);
+            if(!b[br][bc].val) return false; bSet.add(b[br][bc].val);
           }
-          if(rowSet.size !== 9 || colSet.size !== 9) return false;
+          if(rSet.size !== 9 || cSet.size !== 9 || bSet.size !== 9) return false;
         }
         onWin();
       };
 
-      const handleChange = (r, c, val) => {
-        if(fixed[r][c]) return;
-        const v = val.replace(/[^1-9]/g, '').slice(-1);
-        const newB = [...board]; newB[r] = [...newB[r]]; newB[r][c] = v ? parseInt(v) : '';
-        setBoard(newB); checkWin(newB);
+      const handleNumpad = (num) => {
+        if(!selectedCell) return;
+        const [r, c] = selectedCell;
+        if(board[r][c].fixed) return;
+
+        const newBoard = board.map(row => row.map(cell => ({...cell, notes: [...cell.notes]})));
+        
+        if(num === 'DEL') {
+          newBoard[r][c].val = ''; newBoard[r][c].notes = [];
+        } else if(noteMode) {
+          const nSet = new Set(newBoard[r][c].notes);
+          if(nSet.has(num)) nSet.delete(num); else nSet.add(num);
+          newBoard[r][c].notes = Array.from(nSet).sort();
+          newBoard[r][c].val = '';
+        } else {
+          newBoard[r][c].val = num; newBoard[r][c].notes = [];
+        }
+        setBoard(newBoard);
+        if(num !== 'DEL' && !noteMode) checkWin(newBoard);
       };
 
-      if(!board) return <div>Loading...</div>;
+      if(!board) return <div className="animate-pulse py-10">Loading Grid...</div>;
+
+      const selVal = selectedCell ? board[selectedCell[0]][selectedCell[1]].val : null;
+
       return (
-        <div className="flex justify-center my-4">
-          <div className="sudoku-grid flex flex-col">
-            {board.map((row, r) => (
-              <div key={r} className={`flex ${r%3===2 && r!==8 ? 'border-b-thick' : ''}`}>
-                {row.map((val, c) => (
-                  <input key={c} value={val} onChange={(e) => handleChange(r, c, e.target.value)} className={`sudoku-cell ${fixed[r][c] ? 'fixed' : ''} ${c%3===2 && c!==8 ? 'border-r-thick' : ''}`} maxLength={1} />
-                ))}
-              </div>
-            ))}
+        <div className="flex flex-col items-center space-y-5 w-full">
+          {/* HARDCODED GRID FOR IPAD SAFARI */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 36px)', gap: '1px', backgroundColor: '#3B82F6', border: '2px solid #3B82F6', margin: '0 auto', width: 'max-content' }}>
+            {board.flatMap((row, r) => row.map((cell, c) => {
+              const isSel = selectedCell && selectedCell[0] === r && selectedCell[1] === c;
+              const isHi = !isSel && selVal && cell.val === selVal;
+              const borderR = c % 3 === 2 && c !== 8 ? '2px' : '0px';
+              const borderB = r % 3 === 2 && r !== 8 ? '2px' : '0px';
+              
+              let bgClass = cell.fixed ? '#0B1325' : '#050811';
+              let txtClass = cell.fixed ? '#60A5FA' : '#ffffff';
+              if (isSel) bgClass = 'rgba(59, 130, 246, 0.5)';
+              else if (isHi) bgClass = 'rgba(59, 130, 246, 0.2)';
+
+              return (
+                <div 
+                  key={`${r}-${c}`} 
+                  onClick={() => setSelectedCell([r, c])}
+                  style={{ width: '36px', height: '36px', backgroundColor: bgClass, color: txtClass, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginRight: borderR, marginBottom: borderB }}
+                >
+                  {cell.val ? cell.val : (
+                    <div className="notes-grid">
+                      {[1,2,3,4,5,6,7,8,9].map(n => <div key={n} className="note-item">{cell.notes.includes(n) ? n : ''}</div>)}
+                    </div>
+                  )}
+                </div>
+              );
+            }))}
+          </div>
+
+          <div className="w-full max-w-[340px] space-y-2">
+            <div className="flex justify-between items-center bg-[#050811] p-1.5 rounded-xl border border-[#1E3A5F]">
+              <button onClick={() => setNoteMode(false)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
+              <button onClick={() => setNoteMode(true)} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
+            </div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-12 text-lg font-bold">{n}</button>)}
+              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 active:text-white text-red-300 border border-red-900/50 rounded-lg h-12 text-sm font-bold">DEL</button>
+            </div>
           </div>
         </div>
       );
     }
 
-    function MinesweeperGame({ todayStr, onWin }) {
+    // ==========================================
+    // 2. MINESWEEPER COMPONENT
+    // ==========================================
+    function MinesweeperGame({ dateSeed, onWin }) {
       const COLS = 9, ROWS = 9, MINES = 10;
       const [grid, setGrid] = useState([]);
       const [revealed, setRevealed] = useState([]);
       const [flagged, setFlagged] = useState([]);
       const [gameOver, setGameOver] = useState(false);
       const [minesLeft, setMinesLeft] = useState(MINES);
+      const [retryCount, setRetryCount] = useState(0);
+      const [mode, setMode] = useState('dig');
 
       const initGrid = () => {
-        const rng = new PRNG(todayStr + Date.now());
+        const rng = new PRNG(dateSeed + '_ms_fixed_' + retryCount);
         let g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
         let mPlaced = 0;
         while(mPlaced < MINES) {
@@ -167,24 +224,27 @@
         setGameOver(false); setMinesLeft(MINES);
       };
 
-      useEffect(() => { initGrid(); }, [todayStr]);
+      useEffect(() => { initGrid(); }, [dateSeed, retryCount]);
 
-      const handleRightClick = (e, r, c) => {
-        e.preventDefault();
+      const handleFlag = (r, c) => {
         if(gameOver || revealed[r][c]) return;
         const newF = [...flagged]; newF[r] = [...newF[r]]; newF[r][c] = !newF[r][c];
-        setFlagged(newF); setMinesLeft(MINES - newF.flat().filter(Boolean).length);
+        setFlagged(newF);
+        let fCount = 0; newF.forEach(row => row.forEach(v => { if(v) fCount++; }));
+        setMinesLeft(MINES - fCount);
       };
 
-      const handleLeftClick = (r, c) => {
+      const handleDig = (r, c) => {
         if(gameOver || flagged[r][c] || revealed[r][c]) return;
-        if(grid[r][c] === 'M') { setGameOver(true); alert('โดนระเบิด! ลองใหม่นะ'); initGrid(); return; }
+        if(grid[r][c] === 'M') { 
+          setGameOver(true); alert('โดนระเบิด! 💥 เริ่มกระดานใหม่นะ'); setRetryCount(rc => rc+1); return; 
+        }
         const newR = [...revealed.map(row=>[...row])];
         const floodFill = (rr, cc) => {
           if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
           newR[rr][cc] = true;
           if(grid[rr][cc] === 0) {
-            for(let dr=-1; dr<=1; dr++) { for(let dc=-1; dc<=1; dc++) floodFill(rr+dr, cc+dc); }
+            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) floodFill(rr+dr, cc+dc);
           }
         };
         floodFill(r, c); setRevealed(newR);
@@ -192,40 +252,55 @@
         if(revCount === ROWS*COLS - MINES) { setGameOver(true); onWin(); }
       };
 
-      if(!grid.length) return null;
-      const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-yellow-400','text-cyan-400','text-black','text-gray-400'];
+      if(!grid.length) return <div className="animate-pulse py-10">Loading Grid...</div>;
+      const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-amber-400','text-cyan-400','text-pink-400','text-gray-400'];
 
       return (
-        <div className="flex flex-col items-center my-4 space-y-4">
-          <div className="font-bold text-amber-300">💣 ระเบิดที่เหลือ: {minesLeft}</div>
-          <div className="border-2 border-[#1E3A5F] bg-[#050811] p-1">
-            {grid.map((row, r) => (
-              <div key={r} className="flex">
-                {row.map((val, c) => (
-                  <div key={c} onClick={() => handleLeftClick(r,c)} onContextMenu={(e) => handleRightClick(e,r,c)} className={`ms-cell ${revealed[r][c] ? 'revealed' : 'hidden'} ${revealed[r][c] && val ? colors[val] : ''}`}>
-                    {flagged[r][c] ? '🚩' : (revealed[r][c] ? (val === 0 ? '' : val) : '')}
-                  </div>
-                ))}
-              </div>
-            ))}
+        <div className="flex flex-col items-center space-y-4 w-full">
+          <div className="font-bold text-amber-300 text-lg">💣 ระเบิดที่เหลือ: {minesLeft}</div>
+          <div className="flex gap-2 w-full max-w-[280px]">
+            <button onClick={() => setMode('dig')} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === 'dig' ? 'bg-sky-500 text-white shadow-lg' : 'bg-[#0F2547] text-slate-400'}`}>⛏️ ขุด</button>
+            <button onClick={() => setMode('flag')} className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white shadow-lg' : 'bg-[#0F2547] text-slate-400'}`}>🚩 ปักธง</button>
           </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 36px)', gap: '1px', backgroundColor: '#3B82F6', border: '2px solid #3B82F6', margin: '0 auto', width: 'max-content' }}>
+            {grid.flatMap((row, r) => row.map((val, c) => {
+              const isRev = revealed[r][c], isFlg = flagged[r][c];
+              let bgClass = isRev ? '#050811' : '#0F2547';
+              return (
+                <div
+                  key={`${r}-${c}`}
+                  onClick={() => mode === 'dig' ? handleDig(r,c) : handleFlag(r,c)}
+                  className={isRev && val ? colors[val] : ''}
+                  style={{ width: '36px', height: '36px', backgroundColor: bgClass, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  {isFlg ? '🚩' : (isRev ? (val === 0 ? '' : val) : '')}
+                </div>
+              );
+            }))}
+          </div>
+          <div className="text-[11px] text-slate-400">💡 เลือกโหมด "ขุด" หรือ "ปักธง" ก่อนแตะที่ช่องตาราง</div>
         </div>
       );
     }
 
-    function FlagGuesserGame({ todayStr, onWin }) {
+    // ==========================================
+    // 3. FLAG GUESSER COMPONENT
+    // ==========================================
+    function FlagGuesserGame({ dateSeed, onWin }) {
       const ALL_FLAGS = [
         {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'United States'},
         {c:'gb',n:'United Kingdom'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
         {c:'it',n:'Italy'},{c:'br',n:'Brazil'},{c:'ar',n:'Argentina'},{c:'au',n:'Australia'},
         {c:'ca',n:'Canada'},{c:'vn',n:'Vietnam'},{c:'sg',n:'Singapore'},{c:'ru',n:'Russia'},
-        {c:'in',n:'India'},{c:'za',n:'South Africa'},{c:'mx',n:'Mexico'},{c:'es',n:'Spain'}
+        {c:'in',n:'India'},{c:'za',n:'South Africa'},{c:'mx',n:'Mexico'},{c:'es',n:'Spain'},
+        {c:'fi',n:'Finland'},{c:'se',n:'Sweden'},{c:'no',n:'Norway'},{c:'ch',n:'Switzerland'}
       ];
       const [rounds, setRounds] = useState([]);
       const [currentRound, setCurrentRound] = useState(0);
 
       useEffect(() => {
-        const rng = new PRNG(todayStr);
+        const rng = new PRNG(dateSeed + '_flag');
         const shuffled = rng.shuffle([...ALL_FLAGS]);
         const rds = [];
         for(let i=0; i<3; i++) {
@@ -236,116 +311,120 @@
           rds.push({ target, options: rng.shuffle(options) });
         }
         setRounds(rds);
-      }, [todayStr]);
+      }, [dateSeed]);
 
       if(!rounds.length) return null;
 
       const handleGuess = (code) => {
         if(code === rounds[currentRound].target.c) {
           if(currentRound === 2) onWin(); else setCurrentRound(c => c+1);
-        } else {
-          alert('ผิดครับ! ลองเลือกใหม่');
-        }
+        } else { alert('ผิดครับ! โดนบวกเวลาทดเจ็บ 5 วินาที!'); }
       };
 
       const rd = rounds[currentRound];
       return (
-        <div className="flex flex-col items-center my-4 space-y-4">
-          <div className="font-bold text-amber-300">ด่านที่ {currentRound + 1} / 3</div>
-          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-40 border-2 border-white/20 rounded shadow-lg" />
-          <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
-            {rd.options.map(opt => <button key={opt.c} onClick={() => handleGuess(opt.c)} className="btn-w text-sm py-2">{opt.n}</button>)}
+        <div className="flex flex-col items-center my-4 space-y-6 w-full">
+          <div className="font-bold text-amber-300 text-lg">ด่านที่ {currentRound + 1} / 3</div>
+          <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-44 sm:h-52 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-sm mt-4">
+            {rd.options.map(opt => <button key={opt.c} onClick={() => handleGuess(opt.c)} className="btn-w text-sm py-3 active:scale-95 transition-transform shadow-lg">{opt.n}</button>)}
           </div>
         </div>
       );
     }
 
-    function DailyGame() {
-      const [currentUser, setCurrentUser] = useState({ id: 'M999', displayName: 'Tester (ผู้ทดสอบ)' });
+    // ==========================================
+    // MAIN DAILY GAME WRAPPER
+    // ==========================================
+    function DailyGameApp() {
+      const currentUser = { id: 'M999', displayName: 'Tester (iPad)' };
       const todayStr = new Date().toLocaleDateString('en-CA');
-      const rng = new PRNG(todayStr);
-      const gameIdx = rng.nextInt(0, 2);
-      
+      const [activeTab, setActiveTab] = useState(0);
       const [isPlaying, setIsPlaying] = useState(false);
       const [time, setTime] = useState(0);
       const [isWon, setIsWon] = useState(false);
       const [scores, setScores] = useState([]);
 
-      useEffect(() => {
-        let intv;
-        if(isPlaying && !isWon) intv = setInterval(() => setTime(t=>t+1), 1000);
-        return () => clearInterval(intv);
-      }, [isPlaying, isWon]);
+      useEffect(() => { setIsPlaying(false); setIsWon(false); setTime(0); }, [activeTab]);
+      useEffect(() => { let intv; if(isPlaying && !isWon) intv = setInterval(() => setTime(t=>t+1), 1000); return () => clearInterval(intv); }, [isPlaying, isWon]);
 
       useEffect(() => {
         if(!db) return;
-        return db.collection('bma_daily_scores').where('date', '==', todayStr).onSnapshot(s => {
-          const l = s.docs.map(d => d.data()).sort((a,b) => a.timeMs - b.timeMs);
-          setScores(l);
+        return db.collection('bma_daily_scores').where('date', '==', todayStr).where('gameIndex', '==', activeTab).onSnapshot(s => {
+          setScores(s.docs.map(d => d.data()).sort((a,b) => a.timeMs - b.timeMs));
         });
-      }, [todayStr]);
+      }, [todayStr, activeTab]);
 
       const handleWin = async () => {
         setIsWon(true); setIsPlaying(false);
         const existing = scores.find(s => s.userId === currentUser.id);
         if(!existing || time < existing.timeMs) {
-          await db.collection('bma_daily_scores').doc(todayStr + '_' + currentUser.id).set({
-            userId: currentUser.id, displayName: currentUser.displayName,
-            date: todayStr, timeMs: time, gameIndex: gameIdx, timestamp: Date.now()
-          });
+          await db.collection('bma_daily_scores').doc(`${todayStr}_${activeTab}_${currentUser.id}`).set({ userId: currentUser.id, displayName: currentUser.displayName, date: todayStr, timeMs: time, gameIndex: activeTab, timestamp: Date.now() });
         }
       };
 
-      const handleShare = () => alert(`จำลองการแชร์ไปกระดานโพสต์!\nข้อความ: ทำเวลาไปได้ ${fmtTime(time)} นาที! ใครว่างมาลองทำลายสถิติดูนะ 😎`);
-
       return (
-        <div className="min-h-screen pt-10 px-4">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <div className="card p-6 text-center space-y-4 relative overflow-hidden">
-              <h2 className="text-2xl font-bold text-amber-300">🎯 Daily Game วันนี้: {GAME_NAMES[gameIdx]}</h2>
-              <p className="text-sm text-slate-300">ทดสอบระบบเล่นเกมและบันทึกคะแนนลง Firebase</p>
-              
-              <div className="font-mono text-3xl font-bold">{fmtTime(time)}</div>
+        <div className="min-h-screen pt-4 pb-12 px-4 max-w-xl mx-auto flex flex-col">
+          <div className="text-center mb-5 mt-2">
+            <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-wider text-amber-300">🎮 Daily Challenge</h1>
+            <p className="text-xs text-slate-400 mt-1">ประจำวันที่ {todayStr}</p>
+          </div>
 
-              {!isPlaying && !isWon ? (
-                <button onClick={() => setIsPlaying(true)} className="btn-w text-lg px-8 py-3 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.3)]">เริ่มเล่นเกม</button>
-              ) : (
-                <div className="bg-[#050811] rounded-xl p-4 min-h-[300px] flex items-center justify-center border border-[#1E3A5F]">
-                  {gameIdx === 0 && <SudokuGame todayStr={todayStr} onWin={handleWin} />}
-                  {gameIdx === 1 && <MinesweeperGame todayStr={todayStr} onWin={handleWin} />}
-                  {gameIdx === 2 && <FlagGuesserGame todayStr={todayStr} onWin={handleWin} />}
-                </div>
-              )}
+          <div className="flex gap-1.5 p-1.5 bg-[#0B1325] rounded-xl border border-[#1E3A5F] mb-6 shadow-lg">
+            {GAME_NAMES.map((name, idx) => (
+              <button key={idx} onClick={() => setActiveTab(idx)} className={`flex-1 py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-colors ${activeTab === idx ? 'bg-white text-[#050811] shadow' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'}`}>
+                <span className="hidden sm:inline">{name}</span><span className="sm:hidden">{name.split(' ')[0]}</span>
+              </button>
+            ))}
+          </div>
 
-              {isWon && (
-                <div className="space-y-3 pt-4 border-t border-[#1E3A5F]">
-                  <div className="text-xl font-bold text-emerald-400">🎉 ยินดีด้วย! คุณเคลียร์เกมสำเร็จ</div>
-                  <button onClick={handleShare} className="btn-b text-sm">📤 จำลองการแชร์สถิติ</button>
-                </div>
-              )}
-            </div>
+          <div className="card p-4 sm:p-6 text-center flex-1 flex flex-col justify-center relative overflow-hidden shadow-2xl">
+            <div className="font-mono text-4xl sm:text-5xl font-bold text-white mb-5 drop-shadow-md">{fmtTime(time)}</div>
 
-            <div className="card p-5">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">🏆 Leaderboard ประจำวัน</h3>
-              <div className="space-y-2">
-                {scores.length === 0 ? <div className="text-center text-slate-400 text-sm py-4">ยังไม่มีใครเคลียร์เกมได้ในวันนี้</div> : 
-                 scores.map((s, i) => (
-                  <div key={s.userId} className="flex justify-between items-center p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
-                    <div className="flex items-center gap-3">
-                      <span className={`font-bold w-6 text-center ${i===0?'text-yellow-400':i===1?'text-slate-300':i===2?'text-amber-600':'text-slate-500'}`}>#{i+1}</span>
-                      <span className="font-bold text-sm">{s.displayName}</span>
-                    </div>
-                    <span className="font-mono text-sky-300 font-bold">{fmtTime(s.timeMs)}</span>
-                  </div>
-                ))}
+            {!isPlaying && !isWon ? (
+              <div className="py-16">
+                <button onClick={() => setIsPlaying(true)} className="btn-w text-lg sm:text-xl px-10 py-4 animate-pulse shadow-[0_0_30px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform">
+                  ▶ เริ่มจับเวลาเล่นเกม
+                </button>
               </div>
+            ) : (
+              <div className="bg-[#050811] rounded-xl p-3 sm:p-5 min-h-[400px] flex flex-col items-center justify-center border border-[#1E3A5F] w-full">
+                {activeTab === 0 && <SudokuGame dateSeed={todayStr} onWin={handleWin} />}
+                {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onWin={handleWin} />}
+                {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onWin={handleWin} />}
+              </div>
+            )}
+
+            {isWon && (
+              <div className="mt-6 pt-5 border-t border-[#1E3A5F] space-y-4">
+                <div className="text-xl sm:text-2xl font-bold text-emerald-400">🎉 เคลียร์เกมสำเร็จ!</div>
+                <button onClick={() => alert(`จำลองการแชร์ไปกระดานโพสต์!\nเกม: ${GAME_NAMES[activeTab]}\nเวลา: ${fmtTime(time)} นาที`)} className="btn-w w-full py-3 shadow-lg hover:bg-slate-200">
+                  📤 แชร์สถิติให้เพื่อนรู้
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="card p-5 sm:p-6 mt-6 shadow-xl">
+            <h3 className="font-bold text-base sm:text-lg mb-4 flex items-center gap-2">🏆 อันดับของวันนี้ ({GAME_NAMES[activeTab]})</h3>
+            <div className="space-y-2.5">
+              {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-6 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีใครทำเวลาได้ในเกมนี้ของวันนี้ เป็นคนแรกเลยสิ!</div> : 
+               scores.map((s, i) => (
+                <div key={s.userId} className="flex justify-between items-center p-3 sm:p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] shadow-sm">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <span className={`font-bold w-6 sm:w-8 text-center text-sm sm:text-base ${i===0?'text-yellow-400 text-lg drop-shadow-md':i===1?'text-slate-300':i===2?'text-amber-600':'text-slate-500'}`}>#{i+1}</span>
+                    <span className="font-bold text-sm sm:text-base truncate max-w-[150px] sm:max-w-[200px]">{s.displayName}</span>
+                  </div>
+                  <span className="font-mono text-sky-300 font-bold text-base sm:text-lg bg-sky-950/30 px-3 py-1 rounded-lg">{fmtTime(s.timeMs)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<DailyGame />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<DailyGameApp />);
   </script>
 </body>
 </html>
