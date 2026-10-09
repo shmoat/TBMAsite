@@ -48,40 +48,35 @@
     const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
     const db = firebase.firestore(app);
 
-    const fmtTime = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+    const fmtTime = (s) => {
+        if(!isFinite(s) || s === Infinity) return "Bomb";
+        return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+    };
     const GAMES = [
       { id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" },
       { id: 'minesweeper', name: "Minesweeper", icon: "💣" },
       { id: 'flag', name: "Flag Guesser", icon: "🏳️" },
-      { id: 'solitaire', name: "Solitaire", icon: "🃏" }
+      { id: 'solitaire', name: "Solitaire", icon: "🃏" },
+      { id: 'wordle', name: "Wordle", icon: "🔤" }
     ];
 
-    // --- GAME DATE CALCULATOR (Reset at 6:00 AM GMT+7) ---
     function getGameDateStr() {
       const now = new Date();
       const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
       const bkkDate = new Date(utcMs + (7 * 3600000));
-      if (bkkDate.getHours() < 6) {
-        bkkDate.setDate(bkkDate.getDate() - 1);
-      }
+      if (bkkDate.getHours() < 6) bkkDate.setDate(bkkDate.getDate() - 1);
       return `${bkkDate.getFullYear()}-${(bkkDate.getMonth()+1).toString().padStart(2,'0')}-${bkkDate.getDate().toString().padStart(2,'0')}`;
     }
 
-    // --- STICKY STATE HOOK (Persist across tabs/reloads) ---
     function useStickyState(defaultValue, key) {
       const [value, setValue] = useState(() => {
-        try {
-          const stickyValue = window.localStorage.getItem(key);
-          return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
-        } catch (e) { return defaultValue; }
+        try { const v = window.localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } 
+        catch (e) { return defaultValue; }
       });
-      useEffect(() => {
-        window.localStorage.setItem(key, JSON.stringify(value));
-      }, [key, value]);
+      useEffect(() => { window.localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
       return [value, setValue];
     }
 
-    // --- PRNG ---
     class PRNG {
       constructor(seedStr) {
         let h = 2166136261 >>> 0;
@@ -121,7 +116,7 @@
       const [noteMode, setNoteMode] = useState(false);
 
       useEffect(() => {
-        if (board) return; // Only init if empty
+        if (board) return; 
         const rng = new PRNG(dateSeed + '_sudoku');
         let base = [
           [1,2,3,4,5,6,7,8,9],[4,5,6,7,8,9,1,2,3],[7,8,9,1,2,3,4,5,6],
@@ -192,7 +187,7 @@
         if(num !== 'DEL' && !noteMode) checkWin(newB);
       };
 
-      if(!board) return <div className="py-10 animate-pulse text-sky-400 font-mono">กำลังสร้างกระดาน...</div>;
+      if(!board) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
       const selVal = selectedCell ? board[selectedCell[0]][selectedCell[1]].val : null;
 
       return (
@@ -238,7 +233,7 @@
     }
 
     // ==========================================
-    // 2. MINESWEEPER (Safe First Click + Mouse Right Click)
+    // 2. MINESWEEPER
     // ==========================================
     function MinesweeperGame({ dateSeed, onEnd }) {
       const COLS = 9, ROWS = 9;
@@ -250,7 +245,7 @@
       const [mode, setMode] = useState('dig'); 
 
       useEffect(() => {
-        if (grid) return; // Already init
+        if (grid) return;
         const rng = new PRNG(dateSeed + '_msConfig');
         const m = rng.nextInt(10, 20);
         setNumMines(m);
@@ -274,16 +269,14 @@
 
         let g = grid;
         if(isFirst) {
-          const rng = new PRNG(dateSeed + '_ms_' + Date.now()); // randomizing based on action time to ensure randomness
+          const rng = new PRNG(dateSeed + '_ms_' + Date.now()); 
           g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
           let placed = 0;
           while(placed < numMines) {
             let rr = rng.nextInt(0,ROWS-1), cc = rng.nextInt(0,COLS-1);
-            // Safe 3x3 zone around first click
-            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; 
+            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; // Safe zone
             if(g[rr][cc] !== 'M') { g[rr][cc] = 'M'; placed++; }
           }
-          // Calculate numbers
           for(let i=0; i<ROWS; i++) {
             for(let j=0; j<COLS; j++) {
               if(g[i][j] === 'M') continue;
@@ -319,7 +312,7 @@
         if(revCount === ROWS*COLS - numMines) onEnd('win');
       };
 
-      if(!grid) return <div className="animate-pulse py-10">Loading Grid...</div>;
+      if(!grid) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
       
       const colors = ['','text-blue-400','text-green-400','text-red-400','text-purple-400','text-amber-400','text-cyan-400','text-pink-400','text-gray-400'];
       const fCount = flagged ? flagged.flat().filter(Boolean).length : 0;
@@ -334,7 +327,7 @@
             <button onClick={() => setMode('flag')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-colors ${mode === 'flag' ? 'bg-red-500 text-white' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F]'}`}>🚩 ปักธง</button>
           </div>
 
-          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10">
+          <div className="bg-slate-700 p-[2px] w-max mx-auto rounded-lg shadow-xl shadow-sky-900/10" onContextMenu={(e)=>e.preventDefault()}>
             {grid.map((row, r) => (
               <div key={r} className="flex">
                 {row.map((val, c) => {
@@ -356,7 +349,7 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: เลือกโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: กดโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
         </div>
       );
     }
@@ -375,7 +368,8 @@
         {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
         {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
         {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'},
-        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'}
+        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'},
+        {c:'vn',n:'Vietnam'},{c:'mm',n:'Myanmar'},{c:'kh',n:'Cambodia'},{c:'la',n:'Laos'}
       ];
       
       const [rounds, setRounds] = useStickyState([], `bma_fg_rds_${dateSeed}`);
@@ -384,7 +378,7 @@
 
       useEffect(() => {
         if (rounds.length > 0) return;
-        const rng = new PRNG(dateSeed + '_flag4');
+        const rng = new PRNG(dateSeed + '_flag5');
         const shuffled = rng.shuffle([...ALL_FLAGS]);
         const rds = [];
         for(let i=0; i<3; i++) {
@@ -402,11 +396,11 @@
       const handleGuess = (code) => {
         if(wrongGuess) return;
         if(code === rd.target.c) {
-          if(currentRound === 2) onEnd('win', { correctCount: 3 }); 
+          if(currentRound === 2) onEnd('win', { score: 3 }); 
           else setCurrentRound(c => c+1);
         } else {
           setWrongGuess(code);
-          setTimeout(() => onEnd('lost', { correctCount: currentRound }), 2500);
+          setTimeout(() => onEnd('lost', { score: currentRound }), 2500);
         }
       };
 
@@ -435,7 +429,7 @@
     }
 
     // ==========================================
-    // 4. DAILY SOLITAIRE (Drag & Drop + Tap)
+    // 4. DAILY SOLITAIRE
     // ==========================================
     function SolitaireGame({ dateSeed, onEnd }) {
       const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
@@ -512,18 +506,18 @@
           if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
           setSt(ns); checkWin(ns);
         } else {
-          // revert
           if(area === 'waste') setSt({...st}); else setSt({...st}); 
         }
       };
 
-      // Pointer Event Dragging
       useEffect(() => {
-        const handleMove = e => { if(drag) setDrag(p => ({...p, cx: e.clientX, cy: e.clientY})); };
+        const handleMove = e => { if(drag) setDrag(p => ({...p, cx: e.clientX || e.touches[0].clientX, cy: e.clientY || e.touches[0].clientY})); };
         const handleUp = e => {
            if(drag) {
-              const dropTarget = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-drop]');
-              const isTap = Math.abs(e.clientX - drag.startX) < 5 && Math.abs(e.clientY - drag.startY) < 5;
+              let clientX = e.clientX; let clientY = e.clientY;
+              if(e.changedTouches) { clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY; }
+              const dropTarget = document.elementFromPoint(clientX, clientY)?.closest('[data-drop]');
+              const isTap = Math.abs(clientX - drag.startX) < 10 && Math.abs(clientY - drag.startY) < 10;
               
               if (isTap) {
                  handleAutoMove(drag.area, drag.colIdx, drag.cardIdx);
@@ -537,22 +531,27 @@
                  if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
                     if(drag.area === 'tab' && ns.tab[drag.colIdx].length) ns.tab[drag.colIdx][ns.tab[drag.colIdx].length-1].up = true;
                     setSt(ns); checkWin(ns);
-                 } else { setSt({...st}); } // revert
+                 } else { setSt({...st}); } 
               }
               setDrag(null);
            }
         };
-        if(drag) { window.addEventListener('pointermove', handleMove); window.addEventListener('pointerup', handleUp); }
-        return () => { window.removeEventListener('pointermove', handleMove); window.removeEventListener('pointerup', handleUp); }
+        if(drag) { 
+          window.addEventListener('pointermove', handleMove); window.addEventListener('pointerup', handleUp); 
+          window.addEventListener('touchmove', handleMove, {passive:false}); window.addEventListener('touchend', handleUp); 
+        }
+        return () => { 
+          window.removeEventListener('pointermove', handleMove); window.removeEventListener('pointerup', handleUp); 
+          window.removeEventListener('touchmove', handleMove); window.removeEventListener('touchend', handleUp); 
+        }
       }, [drag, st]);
 
-      if(!st) return <div className="py-10 animate-pulse">Shuffling...</div>;
+      if(!st) return <div className="py-10 animate-pulse text-sky-400 font-mono">Shuffling...</div>;
 
       const renderCard = (c, area, col, idx) => {
         if(!c) return <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-[#050811] opacity-50 shrink-0" />;
         if(!c.up) return <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0" />;
         
-        // Hide card if it's currently being dragged
         let isDragging = drag && drag.area === area && drag.colIdx === col && idx >= drag.cardIdx;
         
         return (
@@ -564,6 +563,12 @@
               const rect = e.currentTarget.getBoundingClientRect();
               setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, cx: e.clientX, cy: e.clientY, ox: e.clientX - rect.left, oy: e.clientY - rect.top });
             }}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              const rect = e.currentTarget.getBoundingClientRect();
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.touches[0].clientX, startY: e.touches[0].clientY, cx: e.touches[0].clientX, cy: e.touches[0].clientY, ox: e.touches[0].clientX - rect.left, oy: e.touches[0].clientY - rect.top });
+            }}
             className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'} ${isDragging ? 'opacity-0' : 'opacity-100'}`}
           >
             <div className="text-[10px] sm:text-xs font-bold leading-none">{c.rs}</div>
@@ -573,8 +578,7 @@
       };
 
       return (
-        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center relative">
-          
+        <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center relative touch-none">
           {drag && (
             <div className="fixed inset-0 z-50 pointer-events-none">
                <div style={{ position: 'absolute', left: drag.cx - drag.ox, top: drag.cy - drag.oy }}>
@@ -614,38 +618,138 @@
     }
 
     // ==========================================
+    // 5. WORDLE
+    // ==========================================
+    function WordleGame({ dateSeed, onEnd }) {
+      const WORDS = ["APPLE","BRAIN","CRANE","DREAM","EAGLE","FLAME","GHOST","HEART","IMAGE","JUICE","KNIFE","LEMON","MOUSE","NIGHT","OCEAN","PLANT","QUEEN","RIVER","SNAKE","TRAIN","UNION","VOICE","WATER","YOUTH","ZEBRA","ALIEN","BREAD","CHAIR","DANCE","EARTH","FRUIT","GRAPE","HOUSE","JUMBO","KINGS","LIGHT","MONEY","NURSE","ONION","PAPER","QUIET","RIGHT","SUGAR","TABLE","UNCLE","VIDEO","WATCH","YACHT","STORM","WORLD"];
+      const [target, setTarget] = useState("");
+      const [guesses, setGuesses] = useStickyState([], `bma_wdl_g_${dateSeed}`);
+      const [curr, setCurr] = useStickyState("", `bma_wdl_c_${dateSeed}`);
+
+      useEffect(() => {
+        const rng = new PRNG(dateSeed + '_wordle2');
+        setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
+      }, [dateSeed]);
+
+      const onKey = (k) => {
+        if(k === 'ENTER') {
+          if(curr.length !== 5) return;
+          const newG = [...guesses, curr];
+          setGuesses(newG);
+          setCurr("");
+          if(curr === target) onEnd('win', { score: newG.length });
+          else if(newG.length >= 6) onEnd('lost', { score: 6 });
+        } else if(k === 'DEL') {
+          setCurr(c => c.slice(0, -1));
+        } else if(curr.length < 5) {
+          setCurr(c => c + k);
+        }
+      };
+
+      if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+
+      const getStatus = (char, i, guessStr) => {
+        if(target[i] === char) return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+        if(target.includes(char)) return 'bg-amber-500 text-white border-amber-500';
+        return 'bg-slate-700 text-slate-300 border-slate-700 opacity-60';
+      };
+
+      const rows = [];
+      for(let i=0; i<6; i++) {
+        if(i < guesses.length) {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {guesses[i].split('').map((char, j) => (
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${getStatus(char, j, guesses[i])}`}>{char}</div>
+              ))}
+            </div>
+          );
+        } else if(i === guesses.length) {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {[0,1,2,3,4].map(j => (
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${curr[j] ? 'border-sky-400' : 'border-[#1E3A5F]'} bg-[#050811]`}>{curr[j] || ''}</div>
+              ))}
+            </div>
+          );
+        } else {
+          rows.push(
+            <div key={i} className="flex gap-1.5 justify-center">
+              {[0,1,2,3,4].map(j => <div key={j} className="w-10 h-10 sm:w-12 sm:h-12 rounded border-2 border-[#1E3A5F]/40 bg-[#050811]/50"></div>)}
+            </div>
+          );
+        }
+      }
+
+      const keyColor = (char) => {
+        let stat = 'bg-[#0F2547] text-white border border-[#1E3A5F]';
+        for(let g of guesses) {
+          for(let i=0; i<5; i++) {
+            if(g[i] === char) {
+              if(target[i] === char) return 'bg-emerald-500 text-white border border-emerald-400';
+              if(target.includes(char)) stat = 'bg-amber-500 text-white border border-amber-400';
+              else if(stat !== 'bg-amber-500 text-white border border-amber-400') stat = 'bg-slate-800 text-slate-500 border border-slate-700';
+            }
+          }
+        }
+        return stat;
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
+          <div className="space-y-1.5">{rows}</div>
+          <div className="w-full max-w-[360px] space-y-1.5 mt-4">
+            {[['Q','W','E','R','T','Y','U','I','O','P'],['A','S','D','F','G','H','J','K','L'],['ENTER','Z','X','C','V','B','N','M','DEL']].map((row, i) => (
+              <div key={i} className="flex justify-center gap-1">
+                {row.map(k => (
+                  <button key={k} onClick={()=>onKey(k)} className={`h-11 sm:h-12 rounded font-bold text-xs flex items-center justify-center transition-colors active:scale-95 ${k.length>1?'px-2':'flex-1'} ${keyColor(k)}`}>{k}</button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
     // MAIN APP
     // ==========================================
     function DailyGameApp() {
-      const currentUser = { id: 'M999', displayName: 'Tester (Final UI)' };
+      const currentUser = { id: 'M999', displayName: 'Tester' };
       const todayStr = getGameDateStr();
       
       const [isLeftOpen, setIsLeftOpen] = useState(true);
       const [isRightOpen, setIsRightOpen] = useState(true);
       const [activeTab, setActiveTab] = useState(0); 
       
-      const [isPlaying, setIsPlaying] = useStickyState(false, `bma_isP_${todayStr}_${activeTab}`);
-      const [isPaused, setIsPaused] = useStickyState(false, `bma_isPa_${todayStr}_${activeTab}`);
-      const [time, setTime] = useStickyState(0, `bma_time_${todayStr}_${activeTab}`);
-      const [gameStatus, setGameStatus] = useStickyState('pending', `bma_stat_${todayStr}_${activeTab}`); // pending, won, lost, lost_bomb, viewing_board
-      const [scores, setScores] = useState([]);
-      const [fgScore, setFgScore] = useStickyState(0, `bma_fgscore_${todayStr}_${activeTab}`); // For Flag Guesser correct count
+      const [appState, setAppState] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('bma_appState_' + todayStr)) || {}; } 
+        catch { return {}; }
+      });
 
-      // Reset menu toggle on mobile
+      useEffect(() => { localStorage.setItem('bma_appState_' + todayStr, JSON.stringify(appState)); }, [appState, todayStr]);
+      
+      const currState = appState[activeTab] || { status: 'pending', time: 0, isPlaying: false, isPaused: false, score: 0, showModal: false };
+      const [scores, setScores] = useState([]);
+
       useEffect(() => {
         if(window.innerWidth < 768) { setIsLeftOpen(false); setIsRightOpen(false); }
       }, [activeTab]);
 
-      // Timer
+      // Global Timer Logic
       useEffect(() => {
-        let intv;
-        if(isPlaying && gameStatus === 'pending' && !isPaused) {
-          intv = setInterval(() => setTime(t=>t+1), 1000);
-        }
+        let intv = setInterval(() => {
+          setAppState(prev => {
+            const c = prev[activeTab] || {};
+            if(c.isPlaying && c.status === 'pending' && !c.isPaused) {
+              return { ...prev, [activeTab]: { ...c, time: (c.time||0) + 1 } };
+            }
+            return prev;
+          });
+        }, 1000);
         return () => clearInterval(intv);
-      }, [isPlaying, gameStatus, isPaused]);
+      }, [activeTab]);
 
-      // Fetch Leaderboard
       useEffect(() => {
         if(!db) return;
         return db.collection('bma_daily_scores')
@@ -654,8 +758,9 @@
           .onSnapshot(s => {
             const l = s.docs.map(d => d.data());
             if (activeTab === 2) {
-              // Flag Guesser sorting: correct DESC, time ASC
-              l.sort((a,b) => (b.correctCount||0) - (a.correctCount||0) || a.timeMs - b.timeMs);
+              l.sort((a,b) => (b.score||0) - (a.score||0) || a.timeMs - b.timeMs);
+            } else if (activeTab === 4) {
+              l.sort((a,b) => (a.score||99) - (b.score||99) || a.timeMs - b.timeMs);
             } else {
               l.sort((a,b) => a.timeMs - b.timeMs);
             }
@@ -663,59 +768,70 @@
           });
       }, [todayStr, activeTab]);
 
-      const handleGameEnd = async (result, payload = null) => {
-        setIsPlaying(false);
-        setGameStatus(result === 'bomb' ? 'lost_bomb' : result); // win, lost, lost_bomb
+      const handleGameEnd = async (result, payload = {}) => {
+        const st = result === 'bomb' ? 'lost_bomb' : result;
+        const scoreVal = payload.score || 0;
+        let finalTime;
         
-        let finalTime = result === 'bomb' ? Infinity : time;
-        let cCount = payload?.correctCount || 0;
-        if (activeTab === 2) setFgScore(cCount);
-        
+        setAppState(prev => {
+          const c = prev[activeTab] || {};
+          finalTime = result === 'bomb' ? Infinity : (c.time || 0);
+          
+          updateFirebase(st, scoreVal, finalTime);
+          
+          return { ...prev, [activeTab]: { ...c, isPlaying: false, status: st, score: scoreVal, time: finalTime, showModal: true } };
+        });
+      };
+
+      const updateFirebase = async (status, score, finalTime) => {
         const existing = scores.find(s => s.userId === currentUser.id);
-        
-        // Update if no score, or better score (for Flag Guesser, more correct is better. For others, less time is better)
         let shouldUpdate = false;
+        
         if (!existing) shouldUpdate = true;
-        else if (activeTab === 2 && (cCount > (existing.correctCount||0) || (cCount === (existing.correctCount||0) && finalTime < existing.timeMs))) shouldUpdate = true;
-        else if (activeTab !== 2 && finalTime < existing.timeMs) shouldUpdate = true;
+        else if (activeTab === 2 && (score > (existing.score||0) || (score === (existing.score||0) && finalTime < existing.timeMs))) shouldUpdate = true;
+        else if (activeTab === 4 && (score < (existing.score||99) || (score === (existing.score||99) && finalTime < existing.timeMs))) shouldUpdate = true;
+        else if (activeTab !== 2 && activeTab !== 4 && finalTime < existing.timeMs) shouldUpdate = true;
 
         if (shouldUpdate) {
           await db.collection('bma_daily_scores').doc(`${todayStr}_${activeTab}_${currentUser.id}`).set({
             userId: currentUser.id, displayName: currentUser.displayName,
-            date: todayStr, timeMs: finalTime, status: result, gameIndex: activeTab, 
-            correctCount: cCount, timestamp: Date.now()
+            date: todayStr, timeMs: finalTime, status: status, gameIndex: activeTab, 
+            score: score, timestamp: Date.now()
           });
         }
       };
 
       const handleShare = () => {
         let msg = '';
-        if (gameStatus === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
-        else if (activeTab === 2) msg = `ทายถูก ${fgScore}/3 ประเทศ ใช้เวลา ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! 🏳️`;
-        else msg = `ทำเวลาไปได้ ${fmtTime(time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
+        if (currState.status === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
+        else if (currState.status === 'lost' && activeTab === 2) msg = `ทายธงพลาด! ถูกไปแค่ ${currState.score}/3 ประเทศ ในเกม ${GAMES[activeTab].name} 🏳️`;
+        else if (currState.status === 'lost' && activeTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
+        else if (activeTab === 2) msg = `ทายถูก ${currState.score}/3 ประเทศ ใช้เวลา ${fmtTime(currState.time)} ในเกม ${GAMES[activeTab].name}! 🏳️`;
+        else if (activeTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currState.score} ครั้ง! ใช้เวลา ${fmtTime(currState.time)} ในเกม ${GAMES[activeTab].name}! 🔤`;
+        else msg = `ทำเวลาไปได้ ${fmtTime(currState.time)} นาที ในเกม ${GAMES[activeTab].name}! ใครว่างมาท้าดวลกัน 😎`;
         
         alert(`จำลองการแชร์ไปที่กระดานโพสต์!\n\n${msg}`);
-        setGameStatus('viewing_board');
+        setAppState(p => ({ ...p, [activeTab]: { ...(p[activeTab]||{}), showModal: false, status: 'viewing_board' } }));
       };
 
       return (
         <div className="flex flex-col h-screen overflow-hidden bg-[#050811] text-white text-sm">
-          {/* Header */}
           <header className="h-14 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between px-4 shrink-0 shadow-md z-20">
             <div className="flex items-center gap-3">
               <button onClick={() => setIsLeftOpen(!isLeftOpen)} className="btn-d text-xs font-bold px-3 py-1.5">☰ เกม</button>
               <div className="font-bold text-amber-300 tracking-wider hidden sm:block">🎮 Daily Challenge</div>
             </div>
             
-            {isPlaying && gameStatus === 'pending' && (
-              <button onClick={() => setIsPaused(!isPaused)} className="btn-b text-xs px-4 animate-pulse">{isPaused ? '▶ เล่นต่อ' : '⏸ พักเบรก'}</button>
+            {currState.isPlaying && currState.status === 'pending' && (
+              <button onClick={() => setAppState(p => ({...p, [activeTab]: {...(p[activeTab]||{}), isPaused: !(p[activeTab]?.isPaused)}}))} className="btn-b text-xs px-4 animate-pulse">
+                {currState.isPaused ? '▶ เล่นต่อ' : '⏸ พักเบรก'}
+              </button>
             )}
 
             <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs px-3 py-1.5">🏆 กระดานคะแนน</button>
           </header>
 
           <div className="flex-1 flex overflow-hidden relative">
-            {/* LEFT SIDEBAR: Game Selection */}
             <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${isLeftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
               <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between items-center">
                 <span>เลือกมินิเกมประจำวัน</span>
@@ -723,14 +839,13 @@
               </div>
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                 {GAMES.map((g, idx) => (
-                  <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
+                  <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-400 hover:bg-[#0F2547]'}`}>
                     <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
                   </button>
                 ))}
               </div>
             </aside>
 
-            {/* CENTER: Game Area */}
             <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
               {isLeftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsLeftOpen(false)}></div>}
               {isRightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsRightOpen(false)}></div>}
@@ -738,47 +853,52 @@
               <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
                 <div className="text-center mb-4">
                   <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeTab].icon} {GAMES[activeTab].name}</h2>
-                  <p className="text-xs text-slate-400 mt-1">รีเซ็ตทุกวันเวลา 6:00 AM (วันที่: {todayStr})</p>
+                  <p className="text-xs text-slate-400 mt-1">รีเซ็ตกระดานเวลา 6:00 AM (วันที่: {todayStr})</p>
                 </div>
 
                 <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
-                  <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">{fmtTime(time)}</div>
+                  <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">
+                    {fmtTime(currState.time)}
+                  </div>
 
-                  {!isPlaying && gameStatus === 'pending' ? (
+                  {!currState.isPlaying && currState.status === 'pending' ? (
                     <div className="flex-1 flex flex-col items-center justify-center">
-                      <button onClick={() => setIsPlaying(true)} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
+                      <button onClick={() => setAppState(p => ({...p, [activeTab]: {status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0}}))} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
                       <div className="mt-4 text-xs text-slate-400 bg-[#0F2547] px-4 py-2 rounded-lg">จำกัดสิทธิ์ 1 เกม เล่นได้แค่วันละ 1 ครั้งเท่านั้น</div>
                     </div>
-                  ) : isPaused ? (
+                  ) : currState.isPaused ? (
                     <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-dashed border-[#1E3A5F]">
-                      <div className="text-2xl font-bold text-amber-300 mb-4">⏸ เกมถูกหยุดพักชั่วคราว</div>
-                      <button onClick={() => setIsPaused(false)} className="btn-w px-8 py-3">เล่นต่อ</button>
+                      <div className="text-2xl font-bold text-amber-300 mb-4">⏸ เกมหยุดพักชั่วคราว</div>
+                      <button onClick={() => setAppState(p => ({...p, [activeTab]: {...(p[activeTab]||{}), isPaused: false}}))} className="btn-w px-8 py-3">เล่นต่อ</button>
                     </div>
-                  ) : gameStatus === 'viewing_board' ? (
+                  ) : currState.status === 'viewing_board' ? (
                     <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-[#1E3A5F]">
-                      <div className="text-lg font-bold text-sky-300 mb-2">เกมวันนี้จบลงแล้ว เล่นได้อีกครั้งพรุ่งนี้</div>
-                      <div className="text-xs text-slate-400">เลื่อนดูตารางคะแนนทางขวาได้เลย</div>
+                      <div className="text-lg font-bold text-sky-300 mb-2">เกมวันนี้จบลงแล้ว 👏</div>
+                      <div className="text-xs text-slate-400 mb-6">รอเล่นกระดานใหม่ของพรุ่งนี้เวลา 6.00 น.</div>
+                      <button onClick={() => setAppState(p => ({...p, [activeTab]: {...p[activeTab], showModal: true}}))} className="btn-b text-xs">ดูผลลัพธ์อีกครั้ง</button>
                     </div>
                   ) : (
-                    <div className="flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative">
-                      {activeTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={handleGameEnd} />}
-                      {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={handleGameEnd} />}
-                      {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={handleGameEnd} />}
-                      {activeTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={handleGameEnd} />}
+                    <div className="flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden">
+                      {activeTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameEnd(res, p)} />}
+                      {activeTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameEnd(res, p)} />}
+                      {activeTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameEnd(res, p)} />}
+                      {activeTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameEnd(res, p)} />}
+                      {activeTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameEnd(res, p)} />}
                     </div>
                   )}
 
                   {/* GAME OVER MODAL POP-UP */}
-                  {(gameStatus === 'won' || gameStatus === 'lost_bomb' || gameStatus === 'lost') && (
-                    <Modal title={gameStatus === 'won' ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameStatus('viewing_board')}>
+                  {currState.showModal && (
+                    <Modal title={currState.status === 'won' ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setAppState(p => ({...p, [activeTab]: {...p[activeTab], showModal: false, status: 'viewing_board'}}))}>
                       <div className="space-y-4">
                         <p className="text-slate-300 text-sm">
-                          {gameStatus === 'won' ? `คุณเคลียร์เกม ${GAMES[activeTab].name} สำเร็จ` : 
-                           gameStatus === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
-                           `คุณตอบผิด! ทายถูกไป ${fgScore}/3 ประเทศ`}
+                          {currState.status === 'won' ? `คุณเคลียร์เกม ${GAMES[activeTab].name} สำเร็จ` : 
+                           currState.status === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
+                           activeTab === 2 ? `คุณตอบพลาด! ทายถูกไป ${currState.score}/3 ประเทศ` :
+                           `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ`}
                         </p>
                         <div className="text-3xl font-mono font-bold text-amber-300 my-2">
-                          {gameStatus === 'won' ? fmtTime(time) : 'GAME OVER'}
+                          {currState.status === 'won' ? fmtTime(currState.time) : 'GAME OVER'}
                         </div>
                         <button onClick={handleShare} className="btn-b w-full py-3 shadow hover:scale-105 transition-transform">📤 แชร์สถิติลงกระดานโพสต์</button>
                       </div>
@@ -788,7 +908,6 @@
               </div>
             </main>
 
-            {/* RIGHT SIDEBAR: Leaderboard */}
             <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${isRightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
               <div className="p-4 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between">
                 <span>🏆 อันดับ {GAMES[activeTab].name}</span>
@@ -797,18 +916,20 @@
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {scores.length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนมีสถิติวันนี้</div> : 
                  scores.map((s, i) => {
-                  const isBomb = s.status === 'bomb' || s.timeMs === Infinity;
+                  const isBomb = s.status === 'lost_bomb' || s.timeMs === Infinity;
+                  const isLost = s.status === 'lost';
                   return (
-                    <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
+                    <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb||isLost ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
                       <div className="flex items-center gap-2.5">
-                        <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb?'text-yellow-400':i===1&&!isBomb?'text-slate-300':i===2&&!isBomb?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
+                        <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb&&!isLost?'text-yellow-400':i===1&&!isBomb&&!isLost?'text-slate-300':i===2&&!isBomb&&!isLost?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
                         <div className="flex flex-col">
                           <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
-                          {activeTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.correctCount||0}/3</span>}
+                          {activeTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
+                          {activeTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
                         </div>
                       </div>
-                      <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
-                        {isBomb ? '💥 Bomb' : fmtTime(s.timeMs)}
+                      <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb||isLost ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
+                        {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : fmtTime(s.timeMs)}
                       </span>
                     </div>
                   );
