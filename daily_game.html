@@ -153,7 +153,7 @@
           }
           if(rSet.size !== 9 || cSet.size !== 9 || bSet.size !== 9) return false;
         }
-        onEnd('win');
+        onEnd('won');
       };
 
       const cleanNotes = (b, r, c, num) => {
@@ -309,7 +309,7 @@
         flood(r, c); setRevealed(newR);
         
         let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
-        if(revCount === ROWS*COLS - numMines) onEnd('win');
+        if(revCount === ROWS*COLS - numMines) onEnd('won');
       };
 
       if(!grid) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
@@ -349,7 +349,7 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: กดโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: กดปุ่มเลือกโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
         </div>
       );
     }
@@ -396,7 +396,7 @@
       const handleGuess = (code) => {
         if(wrongGuess) return;
         if(code === rd.target.c) {
-          if(currentRound === 2) onEnd('win', { score: 3 }); 
+          if(currentRound === 2) onEnd('won', { score: 3 }); 
           else setCurrentRound(c => c+1);
         } else {
           setWrongGuess(code);
@@ -429,7 +429,7 @@
     }
 
     // ==========================================
-    // 4. DAILY SOLITAIRE
+    // 4. DAILY SOLITAIRE (Drag fixed for zoom)
     // ==========================================
     function SolitaireGame({ dateSeed, onEnd }) {
       const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
@@ -454,7 +454,7 @@
         setSt({ stock: deck, waste: [], fnd: [[],[],[],[]], tab });
       }, [dateSeed]);
 
-      const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('win'); };
+      const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('won'); };
 
       const handleStock = () => {
         let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
@@ -510,13 +510,24 @@
         }
       };
 
+      // Pointer Event Dragging (Fixed for Zoom via BaseXY)
       useEffect(() => {
-        const handleMove = e => { if(drag) setDrag(p => ({...p, cx: e.clientX || e.touches[0].clientX, cy: e.clientY || e.touches[0].clientY})); };
+        const handleMove = e => { 
+            if(drag) {
+                let clientX = e.clientX; let clientY = e.clientY;
+                if(e.touches) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+                setDrag(p => ({...p, dx: clientX - p.startX, dy: clientY - p.startY})); 
+            }
+        };
         const handleUp = e => {
            if(drag) {
               let clientX = e.clientX; let clientY = e.clientY;
               if(e.changedTouches) { clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY; }
-              const dropTarget = document.elementFromPoint(clientX, clientY)?.closest('[data-drop]');
+              
+              // Find drop target safely
+              let dropTarget = null;
+              try { dropTarget = document.elementFromPoint(clientX, clientY)?.closest('[data-drop]'); } catch(e){}
+              
               const isTap = Math.abs(clientX - drag.startX) < 10 && Math.abs(clientY - drag.startY) < 10;
               
               if (isTap) {
@@ -561,13 +572,13 @@
               e.stopPropagation(); e.preventDefault();
               let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
               const rect = e.currentTarget.getBoundingClientRect();
-              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, cx: e.clientX, cy: e.clientY, ox: e.clientX - rect.left, oy: e.clientY - rect.top });
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
             }}
             onTouchStart={(e) => {
               e.stopPropagation();
               let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
               const rect = e.currentTarget.getBoundingClientRect();
-              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.touches[0].clientX, startY: e.touches[0].clientY, cx: e.touches[0].clientX, cy: e.touches[0].clientY, ox: e.touches[0].clientX - rect.left, oy: e.touches[0].clientY - rect.top });
+              setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.touches[0].clientX, startY: e.touches[0].clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
             }}
             className={`w-10 h-14 sm:w-12 sm:h-16 card-ui shrink-0 ${c.c === 'R' ? 'text-red' : 'text-black'} ${isDragging ? 'opacity-0' : 'opacity-100'}`}
           >
@@ -581,7 +592,7 @@
         <div className="flex flex-col w-full h-full p-2 bg-[#0B1325]/50 rounded-xl max-w-sm mx-auto justify-center relative touch-none">
           {drag && (
             <div className="fixed inset-0 z-50 pointer-events-none">
-               <div style={{ position: 'absolute', left: drag.cx - drag.ox, top: drag.cy - drag.oy }}>
+               <div style={{ position: 'fixed', left: drag.baseX + drag.dx, top: drag.baseY + drag.dy }}>
                   {drag.cards.map((c, i) => (
                     <div key={c.id} style={{ marginTop: i > 0 ? '-2.5rem' : '0', zIndex: 100+i }} className="relative">
                       {renderCard(c, null, null, null)}
@@ -637,7 +648,7 @@
           const newG = [...guesses, curr];
           setGuesses(newG);
           setCurr("");
-          if(curr === target) onEnd('win', { score: newG.length });
+          if(curr === target) onEnd('won', { score: newG.length });
           else if(newG.length >= 6) onEnd('lost', { score: 6 });
         } else if(k === 'DEL') {
           setCurr(c => c.slice(0, -1));
@@ -758,7 +769,7 @@
           .onSnapshot(s => {
             const l = s.docs.map(d => d.data());
             if (activeTab === 2) {
-              l.sort((a,b) => (b.score||0) - (a.score||0) || a.timeMs - b.timeMs);
+              l.sort((a,b) => (b.correctCount||0) - (a.correctCount||0) || a.timeMs - b.timeMs);
             } else if (activeTab === 4) {
               l.sort((a,b) => (a.score||99) - (b.score||99) || a.timeMs - b.timeMs);
             } else {
@@ -814,6 +825,13 @@
         setAppState(p => ({ ...p, [activeTab]: { ...(p[activeTab]||{}), showModal: false, status: 'viewing_board' } }));
       };
 
+      const resetAllData = () => {
+        if(confirm('ยืนยันการล้างข้อมูลเดโมทั้งหมดในเครื่องนี้? (ใช้สำหรับทดสอบ)')) {
+          localStorage.clear();
+          window.location.reload();
+        }
+      };
+
       return (
         <div className="flex flex-col h-screen overflow-hidden bg-[#050811] text-white text-sm">
           <header className="h-14 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between px-4 shrink-0 shadow-md z-20">
@@ -822,13 +840,15 @@
               <div className="font-bold text-amber-300 tracking-wider hidden sm:block">🎮 Daily Challenge</div>
             </div>
             
-            {currState.isPlaying && currState.status === 'pending' && (
-              <button onClick={() => setAppState(p => ({...p, [activeTab]: {...(p[activeTab]||{}), isPaused: !(p[activeTab]?.isPaused)}}))} className="btn-b text-xs px-4 animate-pulse">
-                {currState.isPaused ? '▶ เล่นต่อ' : '⏸ พักเบรก'}
-              </button>
-            )}
-
-            <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs px-3 py-1.5">🏆 กระดานคะแนน</button>
+            <div className="flex items-center gap-2">
+              {currState.isPlaying && currState.status === 'pending' && (
+                <button onClick={() => setAppState(p => ({...p, [activeTab]: {...(p[activeTab]||{}), isPaused: !(p[activeTab]?.isPaused)}}))} className="btn-b text-xs px-4 animate-pulse">
+                  {currState.isPaused ? '▶ เล่นต่อ' : '⏸ พักเบรก'}
+                </button>
+              )}
+              <button onClick={resetAllData} className="btn-d text-xs px-2 bg-red-950/40 text-red-300 border-red-900/50" title="ล้างข้อมูลที่เล่นค้างไว้ในเครื่อง">🔄 ล้างข้อมูลเดโม</button>
+              <button onClick={() => setIsRightOpen(!isRightOpen)} className="btn-w text-xs px-3 py-1.5">🏆 กระดานคะแนน</button>
+            </div>
           </header>
 
           <div className="flex-1 flex overflow-hidden relative">
@@ -839,7 +859,7 @@
               </div>
               <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                 {GAMES.map((g, idx) => (
-                  <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-400 hover:bg-[#0F2547]'}`}>
+                  <button key={g.id} onClick={() => setActiveTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
                     <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
                   </button>
                 ))}
