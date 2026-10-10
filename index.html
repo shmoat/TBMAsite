@@ -971,6 +971,7 @@
             const l = s.docs.map((d) => d.data());
             if (!l.some((c) => c.id === 'global-lobby')) await db.collection('bma_channels').doc('global-lobby').set(DEF_CH[0]);
             if (!l.some((c) => c.id === 'global-announce')) await db.collection('bma_channels').doc('global-announce').set(DEF_CH[1]);
+            if (!l.some((c) => c.id === 'happy-birthday-dear')) await db.collection('bma_channels').doc('happy-birthday-dear').set(DEF_CH[2]);
             setChannels(l.sort((a, b) => getMs(a) - getMs(b)));
           }
         });
@@ -1512,6 +1513,13 @@
                       <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1"><UpIcon />อัปโหลดไฟล์</button>
                       <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1">🔗 แนบลิงก์</button>
                       <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold">@ แท็ก</button>
+                      {activeRoom.type === 'dm' && (
+                        <button type="button" onClick={async () => {
+                          const now = Date.now(), id = 'msg-' + now;
+                          await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.id, text: '👋 สะกิดคุณ!', attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
+                          await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '👋 ' + currentUser.displayName + ' สะกิดคุณ!', body: 'สะกิดคุณ!', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
+                        }} className="btn-b py-1 font-bold text-amber-300 border-amber-500/50 bg-amber-950/30">👋 สะกิด</button>
+                      )}
                     </div>
                     <div className="flex gap-2 items-end">
                       <textarea rows={1} value={chatIn} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(e); } }} onChange={(e) => { const v = e.target.value; setChatIn(v); setTyping(v.trim().length > 0); clearTimeout(typTimer.current); typTimer.current = setTimeout(() => setTyping(false), 3500); const lw = v.split(/\s+/).pop() || ''; if (lw.startsWith('@')) { setMentOpen(true); setMentF(lw.slice(1).toLowerCase()); } else setMentOpen(false); }} placeholder="พิมพ์ข้อความ... (Shift+Enter เพื่อขึ้นบรรทัดใหม่)" className="flex-1 inp text-sm resize-none max-h-24" />
@@ -1549,20 +1557,30 @@
                 </div>
               </aside>
 
-              <main className="flex-1 flex flex-col h-full bg-[#050811] overflow-y-auto p-4 md:p-6 relative">
+              <main className="flex-1 flex flex-col h-full bg-[#050811] relative min-w-0">
                 {leftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setLeftOpen(false)}></div>}
                 {rightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setRightOpen(false)}></div>}
                 
-                <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
-                  <div className="text-center mb-4">
-                    <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeGameTab].icon} {GAMES[activeGameTab].name}</h2>
-                    <p className="text-xs text-slate-400 mt-1">รีเซ็ตกระดานเวลา 6:00 AM (วันที่: {todayStr})</p>
-                  </div>
+                <div className="h-14 px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0 text-xs z-20">
+                  <button onClick={() => setLeftOpen(!leftOpen)} className="btn-d font-semibold">{leftOpen ? '◀ ซ่อนเมนูเกม' : '☰ เมนูเกม ▶'}</button>
+                  <div className="font-bold text-sm text-amber-300 hidden sm:block">The Blue Moon Games</div>
+                  <button onClick={() => setRightOpen(!rightOpen)} className="btn-w">{rightOpen ? '🏆 ซ่อนกระดาน →' : '← 🏆 กระดานคะแนน'}</button>
+                </div>
 
-                  <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
-                    <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow">
-                      {fmtTime(currGameSt.time)}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col relative">
+                  <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
+                    <div className="text-center mb-4">
+                      <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeGameTab].icon} {GAMES[activeGameTab].name}</h2>
+                      <p className="text-xs text-slate-400 mt-1">รีเซ็ตกระดานเวลา 6:00 AM (วันที่: {todayStr})</p>
                     </div>
+
+                    <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
+                      <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow flex justify-center items-center gap-4">
+                        <span>{fmtTime(currGameSt.time)}</span>
+                        {currGameSt.isPlaying && !currGameSt.isPaused && currGameSt.status === 'pending' && (
+                           <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...(p[activeGameTab]||{}), isPaused: true}}))} className="text-sm bg-[#0F2547] border border-[#1E3A5F] px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors font-sans">⏸ Pause</button>
+                        )}
+                      </div>
 
                     {!currGameSt.isPlaying && currGameSt.status === 'pending' ? (
                       <div className="flex-1 flex flex-col items-center justify-center">
@@ -1608,6 +1626,7 @@
                       </Modal>
                     )}
                   </div>
+                </div>
                 </div>
               </main>
 
