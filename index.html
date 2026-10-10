@@ -989,7 +989,7 @@
     // ==========================================
     // CHAT GAMES COMPONENTS
     // ==========================================
-    const CHAT_GAMES_LIST = { chess: 'หมากรุกสากล', checkers: 'หมากฮอสสากล', snl: 'บันไดงู' };
+    const CHAT_GAMES_LIST = { chess: 'หมากรุกสากล', checkers: 'หมากฮอสสากล', snl: 'บันไดงู', connect4: 'Connect 4', domino: 'โดมิโน' };
 
     function ChessInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
         const game = useRef(new window.Chess());
@@ -1281,6 +1281,218 @@
         );
     }
 
+    
+    function Connect4Inner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
+        const board = gameData.gameState?.board || Array(6).fill(null).map(()=>Array(7).fill(0));
+        const turn = gameData.gameState?.turn || 1;
+        const myP = isPlayer1 ? 1 : 2;
+
+        const checkWin = (b, p) => {
+            for(let r=0; r<6; r++) {
+                for(let c=0; c<7; c++) {
+                    if(b[r][c] !== p) continue;
+                    if(c+3 < 7 && b[r][c+1]===p && b[r][c+2]===p && b[r][c+3]===p) return true;
+                    if(r+3 < 6 && b[r+1][c]===p && b[r+2][c]===p && b[r+3][c]===p) return true;
+                    if(c+3 < 7 && r+3 < 6 && b[r+1][c+1]===p && b[r+2][c+2]===p && b[r+3][c+3]===p) return true;
+                    if(c-3 >= 0 && r+3 < 6 && b[r+1][c-1]===p && b[r+2][c-2]===p && b[r+3][c-3]===p) return true;
+                }
+            }
+            return false;
+        };
+
+        const dropPiece = async (col) => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP) return;
+            let newB = board.map(row => [...row]);
+            let placedRow = -1;
+            for(let r=5; r>=0; r--) {
+                if(newB[r][col] === 0) {
+                    newB[r][col] = myP;
+                    placedRow = r;
+                    break;
+                }
+            }
+            if(placedRow === -1) return;
+
+            let st = 'playing'; let w = null;
+            if(checkWin(newB, myP)) {
+                st = 'ended'; w = currentUser.id;
+            } else if(newB[0].every(c => c !== 0)) {
+                st = 'ended'; w = 'draw';
+            }
+
+            await db.collection('bma_chat_games').doc(gameId).update({
+                'gameState.board': newB, 'gameState.turn': myP===1?2:1, status: st, winner: w
+            });
+        };
+
+        return (
+            <div className="bg-blue-700 p-2 sm:p-3 rounded-xl flex gap-1 sm:gap-2 cursor-pointer w-full max-w-[360px] mx-auto shadow-2xl border-4 border-blue-900">
+                {Array(7).fill(0).map((_, c) => (
+                    <div key={c} className="flex flex-col gap-1 sm:gap-2 flex-1 hover:bg-white/10 rounded-full transition-colors pb-1" onClick={() => dropPiece(c)}>
+                        {board.map((row, r) => (
+                            <div key={r} className="aspect-square rounded-full bg-[#050811] flex items-center justify-center border-[3px] border-blue-800 shadow-inner">
+                                {row[c] === 1 && <div className="w-[85%] h-[85%] rounded-full bg-red-500 shadow-[inset_0_-4px_6px_rgba(0,0,0,0.4)]"></div>}
+                                {row[c] === 2 && <div className="w-[85%] h-[85%] rounded-full bg-yellow-400 shadow-[inset_0_-4px_6px_rgba(0,0,0,0.4)]"></div>}
+                            </div>
+                        ))}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    function DominoInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
+        const gs = gameData.gameState || {};
+        const turn = gs.turn || 1;
+        const myP = isPlayer1 ? 1 : 2;
+        const myHand = myP === 1 ? (gs.p1Hand||[]) : (gs.p2Hand||[]);
+        const oppHandLen = myP === 1 ? (gs.p2Hand||[]).length : (gs.p1Hand||[]).length;
+        const boardPieces = gs.boardPieces || [];
+        const deck = gs.deck || [];
+        const hasDrawn = gs.hasDrawn || false;
+
+        const [selIdx, setSelIdx] = useState(null);
+
+        const leftEnd = boardPieces.length > 0 ? boardPieces[0].l : null;
+        const rightEnd = boardPieces.length > 0 ? boardPieces[boardPieces.length-1].r : null;
+
+        const canPlayLeft = (d) => d[0] === leftEnd || d[1] === leftEnd;
+        const canPlayRight = (d) => d[0] === rightEnd || d[1] === rightEnd;
+        const hasAnyMove = myHand.some(d => canPlayLeft(d) || canPlayRight(d));
+
+        const playDomino = async (idx, side) => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP) return;
+            const d = myHand[idx];
+            let newBoard = [...boardPieces];
+            let newHand = [...myHand];
+            newHand.splice(idx, 1);
+
+            if(side === 'left') {
+                if(d[1] === leftEnd) newBoard.unshift({l: d[0], r: d[1]});
+                else newBoard.unshift({l: d[1], r: d[0]});
+            } else {
+                if(d[0] === rightEnd) newBoard.push({l: d[0], r: d[1]});
+                else newBoard.push({l: d[1], r: d[0]});
+            }
+
+            let st = 'playing'; let w = null;
+            if(newHand.length === 0) {
+                st = 'ended'; w = currentUser.id;
+            }
+
+            const upd = { 
+                [`gameState.p${myP}Hand`]: newHand, 
+                'gameState.boardPieces': newBoard, 
+                'gameState.turn': myP===1?2:1, 
+                'gameState.hasDrawn': false,
+                'gameState.passCount': 0,
+                status: st, 
+                winner: w 
+            };
+            await db.collection('bma_chat_games').doc(gameId).update(upd);
+            setSelIdx(null);
+        };
+
+        const drawDomino = async () => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove || deck.length === 0 || hasDrawn) return;
+            const newDeck = [...deck];
+            const newPiece = newDeck.pop();
+            const newHand = [...myHand, newPiece];
+            await db.collection('bma_chat_games').doc(gameId).update({
+                [`gameState.p${myP}Hand`]: newHand,
+                'gameState.deck': newDeck,
+                'gameState.hasDrawn': true
+            });
+        };
+
+        const passTurn = async () => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove) return;
+            if(!hasDrawn && deck.length > 0) return;
+
+            const newPassCount = (gs.passCount || 0) + 1;
+            let st = 'playing'; let w = null;
+            if(newPassCount >= 2) {
+                st = 'ended'; w = 'draw';
+            }
+
+            await db.collection('bma_chat_games').doc(gameId).update({
+                'gameState.turn': myP===1?2:1,
+                'gameState.hasDrawn': false,
+                'gameState.passCount': newPassCount,
+                status: st, winner: w
+            });
+        };
+
+        const DmTile = ({d, isH, onClick, sel}) => {
+            const pipClasses = [
+                [], ['place-self-center'], ['self-start justify-self-end', 'self-end justify-self-start'],
+                ['self-start justify-self-end', 'place-self-center', 'self-end justify-self-start'],
+                ['self-start justify-self-start', 'self-start justify-self-end', 'self-end justify-self-start', 'self-end justify-self-end'],
+                ['self-start justify-self-start', 'self-start justify-self-end', 'place-self-center', 'self-end justify-self-start', 'self-end justify-self-end'],
+                ['self-start justify-self-start', 'self-start justify-self-end', 'self-center justify-self-start', 'self-center justify-self-end', 'self-end justify-self-start', 'self-end justify-self-end']
+            ];
+            
+            const Pip = ({c}) => <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 bg-slate-800 rounded-full ${c}`} />;
+            
+            const renderPips = (num) => (
+                <div className="grid grid-cols-2 grid-rows-3 gap-0.5 sm:gap-1 w-full h-full p-1 sm:p-1.5 items-center justify-items-center relative">
+                    {num === 1 && <div className="absolute inset-0 flex items-center justify-center"><Pip c="" /></div>}
+                    {num === 3 && <><div className="absolute top-1 right-1"><Pip c="" /></div><div className="absolute inset-0 flex items-center justify-center"><Pip c="" /></div><div className="absolute bottom-1 left-1"><Pip c="" /></div></>}
+                    {num === 5 && <><div className="absolute top-1 left-1"><Pip c="" /></div><div className="absolute top-1 right-1"><Pip c="" /></div><div className="absolute inset-0 flex items-center justify-center"><Pip c="" /></div><div className="absolute bottom-1 left-1"><Pip c="" /></div><div className="absolute bottom-1 right-1"><Pip c="" /></div></>}
+                    {num !== 1 && num !== 3 && num !== 5 && pipClasses[num].map((c,i) => <Pip key={i} c={c} />)}
+                </div>
+            );
+
+            return (
+                <div onClick={onClick} className={`flex ${isH?'flex-row w-16 h-8 sm:w-20 sm:h-10':'flex-col w-8 h-16 sm:w-10 sm:h-20'} bg-[#F8FAFC] rounded-md shadow-md cursor-pointer border-2 border-slate-300 items-center justify-center shrink-0 ${sel?'ring-2 ring-sky-500 scale-110 -translate-y-2':''} transition-all overflow-hidden`}>
+                    <div className="flex-1 w-full h-full relative">{renderPips(isH ? d.l : d[0])}</div>
+                    <div className={`${isH?'w-[2px] h-full':'w-full h-[2px]'} bg-slate-400 shadow-sm z-10`} />
+                    <div className="flex-1 w-full h-full relative">{renderPips(isH ? d.r : d[1])}</div>
+                </div>
+            );
+        };
+
+        return (
+            <div className="flex flex-col items-center w-full space-y-4">
+                <div className="text-xs text-slate-400 font-bold px-4 py-1.5 bg-[#0F2547] rounded-full border border-[#1E3A5F]">ไพ่คู่แข่ง: {oppHandLen} ใบ | กองจั่ว: {deck.length} ใบ</div>
+                
+                <div className="w-full h-40 sm:h-48 bg-emerald-800/80 rounded-xl border-4 border-amber-900 flex items-center p-4 overflow-x-auto no-scrollbar shadow-[inset_0_4px_10px_rgba(0,0,0,0.5)] relative">
+                    <div className="flex gap-[1px] items-center mx-auto min-w-max">
+                        {boardPieces.map((p, i) => <DmTile key={i} d={p} isH={true} />)}
+                    </div>
+                </div>
+
+                {selIdx !== null && turn === myP && !isSpectator && (
+                    <div className="flex gap-2">
+                        {canPlayLeft(myHand[selIdx]) && <button onClick={()=>playDomino(selIdx, 'left')} className="btn-b py-2 px-4 text-xs bg-sky-600 border-sky-400">👈 ต่อฝั่งซ้าย</button>}
+                        {canPlayRight(myHand[selIdx]) && <button onClick={()=>playDomino(selIdx, 'right')} className="btn-b py-2 px-4 text-xs bg-emerald-600 border-emerald-400">ต่อฝั่งขวา 👉</button>}
+                        {!canPlayLeft(myHand[selIdx]) && !canPlayRight(myHand[selIdx]) && <div className="text-red-400 text-xs py-2 px-2 font-bold animate-pulse">ต่อไม่ได้!</div>}
+                        <button onClick={()=>setSelIdx(null)} className="btn-d py-2 px-4 text-xs border-red-900/50 hover:bg-red-950">ยกเลิก</button>
+                    </div>
+                )}
+
+                {!hasAnyMove && turn === myP && !isSpectator && (
+                    <div className="flex gap-2 items-center bg-[#0F2547] p-2 rounded-xl border border-red-900/50">
+                        <div className="text-amber-400 text-xs font-bold px-2">ไม่มีไพ่ลงได้!</div>
+                        {(!hasDrawn && deck.length > 0) ? (
+                            <button onClick={drawDomino} className="btn-w py-1.5 px-4 text-xs border-amber-500 shadow-md">🃏 จั่วไพ่ (1 ครั้ง)</button>
+                        ) : (
+                            <button onClick={passTurn} className="btn-b py-1.5 px-4 text-xs text-red-300 border-red-500/50">⏭️ ข้ามตา</button>
+                        )}
+                    </div>
+                )}
+
+                <div className="w-full pt-2">
+                    <div className="text-xs font-bold mb-3 text-center text-sky-300 tracking-widest uppercase">ไพ่ในมือของคุณ</div>
+                    <div className="flex flex-wrap justify-center gap-2 sm:gap-3 p-2 border border-dashed border-[#1E3A5F] rounded-xl bg-[#0B1325]/50">
+                        {!isSpectator ? (myHand.length > 0 ? myHand.map((d, i) => (
+                            <DmTile key={i} d={d} isH={false} onClick={()=>setSelIdx(i)} sel={selIdx===i} />
+                        )) : <div className="text-emerald-400 py-4 font-bold">🎉 ไพ่หมดมือแล้ว!</div>) : <div className="text-xs text-slate-500 py-4">คุณเป็นผู้ชม</div>}
+                    </div>
+                </div>
+            </div>
+        );
+    }
     function ChatGameModal({ gameId, currentUser, onClose, getAuthor, db, activeRoom, roomKey }) {
         const [gameData, setGameData] = useState(null);
         const [rematchTimer, setRematchTimer] = useState(15);
@@ -1326,6 +1538,13 @@
                 return { board, turn: 1 };
             }
             if(type === 'snl') return { p1: 1, p2: 1, turn: 1, lastRoll: null };
+            if(type === 'connect4') return { board: Array(6).fill(null).map(()=>Array(7).fill(0)), turn: 1 };
+            if(type === 'domino') {
+                const all = [];
+                for(let i=0; i<=6; i++) for(let j=i; j<=6; j++) all.push([i,j]);
+                for(let i=all.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [all[i], all[j]] = [all[j], all[i]]; }
+                return { p1Hand: all.slice(0,7), p2Hand: all.slice(7,14), boardPieces: [{l: all[14][0], r: all[14][1]}], deck: all.slice(15), turn: 1, hasDrawn: false, passCount: 0 };
+            }
             return {};
         };
 
@@ -1394,12 +1613,16 @@
                         {gameData.type === 'chess' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันเดินหมากตามกฎมาตรฐานสากล</li><li>คลิกที่หมากของตนเอง ระบบจะไฮไลต์ช่องที่เดินได้</li><li>หากเปิดโหมดจับเวลา เวลาจะเริ่มเดินอัตโนมัติ และสลับฝั่งเมื่อวางหมากสำเร็จ</li><li>ฝ่ายใดรุกฆาต (Checkmate) หรือคู่แข่งเวลาหมด จะเป็นผู้ชนะ</li></ul>}
                         {gameData.type === 'checkers' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>เดินเฉียงไปข้างหน้าทีละ 1 ช่อง</li><li>เข้าฮอส (ไปถึงขอบสุดฝั่งตรงข้าม) จะสามารถเดินหน้า-หลังได้ทีละ 1 ช่อง</li><li>ต้องกระโดดกินหมากฝ่ายตรงข้ามหากมีโอกาส</li><li>ฝ่ายไหนถูกกินจนหมด หรือไม่มีตาเดิน จะเป็นผู้แพ้</li></ul>}
                         {gameData.type === 'snl' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันกดปุ่มทอยลูกเต๋า</li><li>หากตกที่โคนบันได จะได้เลื่อนขึ้นไปจุดสูงสุดของบันได</li><li>หากตกที่หัวงู จะต้องลื่นลงมาที่หางงู</li><li>ใครเดินทางไปถึงช่อง 100 ได้ก่อน จะเป็นผู้ชนะ</li></ul>}
+                        {gameData.type === 'connect4' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันหยอดเหรียญลงในช่อง</li><li>ใครเรียงสีตัวเองให้ติดกันครบ 4 อัน (แนวตั้ง แนวนอน หรือแนวทแยง) ก่อน จะเป็นผู้ชนะ</li></ul>}
+                        {gameData.type === 'domino' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันต่อโดมิโนให้แต้มตรงกับปลายด้านใดด้านหนึ่ง</li><li>หากไม่มีไพ่ให้ลง ต้องจั่วไพ่ 1 ครั้ง</li><li>ถ้าจั่วแล้วยังลงไม่ได้ (หรือไพ่กองกลางหมด) ให้กดข้ามตา</li><li>ใครไพ่หมดมือคนแรกชนะ! (ถ้าข้ามตาทั้งคู่เกมจะจบลงแบบเสมอ)</li></ul>}
                     </div>
 
                     <div className="w-full md:w-2/3 flex justify-center items-center flex-col relative select-none touch-none bg-[#050811] rounded-xl p-2 py-4 border border-[#1E3A5F]">
                         {gameData.type === 'chess' && <ChessInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                         {gameData.type === 'checkers' && <CheckersInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                         {gameData.type === 'snl' && <SnlInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} getAuthor={getAuthor} />}
+                        {gameData.type === 'connect4' && <Connect4Inner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
+                        {gameData.type === 'domino' && <DominoInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                     </div>
                 </div>
             </Modal>
@@ -2128,7 +2351,7 @@
                         <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="btn-b py-1 font-bold text-sky-300 border-sky-500/50 bg-sky-950/30 shadow">🎮 ชวนเล่นเกม</button>
                         {cGameOpen && (
                           <div className="absolute bottom-full left-0 mb-2 w-44 card py-1.5 z-50 shadow-2xl border-white/20 text-xs">
-                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'}].map(g => (
+                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'}].map(g => (
                               <button key={g.id} type="button" onClick={async () => { 
                                 setCGameOpen(false); 
                                 const gid = 'cg-' + Date.now(); 
@@ -2628,7 +2851,7 @@
                   <div className="max-h-64 overflow-y-auto space-y-1.5">
                     {myNotifs.filter((n) => n.category === notifTab).map((n) => {
                       const rd = (n.readBy || []).includes(currentUser.id);
-                      return <div key={n.id} onClick={() => { db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }); setNotifOpen(false); if (n.targetPostId) jumpToPost(n.targetPostId); else if (n.targetRoomType) { setActiveRoom({ type: n.targetRoomType, id: n.targetRoomId }); setCurrentView('chat'); } else if (n.targetView === 'members') { setCurrentView('members'); setMemberModal(users.find(u => u.id === n.targetRoomId) || null); } }} className={'p-2.5 rounded-xl border cursor-pointer flex justify-between items-center ' + (rd ? 'bg-[#050811] border-[#1E3A5F] opacity-60' : 'bg-[#0F2547]/70 border-sky-400')}><div><div className="font-bold">{!rd && '● '}{n.title}</div><div className="text-slate-300">{n.body}</div></div><span className="text-sky-400 shrink-0">ดู →</span></div>;
+                      return <div key={n.id} onClick={() => { db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }); setNotifOpen(false); if (n.targetPostId) jumpToPost(n.targetPostId); else if (n.targetRoomType) { setActiveRoom({ type: n.targetRoomType, id: n.targetRoomId }); setCurrentView('chat'); } }} else if (n.targetView === 'members') { setCurrentView('members'); setMemberModal(users.find(u => u.id === n.targetRoomId) || null); } } className={'p-2.5 rounded-xl border cursor-pointer flex justify-between items-center ' + (rd ? 'bg-[#050811] border-[#1E3A5F] opacity-60' : 'bg-[#0F2547]/70 border-sky-400')}><div><div className="font-bold">{!rd && '● '}{n.title}</div><div className="text-slate-300">{n.body}</div></div><span className="text-sky-400 shrink-0">ดู →</span></div>;
                     })}
                   </div>
                 )}
