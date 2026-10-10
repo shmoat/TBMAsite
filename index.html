@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
@@ -981,9 +982,431 @@
       );
     }
     
+
+    // ==========================================
+    // CHAT GAMES COMPONENTS
+    // ==========================================
+    const CHAT_GAMES_LIST = { chess: 'หมากรุกสากล', checkers: 'หมากฮอสสากล', snl: 'บันไดงู' };
+
+    function ChessInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
+        const game = useRef(new window.Chess());
+        const [selected, setSelected] = useState(null);
+        const [validMoves, setValidMoves] = useState([]);
+        const [board, setBoard] = useState([]);
+        const [elapsed, setElapsed] = useState(0);
+
+        useEffect(() => {
+            if(window.Chess && gameData.gameState?.fen) {
+                game.current.load(gameData.gameState.fen);
+            }
+            setBoard(game.current.board());
+        }, [gameData.gameState?.fen]);
+
+        useEffect(() => {
+            if(gameData.status !== 'playing' || !gameData.timerSetting) return;
+            const intv = setInterval(() => {
+                const now = Date.now();
+                const diff = Math.floor((now - (gameData.gameState.lastMoveAt || now)) / 1000);
+                setElapsed(diff);
+                const isWhiteTurn = game.current.turn() === 'w';
+                const timeLeft = isWhiteTurn ? (gameData.gameState.wTime - diff) : (gameData.gameState.bTime - diff);
+                
+                if(timeLeft <= 0 && !isSpectator) {
+                    db.collection('bma_chat_games').doc(gameId).update({
+                        status: 'ended', winner: isWhiteTurn ? gameData.players[1] : gameData.players[0]
+                    });
+                }
+            }, 1000);
+            return () => clearInterval(intv);
+        }, [gameData.status, gameData.gameState?.lastMoveAt, gameData.timerSetting, isSpectator, gameId, db, gameData.players]);
+
+        const myTurn = (isPlayer1 && game.current.turn()==='w') || (isPlayer2 && game.current.turn()==='b');
+
+        const onSquareClick = async (sq) => {
+            if(gameData.status !== 'playing' || isSpectator || !myTurn) return;
+            if(!selected) {
+                const p = game.current.get(sq);
+                if(p && p.color === game.current.turn()) {
+                    setSelected(sq);
+                    setValidMoves(game.current.moves({square: sq, verbose: true}).map(m=>m.to));
+                }
+            } else {
+                if(sq === selected) { setSelected(null); setValidMoves([]); return; }
+                const moves = game.current.moves({verbose: true});
+                const move = moves.find(m => m.from === selected && m.to === sq);
+                if(move) {
+                    game.current.move({from: selected, to: sq, promotion: 'q'});
+                    let st = 'playing'; let w = null;
+                    if(game.current.game_over()) {
+                        st = 'ended';
+                        w = game.current.in_draw() ? 'draw' : currentUser.id;
+                    }
+                    const upd = { 'gameState.fen': game.current.fen(), 'gameState.turn': game.current.turn(), status: st, winner: w };
+                    
+                    if(gameData.timerSetting) {
+                        const diff = Math.floor((Date.now() - (gameData.gameState.lastMoveAt || Date.now())) / 1000);
+                        if(game.current.turn() === 'b') upd['gameState.wTime'] = gameData.gameState.wTime - diff;
+                        else upd['gameState.bTime'] = gameData.gameState.bTime - diff;
+                        upd['gameState.lastMoveAt'] = Date.now();
+                    }
+                    await db.collection('bma_chat_games').doc(gameId).update(upd);
+                }
+                setSelected(null); setValidMoves([]);
+            }
+        };
+
+        const ranks = isPlayer2 ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
+        const files = isPlayer2 ? ['h','g','f','e','d','c','b','a'] : ['a','b','c','d','e','f','g','h'];
+        const pieceSymbols = { p:'♟', n:'♞', b:'♝', r:'♜', q:'♛', k:'♚' };
+
+        const fmtT = (s) => s <= 0 ? "0:00" : `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+        
+        const wT = gameData.gameState?.wTime || 0;
+        const bT = gameData.gameState?.bTime || 0;
+        const isWT = game.current.turn() === 'w';
+
+        return (
+            <div className="flex flex-col items-center w-full">
+                {gameData.timerSetting && (
+                    <div className="flex justify-between w-full mb-2 font-mono font-bold bg-[#050811] p-2 rounded border border-[#1E3A5F]">
+                        <span className={isPlayer2 ? (isWT?'text-amber-300':'') : (!isWT?'text-amber-300':'')}>{isPlayer2 ? 'White: ' + fmtT(isWT?wT-elapsed:wT) : 'Black: ' + fmtT(!isWT?bT-elapsed:bT)}</span>
+                        <span>Timer</span>
+                        <span className={isPlayer1 ? (isWT?'text-amber-300':'') : (!isWT?'text-amber-300':'')}>{isPlayer1 ? 'White: ' + fmtT(isWT?wT-elapsed:wT) : 'Black: ' + fmtT(!isWT?bT-elapsed:bT)}</span>
+                    </div>
+                )}
+                <div className="border-4 border-slate-700 bg-slate-800 p-1 rounded-lg">
+                    <div className="grid grid-cols-8 grid-rows-8 w-64 h-64 sm:w-80 sm:h-80">
+                        {ranks.map((r, ri) => files.map((f, fi) => {
+                            const sq = f + r;
+                            const isDark = (ri+fi)%2 !== 0;
+                            let bg = isDark ? '#1E3A5F' : '#60A5FA';
+                            if(selected === sq) bg = '#F59E0B';
+                            const p = game.current.get(sq);
+                            const isV = validMoves.includes(sq);
+
+                            return (
+                                <div key={sq} onClick={() => onSquareClick(sq)} style={{backgroundColor: bg}} className="relative flex items-center justify-center cursor-pointer text-xl sm:text-3xl">
+                                    {p && <span style={{color: p.color==='w' ? '#fff' : '#050811', textShadow: p.color==='b' ? '0 0 2px #fff' : '0 0 2px #000'}}>{pieceSymbols[p.type]}</span>}
+                                    {isV && <div className="absolute w-3 h-3 bg-black/40 rounded-full" />}
+                                </div>
+                            );
+                        }))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    function CheckersInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
+        const [selected, setSelected] = useState(null);
+        const [validMoves, setValidMoves] = useState([]);
+        const flatBoard = gameData.gameState?.board || Array(64).fill(null);
+        const board = [];
+        for(let i=0; i<8; i++) board.push([...flatBoard.slice(i*8, i*8+8)]);
+        const turn = gameData.gameState?.turn || 1;
+        const myP = isPlayer1 ? 1 : 2;
+
+        const getMoves = (r, c, p, k) => {
+            const dirs = k ? [[-1,-1],[-1,1],[1,-1],[1,1]] : p===1 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+            const moves = [];
+            dirs.forEach(([dr,dc]) => {
+                let nr=r+dr, nc=c+dc;
+                if(nr>=0&&nr<8&&nc>=0&&nc<8) {
+                    if(!board[nr][nc]) moves.push({r:nr, c:nc, cap:null});
+                    else if(board[nr][nc].p !== p) {
+                        let nnr=nr+dr, nnc=nc+dc;
+                        if(nnr>=0&&nnr<8&&nnc>=0&&nnc<8 && !board[nnr][nnc]) {
+                            moves.push({r:nnr, c:nnc, cap:{r:nr, c:nc}});
+                        }
+                    }
+                }
+            });
+            return moves;
+        };
+
+        const onClick = async (r, c) => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP) return;
+            
+            const actualR = isPlayer2 ? 7-r : r;
+            const actualC = isPlayer2 ? 7-c : c;
+
+            if(!selected) {
+                const piece = board[actualR][actualC];
+                if(piece && piece.p === myP) {
+                    setSelected({r: actualR, c: actualC});
+                    setValidMoves(getMoves(actualR, actualC, piece.p, piece.k));
+                }
+            } else {
+                if(actualR===selected.r && actualC===selected.c) { setSelected(null); setValidMoves([]); return; }
+                const move = validMoves.find(m => m.r===actualR && m.c===actualC);
+                if(move) {
+                    let newB = board.map(row=>[...row]);
+                    const piece = newB[selected.r][selected.c];
+                    newB[selected.r][selected.c] = null;
+                    if((myP===1 && actualR===0) || (myP===2 && actualR===7)) piece.k = true;
+                    newB[actualR][actualC] = piece;
+                    if(move.cap) newB[move.cap.r][move.cap.c] = null;
+                    
+                    let eCnt = 0; newB.forEach(row=>row.forEach(cell=>{if(cell&&cell.p!==myP)eCnt++;}));
+                    let st = eCnt===0 ? 'ended' : 'playing';
+                    
+                    await db.collection('bma_chat_games').doc(gameId).update({
+                        'gameState.board': newB.reduce((a,b)=>a.concat(b), []), 'gameState.turn': myP===1?2:1, status: st, winner: st==='ended' ? currentUser.id : null
+                    });
+                }
+                setSelected(null); setValidMoves([]);
+            }
+        };
+
+        return (
+            <div className="border-4 border-[#0F2547] p-1 bg-[#050811] rounded-lg w-full flex justify-center">
+                <div className="grid grid-cols-8 grid-rows-8 w-64 h-64 sm:w-80 sm:h-80">
+                    {board.map((row, visualR) => row.map((cell, visualC) => {
+                        const r = isPlayer2 ? 7-visualR : visualR;
+                        const c = isPlayer2 ? 7-visualC : visualC;
+                        const isDark = (r+c)%2===1;
+                        let bg = isDark ? '#8B4513' : '#DEB887';
+                        const isSel = selected?.r===r && selected?.c===c;
+                        const isMove = validMoves.some(m=>m.r===r&&m.c===c);
+                        if(isSel) bg = '#F59E0B'; else if(isMove) bg = '#34D399';
+                        
+                        const renderCell = board[r][c];
+
+                        return (
+                            <div key={`${r}-${c}`} onClick={()=>onClick(visualR,visualC)} style={{backgroundColor: bg}} className="flex items-center justify-center">
+                                {renderCell && <div className={`w-[80%] h-[80%] rounded-full shadow-md flex items-center justify-center ${renderCell.p===1?'bg-red-600':'bg-slate-800 border-2 border-slate-600'}`}>{renderCell.k && <span className="text-white text-xs">♚</span>}</div>}
+                            </div>
+                        );
+                    }))}
+                </div>
+            </div>
+        );
+    }
+
+    function SnlInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, getAuthor }) {
+        const p1 = gameData.gameState?.p1 || 1;
+        const p2 = gameData.gameState?.p2 || 1;
+        const turn = gameData.gameState?.turn || 1;
+        const myP = isPlayer1 ? 1 : (isPlayer2 ? 2 : turn);
+
+        const snakes = { 16:6, 47:26, 49:11, 56:53, 62:19, 64:60, 87:24, 93:73, 95:75, 98:78 };
+        const ladders = { 1:38, 4:14, 9:31, 21:42, 28:84, 36:44, 51:67, 71:91, 80:100 };
+
+        const playDiceSound = () => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                for(let i=0; i<3; i++) {
+                    setTimeout(() => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(400 + Math.random()*200, ctx.currentTime);
+                        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+                        osc.connect(gain); gain.connect(ctx.destination);
+                        osc.start(); osc.stop(ctx.currentTime + 0.05);
+                    }, i*80);
+                }
+            } catch(e) {}
+        };
+
+        const rollDice = async () => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP) return;
+            playDiceSound();
+            const roll = Math.floor(Math.random() * 6) + 1;
+            let nPos = (myP === 1 ? p1 : p2) + roll;
+            if(nPos > 100) nPos = 100 - (nPos - 100);
+            if(snakes[nPos]) nPos = snakes[nPos];
+            if(ladders[nPos]) nPos = ladders[nPos];
+
+            const upd = { [`gameState.p${myP}`]: nPos, 'gameState.lastRoll': roll, 'gameState.turn': myP===1?2:1 };
+            if(nPos === 100) { upd.status = 'ended'; upd.winner = gameData.players[myP-1]; }
+            await db.collection('bma_chat_games').doc(gameId).update(upd);
+        };
+
+        const getPos = (num) => {
+            const r = 9 - Math.floor((num-1)/10);
+            const c = Math.floor((num-1)/10) % 2 === 0 ? (num-1)%10 : 9 - ((num-1)%10);
+            return { x: c*10+5, y: r*10+5 };
+        };
+
+        const renderCells = () => {
+            let cells = [];
+            for(let r=9; r>=0; r--) {
+                for(let c=0; c<10; c++) {
+                    let num = r%2===0 ? r*10+c+1 : r*10+(9-c)+1;
+                    let hasP1 = p1===num; let hasP2 = p2===num;
+                    cells.push(
+                        <div key={num} className={`relative flex items-center justify-center text-[10px] font-bold border border-black/20 ${ladders[num]?'bg-sky-200 text-sky-900':snakes[num]?'bg-red-200 text-red-900':num%2===0?'bg-emerald-100 text-emerald-900':'bg-emerald-50 text-emerald-800'}`}>
+                            {num}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+                                {hasP1 && <div className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-lg z-20 flex items-center justify-center text-[8px]">1</div>}
+                                {hasP2 && <div className="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg z-20 flex items-center justify-center text-[8px] mt-0.5">2</div>}
+                            </div>
+                        </div>
+                    );
+                }
+            }
+            return cells;
+        };
+
+        return (
+            <div className="flex flex-col items-center space-y-4 w-full">
+                <div className="relative w-64 h-64 sm:w-80 sm:h-80 border-4 border-[#0F2547] rounded-lg bg-emerald-50 overflow-hidden">
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 drop-shadow-md">
+                        {Object.entries(ladders).map(([start, end]) => {
+                            const s = getPos(Number(start)), e = getPos(end);
+                            return <line key={`l-${start}`} x1={`${s.x}%`} y1={`${s.y}%`} x2={`${e.x}%`} y2={`${e.y}%`} stroke="#059669" strokeWidth="6" strokeDasharray="6 4" opacity="0.8" />;
+                        })}
+                        {Object.entries(snakes).map(([start, end]) => {
+                            const s = getPos(Number(start)), e = getPos(end);
+                            return <line key={`s-${start}`} x1={`${s.x}%`} y1={`${s.y}%`} x2={`${e.x}%`} y2={`${e.y}%`} stroke="#DC2626" strokeWidth="4" opacity="0.9" />;
+                        })}
+                    </svg>
+                    <div className="grid grid-cols-10 grid-rows-10 w-full h-full absolute inset-0 z-0">
+                        {renderCells()}
+                    </div>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="text-xl w-8">🎲 {gameData.gameState?.lastRoll || '-'}</div>
+                    <button onClick={rollDice} disabled={gameData.status!=='playing' || isSpectator || turn!==myP} className="btn-w text-sm py-2 px-6 shadow-xl disabled:opacity-50">
+                        {turn===myP ? 'ทอยลูกเต๋า' : 'รอคู่แข่ง...'}
+                    </button>
+                </div>
+                <div className="text-xs text-slate-400">ผู้เล่น 1 (สีน้ำเงิน), ผู้เล่น 2 (สีแดง)</div>
+            </div>
+        );
+    }
+
+    function ChatGameModal({ gameId, currentUser, onClose, getAuthor, db, activeRoom, roomKey }) {
+        const [gameData, setGameData] = useState(null);
+        const [rematchTimer, setRematchTimer] = useState(15);
+
+        useEffect(() => {
+            const unsub = db.collection('bma_chat_games').doc(gameId).onSnapshot(s => {
+                if(s.exists) {
+                    const data = s.data();
+                    if(data.status === 'waiting' && !data.players.includes(currentUser.id) && data.players.length < 2) {
+                        db.collection('bma_chat_games').doc(gameId).update({
+                            players: [...data.players, currentUser.id],
+                            status: 'playing',
+                            gameState: getInitState(data.type, data.timerSetting)
+                        });
+                    }
+                    setGameData(data);
+                }
+            });
+            return () => unsub();
+        }, [gameId, currentUser.id, db]);
+
+        useEffect(() => {
+            if(gameData?.status === 'ended') {
+                const interval = setInterval(() => {
+                    setRematchTimer(t => t > 0 ? t - 1 : 0);
+                }, 1000);
+                return () => clearInterval(interval);
+            } else {
+                setRematchTimer(15);
+            }
+        }, [gameData?.status]);
+
+        const getInitState = (type, timerSetting) => {
+            if(type === 'chess') return { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', wTime: timerSetting, bTime: timerSetting, lastMoveAt: Date.now() };
+            if(type === 'checkers') {
+                let board = Array(64).fill(null);
+                for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+                    if((r+c)%2!==0) {
+                        if(r<3) board[r*8+c] = {p:2, k:false};
+                        if(r>4) board[r*8+c] = {p:1, k:false};
+                    }
+                }
+                return { board, turn: 1 };
+            }
+            if(type === 'snl') return { p1: 1, p2: 1, turn: 1, lastRoll: null };
+            return {};
+        };
+
+        if(!gameData) return <Modal title="Loading..." onClose={onClose}><div className="animate-pulse">Loading Game...</div></Modal>;
+
+        const isPlayer1 = gameData.players[0] === currentUser.id;
+        const isPlayer2 = gameData.players[1] === currentUser.id;
+        const isSpectator = !isPlayer1 && !isPlayer2;
+
+        const handleRematch = async () => {
+            const rm = [...(gameData.rematch||[])];
+            if(!rm.includes(currentUser.id)) {
+                rm.push(currentUser.id);
+                if(rm.length === 2) {
+                    await db.collection('bma_chat_games').doc(gameId).update({ status: 'playing', gameState: getInitState(gameData.type, gameData.timerSetting), rematch: [], winner: null });
+                } else {
+                    await db.collection('bma_chat_games').doc(gameId).update({ rematch: rm });
+                }
+            }
+        };
+
+        const handleShare = async () => {
+            const mid = 'msg-' + Date.now() + Math.floor(Math.random()*1000);
+            await db.collection('bma_messages').doc(mid).set({
+                id: mid, roomKey, senderId: currentUser.id, receiverId: activeRoom.type==='dm'?activeRoom.id:null,
+                text: '🏆 แชร์ผลการแข่งขัน: ' + (gameData.name || CHAT_GAMES_LIST[gameData.type]),
+                isGameResult: true, gameId, gameType: gameData.type, gameName: gameData.name || CHAT_GAMES_LIST[gameData.type],
+                gameResultData: { winner: gameData.winner },
+                readBy: [currentUser.id], isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            onClose();
+        };
+
+        return (
+            <Modal title={"🎮 " + (gameData.name || CHAT_GAMES_LIST[gameData.type])} onClose={onClose} maxW="max-w-3xl">
+                <div className="flex justify-between items-center bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F] mb-4">
+                    <div className="flex items-center gap-2">
+                        <Avatar user={getAuthor(gameData.players[0])} size="sm" />
+                        <span className={gameData.status==='playing' && (!gameData.gameState?.turn || gameData.gameState?.turn===1 || gameData.gameState?.turn==='w') ? 'font-bold text-amber-300' : 'text-slate-300'}>{getAuthor(gameData.players[0])?.displayName || 'Player 1'}</span>
+                    </div>
+                    <div className="text-xl font-bold">VS</div>
+                    <div className="flex items-center gap-2">
+                        <span className={gameData.status==='playing' && (gameData.gameState?.turn===2 || gameData.gameState?.turn==='b') ? 'font-bold text-amber-300' : 'text-slate-300'}>{gameData.players[1] ? getAuthor(gameData.players[1])?.displayName : 'รอผู้เล่น...'}</span>
+                        {gameData.players[1] && <Avatar user={getAuthor(gameData.players[1])} size="sm" />}
+                    </div>
+                </div>
+
+                {gameData.status === 'ended' && (
+                    <div className="bg-amber-950/40 border border-amber-500/50 p-4 rounded-lg text-center mb-4">
+                        <h2 className="text-xl font-bold text-amber-400 mb-2">เกมจบแล้ว!</h2>
+                        <p className="mb-4 text-sm font-bold">ผู้ชนะ: {gameData.winner === 'draw' ? 'เสมอ' : getAuthor(gameData.winner)?.displayName}</p>
+                        <div className="flex gap-2 justify-center">
+                            {!isSpectator && rematchTimer > 0 && (
+                                <button onClick={handleRematch} disabled={(gameData.rematch||[]).includes(currentUser.id)} className="btn-w text-xs px-3">
+                                    {(gameData.rematch||[]).includes(currentUser.id) ? 'รอคู่แข่งยืนยัน...' : `เล่นอีกครั้ง (${rematchTimer}s)`}
+                                </button>
+                            )}
+                            <button onClick={handleShare} className="btn-b text-sky-300 border-sky-400/50 text-xs">📤 แชร์ผลลัพธ์ลงแชต</button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="w-full md:w-1/3 bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] text-xs h-fit max-h-48 md:max-h-full overflow-y-auto">
+                        <h3 className="font-bold text-amber-300 mb-3 text-sm">📜 กติกาและวิธีเล่น</h3>
+                        {gameData.type === 'chess' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันเดินหมากตามกฎมาตรฐานสากล</li><li>คลิกที่หมากของตนเอง ระบบจะไฮไลต์ช่องที่เดินได้</li><li>หากเปิดโหมดจับเวลา เวลาจะเริ่มเดินอัตโนมัติ และสลับฝั่งเมื่อวางหมากสำเร็จ</li><li>ฝ่ายใดรุกฆาต (Checkmate) หรือคู่แข่งเวลาหมด จะเป็นผู้ชนะ</li></ul>}
+                        {gameData.type === 'checkers' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>เดินเฉียงไปข้างหน้าทีละ 1 ช่อง</li><li>เข้าฮอส (ไปถึงขอบสุดฝั่งตรงข้าม) จะสามารถเดินหน้า-หลังได้ทีละ 1 ช่อง</li><li>ต้องกระโดดกินหมากฝ่ายตรงข้ามหากมีโอกาส</li><li>ฝ่ายไหนถูกกินจนหมด หรือไม่มีตาเดิน จะเป็นผู้แพ้</li></ul>}
+                        {gameData.type === 'snl' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันกดปุ่มทอยลูกเต๋า</li><li>หากตกที่โคนบันได จะได้เลื่อนขึ้นไปจุดสูงสุดของบันได</li><li>หากตกที่หัวงู จะต้องลื่นลงมาที่หางงู</li><li>ใครเดินทางไปถึงช่อง 100 ได้ก่อน จะเป็นผู้ชนะ</li></ul>}
+                    </div>
+
+                    <div className="w-full md:w-2/3 flex justify-center items-center flex-col relative select-none touch-none bg-[#050811] rounded-xl p-2 py-4 border border-[#1E3A5F]">
+                        {gameData.type === 'chess' && <ChessInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
+                        {gameData.type === 'checkers' && <CheckersInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
+                        {gameData.type === 'snl' && <SnlInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} getAuthor={getAuthor} />}
+                    </div>
+                </div>
+            </Modal>
+        );
+    }
     // ==========================================
     // MAIN APP
     // ==========================================
+
+
     function App() {
       const [users, setUsers] = useState([OWNER_SEED]);
       const [posts, setPosts] = useState([]);
@@ -1040,6 +1463,7 @@
       const [uploading, setUploading] = useState(false); const cFileRef = useRef(null); const typTimer = useRef(null);
       const [ctxMenu, setCtxMenu] = useState(null); const [editMsg, setEditMsg] = useState(null); const [repMsg, setRepMsg] = useState(null); const [fwdMsg, setFwdMsg] = useState(null);
       const [mentOpen, setMentOpen] = useState(false); const [mentF, setMentF] = useState('');
+      const [activeChatGameId, setActiveChatGameId] = useState(null); const [cGameOpen, setCGameOpen] = useState(false);
       const [cChOpen, setCChOpen] = useState(false); const [chName, setChName] = useState(''); const [chIcon, setChIcon] = useState('💬'); const [chDesc, setChDesc] = useState('');
       const [cGrpOpen, setCGrpOpen] = useState(false); const [grpName, setGrpName] = useState(''); const [grpMems, setGrpMems] = useState([]); const [addMemOpen, setAddMemOpen] = useState(false);
       const [delTgt, setDelTgt] = useState(null);
@@ -1539,6 +1963,7 @@
             </div>
           )}
 
+          {activeChatGameId && <ChatGameModal gameId={activeChatGameId} currentUser={currentUser} onClose={() => setActiveChatGameId(null)} getAuthor={getAuthor} db={db} activeRoom={activeRoom} roomKey={roomKey} />}
           {currentView === 'chat' && (
             <div className="flex-1 flex overflow-hidden min-h-0">
               {leftOpen && (
@@ -1601,6 +2026,15 @@
                     if (msg.isSystemPostAlert) {
                       const pa = getAuthor(msg.senderId);
                       return <div key={msg.id} className="p-3.5 card flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" /><div><div className="text-[10px] text-blue-300 font-bold">📝 โพสต์ใหม่ • {tStr}</div><div className="text-xs font-bold">{msg.text}</div>{msg.postTitle && <div className="text-xs text-slate-300">"{msg.postTitle}"</div>}</div></div>{msg.linkedPostId && <button onClick={() => jumpToPost(msg.linkedPostId)} className="btn-w text-xs shrink-0">🔗 ดูโพสต์ →</button>}</div>;
+                    }
+                    if (msg.isGameInvite) {
+                      const pa = getAuthor(msg.senderId);
+                      return <div key={msg.id} className="p-3.5 card border-sky-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-sky-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5 font-bold">🎮 ชวนเล่นเกม {msg.gameName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform">⚔️ เข้าร่วม / เปิดเกม</button></div>;
+                    }
+                    if (msg.isGameResult) {
+                      const pa = getAuthor(msg.senderId);
+                      const wName = msg.gameResultData.winner === 'draw' ? 'เสมอ' : getAuthor(msg.gameResultData.winner)?.displayName;
+                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">🏆 ผลการแข่งขัน {msg.gameName}</p><p className="text-xs font-bold text-amber-400 mt-1">ผู้ชนะ: {wName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-b text-xs self-start ml-11 hover:scale-105 transition-transform text-amber-300 border-amber-500/50">👁️ ดูหน้ากระดานสรุป</button></div>;
                     }
                     if (msg.dailyGameShare) {
                       const pa = getAuthor(msg.senderId);
@@ -1666,6 +2100,25 @@
                       <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1"><UpIcon />อัปโหลดไฟล์</button>
                       <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1">🔗 แนบลิงก์</button>
                       <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold">@ แท็ก</button>
+                      <div className="relative">
+                        <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="btn-b py-1 font-bold text-sky-300 border-sky-500/50 bg-sky-950/30 shadow">🎮 ชวนเล่นเกม</button>
+                        {cGameOpen && (
+                          <div className="absolute bottom-full left-0 mb-2 w-44 card py-1.5 z-50 shadow-2xl border-white/20 text-xs">
+                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'}].map(g => (
+                              <button key={g.id} type="button" onClick={async () => { 
+                                setCGameOpen(false); 
+                                const gid = 'cg-' + Date.now(); 
+                                const realId = g.id.split('_')[0];
+                                const timerSetting = g.id.includes('_') ? parseInt(g.id.split('_')[1]) * 60 : null;
+                                await db.collection('bma_chat_games').doc(gid).set({ id: gid, type: realId, name: g.n, players: [currentUser.id], status: 'waiting', gameState: {}, timerSetting, rematch: [], timestamp: Date.now() }); 
+                                const mid = 'msg-' + Date.now(); 
+                                await db.collection('bma_messages').doc(mid).set({ id: mid, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: 'ชวนเล่นเกม ' + g.n, isGameInvite: true, gameId: gid, gameType: realId, gameName: g.n, readBy: [currentUser.id], isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: svrTs() }); 
+                                setActiveChatGameId(gid); 
+                              }} className="w-full text-left px-3.5 py-2 hover:bg-[#0F2547] flex gap-2"><span>{g.i}</span> <span>{g.n}</span></button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       {activeRoom.type === 'dm' && (
                         <button type="button" onClick={async () => {
                           const now = Date.now(), id = 'msg-' + now;
