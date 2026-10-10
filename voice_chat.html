@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Voice & Video Chat Demo - The Blue Moon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+    body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; background: #050811; color: #fff; overflow-x: hidden; margin: 0; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; } 
+    ::-webkit-scrollbar-track { background: #050811; } 
+    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 99px; }
+    
+    /* Theme Colors 
+       Background: #050811
+       Card/Sidebar: #070C18 / #0B1325
+       Highlight/Button: #0F2547
+       Borders: #1E3A5F
+    */
+    .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
+    .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; cursor: pointer; transition: all 0.2s; }
+    .btn-w:active { transform: scale(0.95); }
+    .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.4rem 0.85rem; cursor: pointer; transition: all 0.2s; }
+    .btn-b:hover { background: #1a365d; }
+    .btn-action { width: 3rem; height: 3rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; cursor: pointer; transition: all 0.2s; border: none; }
+    .btn-action.active { background: #374151; color: #fff; }
+    .btn-action.inactive { background: #EF4444; color: #fff; }
+    .btn-action:hover { filter: brightness(1.2); }
+  </style>
+</head>
+<body class="h-screen flex flex-col">
+  <div id="root" class="h-full flex flex-col"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const MOCK_USERS = [
+      { id: 'M002', name: 'Alice Space', avatar: '👩‍🚀' },
+      { id: 'M005', name: 'Bob Comet', avatar: '👨‍🔬' },
+      { id: 'M009', name: 'Charlie Star', avatar: '🧑‍🚀' },
+      { id: 'M012', name: 'Diana Moon', avatar: '👩‍💻' }
+    ];
+
+    // Simple component to handle attaching MediaStream to a video element
+    const VideoPlayer = ({ stream, isMuted, isLocal }) => {
+      const videoRef = useRef(null);
+
+      useEffect(() => {
+        if (videoRef.current && stream) {
+          videoRef.current.srcObject = stream;
+        }
+      }, [stream]);
+
+      return (
+        <video 
+          ref={videoRef} 
+          autoPlay 
+          playsInline 
+          muted={isMuted || isLocal} 
+          className="w-full h-full object-cover"
+          style={{ transform: isLocal ? 'scaleX(-1)' : 'none' }} // Mirror local video
+        />
+      );
+    };
+
+    function VoiceChatDemo() {
+      // Room State
+      const [activeRoom, setActiveRoom] = useState(null); // null, 'global', or 'private-{id}'
+      const [roomName, setRoomName] = useState('');
+      const [simulatedParticipants, setSimulatedParticipants] = useState([]);
+
+      // Media State
+      const [localStream, setLocalStream] = useState(null);
+      const [micEnabled, setMicEnabled] = useState(true);
+      const [camEnabled, setCamEnabled] = useState(false);
+      const [deafened, setDeafened] = useState(false);
+      const [permissionsGranted, setPermissionsGranted] = useState(false);
+      const [error, setError] = useState('');
+
+      const stopMediaTracks = (stream) => {
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      };
+
+      const joinRoom = async (roomId, name) => {
+        setError('');
+        try {
+          // Request permissions and get stream
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: true, // Request both to get permissions, toggle tracks later
+            audio: true 
+          });
+          
+          setPermissionsGranted(true);
+          
+          // Apply initial states
+          stream.getAudioTracks().forEach(t => t.enabled = micEnabled && !deafened);
+          stream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+          
+          setLocalStream(stream);
+          setActiveRoom(roomId);
+          setRoomName(name);
+
+          // Simulate random people joining the room
+          const numPeople = roomId === 'global' ? 3 : 1;
+          const shuffled = [...MOCK_USERS].sort(() => 0.5 - Math.random());
+          setSimulatedParticipants(shuffled.slice(0, numPeople).map(user => ({
+            ...user,
+            isMicOn: Math.random() > 0.3,
+            isCamOn: false, // Keep false for fake users so we show avatars
+            isSpeaking: false
+          })));
+
+        } catch (err) {
+          console.error("Media Error:", err);
+          if (err.name === 'NotAllowedError') {
+            setError('ไม่สามารถเข้าถึงไมโครโฟนและกล้องได้ กรุณาอนุญาตให้เบราว์เซอร์เข้าถึงอุปกรณ์');
+          } else if (err.name === 'NotFoundError') {
+            setError('ไม่พบอุปกรณ์ไมโครโฟนหรือกล้องในเครื่องของคุณ');
+          } else {
+            setError('เกิดข้อผิดพลาดในการเชื่อมต่อสื่อ: ' + err.message);
+          }
+        }
+      };
+
+      const leaveRoom = () => {
+        stopMediaTracks(localStream);
+        setLocalStream(null);
+        setActiveRoom(null);
+        setSimulatedParticipants([]);
+      };
+
+      const toggleMic = () => {
+        if (localStream && !deafened) {
+          const newState = !micEnabled;
+          localStream.getAudioTracks().forEach(t => t.enabled = newState);
+          setMicEnabled(newState);
+        } else if (deafened) {
+          // If deafened, turning on mic should undeafen
+          toggleDeafen();
+          if(localStream) {
+             localStream.getAudioTracks().forEach(t => t.enabled = true);
+          }
+          setMicEnabled(true);
+        } else {
+          setMicEnabled(!micEnabled);
+        }
+      };
+
+      const toggleCam = () => {
+        if (localStream) {
+          const newState = !camEnabled;
+          localStream.getVideoTracks().forEach(t => t.enabled = newState);
+          setCamEnabled(newState);
+        } else {
+          setCamEnabled(!camEnabled);
+        }
+      };
+
+      const toggleDeafen = () => {
+        const newDeafenState = !deafened;
+        setDeafened(newDeafenState);
+        
+        // Deafen usually mutes your mic automatically
+        if (newDeafenState && localStream) {
+          localStream.getAudioTracks().forEach(t => t.enabled = false);
+          setMicEnabled(false);
+        }
+      };
+
+      const createPrivateRoom = () => {
+        const roomId = 'private-' + Math.random().toString(36).substr(2, 6);
+        joinRoom(roomId, 'ห้องส่วนตัวของคุณ');
+      };
+
+      const simulateInvite = () => {
+        const inviteLink = `https://tbma.app/voice/${activeRoom}`;
+        navigator.clipboard.writeText(inviteLink);
+        alert(`จำลองการส่งคำเชิญ!\n\nลิงก์คำเชิญ (คัดลอกแล้ว): ${inviteLink}\n\nในระบบจริง จะเป็นการส่งลิงก์นี้ไปทาง DM หาเพื่อนครับ`);
+      };
+
+      // Cleanup on unmount
+      useEffect(() => {
+        return () => {
+          stopMediaTracks(localStream);
+        };
+      }, [localStream]);
+
+      useEffect(() => {
+        if (!activeRoom) return;
+        // Randomly make fake users "speak" (glow green)
+        const interval = setInterval(() => {
+          setSimulatedParticipants(prev => prev.map(p => {
+            if (!p.isMicOn) return p;
+            return { ...p, isSpeaking: Math.random() > 0.7 };
+          }));
+        }, 1500);
+        return () => clearInterval(interval);
+      }, [activeRoom]);
+
+      return (
+        <div className="flex flex-col md:flex-row h-full overflow-hidden">
+          
+          {/* Sidebar */}
+          <aside className="w-full md:w-64 bg-[#070C18] border-b md:border-b-0 md:border-r border-[#1E3A5F] flex flex-col shrink-0">
+            <div className="p-4 border-b border-[#1E3A5F]">
+              <h1 className="font-bold text-lg text-amber-300">Voice Channels</h1>
+              <p className="text-[10px] text-slate-400 mt-1">ระบบจำลองห้องสนทนาเสียง/วิดีโอ</p>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-3 space-y-4">
+              {/* Global Rooms */}
+              <div>
+                <div className="text-xs font-bold text-slate-500 uppercase mb-2 px-2">Public Rooms</div>
+                <button 
+                  onClick={() => joinRoom('global', 'Global Voice Chat')}
+                  disabled={activeRoom === 'global'}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${activeRoom === 'global' ? 'bg-sky-600 text-white' : 'hover:bg-[#0F2547] text-slate-300'}`}
+                >
+                  <span className="flex items-center gap-2">🌐 Global Voice</span>
+                  {activeRoom === 'global' && <span className="text-[10px] bg-white/20 px-1.5 rounded animate-pulse">Active</span>}
+                </button>
+              </div>
+
+              {/* Private Rooms */}
+              <div>
+                <div className="text-xs font-bold text-slate-500 uppercase mb-2 px-2 flex justify-between items-center">
+                  <span>Private Rooms</span>
+                  <button onClick={createPrivateRoom} className="text-sky-400 hover:text-white text-lg leading-none">+</button>
+                </div>
+                {activeRoom?.startsWith('private-') && (
+                  <button className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-600 text-white transition-colors">
+                    <span className="flex items-center gap-2">🔒 {roomName}</span>
+                    <span className="text-[10px] bg-white/20 px-1.5 rounded animate-pulse">Active</span>
+                  </button>
+                )}
+                <button onClick={createPrivateRoom} className="w-full mt-2 py-2 btn-b text-xs border-dashed border-slate-500 text-slate-300 hover:text-white">
+                  + สร้างห้องส่วนตัวใหม่
+                </button>
+              </div>
+            </div>
+
+            {/* Error Message Display */}
+            {error && (
+              <div className="p-3 m-3 bg-red-900/50 border border-red-500 text-red-200 text-xs rounded-xl">
+                {error}
+              </div>
+            )}
+          </aside>
+
+          {/* Main Content Area */}
+          <main className="flex-1 flex flex-col bg-[#050811] relative">
+            
+            {!activeRoom ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
+                <div className="text-6xl mb-4">🎙️</div>
+                <h2 className="text-2xl font-bold text-white mb-2">เลือกห้องเพื่อเข้าร่วมการสนทนา</h2>
+                <p className="max-w-md">กดเข้า Global Voice หรือสร้างห้องส่วนตัว เพื่อทดสอบการเปิดไมค์ เปิดกล้อง และจำลองการสนทนากับเพื่อนสมาชิก</p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col h-full">
+                {/* Room Header */}
+                <div className="h-16 px-6 border-b border-[#1E3A5F] flex items-center justify-between bg-[#0B1325]">
+                  <div className="font-bold text-lg flex items-center gap-2">
+                    {activeRoom === 'global' ? '🌐' : '🔒'} {roomName}
+                  </div>
+                  {activeRoom?.startsWith('private-') && (
+                    <button onClick={simulateInvite} className="btn-w text-xs shadow-lg shadow-sky-900/20">
+                      📩 คัดลอกคำเชิญ / ส่ง DM
+                    </button>
+                  )}
+                </div>
+
+                {/* Video Grid Area */}
+                <div className="flex-1 p-4 md:p-6 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 h-full auto-rows-fr">
+                    
+                    {/* Local User Card */}
+                    <div className={`card relative overflow-hidden flex flex-col items-center justify-center bg-[#070C18] border-2 ${micEnabled && !deafened ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-[#1E3A5F]'}`}>
+                      {camEnabled && localStream ? (
+                        <VideoPlayer stream={localStream} isMuted={true} isLocal={true} />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-[#0F2547] flex items-center justify-center text-4xl shadow-inner border-2 border-slate-600">
+                          😎
+                        </div>
+                      )}
+                      
+                      {/* Name Tag */}
+                      <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2">
+                        คุณ (Local)
+                        {!micEnabled && <span className="text-red-400">🔇</span>}
+                        {deafened && <span className="text-red-400">🎧❌</span>}
+                      </div>
+                    </div>
+
+                    {/* Simulated Remote Users */}
+                    {simulatedParticipants.map((p, idx) => (
+                      <div key={idx} className={`card relative overflow-hidden flex flex-col items-center justify-center bg-[#070C18] transition-all duration-300 border-2 ${p.isSpeaking && !deafened ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'border-[#1E3A5F]'}`}>
+                        <div className={`w-24 h-24 rounded-full bg-[#0F2547] flex items-center justify-center text-4xl shadow-inner border-2 ${p.isSpeaking && !deafened ? 'border-emerald-500' : 'border-slate-600'}`}>
+                          {p.avatar}
+                        </div>
+                        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-2">
+                          {p.name}
+                          {!p.isMicOn && <span className="text-red-400">🔇</span>}
+                        </div>
+                        {/* If deafened, mock users are conceptually muted to the local user */}
+                        {deafened && <div className="absolute top-3 right-3 text-red-400 bg-black/50 rounded-full p-1 text-xs">🔇 Muted locally</div>}
+                      </div>
+                    ))}
+
+                  </div>
+                </div>
+
+                {/* Control Bar */}
+                <div className="h-20 bg-[#0B1325] border-t border-[#1E3A5F] flex items-center justify-center gap-4 px-4 pb-safe">
+                  
+                  {/* Mic Toggle */}
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={toggleMic} className={`btn-action ${micEnabled && !deafened ? 'active' : 'inactive'}`}>
+                      {micEnabled && !deafened ? '🎤' : '🔇'}
+                    </button>
+                    <span className="text-[10px] text-slate-400">{micEnabled && !deafened ? 'ปิดไมค์' : 'เปิดไมค์'}</span>
+                  </div>
+
+                  {/* Camera Toggle */}
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={toggleCam} className={`btn-action ${camEnabled ? 'active' : 'inactive'}`}>
+                      {camEnabled ? '📷' : '🚫'}
+                    </button>
+                    <span className="text-[10px] text-slate-400">{camEnabled ? 'ปิดกล้อง' : 'เปิดกล้อง'}</span>
+                  </div>
+
+                  {/* Deafen Toggle */}
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={toggleDeafen} className={`btn-action ${!deafened ? 'active' : 'inactive'}`}>
+                      {!deafened ? '🎧' : '🎧❌'}
+                    </button>
+                    <span className="text-[10px] text-slate-400">{!deafened ? 'ปิดเสียงหูฟัง' : 'เปิดหูฟัง'}</span>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="w-px h-10 bg-[#1E3A5F] mx-2"></div>
+
+                  {/* Disconnect */}
+                  <div className="flex flex-col items-center gap-1">
+                    <button onClick={leaveRoom} className="btn-action bg-red-600 hover:bg-red-500 text-white">
+                      📞
+                    </button>
+                    <span className="text-[10px] text-red-400 font-bold">วางสาย</span>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<VoiceChatDemo />);
+  </script>
+</body>
+</html>
