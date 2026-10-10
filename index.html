@@ -764,7 +764,7 @@
         setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
       }, [dateSeed]);
 
-      const onKey = (k) => {
+      const onKey = useCallback((k) => {
         if(k === 'ENTER') {
           if(curr.length !== 5) return;
           const newG = [...guesses, curr];
@@ -777,23 +777,55 @@
         } else if(curr.length < 5) {
           setCurr(c => c + k);
         }
-      };
+      }, [curr, guesses, target, onEnd]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if(e.ctrlKey || e.metaKey || e.altKey) return;
+          const key = e.key.toUpperCase();
+          if(key === 'ENTER') onKey('ENTER');
+          else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
+          else if(/^[A-Z]$/.test(key)) onKey(key);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [onKey]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
-      const getStatus = (char, i, guessStr) => {
-        if(target[i] === char) return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
-        if(target.includes(char)) return 'bg-amber-500 text-white border-amber-500';
-        return 'bg-slate-700 text-slate-300 border-slate-700 opacity-60';
+      const getStatuses = (guessStr) => {
+        const statuses = Array(5).fill('bg-slate-700 text-slate-300 border-slate-700 opacity-60');
+        const targetChars = target.split('');
+        
+        // First pass: check for correct positions (green)
+        for(let i = 0; i < 5; i++) {
+          if(guessStr[i] === targetChars[i]) {
+            statuses[i] = 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+            targetChars[i] = null; // Mark as used
+          }
+        }
+        
+        // Second pass: check for wrong positions (yellow)
+        for(let i = 0; i < 5; i++) {
+          if(statuses[i].includes('bg-emerald-500')) continue;
+          
+          const targetIndex = targetChars.indexOf(guessStr[i]);
+          if(targetIndex !== -1) {
+             statuses[i] = 'bg-amber-500 text-white border-amber-500';
+             targetChars[targetIndex] = null; // Mark as used
+          }
+        }
+        return statuses;
       };
 
       const rows = [];
       for(let i=0; i<6; i++) {
         if(i < guesses.length) {
+          const statuses = getStatuses(guesses[i]);
           rows.push(
             <div key={i} className="flex gap-1.5 justify-center">
               {guesses[i].split('').map((char, j) => (
-                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${getStatus(char, j, guesses[i])}`}>{char}</div>
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 ${statuses[j]}`}>{char}</div>
               ))}
             </div>
           );
@@ -817,10 +849,11 @@
       const keyColor = (char) => {
         let stat = 'bg-[#0F2547] text-white border border-[#1E3A5F]';
         for(let g of guesses) {
+          const statuses = getStatuses(g);
           for(let i=0; i<5; i++) {
             if(g[i] === char) {
-              if(target[i] === char) return 'bg-emerald-500 text-white border border-emerald-400';
-              if(target.includes(char)) stat = 'bg-amber-500 text-white border border-amber-400';
+              if(statuses[i].includes('bg-emerald-500')) return 'bg-emerald-500 text-white border border-emerald-400';
+              if(statuses[i].includes('bg-amber-500')) stat = 'bg-amber-500 text-white border border-amber-400';
               else if(stat !== 'bg-amber-500 text-white border border-amber-400') stat = 'bg-slate-800 text-slate-500 border border-slate-700';
             }
           }
