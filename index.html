@@ -78,7 +78,7 @@
       { id: 'global-announce', name: 'announcements', icon: '📢', desc: 'ห้องแจ้งเตือนอัตโนมัติเมื่อมีโพสต์ใหม่ในเว็บไซต์ (ไม่อนุญาตให้พิมพ์)', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: true, timestamp: 2000 },
       { id: 'happy-birthday-dear', name: 'happy-birthday-dear', icon: '🎂', desc: 'ห้องสำหรับส่งคำอวยพรวันเกิดให้สมาชิก', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: false, timestamp: 3000 }
     ];
-    const GAMES = [{ id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" }, { id: 'minesweeper', name: "Minesweeper", icon: "💣" }, { id: 'flag', name: "Flag Guesser", icon: "🏳️" }, { id: 'solitaire', name: "Solitaire", icon: "🃏" }, { id: 'wordle', name: "Wordle", icon: "🔤" }];
+    const GAMES = [{ id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" }, { id: 'minesweeper', name: "Minesweeper", icon: "💣" }, { id: 'flag', name: "Flag Guesser", icon: "🏳️" }, { id: 'solitaire', name: "Solitaire", icon: "🃏" }, { id: 'wordle', name: "Wordle", icon: "🔤" }, { id: 'snake', name: "Snake", icon: "🐍" }];
 
     const UpIcon = () => <svg className="w-3.5 h-3.5 inline mr-1 -mt-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4m0 0L8 8m4-4v12"/></svg>;
     const Logo = ({ s = 38 }) => <svg width={s} height={s} viewBox="0 0 100 100" fill="none" className="shrink-0 drop-shadow-[0_0_8px_rgba(59,130,246,0.45)]"><path d="M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z" fill="#0F2547" stroke="#FFFFFF" strokeWidth="5.5" strokeLinejoin="round"/></svg>;
@@ -877,6 +877,110 @@
       );
     }
 
+
+    function SnakeGame({ dateSeed, onEnd }) {
+      const ROWS = 15;
+      const COLS = 15;
+      const [snake, setSnake] = useState([{ r: 7, c: 7 }]);
+      const [food, setFood] = useState({ r: 3, c: 3 });
+      const [dir, setDir] = useState({ r: 0, c: 1 });
+      const [nextDir, setNextDir] = useState({ r: 0, c: 1 });
+      const [isGameOver, setIsGameOver] = useState(false);
+      const [score, setScore] = useState(0);
+
+      const spawnFood = (currSnake) => {
+        let r, c, isSafe;
+        do {
+          r = Math.floor(Math.random() * ROWS);
+          c = Math.floor(Math.random() * COLS);
+          isSafe = !currSnake.some(s => s.r === r && s.c === c);
+        } while(!isSafe);
+        return { r, c };
+      };
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          const key = e.key;
+          if (['ArrowUp', 'w', 'W'].includes(key) && dir.r !== 1) setNextDir({ r: -1, c: 0 });
+          if (['ArrowDown', 's', 'S'].includes(key) && dir.r !== -1) setNextDir({ r: 1, c: 0 });
+          if (['ArrowLeft', 'a', 'A'].includes(key) && dir.c !== 1) setNextDir({ r: 0, c: -1 });
+          if (['ArrowRight', 'd', 'D'].includes(key) && dir.c !== -1) setNextDir({ r: 0, c: 1 });
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [dir]);
+
+      useEffect(() => {
+        if (isGameOver) return;
+        const interval = setInterval(() => {
+          setSnake(prevSnake => {
+            const newSnake = [...prevSnake];
+            const head = newSnake[0];
+            const d = nextDir;
+            let newR = (head.r + d.r + ROWS) % ROWS;
+            let newC = (head.c + d.c + COLS) % COLS;
+            
+            const newHead = { r: newR, c: newC };
+            
+            if (newSnake.some((s, idx) => idx !== newSnake.length - 1 && s.r === newR && s.c === newC)) {
+              setIsGameOver(true);
+              onEnd('ended', { score: score });
+              return prevSnake;
+            }
+            
+            newSnake.unshift(newHead);
+            
+            if (newR === food.r && newC === food.c) {
+              setScore(s => s + 1);
+              setFood(spawnFood(newSnake));
+            } else {
+              newSnake.pop();
+            }
+            setDir(d);
+            return newSnake;
+          });
+        }, 150);
+        return () => clearInterval(interval);
+      }, [nextDir, food, isGameOver, score, onEnd]);
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none touch-none">
+          <div className="font-bold text-emerald-400 text-lg bg-[#0F2547] px-6 py-1.5 rounded-full border border-[#1E3A5F]">
+            คะแนน: {score} 🍎
+          </div>
+          <div className="bg-slate-800 border-4 border-[#1E3A5F] rounded-lg p-1 relative w-full max-w-[320px] aspect-square mx-auto">
+            {Array.from({ length: ROWS }).map((_, r) => (
+              <div key={r} className="flex" style={{ height: `${100/ROWS}%` }}>
+                {Array.from({ length: COLS }).map((_, c) => {
+                  const isSnake = snake.some(s => s.r === r && s.c === c);
+                  const isHead = snake[0].r === r && snake[0].c === c;
+                  const isFood = food.r === r && food.c === c;
+                  
+                  return (
+                    <div key={c} className="flex-1 border-[0.5px] border-slate-700/30" style={{
+                      backgroundColor: isHead ? '#34D399' : isSnake ? '#10B981' : 'transparent',
+                      borderRadius: isHead ? '20%' : isSnake ? '10%' : '0'
+                    }}>
+                      {isFood && <div className="w-full h-full bg-red-500 rounded-full scale-[0.6] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2 w-48 mt-4 md:hidden">
+            <div></div>
+            <button onClick={(e) => { e.preventDefault(); if (dir.r !== 1) setNextDir({ r: -1, c: 0 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">⬆️</button>
+            <div></div>
+            <button onClick={(e) => { e.preventDefault(); if (dir.c !== 1) setNextDir({ r: 0, c: -1 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">⬅️</button>
+            <button onClick={(e) => { e.preventDefault(); if (dir.r !== -1) setNextDir({ r: 1, c: 0 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">⬇️</button>
+            <button onClick={(e) => { e.preventDefault(); if (dir.c !== -1) setNextDir({ r: 0, c: 1 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">➡️</button>
+          </div>
+          <div className="text-[10px] text-slate-400 mt-2 text-center">💡 ใช้ลูกศรหรือ W A S D บนคีย์บอร์ด หรือปุ่มบนหน้าจอ<br/>งูสามารถเดินทะลุขอบได้</div>
+        </div>
+      );
+    }
+    
     // ==========================================
     // MAIN APP
     // ==========================================
@@ -922,7 +1026,7 @@
       const avRef = useRef(null);
 
       const [createPost, setCreatePost] = useState(false);
-      const [pTitle, setPTitle] = useState(''); const [pCont, setPCont] = useState(''); const [pGuest, setPGuest] = useState(false);
+      const [pTitle, setPTitle] = useState(''); const [pCont, setPCont] = useState(''); const [pGuest, setPGuest] = useState(false); const [pPinned, setPPinned] = useState(false);
       const [pAtts, setPAtts] = useState([]); const [aUrl, setAUrl] = useState(''); const [aType, setAType] = useState('image');
       const pFileRef = useRef(null);
       const [cInputs, setCInputs] = useState({}); const [repComm, setRepComm] = useState({}); const [commMenu, setCommMenu] = useState(null);
@@ -1041,6 +1145,7 @@
       const dmKey = (a, b) => 'dm_' + [a, b].sort().join('_');
       const roomKey = currentUser && activeRoom.type === 'dm' ? dmKey(currentUser.id, activeRoom.id) : activeRoom.id;
       const roomMsgs = chatMessages.filter((m) => m.roomKey === roomKey);
+      const pinnedMsg = activeRoom.type === 'dm' ? roomMsgs.find(m => m.isPinned) : null;
 
       useEffect(() => {
         if (!currentUser || currentView !== 'chat') return;
@@ -1146,7 +1251,7 @@
 
       const handleEditPostReq = (post) => {
         setPTitle(post.title || ''); setPCont(post.content || ''); setPGuest(post.isGuestAllowed); setPAtts(post.attachments || []); 
-        if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
+        setPPinned(post.isPinned || false); if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
         else { setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setPollClose(''); }
         setEditPostData(post.id); setCreatePost(true);
       };
@@ -1161,12 +1266,12 @@
         }
         if (!pCont.trim() && !pTitle.trim() && !pAtts.length && !poll) return;
         if(editPostData) {
-          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts });
-          setPTitle(''); setPCont(''); setPGuest(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
+          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, isPinned: pPinned });
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
         } else {
           const now = Date.now(), postId = 'post-' + now;
-          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, poll, mutedBy: [], createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
-          setPTitle(''); setPCont(''); setPGuest(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
+          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, poll, mutedBy: [], isPinned: pPinned, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
           await db.collection('bma_posts').doc(postId).set(postObj);
           await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
           await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
@@ -1225,7 +1330,7 @@
         if (!currentUser && !p.isGuestAllowed) return false;
         const a = getAuthor(p.authorId);
         return (currentView === 'bookmarks' ? (p.bookmarks || []).includes(currentUser?.id) : true) && (tagFilter === 'ALL' || getTags(a).includes(tagFilter)) && ((p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.content || '').toLowerCase().includes(searchQ.toLowerCase()) || a.displayName.toLowerCase().includes(searchQ.toLowerCase()) || String(a.id).toLowerCase().includes(searchQ.toLowerCase()));
-      });
+      }).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
       const orbitRings = () => {
         const r1 = [], r2 = [], r3 = [], list = activeMembers.length ? activeMembers : users;
         list.forEach((u, i) => (i % 3 === 0 ? r1 : i % 3 === 1 ? r2 : r3).push(u));
@@ -1236,6 +1341,7 @@
         return list.sort((a,b) => {
           if(gIdx === 2) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           if(gIdx === 4) return (a.score||99) - (b.score||99) || a.timeMs - b.timeMs;
+          if(gIdx === 5) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           return a.timeMs - b.timeMs;
         });
       };
@@ -1274,6 +1380,7 @@
               let isB = false;
               if(activeGameTab===2) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
               else if(activeGameTab===4) isB = sc.score < best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===5) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
               else isB = sc.timeMs < best[sc.userId].timeMs;
               if(isB) best[sc.userId] = sc;
             }
@@ -1297,7 +1404,8 @@
             if(!ext) up = true;
             else if(activeGameTab===2 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
             else if(activeGameTab===4 && (sVal < (ext.score||99) || (sVal === (ext.score||99) && fTime < ext.timeMs))) up = true;
-            else if(activeGameTab!==2 && activeGameTab!==4 && fTime < ext.timeMs) up = true;
+            else if(activeGameTab===5 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
+            else if(activeGameTab!==2 && activeGameTab!==4 && activeGameTab!==5 && fTime < ext.timeMs) up = true;
 
             if(up) {
               db.collection('bma_daily_scores').doc(`${todayStr}_${activeGameTab}_${currentUser.id}`).set({
@@ -1319,6 +1427,7 @@
         else if (currGameSt.status === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
         else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
         else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
+        else if (activeGameTab === 5) msg = `ทำคะแนนได้ ${currGameSt.score} 🍎 ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🐍`;
         else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
 
         const postId = 'post-' + Date.now();
@@ -1474,6 +1583,17 @@
                     <button onClick={() => setRightOpen(!rightOpen)} className="btn-w">{rightOpen ? '👥 ซ่อน →' : '← 👥 สมาชิก'}</button>
                   </div>
                 </div>
+                {pinnedMsg && (
+                    <div className="bg-[#0B1325] border-b border-[#1E3A5F] p-2.5 px-4 flex items-center justify-between gap-2 shrink-0 cursor-pointer shadow-md z-10 hover:bg-[#0F2547]" onClick={() => document.getElementById('msg-' + pinnedMsg.id)?.scrollIntoView({behavior: 'smooth', block: 'center'})}>
+                        <div className="flex-1 min-w-0 text-xs text-slate-300 border-l-2 border-amber-400 pl-2">
+                            <div className="font-bold text-amber-300">📌 ข้อความปักหมุด</div>
+                            <div className="truncate text-slate-100">
+                                {pinnedMsg.text || (pinnedMsg.attachments?.length > 0 ? `[${pinnedMsg.attachments[0].type === 'image' ? 'รูปภาพ' : pinnedMsg.attachments[0].type === 'video' ? 'วิดีโอ' : pinnedMsg.attachments[0].type === 'audio' ? 'ไฟล์เสียง' : 'ไฟล์แนบ'}]` : 'ข้อความ')}
+                            </div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); db.collection('bma_messages').doc(pinnedMsg.id).update({ isPinned: false }); }} className="text-slate-500 hover:text-red-400 px-2 font-bold bg-[#050811] rounded-lg">เลิกปักหมุด</button>
+                    </div>
+                )}
 
                 <div ref={chatBoxRef} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3.5">
                   {roomMsgs.map((msg) => {
@@ -1488,7 +1608,7 @@
                     }
                     const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
                     return (
-                      <div key={msg.id} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} className="flex items-start gap-3 p-1.5 rounded-xl hover:bg-[#0B1325]/60">
+                      <div id={'msg-' + msg.id} key={msg.id} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} className="flex items-start gap-3 p-1.5 rounded-xl hover:bg-[#0B1325]/60">
                         <div onClick={() => setMemberModal(s)} className="cursor-pointer"><Avatar user={s} size="sm" showStatus={true} /></div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -1638,6 +1758,7 @@
                         {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                         {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                         {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                       </div>
                     )}
 
@@ -1649,10 +1770,11 @@
                             {currGameSt.status === 'won' ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
                              currGameSt.status === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
                              activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไป ${currGameSt.score}/3 ประเทศ` :
+                             activeGameTab === 5 ? `เกมโอเวอร์! คุณทำคะแนนได้ ${currGameSt.score} 🍎 คะแนน` :
                              `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ`}
                           </p>
                           <div className="text-3xl font-mono font-bold text-amber-300 my-2">
-                            {currGameSt.status === 'won' ? fmtTime(currGameSt.time) : 'GAME OVER'}
+                            {currGameSt.status === 'won' || currGameSt.status === 'ended' ? fmtTime(currGameSt.time) : 'GAME OVER'}
                           </div>
                           <button onClick={shareGameResult} className="btn-b w-full py-3 shadow hover:scale-105 transition-transform">📤 แชร์สถิติลงกระดานโพสต์</button>
                         </div>
@@ -1685,6 +1807,7 @@
                             <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
                             {activeGameTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
                             {activeGameTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
+                            {activeGameTab === 5 && <span className="text-[10px] text-slate-400">{s.score||0} 🍎</span>}
                             {lbTab === 'monthly' && <span className="text-[9px] text-slate-500">{s.date}</span>}
                           </div>
                         </div>
@@ -1706,6 +1829,8 @@
               <button onClick={() => { setFwdMsg(ctxMenu); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">↪️ ส่งต่อ...</button>
               {currentUser?.id === ctxMenu.message.senderId && !ctxMenu.mediaItem && <button onClick={() => { setEditMsg(ctxMenu.message); setChatIn(ctxMenu.message.text || ''); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไข</button>}
               {currentUser?.id === ctxMenu.message.senderId && <button onClick={async () => { await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isDeleted: true, text: '', attachments: [] }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-red-950 text-red-400">🚫 ยกเลิกข้อความ</button>}
+              {activeRoom.type === 'dm' && !ctxMenu.message.isPinned && <button onClick={async () => { const prevPins = roomMsgs.filter(m => m.isPinned); for(const pm of prevPins) await db.collection('bma_messages').doc(pm.id).update({ isPinned: false }); await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isPinned: true }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-amber-300 border-t border-[#1E3A5F] mt-1 pt-2">📌 ปักหมุดข้อความ</button>}
+              {activeRoom.type === 'dm' && ctxMenu.message.isPinned && <button onClick={async () => { await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isPinned: false }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-red-950 text-red-400 border-t border-[#1E3A5F] mt-1 pt-2">📍 เลิกปักหมุด</button>}
             </div>
           )}
 
@@ -1738,6 +1863,7 @@
 
                   return (
                         <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 shadow-2xl border border-sky-900/50'}>
+                          {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
                           <div className="flex justify-between items-start gap-2">
                             <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
                             <div className="flex items-center gap-2 relative">
@@ -1885,6 +2011,7 @@
 
                       return (
                         <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 ' + (hiPostId === post.id ? 'border-2 border-sky-400' : '')}>
+                          {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
                           <div className="flex justify-between items-start gap-2">
                             <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className="px-1.5 py-0.5 rounded bg-white text-[#050811] font-mono text-[10px] font-bold">{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
                             <div className="flex items-center gap-2 relative">
@@ -2026,6 +2153,7 @@
                 <p className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] text-left">{memberModal.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}</p>
                 {memberModal.socialLinks?.length > 0 && <div className="flex flex-wrap gap-1.5">{memberModal.socialLinks.map((s) => <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="btn-d py-1">{SOCIALS.find((x) => x.id === s.platform)?.icon || '🔗'} {s.label} ↗</a>)}</div>}
                 {currentUser?.id !== memberModal.id && <button onClick={() => { if (!currentUser) return setCurrentView('login'); if (!openDms.includes(memberModal.id)) setOpenDms([...openDms, memberModal.id]); setMemberModal(null); setActiveRoom({ type: 'dm', id: memberModal.id }); setCurrentView('chat'); }} className="w-full btn-w py-2.5">💬 ส่งข้อความส่วนตัว (DM)</button>}
+                <button onClick={() => { setSearchQ(memberModal.id); setTagFilter('ALL'); setCurrentView('feed'); setMemberModal(null); }} className="w-full btn-b py-2.5 mt-1.5 border border-white/20 hover:border-sky-400">📝 ดูโพสต์ทั้งหมดของสมาชิกนี้</button>
               </div>
             </Modal>
           )}
@@ -2062,6 +2190,12 @@
                   <span>🌐 อนุญาตให้ผู้มาเยือน (Guest) มองเห็นโพสต์นี้ได้ (ค่าเริ่มต้นเป็นความลับเฉพาะสมาชิก)</span>
                   <input type="checkbox" checked={pGuest} onChange={(e) => setPGuest(e.target.checked)} />
                 </label>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] cursor-pointer mt-2">
+                    <span className="font-bold text-amber-300">📌 ปักหมุดโพสต์ไว้บนสุด</span>
+                    <input type="checkbox" checked={pPinned} onChange={(e) => setPPinned(e.target.checked)} />
+                  </label>
+                )}
                 <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
                   <div className="flex justify-between items-center"><span className="font-bold">📊 โพลล์สำรวจความคิดเห็น</span><button type="button" onClick={() => setHasPoll(!hasPoll)} className="btn-b py-1">{hasPoll ? '✓ เปิดโพลล์แล้ว' : '+ เพิ่มโพลล์'}</button></div>
                   {hasPoll && (
