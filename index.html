@@ -1298,7 +1298,7 @@
 
     
     function Connect4Inner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
-        const board = gameData.gameState?.board?.map(r => r.cols) || Array(6).fill(null).map(()=>Array(7).fill(0));
+        const rawB = gameData.gameState?.board; const board = rawB ? (rawB[0]?.cols ? rawB.map(r => r.cols) : rawB) : Array(6).fill(null).map(()=>Array(7).fill(0));
         const turn = gameData.gameState?.turn || 1;
         const myP = isPlayer1 ? 1 : 2;
 
@@ -2722,15 +2722,15 @@
                         </div>
                       ))}
                     </div>
+                    {editTagU && (
+                      <Modal title={`แก้ไขหมวดหมู่: ${editTagU.id}`} onClose={() => setEditTagU(null)}>
+                        <div className="space-y-3 text-xs">
+                          <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...PRESET_TAGS, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
+                          <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2">บันทึก</button>
+                        </div>
+                      </Modal>
+                    )}
                   </div>
-                  {editTagU && (
-                    <Modal title={`แก้ไขหมวดหมู่: ${editTagU.id}`} onClose={() => setEditTagU(null)}>
-                      <div className="space-y-3 text-xs">
-                        <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...PRESET_TAGS, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
-                        <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2">บันทึก</button>
-                      </div>
-                    </Modal>
-                  )}
                 ) : (
                   <>
                     <div className="card p-3.5 space-y-2.5">
