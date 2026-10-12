@@ -1905,41 +1905,43 @@
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
+      const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
-      // ฟังก์ชันเช็กล็อกอินแบบปลอดภัย
+      // 1. ฟังก์ชัน Auto-Login (รันแค่ครั้งเดียวตอนฐานข้อมูลโหลดเสร็จ)
       useEffect(() => {
-        if (users.length === 0) return; 
+        if (!isUsersLoaded || autoLoginAttempted) return; 
 
-        if (!currentUser) {
-          // ค้นหา ID ที่บันทึกไว้ในเครื่อง
-          const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
-          if (id) {
-             const foundUser = users.find((u) => u.id === id && u.isActivated);
-             if (foundUser) {
-                 setCurrentUser({...foundUser, isOnline: true, lastActive: Date.now()});
-                 db.collection('bma_users').doc(foundUser.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
-                 
-                 // บังคับเปลี่ยนหน้าเมื่อเจอไอดีที่เซฟไว้
-                 if (currentView === 'login' || currentView === 'home') {
-                     setCurrentView('feed');
-                 }
-             }
-          }
-        } else {
-            // อัปเดตข้อมูลผู้ใช้แบบเรียลไทม์
-            const me = users.find((u) => u.id === currentUser.id);
-            if (me) setCurrentUser(me);
+        const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
+        if (id) {
+           const foundUser = users.find((u) => u.id === id && u.isActivated);
+           if (foundUser) {
+               setCurrentUser({...foundUser, isOnline: true, lastActive: Date.now()});
+               db.collection('bma_users').doc(foundUser.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
+               
+               if (currentView === 'login' || currentView === 'home') {
+                   setCurrentView('feed');
+               }
+           }
         }
         
-        // ปิดหน้าจอโหลดเมื่อข้อมูลผู้ใช้เข้าสู่ระบบเรียบร้อย (มีมากกว่า 1 คน)
-        if (users.length > 1) {
-            setIsAuthLoading(false);
-        }
-      }, [users, currentUser, currentView]);
+        setAutoLoginAttempted(true);
+        setIsAuthLoading(false);
+      }, [users, isUsersLoaded, autoLoginAttempted, currentView]); 
 
-      // ตัวช่วยป้องกันหน้าจอโหลดค้าง (ถ้าเน็ตช้ามากๆ จะตัดเข้าสู่ระบบทันทีใน 2.5 วินาที)
+      // 2. ฟังก์ชันอัปเดตข้อมูลแบบเรียลไทม์ (ทำงานแยกออกมาเพื่อไม่ให้กวน Auto-Login)
       useEffect(() => {
-         const timer = setTimeout(() => setIsAuthLoading(false), 2500);
+          if (currentUser && isUsersLoaded) {
+              const me = users.find((u) => u.id === currentUser.id);
+              // อัปเดตเมื่อมีข้อมูลเปลี่ยนเท่านั้น เพื่อลดอาการกระตุก
+              if (me && JSON.stringify(me) !== JSON.stringify(currentUser)) {
+                  setCurrentUser(me);
+              }
+          }
+      }, [users, isUsersLoaded]);
+
+      // 3. Fallback กันหน้าจอค้าง (ถ้าเน็ตช้ามากๆ จะตัดเข้าสู่เว็บทันที)
+      useEffect(() => {
+         const timer = setTimeout(() => setIsAuthLoading(false), 3000);
          return () => clearTimeout(timer);
       }, []);
 
@@ -2031,8 +2033,9 @@
 
       const handleSignIn = async (e) => {
         e.preventDefault(); setAuthErr('');
-        // เช็กจากความยาวผู้ใช้แทน (ให้มั่นใจว่าดึงข้อมูลมาเสร็จแล้ว)
-        if (users.length <= 1) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
+        
+        // เช็กจากสถานะการโหลดของฐานข้อมูลโดยตรง
+        if (!isUsersLoaded) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
         
         const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
         if (!f) return setAuthErr('Username หรือ Password ไม่ถูกต้อง');
