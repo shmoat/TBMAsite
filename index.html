@@ -786,73 +786,50 @@
         setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
       }, [dateSeed]);
 
-      const currRef = useRef(curr);
-      useEffect(() => { currRef.current = curr; }, [curr]);
-
-      const guessesRef = useRef(guesses);
-      useEffect(() => { guessesRef.current = guesses; }, [guesses]);
-
-      const targetRef = useRef(target);
-      useEffect(() => { targetRef.current = target; }, [target]);
-
-      const isCheckingRef = useRef(isChecking);
-      useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
-
-      const onKey = useCallback(async (k) => {
-        const currentWord = currRef.current;
-        
+      const onKey = async (k) => {
+        if(isChecking) return;
         if(k === 'ENTER') {
-          if(isCheckingRef.current || currentWord.length !== 5) return;
+          if(curr.length !== 5) return;
           setIsChecking(true);
-          let isValid = WORDS.includes(currentWord);
+          let isValid = WORDS.includes(curr);
           if(!isValid) {
-            try { 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + currentWord.toLowerCase(), { signal: controller.signal }); 
-                clearTimeout(timeoutId);
-                isValid = r.ok; 
-            } catch(e) { isValid = true; } // fallback to true if network fails or timeouts
+            try { const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + curr.toLowerCase()); isValid = r.ok; } catch(e) { isValid = true; }
           }
           setIsChecking(false);
-          
           if(!isValid) {
              setWordErr('คำนี้ไม่มีอยู่ในพจนานุกรม');
              setTimeout(() => setWordErr(''), 2000);
              return;
           }
-          const newG = [...guessesRef.current, currentWord];
+          const newG = [...guesses, curr];
           setGuesses(newG);
           setCurr("");
-          if(currentWord === targetRef.current) onEnd('won', { score: newG.length, answer: targetRef.current });
-          else if(newG.length >= 6) onEnd('lost', { score: 6, answer: targetRef.current });
-          
+          if(curr === target) onEnd('won', { score: newG.length, answer: target });
+          else if(newG.length >= 6) onEnd('lost', { score: 6, answer: target });
         } else if(k === 'DEL') {
-          setCurr(currentWord.slice(0, -1));
-          setIsChecking(false); // Force unlock if hung
-        } else if(currentWord.length < 5) {
-          if(isCheckingRef.current) return;
-          setCurr(currentWord + k);
+          setCurr(curr.slice(0, -1));
+        } else if(curr.length < 5) {
+          setCurr(curr + k);
         }
-      }, [onEnd]); // Fixed dependencies
+      };
 
       useEffect(() => {
         const handleKeyDown = (e) => {
           if(e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key.toUpperCase();
-          if(key === 'ENTER') { e.preventDefault(); onKey('ENTER'); }
-          else if(key === 'BACKSPACE' || key === 'DELETE') { e.preventDefault(); onKey('DEL'); }
-          else if(/^[A-Z]$/.test(key)) { e.preventDefault(); onKey(key); }
+          if(key === 'ENTER') onKey('ENTER');
+          else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
+          else if(/^[A-Z]$/.test(key)) onKey(key);
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [onKey]);
+      }, [curr, guesses, target, onEnd, isChecking]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
       const getStatuses = (guessStr) => {
         const statuses = Array(5).fill('bg-slate-700 text-slate-300 border-slate-700 opacity-60');
-        const targetChars = targetRef.current.split('');
+        const targetChars = target.split('');
         
         // First pass: check for correct positions (green)
         for(let i = 0; i < 5; i++) {
@@ -1740,7 +1717,7 @@
       const [actSuccessMsg, setActSuccessMsg] = useState('');
       const [editTagU, setEditTagU] = useState(null); const [editTagL, setEditTagL] = useState([]);
 
-      const [openDms, setOpenDms] = useState([]); const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true); const [rightTag, setRightTag] = useState('ALL');
+      const [openDms, setOpenDms] = useState([]); const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true); const [rightTag, setRightTag] = useState('ALL'); const [dmSortType, setDmSortType] = useState('latest');
       const [chatIn, setChatIn] = useState(''); const [chatAtts, setChatAtts] = useState([]); const [cUrlOpen, setCUrlOpen] = useState(false); const [cAttUrl, setCAttUrl] = useState(''); const [cAttType, setCAttType] = useState('image');
       const [uploading, setUploading] = useState(false); const cFileRef = useRef(null); const typTimer = useRef(null);
       const [ctxMenu, setCtxMenu] = useState(null); const [editMsg, setEditMsg] = useState(null); const [repMsg, setRepMsg] = useState(null); const [fwdMsg, setFwdMsg] = useState(null);
@@ -2050,6 +2027,17 @@
       };
 
       const conversedDms = currentUser ? activeMembers.filter((m) => m.id !== currentUser.id && (chatMessages.some((msg) => msg.roomKey === dmKey(currentUser.id, m.id)) || openDms.includes(m.id) || (activeRoom.type === 'dm' && activeRoom.id === m.id))) : [];
+      if(dmSortType === 'alpha') {
+         conversedDms.sort((a,b) => a.displayName.localeCompare(b.displayName, 'th'));
+      } else {
+         conversedDms.sort((a,b) => {
+             const aMsgs = chatMessages.filter(msg => msg.roomKey === dmKey(currentUser.id, a.id));
+             const bMsgs = chatMessages.filter(msg => msg.roomKey === dmKey(currentUser.id, b.id));
+             const aLast = aMsgs.length > 0 ? getMs(aMsgs[aMsgs.length-1]) : 0;
+             const bLast = bMsgs.length > 0 ? getMs(bMsgs[bMsgs.length-1]) : 0;
+             return bLast - aLast;
+         });
+      }
       const myGroups = currentUser ? groups.filter((g) => (g.members || []).includes(currentUser.id)) : [];
       const roomTypers = typingStatuses.filter((t) => t.roomKey === roomKey && t.userId !== currentUser?.id);
       const filteredPosts = posts.filter((p) => {
@@ -2284,9 +2272,17 @@
                     <div className="mb-2 flex justify-between items-center"><span className="text-[11px] font-bold uppercase text-slate-400">กลุ่มแชต (Groups)</span><button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold">+ สร้างกลุ่ม</button></div>
                     {myGroups.map((g) => <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'group' && activeRoom.id === g.id ? 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl bg-white text-[#050811] font-bold' : 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl text-slate-300 hover:bg-[#0F2547]'}><span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span><span className="text-[10px] font-mono">{(g.members || []).length}</span></button>)}
                   </div>
-                  <div className="p-3 flex-1">
-                    <div className="mb-2 text-[11px] font-bold uppercase text-slate-400">แชตส่วนตัว (ที่เคยคุย)</div>
-                    {conversedDms.map((m) => <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'dm' && activeRoom.id === m.id ? 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl bg-white text-[#050811] text-left' : 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'}><Avatar user={m} size="xs" showStatus={true} /><span className="truncate font-bold">{m.displayName}</span></button>)}
+                  <div className="p-3 flex-1 flex flex-col min-h-0">
+                    <div className="mb-2 flex justify-between items-center">
+                       <span className="text-[11px] font-bold uppercase text-slate-400">แชตส่วนตัว</span>
+                       <select value={dmSortType} onChange={(e) => setDmSortType(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] text-[10px] text-slate-300 rounded outline-none p-0.5 max-w-[80px]">
+                          <option value="latest">ใหม่สุดก่อน</option>
+                          <option value="alpha">เรียงตามอักษร</option>
+                       </select>
+                    </div>
+                    <div className="flex-1 overflow-y-auto no-scrollbar">
+                       {conversedDms.map((m) => <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'dm' && activeRoom.id === m.id ? 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl bg-white text-[#050811] text-left' : 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'}><Avatar user={m} size="xs" showStatus={true} /><span className="truncate font-bold">{m.displayName}</span></button>)}
+                    </div>
                   </div>
                 </aside>
               )}
