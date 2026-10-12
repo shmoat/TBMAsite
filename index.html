@@ -1762,7 +1762,6 @@
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           
-          // ตรวจสอบว่าเบราว์เซอร์รองรับไฟล์เสียงรูปแบบใดบ้าง (สำหรับแก้ปัญหา Safari/iOS)
           let options = {};
           if (MediaRecorder.isTypeSupported('audio/webm')) {
             options = { mimeType: 'audio/webm' };
@@ -1800,29 +1799,6 @@
             setUploading(false);
           };
           
-          mediaRecorderRef.current.start();
-          setIsRecording(true);
-        } catch (err) {
-          alert('กรุณาอนุญาตการเข้าถึงไมโครโฟนเพื่อส่งข้อความเสียง');
-        }
-      };
-            if (e.data.size > 0) audioChunksRef.current.push(e.data);
-          };
-          mediaRecorderRef.current.onstop = async () => {
-            // ดึง Mime Type ตัวจริงของเบราว์เซอร์มาใช้ เพื่อป้องกันไฟล์พังบน Safari/iOS
-            const mimeType = mediaRecorderRef.current.mimeType || 'audio/mp4';
-            const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-            const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'm4a';
-            const file = new File([audioBlob], `voice-message.${ext}`, { type: mimeType });
-            setUploading(true);
-            try {
-              const att = await uploadChunked(file);
-              setChatAtts((prev) => [...prev, att]);
-            } catch (err) {
-              alert(err.message);
-            }
-            setUploading(false);
-          };
           mediaRecorderRef.current.start();
           setIsRecording(true);
         } catch (err) {
