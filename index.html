@@ -581,6 +581,8 @@
 
     function SolitaireGame({ dateSeed, onEnd }) {
       const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
+      const [history, setHistory] = useStickyState([], `bma_sol_hist_${dateSeed}`);
+      const [initialSt, setInitialSt] = useStickyState(null, `bma_sol_init_${dateSeed}`);
       const [drag, setDrag] = useState(null);
 
       useEffect(() => {
@@ -599,12 +601,35 @@
             tab[j].push(card);
           }
         }
-        setSt({ stock: deck, waste: [], fnd: [[],[],[],[]], tab });
+        const newSt = { stock: deck, waste: [], fnd: [[],[],[],[]], tab };
+        setSt(newSt);
+        setInitialSt(JSON.parse(JSON.stringify(newSt)));
+        setHistory([]);
       }, [dateSeed]);
+
+      const saveHistory = (currentSt) => {
+        setHistory(prev => [...prev, JSON.parse(JSON.stringify(currentSt))]);
+      };
+
+      const handleUndo = () => {
+        if (history.length > 0) {
+            const prev = history[history.length - 1];
+            setSt(prev);
+            setHistory(history.slice(0, -1));
+        }
+      };
+
+      const handleReset = () => {
+        if (initialSt) {
+            setSt(JSON.parse(JSON.stringify(initialSt)));
+            setHistory([]);
+        }
+      };
 
       const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('won'); };
 
       const handleStock = () => {
+        saveHistory(st);
         let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
         if(ns.stock.length) { let c = ns.stock.pop(); c.up = true; ns.waste.push(c); } 
         else { ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = []; }
@@ -651,6 +676,7 @@
         }
         
         if(moved) {
+          saveHistory(st);
           if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
           setSt(ns); checkWin(ns);
         } else {
@@ -685,6 +711,7 @@
                  let stack = drag.area === 'waste' ? [ns.waste.pop()] : ns.tab[drag.colIdx].splice(drag.cardIdx);
                  
                  if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
+                    saveHistory(st);
                     if(drag.area === 'tab' && ns.tab[drag.colIdx].length) ns.tab[drag.colIdx][ns.tab[drag.colIdx].length-1].up = true;
                     setSt(ns); checkWin(ns);
                  } else { setSt({...st}); } 
@@ -747,6 +774,12 @@
             </div>
           )}
 
+          <div className="flex justify-between mb-4">
+            <div className="flex gap-2">
+              <button onClick={handleUndo} disabled={history.length === 0} className="px-3 py-1 bg-[#0F2547] text-white rounded text-[10px] border border-[#1E3A5F] disabled:opacity-50 font-bold shadow-md hover:bg-sky-900 transition-colors">↩️ Undo</button>
+              <button onClick={handleReset} disabled={!initialSt} className="px-3 py-1 bg-red-900/50 text-red-200 rounded text-[10px] border border-red-900/50 disabled:opacity-50 font-bold shadow-md hover:bg-red-900 transition-colors">🔄 Reset</button>
+            </div>
+          </div>
           <div className="flex justify-between mb-6">
             <div className="flex gap-2">
               <div onClick={handleStock} className="cursor-pointer">{st.stock.length > 0 ? <div className="w-10 h-14 sm:w-12 sm:h-16 card-ui face-down shrink-0 flex items-center justify-center text-[10px] text-white/50">{st.stock.length}</div> : <div className="w-10 h-14 sm:w-12 sm:h-16 border border-[#1E3A5F] rounded bg-black flex items-center justify-center text-[10px] text-slate-500">↺</div>}</div>
@@ -1503,13 +1536,14 @@
                     </div>
                 )}
 
-                {!hasAnyMove && turn === myP && !isSpectator && (
-                    <div className="flex gap-2 items-center bg-[#0F2547] p-2 rounded-xl border border-red-900/50">
-                        <div className="text-amber-400 text-xs font-bold px-2">ไม่มีไพ่ลงได้!</div>
-                        {(!hasDrawn && deck.length > 0) ? (
-                            <button onClick={drawDomino} className="btn-w py-1.5 px-4 text-xs border-amber-500 shadow-md">🃏 จั่วไพ่ (1 ครั้ง)</button>
-                        ) : (
-                            <button onClick={passTurn} className="btn-b py-1.5 px-4 text-xs text-red-300 border-red-500/50">⏭️ ข้ามตา</button>
+                {turn === myP && !isSpectator && (
+                    <div className="flex gap-2 items-center bg-[#0F2547] p-2 rounded-xl border border-[#1E3A5F] justify-center mt-2">
+                        {!hasAnyMove && <div className="text-amber-400 text-xs font-bold px-2">ไม่มีไพ่ลงได้!</div>}
+                        {(!hasDrawn && deck.length > 0) && (
+                            <button onClick={drawDomino} className="btn-w py-1.5 px-4 text-xs border-amber-500 shadow-md hover:scale-105 transition-transform">🃏 จั่วไพ่</button>
+                        )}
+                        {(!hasAnyMove || hasDrawn) && (
+                            <button onClick={passTurn} className="btn-b py-1.5 px-4 text-xs text-red-300 border-red-500/50 hover:bg-red-950 transition-colors">⏭️ ข้ามตา</button>
                         )}
                     </div>
                 )}
@@ -1720,6 +1754,45 @@
       const [openDms, setOpenDms] = useState([]); const [leftOpen, setLeftOpen] = useState(true); const [rightOpen, setRightOpen] = useState(true); const [rightTag, setRightTag] = useState('ALL'); const [dmSortType, setDmSortType] = useState('latest');
       const [chatIn, setChatIn] = useState(''); const [chatAtts, setChatAtts] = useState([]); const [cUrlOpen, setCUrlOpen] = useState(false); const [cAttUrl, setCAttUrl] = useState(''); const [cAttType, setCAttType] = useState('image');
       const [uploading, setUploading] = useState(false); const cFileRef = useRef(null); const typTimer = useRef(null);
+      const [isRecording, setIsRecording] = useState(false);
+      const mediaRecorderRef = useRef(null);
+      const audioChunksRef = useRef([]);
+
+      const startRecording = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+          mediaRecorderRef.current.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+          mediaRecorderRef.current.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const file = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
+            setUploading(true);
+            try {
+              const att = await uploadChunked(file);
+              setChatAtts((prev) => [...prev, att]);
+            } catch (err) {
+              alert(err.message);
+            }
+            setUploading(false);
+          };
+          mediaRecorderRef.current.start();
+          setIsRecording(true);
+        } catch (err) {
+          alert('กรุณาอนุญาตการเข้าถึงไมโครโฟนเพื่อส่งข้อความเสียง');
+        }
+      };
+
+      const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+          mediaRecorderRef.current.stop();
+          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+          setIsRecording(false);
+        }
+      };
+      
       const [ctxMenu, setCtxMenu] = useState(null); const [editMsg, setEditMsg] = useState(null); const [repMsg, setRepMsg] = useState(null); const [fwdMsg, setFwdMsg] = useState(null);
       const [mentOpen, setMentOpen] = useState(false); const [mentF, setMentF] = useState(''); const [emoOpen, setEmoOpen] = useState(false);
       const [activeChatGameId, setActiveChatGameId] = useState(null); const [cGameOpen, setCGameOpen] = useState(false);
@@ -2300,7 +2373,7 @@
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && <button onClick={() => setAddMemOpen(true)} className="btn-b text-sky-200">+ เพิ่มสมาชิก</button>}
+                    {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && <button onClick={() => setAddMemOpen(true)} className="btn-b text-sky-200">แก้ไขสมาชิก</button>}
                     {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
                       <><button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b">{activeGrp.isArchived ? '🔓 เปิด' : '📦 Archive'}</button><button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="px-2.5 py-1 rounded-xl bg-red-950 text-red-200">🗑️</button></>
                     )}
@@ -2398,6 +2471,7 @@
                       <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
                       <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1"><UpIcon />อัปโหลดไฟล์</button>
                       <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1">🔗 แนบลิงก์</button>
+                      <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`btn-d py-1 ${isRecording ? 'text-red-400 font-bold bg-red-900/30 animate-pulse' : ''}`}>{isRecording ? '⏹️ หยุดบันทึก' : '🎤 เสียง'}</button>
                       <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold">@ แท็ก</button>
                       <div className="relative">
                          <button type="button" onClick={() => setEmoOpen(!emoOpen)} className="btn-d py-1 text-lg leading-none px-2">😀</button>
@@ -2893,14 +2967,35 @@
 
           {/* Modal Components */}
           {addMemOpen && activeGrp && (
-            <Modal title={'👥 เพิ่มสมาชิกเข้ากลุ่ม: ' + activeGrp.name} onClose={() => setAddMemOpen(false)}>
-              <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
-                {activeMembers.filter((m) => !(activeGrp.members || []).includes(m.id)).map((m) => (
-                  <div key={m.id} className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex justify-between items-center">
-                    <span>{m.displayName} ({m.id})</span>
-                    <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ members: Array.from(new Set([...(activeGrp.members || []), m.id])) })} className="btn-w py-1">+ ดึงเข้ากลุ่ม</button>
+            <Modal title={'👥 แก้ไขสมาชิกกลุ่ม: ' + activeGrp.name} onClose={() => setAddMemOpen(false)}>
+              <div className="space-y-4 max-h-80 overflow-y-auto text-xs">
+                <div>
+                  <h4 className="font-bold text-sky-300 mb-2">สมาชิกในกลุ่ม ({(activeGrp.members || []).length})</h4>
+                  <div className="space-y-2">
+                    {activeMembers.filter((m) => (activeGrp.members || []).includes(m.id)).map((m) => (
+                      <div key={m.id} className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex justify-between items-center">
+                        <div className="flex items-center gap-2"><Avatar user={m} size="xs" /><span>{m.displayName} ({m.id})</span></div>
+                        <div className="flex gap-2">
+                          {m.id === activeGrp.createdBy && <span className="text-amber-400 text-[10px] self-center font-bold">👑 ผู้สร้าง</span>}
+                          {m.id !== activeGrp.createdBy && m.id !== currentUser?.id && (
+                            <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ members: (activeGrp.members || []).filter(id => id !== m.id) })} className="text-red-400 font-bold bg-red-950/50 px-2 py-1 rounded hover:bg-red-900 transition-colors">ลบออก</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <div>
+                  <h4 className="font-bold text-emerald-300 mb-2">เพิ่มสมาชิกใหม่</h4>
+                  <div className="space-y-2">
+                    {activeMembers.filter((m) => !(activeGrp.members || []).includes(m.id)).map((m) => (
+                      <div key={m.id} className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex justify-between items-center">
+                        <div className="flex items-center gap-2"><Avatar user={m} size="xs" /><span>{m.displayName} ({m.id})</span></div>
+                        <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ members: Array.from(new Set([...(activeGrp.members || []), m.id])) })} className="btn-w py-1 text-[10px] hover:scale-105 transition-transform">+ ดึงเข้ากลุ่ม</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </Modal>
           )}
