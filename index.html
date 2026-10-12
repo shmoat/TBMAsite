@@ -1761,9 +1761,51 @@
       const startRecording = async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorderRef.current = new MediaRecorder(stream);
+          
+          // ตรวจสอบว่าเบราว์เซอร์รองรับไฟล์เสียงรูปแบบใดบ้าง (สำหรับแก้ปัญหา Safari/iOS)
+          let options = {};
+          if (MediaRecorder.isTypeSupported('audio/webm')) {
+            options = { mimeType: 'audio/webm' };
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+          } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+            options = { mimeType: 'audio/aac' };
+          }
+          
+          mediaRecorderRef.current = new MediaRecorder(stream, options);
           audioChunksRef.current = [];
+          
           mediaRecorderRef.current.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+          
+          mediaRecorderRef.current.onstop = async () => {
+            const actualMimeType = mediaRecorderRef.current.mimeType || options.mimeType || 'audio/mp4';
+            const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
+            
+            let ext = 'mp4';
+            if (actualMimeType.includes('webm')) ext = 'webm';
+            else if (actualMimeType.includes('mp3')) ext = 'mp3';
+            else if (actualMimeType.includes('aac') || actualMimeType.includes('m4a')) ext = 'm4a';
+            else if (actualMimeType.includes('ogg')) ext = 'ogg';
+            
+            const file = new File([audioBlob], `voice-message.${ext}`, { type: actualMimeType });
+            setUploading(true);
+            try {
+              const att = await uploadChunked(file);
+              setChatAtts((prev) => [...prev, att]);
+            } catch (err) {
+              alert(err.message);
+            }
+            setUploading(false);
+          };
+          
+          mediaRecorderRef.current.start();
+          setIsRecording(true);
+        } catch (err) {
+          alert('กรุณาอนุญาตการเข้าถึงไมโครโฟนเพื่อส่งข้อความเสียง');
+        }
+      };
             if (e.data.size > 0) audioChunksRef.current.push(e.data);
           };
           mediaRecorderRef.current.onstop = async () => {
