@@ -1767,8 +1767,11 @@
             if (e.data.size > 0) audioChunksRef.current.push(e.data);
           };
           mediaRecorderRef.current.onstop = async () => {
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            const file = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
+            // ดึง Mime Type ตัวจริงของเบราว์เซอร์มาใช้ เพื่อป้องกันไฟล์พังบน Safari/iOS
+            const mimeType = mediaRecorderRef.current.mimeType || 'audio/mp4';
+            const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+            const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'm4a';
+            const file = new File([audioBlob], `voice-message.${ext}`, { type: mimeType });
             setUploading(true);
             try {
               const att = await uploadChunked(file);
@@ -1858,7 +1861,8 @@
           const maxF = l.reduce((m, u) => { const r = String(u.id).match(/^F(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           setNewMId('M' + String(max + 1).padStart(3, '0'));
         });
-        const u2 = db.collection('bma_posts').onSnapshot((s) => setPosts(s.docs.map((d) => d.data()).sort((a, b) => getMs(b) - getMs(a))));
+        // กำหนด Limit ให้โหลดเฉพาะข้อมูลล่าสุด ป้องกันการโหลดข้อมูลมหาศาลรวดเดียว
+        const u2 = db.collection('bma_posts').orderBy('timestamp', 'desc').limit(150).onSnapshot((s) => setPosts(s.docs.map((d) => d.data())));
         const u3 = db.collection('bma_channels').onSnapshot(async (s) => {
           if (s.empty) { for (const c of DEF_CH) await db.collection('bma_channels').doc(c.id).set(c); }
           else {
@@ -1870,9 +1874,9 @@
           }
         });
         const u4 = db.collection('bma_groups').onSnapshot((s) => setGroups(s.docs.map((d) => d.data()).sort((a, b) => getMs(b) - getMs(a))));
-        const u5 = db.collection('bma_messages').onSnapshot((s) => setChatMessages(s.docs.map((d) => d.data()).sort((a, b) => (getMs(a) - getMs(b)) || String(a.id).localeCompare(String(b.id)))));
+        const u5 = db.collection('bma_messages').orderBy('timestamp', 'desc').limit(400).onSnapshot((s) => setChatMessages(s.docs.map((d) => d.data()).reverse()));
         const u6 = db.collection('bma_typing').onSnapshot((s) => setTypingStatuses(s.docs.map((d) => d.data()).filter((t) => t.isTyping)), () => {});
-        const u7 = db.collection('bma_notifications').onSnapshot((s) => setNotifications(s.docs.map((d) => d.data()).sort((a, b) => getMs(b) - getMs(a))), () => {});
+        const u7 = db.collection('bma_notifications').orderBy('timestamp', 'desc').limit(100).onSnapshot((s) => setNotifications(s.docs.map((d) => d.data())), () => {});
         return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
       }, []);
 
