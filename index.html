@@ -1701,6 +1701,7 @@
 
     function App() {
       const [users, setUsers] = useState([OWNER_SEED]);
+      const [isUsersLoaded, setIsUsersLoaded] = useState(false); // เพิ่มบรรทัดนี้
       const [posts, setPosts] = useState([]);
       const [channels, setChannels] = useState(DEF_CH);
       const [groups, setGroups] = useState([]);
@@ -1871,13 +1872,18 @@
 
       useEffect(() => {
         const u1 = db.collection('bma_users').onSnapshot(async (s) => {
-          if (s.empty) return db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
+          if (s.empty) {
+             await db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
+             setIsUsersLoaded(true);
+             return;
+          }
           const l = s.docs.map((d) => d.data()).filter((u) => u.id !== 'BMA-000' && u.password !== 'bma-root-password' && u.password !== 'moon-8842');
-          if (!l.some((u) => u.id === 'M000')) return db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
+          if (!l.some((u) => u.id === 'M000')) await db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
           l.sort((a, b) => String(a.id).localeCompare(String(b.id))); setUsers(l);
           const max = l.reduce((m, u) => { const r = String(u.id).match(/^M(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           const maxF = l.reduce((m, u) => { const r = String(u.id).match(/^F(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           setNewMId('M' + String(max + 1).padStart(3, '0'));
+          setIsUsersLoaded(true); // เพิ่มบรรทัดนี้เพื่อบอกว่าโหลดข้อมูลผู้ใช้เสร็จแล้ว
         });
         // กำหนด Limit ให้โหลดเฉพาะข้อมูลล่าสุด ป้องกันการโหลดข้อมูลมหาศาลรวดเดียว
         const u2 = db.collection('bma_posts').orderBy('timestamp', 'desc').limit(150).onSnapshot((s) => setPosts(s.docs.map((d) => d.data())));
@@ -1900,7 +1906,7 @@
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
       useEffect(() => {
-        if (users.length <= 1) return; // Wait for full user list to load
+        if (!isUsersLoaded) return; // เปลี่ยนบรรทัดนี้ ให้รอจนกว่าฐานข้อมูลโหลดเสร็จ
         if (!currentUser) {
           const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
           const f = id && users.find((u) => u.id === id && u.isActivated);
