@@ -1879,13 +1879,13 @@
           }
           const l = s.docs.map((d) => d.data()).filter((u) => u.id !== 'BMA-000' && u.password !== 'bma-root-password' && u.password !== 'moon-8842');
           if (!l.some((u) => u.id === 'M000')) await db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
-          l.sort((a, b) => String(a.id).localeCompare(String(b.id))); setUsers(l);
+          l.sort((a, b) => String(a.id).localeCompare(String(b.id))); 
+          setUsers(l);
           const max = l.reduce((m, u) => { const r = String(u.id).match(/^M(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           const maxF = l.reduce((m, u) => { const r = String(u.id).match(/^F(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           setNewMId('M' + String(max + 1).padStart(3, '0'));
-          setIsUsersLoaded(true); // เพิ่มบรรทัดนี้เพื่อบอกว่าโหลดข้อมูลผู้ใช้เสร็จแล้ว
+          setIsUsersLoaded(true);
         });
-        // กำหนด Limit ให้โหลดเฉพาะข้อมูลล่าสุด ป้องกันการโหลดข้อมูลมหาศาลรวดเดียว
         const u2 = db.collection('bma_posts').orderBy('timestamp', 'desc').limit(150).onSnapshot((s) => setPosts(s.docs.map((d) => d.data())));
         const u3 = db.collection('bma_channels').onSnapshot(async (s) => {
           if (s.empty) { for (const c of DEF_CH) await db.collection('bma_channels').doc(c.id).set(c); }
@@ -1906,20 +1906,28 @@
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
       useEffect(() => {
-        if (!isUsersLoaded) return; // รอให้ฐานข้อมูลผู้ใช้โหลดเสร็จ
+        if (!isUsersLoaded) return; 
+        
+        let foundUser = null;
         if (!currentUser) {
           const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
-          const f = id && users.find((u) => u.id === id && u.isActivated);
-          if (f) { 
-              setCurrentUser({...f, isOnline: true, lastActive: Date.now()}); 
-              db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {}); 
+          foundUser = id && users.find((u) => u.id === id && u.isActivated);
+          if (foundUser) { 
+              setCurrentUser({...foundUser, isOnline: true, lastActive: Date.now()}); 
+              db.collection('bma_users').doc(foundUser.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {}); 
           }
         } else {
-            const me = users.find((u) => u.id === currentUser.id);
-            if (me) setCurrentUser(me);
+            foundUser = users.find((u) => u.id === currentUser.id);
+            if (foundUser) setCurrentUser(foundUser);
         }
-        setIsAuthLoading(false); // ปิดหน้าต่างโหลด
-      }, [users, isUsersLoaded]); // <--- เพิ่ม isUsersLoaded เข้าไปที่นี่
+        
+        // จุดสำคัญ: ถ้าล็อกอินสำเร็จ (ไม่ว่าจะเซฟไว้หรือเพิ่งกรอก) ให้ย้ายออกจากหน้า Login ทันที
+        if (foundUser && currentView === 'login') {
+            setCurrentView('feed');
+        }
+        
+        setIsAuthLoading(false);
+      }, [users, isUsersLoaded]);
 
       const pingRef = useRef(0);
       const updateActivity = useCallback(() => {
@@ -2009,7 +2017,6 @@
 
       const handleSignIn = async (e) => {
         e.preventDefault(); setAuthErr('');
-        // เปลี่ยนมาเช็กจาก isUsersLoaded แทน users.length
         if(!isUsersLoaded) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
         
         const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
