@@ -786,7 +786,7 @@
         setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
       }, [dateSeed]);
 
-      const onKey = useCallback(async (k) => {
+      const onKey = async (k) => {
         if(isChecking) return;
         if(k === 'ENTER') {
           if(curr.length !== 5) return;
@@ -807,24 +807,23 @@
           if(curr === target) onEnd('won', { score: newG.length, answer: target });
           else if(newG.length >= 6) onEnd('lost', { score: 6, answer: target });
         } else if(k === 'DEL') {
-          setCurr(c => c.slice(0, -1));
+          setCurr(curr.slice(0, -1));
         } else if(curr.length < 5) {
-          setCurr(c => c + k);
+          setCurr(curr + k);
         }
-      }, [curr, guesses, target, onEnd, isChecking]);
+      };
 
       useEffect(() => {
         const handleKeyDown = (e) => {
-          if(e.ctrlKey || e.metaKey || e.altKey) return;
+          if(e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key.toUpperCase();
           if(key === 'ENTER') onKey('ENTER');
           else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
           else if(/^[A-Z]$/.test(key)) onKey(key);
         };
-        const rootNode = document.getElementById('root');
-        rootNode.addEventListener('keydown', handleKeyDown);
-        return () => rootNode.removeEventListener('keydown', handleKeyDown);
-      }, [onKey]);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [curr, guesses, target, onEnd, isChecking]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
