@@ -303,6 +303,21 @@
         setBoard(puzzle.map(r => r.map(val => ({ val, fixed: val !== '', notes: [] }))));
       }, [dateSeed]);
 
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if(!selectedCell || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          const k = e.key;
+          if(/^[1-9]$/.test(k)) handleNumpad(parseInt(k));
+          else if(k === 'Backspace' || k === 'Delete') handleNumpad('DEL');
+          else if(k === 'ArrowUp') setSelectedCell(p => p ? [Math.max(0, p[0]-1), p[1]] : [8,0]);
+          else if(k === 'ArrowDown') setSelectedCell(p => p ? [Math.min(8, p[0]+1), p[1]] : [0,0]);
+          else if(k === 'ArrowLeft') setSelectedCell(p => p ? [p[0], Math.max(0, p[1]-1)] : [0,8]);
+          else if(k === 'ArrowRight') setSelectedCell(p => p ? [p[0], Math.min(8, p[1]+1)] : [0,0]);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [selectedCell, board, noteMode]);
+
       const checkWin = (b) => {
         for(let r=0; r<9; r++) {
           const rSet = new Set(), cSet = new Set(), bSet = new Set();
@@ -383,6 +398,7 @@
             <div className="grid grid-cols-5 gap-1.5">
               {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-10 sm:h-12 text-lg font-bold">{n}</button>)}
               <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 text-red-300 border border-red-900/50 rounded-lg h-10 sm:h-12 text-xs font-bold">DEL</button>
+              <button onClick={() => { if(confirm('ต้องการล้างกระดานทั้งหมดใช่หรือไม่?')) setBoard(board.map(r => r.map(c => c.fixed ? c : { ...c, val: '', notes: [] }))); }} className="col-span-5 mt-1 bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-900/50 rounded-lg h-10 text-xs font-bold transition-colors">🗑️ เคลียร์กระดาน (Clear All)</button>
             </div>
           </div>
         </div>
@@ -805,8 +821,9 @@
           else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
           else if(/^[A-Z]$/.test(key)) onKey(key);
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        const rootNode = document.getElementById('root');
+        rootNode.addEventListener('keydown', handleKeyDown);
+        return () => rootNode.removeEventListener('keydown', handleKeyDown);
       }, [onKey]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
@@ -925,8 +942,9 @@
           if (['ArrowLeft', 'a', 'A'].includes(key) && dir.c !== 1) setNextDir({ r: 0, c: -1 });
           if (['ArrowRight', 'd', 'D'].includes(key) && dir.c !== -1) setNextDir({ r: 0, c: 1 });
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        const rootNode = document.getElementById('root');
+        rootNode.addEventListener('keydown', handleKeyDown);
+        return () => rootNode.removeEventListener('keydown', handleKeyDown);
       }, [dir]);
 
       useEffect(() => {
@@ -1704,7 +1722,7 @@
       const [chatIn, setChatIn] = useState(''); const [chatAtts, setChatAtts] = useState([]); const [cUrlOpen, setCUrlOpen] = useState(false); const [cAttUrl, setCAttUrl] = useState(''); const [cAttType, setCAttType] = useState('image');
       const [uploading, setUploading] = useState(false); const cFileRef = useRef(null); const typTimer = useRef(null);
       const [ctxMenu, setCtxMenu] = useState(null); const [editMsg, setEditMsg] = useState(null); const [repMsg, setRepMsg] = useState(null); const [fwdMsg, setFwdMsg] = useState(null);
-      const [mentOpen, setMentOpen] = useState(false); const [mentF, setMentF] = useState('');
+      const [mentOpen, setMentOpen] = useState(false); const [mentF, setMentF] = useState(''); const [emoOpen, setEmoOpen] = useState(false);
       const [activeChatGameId, setActiveChatGameId] = useState(null); const [cGameOpen, setCGameOpen] = useState(false);
       const [cChOpen, setCChOpen] = useState(false); const [chName, setChName] = useState(''); const [chIcon, setChIcon] = useState('💬'); const [chDesc, setChDesc] = useState('');
       const [cGrpOpen, setCGrpOpen] = useState(false); const [grpName, setGrpName] = useState(''); const [grpMems, setGrpMems] = useState([]); const [addMemOpen, setAddMemOpen] = useState(false);
@@ -2364,6 +2382,17 @@
                       <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1">🔗 แนบลิงก์</button>
                       <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold">@ แท็ก</button>
                       <div className="relative">
+                         <button type="button" onClick={() => setEmoOpen(!emoOpen)} className="btn-d py-1 text-lg leading-none px-2">😀</button>
+                         {emoOpen && (
+                           <div className="absolute bottom-full left-0 mb-2 w-64 card p-2 z-50 shadow-2xl border-white/20 text-xl grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
+                             {['😀','😂','🤣','😊','😍','😘','🥰','😜','😎','🤩','😭','😡','🤯','🥶','😱','🤡','👻','💀','👽','👾','💖','💔','💯','💥','💦','💨','👍','👎','👏','🙌','🤝','🙏','💪','🏆','🔥','✨','🎉','🎊','🎈','🧸'].map(em => (
+                               <button key={em} type="button" onClick={() => { setChatIn(chatIn + em); setEmoOpen(false); document.querySelector('textarea.max-h-24')?.focus(); }} className="hover:bg-[#0F2547] rounded p-1 transition-colors">{em}</button>
+                             ))}
+                             <div className="col-span-6 text-[10px] text-center text-slate-400 mt-2 border-t border-[#1E3A5F] pt-1">ส่วนรองรับสติ๊กเกอร์ (Coming Soon)</div>
+                           </div>
+                         )}
+                      </div>
+                      <div className="relative">
                         <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="btn-b py-1 font-bold text-sky-300 border-sky-500/50 bg-sky-950/30 shadow">🎮 ชวนเล่นเกม</button>
                         {cGameOpen && (
                           <div className="absolute bottom-full left-0 mb-2 w-44 card py-1.5 z-50 shadow-2xl border-white/20 text-xs">
@@ -2855,6 +2884,38 @@
                   </div>
                 ))}
               </div>
+            </Modal>
+          )}
+
+          
+          {cGrpOpen && (
+            <Modal title="👥 สร้างกลุ่มแชตใหม่" onClose={() => { setCGrpOpen(false); setGrpName(''); setGrpMems([]); }}>
+              <form onSubmit={async (e) => { e.preventDefault(); if(!grpName.trim() || grpMems.length === 0) return alert('กรุณาตั้งชื่อกลุ่มและเลือกสมาชิกอย่างน้อย 1 คน'); const id = 'grp-' + Date.now(); await db.collection('bma_groups').doc(id).set({ id, name: grpName.trim(), members: [currentUser.id, ...grpMems], createdBy: currentUser.id, isArchived: false, timestamp: Date.now(), serverCreatedAt: svrTs() }); setCGrpOpen(false); setGrpName(''); setGrpMems([]); setActiveRoom({type: 'group', id}); }} className="space-y-3 text-xs">
+                <input type="text" value={grpName} onChange={(e) => setGrpName(e.target.value)} placeholder="ชื่อกลุ่ม..." className="w-full inp" required />
+                <div className="card p-2 max-h-48 overflow-y-auto space-y-1">
+                   <div className="text-slate-400 mb-1 px-1">เลือกสมาชิก:</div>
+                   {activeMembers.filter(m => m.id !== currentUser.id).map(m => (
+                     <label key={m.id} className="flex items-center gap-2 p-1.5 hover:bg-[#0F2547] rounded cursor-pointer">
+                       <input type="checkbox" checked={grpMems.includes(m.id)} onChange={(e) => { if(e.target.checked) setGrpMems([...grpMems, m.id]); else setGrpMems(grpMems.filter(x => x !== m.id)); }} />
+                       <Avatar user={m} size="xs" /> <span>{m.displayName} ({m.id})</span>
+                     </label>
+                   ))}
+                </div>
+                <button type="submit" className="w-full btn-w py-2">สร้างกลุ่มแชต</button>
+              </form>
+            </Modal>
+          )}
+
+          {cChOpen && isModOrAdmin && (
+            <Modal title="💬 สร้างห้องแชตรวมใหม่" onClose={() => { setCChOpen(false); setChName(''); setChIcon('💬'); setChDesc(''); }}>
+              <form onSubmit={async (e) => { e.preventDefault(); if(!chName.trim()) return; const id = 'ch-' + Date.now(); await db.collection('bma_channels').doc(id).set({ id, name: chName.trim().replace(/\s+/g, '-').toLowerCase(), icon: chIcon, desc: chDesc.trim(), createdBy: currentUser.id, isProtected: false, isSystemReadOnly: false, timestamp: Date.now(), serverCreatedAt: svrTs() }); setCChOpen(false); setChName(''); setChIcon('💬'); setChDesc(''); setActiveRoom({type: 'channel', id}); }} className="space-y-3 text-xs">
+                <div className="flex gap-2">
+                   <input type="text" value={chIcon} onChange={(e) => setChIcon(e.target.value)} className="inp w-16 text-center text-lg" placeholder="อีโมจิ" required />
+                   <input type="text" value={chName} onChange={(e) => setChName(e.target.value)} placeholder="ชื่อห้องแชต (เช่น general-talk)..." className="flex-1 inp font-mono" required />
+                </div>
+                <input type="text" value={chDesc} onChange={(e) => setChDesc(e.target.value)} placeholder="คำอธิบายห้องแชตสั้นๆ..." className="w-full inp" />
+                <button type="submit" className="w-full btn-w py-2">สร้างห้องแชต</button>
+              </form>
             </Modal>
           )}
 
