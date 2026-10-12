@@ -1906,7 +1906,7 @@
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
       useEffect(() => {
-        if (!isUsersLoaded) return; // เปลี่ยนบรรทัดนี้ ให้รอจนกว่าฐานข้อมูลโหลดเสร็จ
+        if (!isUsersLoaded) return; // รอให้ฐานข้อมูลผู้ใช้โหลดเสร็จ
         if (!currentUser) {
           const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
           const f = id && users.find((u) => u.id === id && u.isActivated);
@@ -1918,8 +1918,8 @@
             const me = users.find((u) => u.id === currentUser.id);
             if (me) setCurrentUser(me);
         }
-        setIsAuthLoading(false);
-      }, [users]);
+        setIsAuthLoading(false); // ปิดหน้าต่างโหลด
+      }, [users, isUsersLoaded]); // <--- เพิ่ม isUsersLoaded เข้าไปที่นี่
 
       const pingRef = useRef(0);
       const updateActivity = useCallback(() => {
@@ -2009,9 +2009,12 @@
 
       const handleSignIn = async (e) => {
         e.preventDefault(); setAuthErr('');
-        if(users.length <= 1) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
+        // เปลี่ยนมาเช็กจาก isUsersLoaded แทน users.length
+        if(!isUsersLoaded) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
+        
         const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
         if (!f) return setAuthErr('Username หรือ Password ไม่ถูกต้อง');
+        
         setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() }); saveSess(f);
         await db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
         setLUser(''); setLPass(''); setCurrentView('feed');
