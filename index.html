@@ -2336,9 +2336,13 @@
           </header>
 
           {currentView === 'home' && (
-            <div className="relative flex-1 flex flex-col items-center justify-between py-6 px-4 overflow-hidden">
-              <div className="text-center space-y-1 z-10"><h2 className="text-2xl md:text-3xl font-bold uppercase">The Blue Moon Association</h2><p className="text-xs text-slate-300">คลิกดาวบริวารเพื่อดูโปรไฟล์และส่งข้อความ หรือเข้าสู่กระดานโพสต์</p></div>
-              <div className="relative w-full max-w-[620px] h-[520px] flex items-center justify-center orbit-sys select-none">
+            <div className="relative flex-1 flex flex-col items-center py-8 px-4 overflow-y-auto no-scrollbar">
+              <div className="text-center space-y-1 z-10 shrink-0">
+                <h2 className="text-2xl md:text-3xl font-bold uppercase">The Blue Moon Association</h2>
+                <p className="text-xs text-slate-300">คลิกดาวบริวารเพื่อดูโปรไฟล์และส่งข้อความ หรือเข้าสู่กระดานโพสต์</p>
+              </div>
+              
+              <div className="relative w-full max-w-[620px] h-[520px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
                 <div onClick={() => setCurrentView('feed')} className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition" style={{ background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)', boxShadow: '0 0 60px rgba(37,99,235,0.65)' }}><Logo s={32} /><span className="text-[11px] font-bold uppercase mt-1">Blue Moon</span><span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span></div>
                 {orbitRings().map((ring, ri) => (
                   <div key={ri} className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
@@ -2349,9 +2353,22 @@
                   </div>
                 ))}
               </div>
-              <div className="flex gap-3 w-full max-w-md justify-center z-10">
-                <button onClick={() => setCurrentView('feed')} className="flex-1 py-3 btn-b text-xs">📖 กระดานโพสต์</button>
-                <button onClick={() => currentUser ? setCurrentView('daily_game') : setCurrentView('login')} className="flex-1 py-3 btn-w text-xs">{currentUser ? '🎮 ท้าดวล Daily Game' : '🔑 เข้าสู่ระบบ'}</button>
+              
+              <div className="flex gap-3 w-full max-w-md justify-center z-10 shrink-0">
+                <button onClick={() => setCurrentView('feed')} className="flex-1 py-3 btn-b text-xs shadow-lg hover:scale-105 transition-transform">📖 กระดานโพสต์</button>
+                <button onClick={() => currentUser ? setCurrentView('daily_game') : setCurrentView('login')} className="flex-1 py-3 btn-w text-xs shadow-lg hover:scale-105 transition-transform">{currentUser ? '🎮 ท้าดวล Daily Game' : '🔑 เข้าสู่ระบบ'}</button>
+              </div>
+
+              {/* ข้อตกลงสมาคม */}
+              <div className="z-10 mt-16 mb-8 w-full max-w-3xl bg-[#0B1325]/80 backdrop-blur-sm border border-[#1E3A5F] rounded-2xl p-6 sm:p-8 text-xs text-slate-300 leading-relaxed shadow-2xl shrink-0 text-left">
+                <h3 className="font-bold text-sky-400 text-sm mb-4">📜 ข้อตกลง (อัพเดตล่าสุด 10 ตุลาคม 2026)</h3>
+                <ul className="space-y-3 list-none pl-0">
+                  <li className="flex gap-2.5"><span className="text-sky-500 font-bold">1.</span> <span>สมาคมนี้จัดตั้งขึ้นเพื่อสร้างคอนเนกชั่นระหว่างคนในจักรวาลของทอมสำหรับประโยชน์อันใดของสมาชิกในอนาคต</span></li>
+                  <li className="flex gap-2.5"><span className="text-sky-500 font-bold">2.</span> <span>สมาคมนี้ "ยัง" ไม่แสวงหาผลกำไรใด ๆ</span></li>
+                  <li className="flex gap-2.5"><span className="text-sky-500 font-bold">3.</span> <span>สมาชิกทุกคนจะถูกเชิญโดยเจ้าของเท่านั้น</span></li>
+                  <li className="flex gap-2.5"><span className="text-sky-500 font-bold">4.</span> <span>สมาชิกทุกคนสามารถมีผู้ติดตามมาในนี้ได้ครั้งละ 1 คน หากต้องการเปลี่ยนคนหรือต้องการผู้ติดตามมากกว่า 1 คน โปรดแจ้งเจ้าของก่อน</span></li>
+                  <li className="flex gap-2.5"><span className="text-sky-500 font-bold">5.</span> <span>สมาคมนี้จะใช้ Website ของสมาคมเป็นช่องทางหลักในการติดต่อสื่อสาร และมี <a href="https://discord.com/invite/HCqFYXCYBt" target="_blank" rel="noreferrer" className="text-[#5865F2] font-bold hover:underline bg-[#5865F2]/10 px-1 rounded transition-colors">Discord</a> เป็นห้องเสียงในการพูดคุยกันอีกช่องทางหนึ่ง โดยเจ้าของจะออก ID ให้สำหรับสมาชิกในการเข้าเว็บไซต์</span></li>
+                </ul>
               </div>
             </div>
           )}
@@ -2912,7 +2929,8 @@
                         <div key={u.id} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2.5"><Avatar user={u} size="xs" /><div><div className="flex items-center gap-1.5"><span className="font-mono font-bold">{u.id}</span><TagBadges user={u} /><RoleBadge role={u.role} /></div><div className="font-bold mt-0.5">{u.displayName}</div></div></div>
                           <div className="flex gap-1.5">
-                            {!u.isActivated && <button onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} className="btn-d text-blue-200 py-1">🏷️ หมวดหมู่</button>}
+                            {/* เปิดให้กดแก้ไขหมวดหมู่ได้ทุกคน ทั้งก่อนและหลังเปิดใช้งาน ID */}
+                            <button onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} className="btn-d text-blue-200 py-1">🏷️ หมวดหมู่</button>
                             {!u.isActivated && <button onClick={() => { const link = window.location.origin + window.location.pathname; navigator.clipboard.writeText(`ยินดีต้อนรับสู่ The Blue Moon Association 🪐\n\nลิงก์เข้าสู่เว็บไซต์: ${link}\n\nรหัสประจำตัวของคุณคือ: ${u.id}\nกรุณากดที่ "เปิดใช้งาน Member ID" ในหน้าแรกเพื่อตั้งชื่อ Username และรหัสผ่านสำหรับการเข้าใช้งานในครั้งต่อไปครับ`); setCopiedId(u.id); setTimeout(() => setCopiedId(null), 2000); }} className="btn-w py-1 text-[10px]">{copiedId === u.id ? '✓ คัดลอกแล้ว' : 'ส่งให้สมาชิก'}</button>}
                             {u.role !== 'admin' && u.isActivated && <button onClick={() => db.collection('bma_users').doc(u.id).update({ role: u.role === 'mod' ? 'member' : 'mod' })} className="btn-b py-1">{u.role === 'mod' ? 'ปลด Vice' : '🛡️ ตั้ง Vice'}</button>}
                             {u.role !== 'admin' && <button onClick={() => confirm('ลบ ' + u.id + '?') && db.collection('bma_users').doc(u.id).delete()} className="px-2 py-1 rounded bg-black text-red-400">ลบ</button>}
