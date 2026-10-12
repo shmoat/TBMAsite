@@ -1905,29 +1905,43 @@
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
+      
+      // ฟังก์ชันเช็กล็อกอินแบบปลอดภัย
       useEffect(() => {
-        if (!isUsersLoaded) return; 
-        
-        let foundUser = null;
+        if (users.length === 0) return; 
+
         if (!currentUser) {
+          // ค้นหา ID ที่บันทึกไว้ในเครื่อง
           const id = localStorage.getItem('tbma_saved_user_id') || sessionStorage.getItem('tbma_session_user_id');
-          foundUser = id && users.find((u) => u.id === id && u.isActivated);
-          if (foundUser) { 
-              setCurrentUser({...foundUser, isOnline: true, lastActive: Date.now()}); 
-              db.collection('bma_users').doc(foundUser.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {}); 
+          if (id) {
+             const foundUser = users.find((u) => u.id === id && u.isActivated);
+             if (foundUser) {
+                 setCurrentUser({...foundUser, isOnline: true, lastActive: Date.now()});
+                 db.collection('bma_users').doc(foundUser.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
+                 
+                 // บังคับเปลี่ยนหน้าเมื่อเจอไอดีที่เซฟไว้
+                 if (currentView === 'login' || currentView === 'home') {
+                     setCurrentView('feed');
+                 }
+             }
           }
         } else {
-            foundUser = users.find((u) => u.id === currentUser.id);
-            if (foundUser) setCurrentUser(foundUser);
+            // อัปเดตข้อมูลผู้ใช้แบบเรียลไทม์
+            const me = users.find((u) => u.id === currentUser.id);
+            if (me) setCurrentUser(me);
         }
         
-        // จุดสำคัญ: ถ้าล็อกอินสำเร็จ (ไม่ว่าจะเซฟไว้หรือเพิ่งกรอก) ให้ย้ายออกจากหน้า Login ทันที
-        if (foundUser && currentView === 'login') {
-            setCurrentView('feed');
+        // ปิดหน้าจอโหลดเมื่อข้อมูลผู้ใช้เข้าสู่ระบบเรียบร้อย (มีมากกว่า 1 คน)
+        if (users.length > 1) {
+            setIsAuthLoading(false);
         }
-        
-        setIsAuthLoading(false);
-      }, [users, isUsersLoaded]);
+      }, [users, currentUser, currentView]);
+
+      // ตัวช่วยป้องกันหน้าจอโหลดค้าง (ถ้าเน็ตช้ามากๆ จะตัดเข้าสู่ระบบทันทีใน 2.5 วินาที)
+      useEffect(() => {
+         const timer = setTimeout(() => setIsAuthLoading(false), 2500);
+         return () => clearTimeout(timer);
+      }, []);
 
       const pingRef = useRef(0);
       const updateActivity = useCallback(() => {
@@ -2017,14 +2031,17 @@
 
       const handleSignIn = async (e) => {
         e.preventDefault(); setAuthErr('');
-        if(!isUsersLoaded) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
+        // เช็กจากความยาวผู้ใช้แทน (ให้มั่นใจว่าดึงข้อมูลมาเสร็จแล้ว)
+        if (users.length <= 1) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
         
         const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
         if (!f) return setAuthErr('Username หรือ Password ไม่ถูกต้อง');
         
-        setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() }); saveSess(f);
+        setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() }); 
+        saveSess(f);
         await db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
-        setLUser(''); setLPass(''); setCurrentView('feed');
+        setLUser(''); setLPass(''); 
+        setCurrentView('feed');
       };
 
       const handleActivate = async (e) => {
