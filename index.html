@@ -781,34 +781,38 @@
       const [isChecking, setIsChecking] = useState(false);
       const [wordErr, setWordErr] = useState('');
 
-      const currRef = useRef(curr);
-      useEffect(() => { currRef.current = curr; }, [curr]);
-      const guessesRef = useRef(guesses);
-      useEffect(() => { guessesRef.current = guesses; }, [guesses]);
-      const isCheckingRef = useRef(isChecking);
-      useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
-
       useEffect(() => {
         const rng = new PRNG(dateSeed + '_wordle2');
         setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
       }, [dateSeed]);
 
+      const currRef = useRef(curr);
+      useEffect(() => { currRef.current = curr; }, [curr]);
+
+      const guessesRef = useRef(guesses);
+      useEffect(() => { guessesRef.current = guesses; }, [guesses]);
+
+      const targetRef = useRef(target);
+      useEffect(() => { targetRef.current = target; }, [target]);
+
+      const isCheckingRef = useRef(isChecking);
+      useEffect(() => { isCheckingRef.current = isChecking; }, [isChecking]);
+
       const onKey = useCallback(async (k) => {
-        if(isCheckingRef.current) return;
         const currentWord = currRef.current;
         
         if(k === 'ENTER') {
-          if(currentWord.length !== 5) return;
+          if(isCheckingRef.current || currentWord.length !== 5) return;
           setIsChecking(true);
           let isValid = WORDS.includes(currentWord);
           if(!isValid) {
             try { 
-              const controller = new AbortController();
-              const id = setTimeout(() => controller.abort(), 2500);
-              const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + currentWord.toLowerCase(), { signal: controller.signal });
-              clearTimeout(id);
-              isValid = r.ok; 
-            } catch(e) { isValid = true; }
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + currentWord.toLowerCase(), { signal: controller.signal }); 
+                clearTimeout(timeoutId);
+                isValid = r.ok; 
+            } catch(e) { isValid = true; } // fallback to true if network fails or timeouts
           }
           setIsChecking(false);
           
@@ -817,50 +821,38 @@
              setTimeout(() => setWordErr(''), 2000);
              return;
           }
-          
           const newG = [...guessesRef.current, currentWord];
           setGuesses(newG);
           setCurr("");
-          if(currentWord === target) onEnd('won', { score: newG.length, answer: target });
-          else if(newG.length >= 6) onEnd('lost', { score: 6, answer: target });
+          if(currentWord === targetRef.current) onEnd('won', { score: newG.length, answer: targetRef.current });
+          else if(newG.length >= 6) onEnd('lost', { score: 6, answer: targetRef.current });
           
         } else if(k === 'DEL') {
-          setCurr(prev => prev.slice(0, -1));
+          setCurr(currentWord.slice(0, -1));
+          setIsChecking(false); // Force unlock if hung
         } else if(currentWord.length < 5) {
-          setCurr(prev => prev + k);
+          if(isCheckingRef.current) return;
+          setCurr(currentWord + k);
         }
-      }, [target, onEnd]);
+      }, [onEnd]); // Fixed dependencies
 
       useEffect(() => {
         const handleKeyDown = (e) => {
           if(e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key.toUpperCase();
-          if(key === 'ENTER') onKey('ENTER');
-          else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
-          else if(/^[A-Z]$/.test(key)) onKey(key);
+          if(key === 'ENTER') { e.preventDefault(); onKey('ENTER'); }
+          else if(key === 'BACKSPACE' || key === 'DELETE') { e.preventDefault(); onKey('DEL'); }
+          else if(/^[A-Z]$/.test(key)) { e.preventDefault(); onKey(key); }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [onKey]);
-
-      useEffect(() => {
-        const handleKeyDown = (e) => {
-          if(e.ctrlKey || e.metaKey || e.altKey) return;
-          const key = e.key.toUpperCase();
-          if(key === 'ENTER') onKey('ENTER');
-          else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
-          else if(/^[A-Z]$/.test(key)) onKey(key);
-        };
-        const rootNode = document.getElementById('root');
-        rootNode.addEventListener('keydown', handleKeyDown);
-        return () => rootNode.removeEventListener('keydown', handleKeyDown);
       }, [onKey]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
       const getStatuses = (guessStr) => {
         const statuses = Array(5).fill('bg-slate-700 text-slate-300 border-slate-700 opacity-60');
-        const targetChars = target.split('');
+        const targetChars = targetRef.current.split('');
         
         // First pass: check for correct positions (green)
         for(let i = 0; i < 5; i++) {
