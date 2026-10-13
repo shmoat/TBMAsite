@@ -2809,15 +2809,9 @@
 
                         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
                             updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                          }).catch(() => {
+                        }).catch(() => {
                             updatePayload({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                          });
-                            const songObj = { id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() };
-                            db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true });
-                          }).catch(() => {
-                            const songObj = { id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() };
-                            db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true });
-                          });
+                        });
                       } else alert('รองรับเฉพาะ URL ของวิดีโอ YouTube เดี่ยวๆ เท่านั้น');
                       e.target.reset();
                    }} className="flex gap-2">
