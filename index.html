@@ -2220,9 +2220,13 @@
          const currentVideoId = djState.queue?.[0]?.id;
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
+         // ป้องกันบั๊ก: ถ้าคิวเพลงว่างเปล่า ให้หยุดเครื่องเล่นทันทีและไม่ต้องทำอะไรต่อ
+         if (!currentVideoId || !djState.queue || djState.queue.length === 0) {
+             ytPlayerRef.current.stopVideo();
+             return; 
+         }
+
          const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
-         
-         // คำนวณเวลาที่จะ Seek ตามสถานะ: ถ้าเล่นให้ลบจาก Date.now ถ้าหยุดให้ดึง pausedPos (ถ้าไม่มีให้เป็น 0)
          const expectedTime = djState.isPlaying 
              ? (djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0)
              : (typeof djState.pausedPos === 'number' ? djState.pausedPos : 0);
@@ -2233,13 +2237,10 @@
              } else {
                  ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
              }
-         } else if (!currentVideoId || djState.queue?.length === 0) {
-             ytPlayerRef.current.stopVideo();
          }
 
-         if (djState.isPlaying && currentVideoId && !isLocalPaused) {
+         if (djState.isPlaying && !isLocalPaused) {
              ytPlayerRef.current.playVideo();
-             // ถ้าเพลงเดิมเล่นอยู่ แล้วเวลาในเครื่องเพี้ยนไปเกิน 3 วิ (หรือเพิ่งกด Play จาก Pause) ให้กระชากเวลาให้ตรง
              const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
              if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
                  isSeekingRef.current = true;
@@ -2247,33 +2248,28 @@
                  setTimeout(() => { isSeekingRef.current = false; }, 2000); 
              }
          } else {
-             // ถ้าไม่ได้อยู่ในโหมดกดเล่น ก็สั่งหยุดวิดีโอ (แล้วไม่ต้อง Seek กลับไป 0)
              ytPlayerRef.current.pauseVideo();
          }
          
          if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
       }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused, djState.pausedPos]);
 
+      // (ไม่ต้องลบ useEffect ของ djVolume นะครับ ปล่อยไว้เหมือนเดิม)
       useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
          if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
-         if (isDjMuted) {
-             ytPlayerRef.current.mute();
-         } else { 
-             ytPlayerRef.current.unMute(); 
-             ytPlayerRef.current.setVolume(djVolume); 
-         }
+         if (isDjMuted) { ytPlayerRef.current.mute(); } 
+         else { ytPlayerRef.current.unMute(); ytPlayerRef.current.setVolume(djVolume); }
       }, [isDjMuted, djVolume]);
 
       // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync)
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             // เช็กเวลาเฉพาะตอนที่เปิดเสียงฟังอยู่ และเพลงอยู่ในสถานะกำลังเล่น (และผู้ใช้ไม่ได้กด Local Pause หยุดฟังเอง)
-             if (!isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+             // แก้บั๊ก 3 วิ: เรดาร์จะทำงานก็ต่อเมื่อ "มีเพลงในคิวอย่างน้อย 1 เพลง" เท่านั้น!
+             if (djState.queue?.length > 0 && !isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
                  const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
                  const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
                  const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
                  
-                 // ห้าม Seek ตอนที่ YouTube กำลังโหลดหมุนๆ (State = 3) หรือเพิ่งข้ามเวลาไปเมื่อกี้
                  if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
                      isSeekingRef.current = true;
                      ytPlayerRef.current.seekTo(expectedTime, true);
@@ -2283,7 +2279,7 @@
              }
          }, 3000); 
          return () => clearInterval(syncTimer);
-      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused]);
+      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -2829,7 +2825,7 @@
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* ด้านซ้าย: Now Playing & DJ Controls */}
+               {/* ด้านซ้าย: Now Playing & DJ Controls */}
                 <div className="lg:col-span-5 space-y-4">
                    <div className="card p-5 border-sky-500/50 shadow-[inset_0_0_20px_rgba(14,165,233,0.1)]">
                       <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><span>▶️</span> Now Playing</h3>
@@ -2867,13 +2863,9 @@
                              <button onClick={() => {
                                  if (!djState.queue || djState.queue.length === 0) return;
                                  if (!djState.isPlaying) {
-                                     // ดึงค่าตำแหน่งวินาทีที่หยุดไว้ มาคำนวณเวลาเริ่ม (StartedAt) ย้อนหลังให้เป๊ะ
-                                     // โดยจะต้องไม่ไปเคลียร์ pausedPos ทิ้งทันที (ปล่อยให้มันค้างไว้แบบนั้นแหละ)
                                      const resumePos = typeof djState.pausedPos === 'number' ? djState.pausedPos : 0;
                                      updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
                                  } else {
-                                     // กดหยุด: บันทึกวินาทีที่เล่นผ่านไปแล้วแบบเรียลไทม์
-                                     // (เอา Date.now() ลบ startedAt ได้เลย ชัวร์กว่าดึงจาก YouTube Player บางจังหวะที่มันหลับ)
                                      const playedSeconds = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
                                      updateDjState({ isPlaying: false, pausedPos: playedSeconds });
                                  }
@@ -2881,13 +2873,11 @@
                                {djState.isPlaying ? '⏸' : '▶'}
                              </button>
                              <button onClick={() => {
-                                <button onClick={() => {
                                 if (!djState.queue || djState.queue.length === 0) return;
                                 const newQueue = [...djState.queue];
                                 newQueue.shift(); 
                                 
                                 const payload = { queue: newQueue, startedAt: Date.now(), pausedPos: 0 };
-                                // ถ้ากดข้ามเพลง แล้วกลายเป็นว่าคิวว่างเปล่า ให้บังคับหยุดเพลงด้วย
                                 if (newQueue.length === 0) {
                                     payload.isPlaying = false;
                                     if (ytPlayerRef.current) ytPlayerRef.current.stopVideo();
