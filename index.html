@@ -807,12 +807,26 @@
     }
 
     function WordleGame({ dateSeed, onEnd }) {
+      // คำที่เป็นคำตอบ (เป้าหมาย) จะใช้คำศัพท์พื้นฐานที่คนทั่วไปรู้จัก
       const WORDS = ["APPLE","BRAIN","CRANE","DREAM","EAGLE","FLAME","GHOST","HEART","IMAGE","JUICE","KNIFE","LEMON","MOUSE","NIGHT","OCEAN","PLANT","QUEEN","RIVER","SNAKE","TRAIN","UNION","VOICE","WATER","YOUTH","ZEBRA","ALIEN","BREAD","CHAIR","DANCE","EARTH","FRUIT","GRAPE","HOUSE","JUMBO","KINGS","LIGHT","MONEY","NURSE","ONION","PAPER","QUIET","RIGHT","SUGAR","TABLE","UNCLE","VIDEO","WATCH","YACHT","STORM","WORLD"];
+      
       const [target, setTarget] = useState("");
       const [guesses, setGuesses] = useStickyState([], `bma_wdl_g_${dateSeed}`);
       const [curr, setCurr] = useStickyState("", `bma_wdl_c_${dateSeed}`);
       const [isChecking, setIsChecking] = useState(false);
       const [wordErr, setWordErr] = useState('');
+      const [validDict, setValidDict] = useState(new Set(WORDS));
+
+      // ดาวน์โหลดพจนานุกรมคำศัพท์ 5 ตัวอักษรมาเตรียมไว้ตั้งแต่ตอนเปิดเกม (ใช้เวลาโหลดไม่ถึงเสี้ยววินาที)
+      useEffect(() => {
+        fetch('https://raw.githubusercontent.com/charlesreid1/five-letter-words/master/sgb-words.txt')
+          .then(res => res.text())
+          .then(text => {
+            const wordList = text.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length === 5);
+            setValidDict(new Set([...WORDS, ...wordList]));
+          })
+          .catch(e => console.warn("ไม่สามารถโหลดพจนานุกรมสำรองได้ ใช้ฐานข้อมูลหลักแทน"));
+      }, []);
 
       useEffect(() => {
         const rng = new PRNG(dateSeed + '_wordle2');
@@ -824,16 +838,17 @@
         if(k === 'ENTER') {
           if(curr.length !== 5) return;
           setIsChecking(true);
-          let isValid = WORDS.includes(curr);
-          if(!isValid) {
-            try { const r = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + curr.toLowerCase()); isValid = r.ok; } catch(e) { isValid = true; }
-          }
+          
+          // เช็กคำจาก Dictionary ที่โหลดเก็บไว้ในเครื่อง (เร็ว 0 วินาที)
+          const isValid = validDict.has(curr);
+          
           setIsChecking(false);
           if(!isValid) {
              setWordErr('คำนี้ไม่มีอยู่ในพจนานุกรม');
              setTimeout(() => setWordErr(''), 2000);
              return;
           }
+          
           const newG = [...guesses, curr];
           setGuesses(newG);
           setCurr("");
@@ -856,7 +871,7 @@
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [curr, guesses, target, onEnd, isChecking]);
+      }, [curr, guesses, target, onEnd, isChecking, validDict]);
 
       if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
@@ -864,22 +879,20 @@
         const statuses = Array(5).fill('bg-slate-700 text-slate-300 border-slate-700 opacity-60');
         const targetChars = target.split('');
         
-        // First pass: check for correct positions (green)
         for(let i = 0; i < 5; i++) {
           if(guessStr[i] === targetChars[i]) {
             statuses[i] = 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
-            targetChars[i] = null; // Mark as used
+            targetChars[i] = null; 
           }
         }
         
-        // Second pass: check for wrong positions (yellow)
         for(let i = 0; i < 5; i++) {
           if(statuses[i].includes('bg-emerald-500')) continue;
           
           const targetIndex = targetChars.indexOf(guessStr[i]);
           if(targetIndex !== -1) {
              statuses[i] = 'bg-amber-500 text-white border-amber-500';
-             targetChars[targetIndex] = null; // Mark as used
+             targetChars[targetIndex] = null; 
           }
         }
         return statuses;
