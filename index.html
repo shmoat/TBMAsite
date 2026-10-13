@@ -411,40 +411,26 @@
       const [grid, setGrid] = useStickyState(null, `bma_ms_grid_${dateSeed}`);
       const [revealed, setRevealed] = useStickyState(null, `bma_ms_rev_${dateSeed}`);
       const [flagged, setFlagged] = useStickyState(null, `bma_ms_flag_${dateSeed}`);
-      const [isFirst, setIsFirst] = useStickyState(true, `bma_ms_first_${dateSeed}`);
       const [mode, setMode] = useState('dig'); 
 
       useEffect(() => {
         if (grid) return;
-        const rng = new PRNG(dateSeed + '_msConfig');
-        const m = rng.nextInt(10, 20);
+        
+        // ใช้ Seed ตามวันเท่านั้น เพื่อให้ทุกคนได้ด่านเดียวกัน 100%
+        const rng = new PRNG(dateSeed + '_msBoard_v2');
+        const m = rng.nextInt(10, 16);
         setNumMines(m);
-        setGrid(Array(ROWS).fill().map(()=>Array(COLS).fill(0)));
-        setRevealed(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
-        setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
-        setIsFirst(true);
-      }, [dateSeed]);
-
-      const handleAction = (r, c, act) => {
-        if(revealed[r][c]) return;
-        if(act === 'flag') {
-          const newF = [...flagged.map(row=>[...row])];
-          newF[r][c] = !newF[r][c];
-          setFlagged(newF); return;
-        }
-        if(flagged[r][c]) return; 
-
-        let g = grid;
-        if(isFirst) {
-          const rng = new PRNG(dateSeed + '_ms_' + Date.now()); 
-          g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
-          let placed = 0;
-          while(placed < numMines) {
-            let rr = rng.nextInt(0,ROWS-1), cc = rng.nextInt(0,COLS-1);
-            if(Math.abs(rr-r) <= 1 && Math.abs(cc-c) <= 1) continue; 
+        
+        // 1. วางระเบิดล่วงหน้า
+        let g = Array(ROWS).fill().map(()=>Array(COLS).fill(0));
+        let placed = 0;
+        while(placed < m) {
+            let rr = rng.nextInt(0, ROWS-1), cc = rng.nextInt(0, COLS-1);
             if(g[rr][cc] !== 'M') { g[rr][cc] = 'M'; placed++; }
-          }
-          for(let i=0; i<ROWS; i++) {
+        }
+        
+        // 2. คำนวณตัวเลข
+        for(let i=0; i<ROWS; i++) {
             for(let j=0; j<COLS; j++) {
               if(g[i][j] === 'M') continue;
               let cnt = 0;
@@ -453,13 +439,55 @@
               }
               g[i][j] = cnt;
             }
-          }
-          setGrid(g); setIsFirst(false);
         }
+        
+        // 3. หาจุดเปิดเริ่มต้นให้ทุกคน (หาช่องโล่งที่เป็นเลข 0)
+        let startR = -1, startC = -1;
+        for(let i=0; i<ROWS; i++) {
+            for(let j=0; j<COLS; j++) {
+                if(g[i][j] === 0) { startR = i; startC = j; break; }
+            }
+            if(startR !== -1) break;
+        }
+        // กรณีด่านยากมาก ไม่มีเลข 0 เลย ให้เปิดช่องตัวเลขธรรมดาที่ปลอดภัย
+        if(startR === -1) {
+            for(let i=0; i<ROWS; i++) {
+                for(let j=0; j<COLS; j++) {
+                    if(g[i][j] !== 'M') { startR = i; startC = j; break; }
+                }
+                if(startR !== -1) break;
+            }
+        }
+        
+        let newR = Array(ROWS).fill().map(()=>Array(COLS).fill(false));
+        const flood = (rr, cc) => {
+          if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
+          newR[rr][cc] = true;
+          if(g[rr][cc] === 0) {
+            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) flood(rr+dr, cc+dc);
+          }
+        };
+        
+        // เปิดพื้นที่ให้ตั้งแต่เริ่มเกม
+        if (startR !== -1) flood(startR, startC);
+        
+        setGrid(g);
+        setRevealed(newR);
+        setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
+      }, [dateSeed]);
 
-        if(g[r][c] === 'M') {
+      const handleAction = (r, c, act) => {
+        if(!revealed || revealed[r][c]) return;
+        if(act === 'flag') {
+          const newF = [...flagged.map(row=>[...row])];
+          newF[r][c] = !newF[r][c];
+          setFlagged(newF); return;
+        }
+        if(flagged[r][c]) return; 
+
+        if(grid[r][c] === 'M') {
           const newR = [...revealed.map(row=>[...row])];
-          for(let i=0;i<ROWS;i++) for(let j=0;j<COLS;j++) if(g[i][j]==='M') newR[i][j] = true;
+          for(let i=0;i<ROWS;i++) for(let j=0;j<COLS;j++) if(grid[i][j]==='M') newR[i][j] = true;
           setRevealed(newR);
           setTimeout(() => onEnd('bomb'), 800);
           return;
@@ -469,7 +497,7 @@
         const flood = (rr, cc) => {
           if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
           newR[rr][cc] = true;
-          if(g[rr][cc] === 0) {
+          if(grid[rr][cc] === 0) {
             for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) flood(rr+dr, cc+dc);
           }
         };
