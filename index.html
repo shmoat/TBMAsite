@@ -50,6 +50,12 @@
     let openZoom = () => {};
 
     // Base utilities
+    const parseYouTubeUrl = (url) => {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      if (match && match[2].length === 11) return { videoId: match[2] };
+      return null;
+    };
     const getMs = (d) => d?.serverCreatedAt?.toMillis ? d.serverCreatedAt.toMillis() : (d?.serverCreatedAt?.seconds ? d.serverCreatedAt.seconds * 1000 : (d?.timestamp || 0));
     const getTimeStr = (d) => d?.serverCreatedAt?.toDate ? d.serverCreatedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : (d?.time || '');
     const getTags = (u) => Array.isArray(u?.memberTags) && u.memberTags.length ? u.memberTags : [u?.memberTag || 'Others'];
@@ -2121,10 +2127,79 @@
         const u5 = db.collection('bma_messages').orderBy('timestamp', 'desc').limit(400).onSnapshot((s) => setChatMessages(s.docs.map((d) => d.data()).reverse()));
         const u6 = db.collection('bma_typing').onSnapshot((s) => setTypingStatuses(s.docs.map((d) => d.data()).filter((t) => t.isTyping)), () => {});
         const u7 = db.collection('bma_notifications').orderBy('timestamp', 'desc').limit(100).onSnapshot((s) => setNotifications(s.docs.map((d) => d.data())), () => {});
-        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
+        
+        // ดึงสถานะคิวเพลงส่วนกลาง
+        const u8 = db.collection('bma_system').doc('discjam').onSnapshot((s) => {
+           if (s.exists) setDjState(s.data());
+           else db.collection('bma_system').doc('discjam').set({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
+        });
+        
+        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
+      
+      // ================= DISC JAM LOGIC =================
+      const [djState, setDjState] = useState({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
+      const [isDjMuted, setIsDjMuted] = useState(true); // เริ่มต้นถูกปิดเสียงเสมอเพื่อไม่ให้คนเข้าเว็บตกใจ
+      const ytPlayerRef = useRef(null);
+
+      const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
+      const canManageAudio = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod' || djState.jammerId === currentUser.id);
+
+      useEffect(() => {
+        if (!window.YT) {
+          const tag = document.createElement('script');
+          tag.src = "https://www.youtube.com/iframe_api";
+          const firstScriptTag = document.getElementsByTagName('script')[0];
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+          window.onYouTubeIframeAPIReady = initYTPlayer;
+        } else if (!ytPlayerRef.current) initYTPlayer();
+        
+        function initYTPlayer() {
+          ytPlayerRef.current = new window.YT.Player('yt-player-global', {
+            height: '0', width: '0', videoId: '',
+            playerVars: { autoplay: 1, controls: 0, disablekb: 1 },
+            events: {
+              onReady: (e) => { if (isDjMuted) e.target.mute(); },
+              onStateChange: (e) => {
+                if (e.data === 0) { // เมื่อเพลงเล่นจบ
+                  setDjState(prev => {
+                    if (prev.loopMode === 'single') {
+                      ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
+                    } else if (prev.queue?.length > 0) {
+                      const finishedSong = prev.queue[0];
+                      db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayRemove(finishedSong) });
+                    }
+                    return prev;
+                  });
+                }
+              }
+            }
+          });
+        }
+      }, []);
+
+      useEffect(() => { // ซิงค์เพลงและสถานะ
+         if (!ytPlayerRef.current || !ytPlayerRef.current.playVideo) return;
+         const currentVideoId = djState.queue?.[0]?.id;
+         const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+         
+         if (currentVideoId && currentVideoId !== playerVideoId) ytPlayerRef.current.loadVideoById(currentVideoId);
+         else if (!currentVideoId || djState.queue?.length === 0) ytPlayerRef.current.stopVideo();
+
+         if (djState.isPlaying && currentVideoId) ytPlayerRef.current.playVideo();
+         else ytPlayerRef.current.pauseVideo();
+         
+         if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
+      }, [djState.queue, djState.isPlaying, djState.speed]);
+
+      useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงบนเครื่อง
+         if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
+         if (isDjMuted) ytPlayerRef.current.mute();
+         else { ytPlayerRef.current.unMute(); ytPlayerRef.current.setVolume(50); }
+      }, [isDjMuted]);
+      // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
       // 1. ฟังก์ชัน Auto-Login (รันแค่ครั้งเดียวตอนฐานข้อมูลโหลดเสร็จ)
@@ -2535,7 +2610,7 @@
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
               <nav className="flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-x-auto">
-                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game']].map(([v, l]) => <button key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white whitespace-nowrap'}>{l}</button>)}
+                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam']].map(([v, l]) => <button key={v} onClick={() => (v === 'chat' || v === 'daily_game' || v === 'discjam') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white whitespace-nowrap'}>{l}</button>)}
                 {currentUser?.role === 'admin' && <button onClick={() => setCurrentView('admin')} className={currentView === 'admin' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 whitespace-nowrap'}>👑 Owner</button>}
               </nav>
               <div className="flex items-center gap-2">
@@ -2632,6 +2707,112 @@
                     <div className="p-4 flex items-start gap-3"><Avatar user={m} size="lg" showStatus={true} /><div className="min-w-0 flex-1"><h3 className="text-sm font-bold truncate">{m.displayName}</h3><p className="text-xs font-mono text-slate-400">@{m.username}</p><p className="text-xs text-slate-200 mt-1.5 bg-[#050811] p-2 rounded-xl border border-[#1E3A5F] line-clamp-2">{m.bio}</p></div></div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+	  {currentView === 'discjam' && (
+            <div className="max-w-7xl mx-auto w-full px-4 py-8 overflow-y-auto h-full space-y-6 pb-24">
+              <div className="flex justify-between items-end border-b border-[#1E3A5F] pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-sky-400">💿 Disc Jam</h2>
+                  <p className="text-xs text-slate-400 mt-1">ระบบคิวเพลงส่วนกลาง เล่นพร้อมกันทุกคนในสมาคม</p>
+                </div>
+                {currentUser && currentUser.role === 'member' && (
+                  <div>
+                    {!djState.jammerId ? (
+                      <button onClick={() => updateDjState({ jammerId: currentUser.id })} className="btn-w text-xs px-4 py-2 border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]">🎤 รับสิทธิ์ Disc Jammer</button>
+                    ) : djState.jammerId === currentUser.id ? (
+                      <button onClick={() => updateDjState({ jammerId: null })} className="bg-red-950 text-red-300 px-4 py-2 rounded-xl text-xs font-bold border border-red-900">⏹ คืนสิทธิ์ Jammer</button>
+                    ) : (
+                      <div className="text-xs text-slate-500 bg-[#0B1325] px-3 py-1.5 rounded-lg border border-[#1E3A5F]">มีสมาชิกยึดตำแหน่ง Jammer อยู่</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* ด้านซ้าย: Now Playing & DJ Controls */}
+                <div className="lg:col-span-5 space-y-4">
+                   <div className="card p-5 border-sky-500/50 shadow-[inset_0_0_20px_rgba(14,165,233,0.1)]">
+                      <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><span>▶️</span> Now Playing</h3>
+                      {djState.queue?.length > 0 ? (
+                        <div className="space-y-3">
+                          <img src={`https://img.youtube.com/vi/${djState.queue[0].id}/hqdefault.jpg`} alt="Thumbnail" className="w-full aspect-video object-cover rounded-xl border-2 border-[#1E3A5F] shadow-lg" />
+                          <div className="font-bold text-sm line-clamp-2">{djState.queue[0].title}</div>
+                          <div className="text-xs text-slate-400">เพิ่มโดย: {getAuthor(djState.queue[0].addedBy).displayName}</div>
+                        </div>
+                      ) : (
+                        <div className="aspect-video bg-black/50 rounded-xl flex items-center justify-center border-2 border-dashed border-[#1E3A5F] text-slate-500 text-sm">ไม่มีเพลงกำลังเล่น</div>
+                      )}
+                   </div>
+
+                   <div className={`card p-5 space-y-4 ${canManageAudio ? '' : 'opacity-50 pointer-events-none'}`}>
+                      <div className="border-b border-[#1E3A5F] pb-2">
+                        <h3 className="font-bold text-amber-400">🎛 DJ Controller</h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">สิทธิ์เฉพาะ Owner, Vice และ Disc Jammer</p>
+                      </div>
+                      <div className="flex justify-between items-center bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                        <span className="text-xs font-bold">โหมดเล่นซ้ำ (Loop)</span>
+                        <button onClick={() => updateDjState({ loopMode: djState.loopMode === 'none' ? 'single' : 'none' })} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.loopMode === 'single' ? 'bg-amber-500 text-[#050811]' : 'bg-[#0F2547] text-slate-300'}`}>
+                          {djState.loopMode === 'single' ? '🔂 วนซ้ำเพลงนี้' : '➡ เล่นตามคิว'}
+                        </button>
+                      </div>
+                      <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                        <div className="flex justify-between text-xs font-bold mb-2"><span>ความเร็ว (Speed)</span><span className="text-sky-400">{djState.speed || 1}x</span></div>
+                        <input type="range" min="0.25" max="2" step="0.25" value={djState.speed || 1} onChange={(e) => updateDjState({ speed: parseFloat(e.target.value) })} className="w-full accent-sky-500" />
+                      </div>
+                   </div>
+                </div>
+
+                {/* ด้านขวา: Queue */}
+                <div className="lg:col-span-7 space-y-4">
+                   <form onSubmit={(e) => {
+                      e.preventDefault();
+                      const url = e.target.elements.ytUrl.value;
+                      const parsed = parseYouTubeUrl(url);
+                      if (parsed?.videoId) {
+                        const newId = parsed.videoId;
+                        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
+                            const songObj = { id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() };
+                            db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true });
+                          }).catch(() => {
+                            const songObj = { id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() };
+                            db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true });
+                          });
+                      } else alert('รองรับเฉพาะ URL ของวิดีโอ YouTube เดี่ยวๆ เท่านั้น');
+                      e.target.reset();
+                   }} className="flex gap-2">
+                      <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
+                      <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
+                   </form>
+                   
+                   <div className="card p-4 h-[500px] flex flex-col">
+                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0">
+                        <span>รายการคิวเพลง ({djState.queue?.length || 0})</span>
+                        {djState.loopMode === 'single' && <span className="text-amber-400 text-xs">🔂 วนซ้ำเพลงแรก</span>}
+                      </h3>
+                      <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
+                        {!djState.queue || djState.queue.length === 0 ? <p className="text-slate-500 text-xs text-center py-10">คิวว่างเปล่า</p> : (
+                          djState.queue.map((q, idx) => (
+                            <div key={q.key} className={`flex items-center justify-between p-2.5 rounded-xl text-xs border transition-colors ${idx === 0 ? 'bg-sky-900/40 border-sky-500 text-white font-bold shadow-md' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:border-slate-600'}`}>
+                              <div className="flex items-center gap-3 overflow-hidden flex-1">
+                                <img src={`https://img.youtube.com/vi/${q.id}/default.jpg`} className="w-10 h-7 object-cover rounded opacity-80 shrink-0" alt="" />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="truncate">{q.title}</span><span className="text-[9px] text-slate-500 font-normal">โดย {getAuthor(q.addedBy).displayName}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                {canManageAudio && idx > 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx-1], nQ[idx]] = [nQ[idx], nQ[idx-1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↑</button>}
+                                {canManageAudio && idx > 0 && idx < djState.queue.length - 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx+1], nQ[idx]] = [nQ[idx], nQ[idx+1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↓</button>}
+                                {(canManageAudio || q.addedBy === currentUser?.id) && idx > 0 && <button onClick={() => { const nQ = [...djState.queue]; nQ.splice(idx, 1); updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1">✕</button>}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                   </div>
+                </div>
               </div>
             </div>
           )}
@@ -3453,6 +3634,54 @@
               </form>
             </Modal>
           )}
+        {/* Global Audio Player Bar (แสดงทุกหน้า) */}
+          {currentUser && (
+            <footer className="bg-gradient-to-r from-[#050811] to-[#0B1325] border-t border-sky-900/50 p-2.5 sm:p-3 flex justify-between items-center z-50 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-2 sm:gap-4 w-1/3">
+                {isDjMuted ? (
+                  <button onClick={() => setIsDjMuted(false)} className="btn-w text-[10px] sm:text-xs shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse border-sky-400 border px-2 sm:px-4">
+                    🔊 กดเปิดรับเสียงเพลง
+                  </button>
+                ) : (
+                  <button onClick={() => setIsDjMuted(true)} className="btn-d text-[10px] sm:text-xs px-2 sm:px-4 hover:bg-red-950 hover:text-red-300 hover:border-red-900 transition-colors">
+                    🔇 ปิดเสียงเพลง
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-col items-center flex-1 cursor-pointer hover:scale-105 transition-transform" onClick={() => setCurrentView('discjam')}>
+                <div className="text-[9px] sm:text-[10px] text-sky-400 font-bold tracking-widest uppercase mb-0.5 sm:mb-1 flex items-center gap-1">
+                  💿 Disc Jam {djState.isPlaying && !isDjMuted ? '🎵' : ''}
+                </div>
+                <div className="text-xs sm:text-sm font-bold truncate max-w-[120px] sm:max-w-xs text-center text-slate-200">
+                  {djState.queue?.length > 0 ? djState.queue[0].title : 'ไม่มีเพลงกำลังเล่น'}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-1.5 sm:gap-3 w-1/3">
+                <button 
+                  onClick={() => {
+                    canManageAudio ? updateDjState({ isPlaying: !djState.isPlaying }) : alert('เฉพาะ Owner, Vice และ Disc Jammer ที่หยุดเพลงหลักได้');
+                  }} 
+                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-lg shadow-lg transition-transform ${canManageAudio ? 'bg-sky-500 text-white hover:scale-110' : 'bg-[#0F2547] text-slate-500 cursor-not-allowed border border-[#1E3A5F]'}`}
+                  disabled={!djState.queue || djState.queue.length === 0}
+                >
+                  {djState.isPlaying ? '⏸' : '▶'}
+                </button>
+                {canManageAudio && (
+                  <button onClick={() => {
+                     if (!djState.queue || djState.queue.length <= 1) return;
+                     updateDjState({ queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]) });
+                  }} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center text-[10px] sm:text-xs hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length <= 1} title="ข้ามเพลง">
+                    ⏭
+                  </button>
+                )}
+              </div>
+            </footer>
+          )}
+
+          {/* ซ่อนตัวเล่นวิดีโอ IFrame เอาไว้เบื้องหลัง */}
+          <div id="yt-player-global" className="hidden"></div>
         </div>
       );
     }
