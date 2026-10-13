@@ -1145,8 +1145,12 @@
             setScore(p => p + gainedScore);
             setMoves(m => m - 1);
             
+            // หาเลขบล็อกสูงสุดบนกระดาน
+            let maxT = 0;
+            for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(finalB[r][c] > maxT) maxT = finalB[r][c];
+            
             if (moves - 1 <= 0) {
-               onEnd('ended', { score: score + gainedScore });
+               onEnd('ended', { score: score + gainedScore, maxTile: maxT });
             } else {
                let canMove = false;
                for(let r=0; r<4; r++) for(let c=0; c<4; c++) {
@@ -1154,7 +1158,7 @@
                   if(r<3 && finalB[r][c] === finalB[r+1][c]) canMove = true;
                   if(c<3 && finalB[r][c] === finalB[r][c+1]) canMove = true;
                }
-               if(!canMove) onEnd('ended', { score: score + gainedScore });
+               if(!canMove) onEnd('ended', { score: score + gainedScore, maxTile: maxT });
             }
          }
       };
@@ -2432,7 +2436,7 @@
               });
             }
           }
-          return { ...prev, [activeGameTab]: { ...c, isPlaying: false, status: st, score: sVal, time: fTime, showModal: true, answer: payload.answer || null } };
+          return { ...prev, [activeGameTab]: { ...c, isPlaying: false, status: st, score: sVal, time: fTime, showModal: true, answer: payload.answer || null, maxTile: payload.maxTile || null } };
         });
       };
 
@@ -2446,6 +2450,7 @@
         else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
         else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
         else if (activeGameTab === 5) msg = `ทำคะแนนได้ ${currGameSt.score} 🍎 ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🐍`;
+        else if (activeGameTab === 6) msg = `ทำคะแนนรวมไปได้ ${currGameSt.score} คะแนน โดยได้เลขสูงสุดคือ [${currGameSt.maxTile || 0}] 🟨 ในเกม ${GAMES[activeGameTab].name}! 😎`;
         else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
 
         const postId = 'post-' + Date.now();
@@ -2856,8 +2861,10 @@
                             {currGameSt.status === 'won' ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
                              currGameSt.status === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
                              activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไป ${currGameSt.score}/3 ประเทศ` :
-                             activeGameTab === 5 ? `เกมโอเวอร์! คุณทำคะแนนได้ ${currGameSt.score} 🍎 คะแนน` :
-                             `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ`}
+                             activeGameTab === 4 ? `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ` :
+                             activeGameTab === 5 ? `เกมโอเวอร์! คุณกินแอปเปิลไปได้ ${currGameSt.score} 🍎` :
+                             activeGameTab === 6 ? `จบเกม! คุณทำคะแนนรวมไปได้ ${currGameSt.score} คะแนน โดยได้เลขสูงสุดคือ [${currGameSt.maxTile || 0}] 🟨` :
+                             `เกมโอเวอร์! หมดเวลา/โควตาของคุณแล้ว`}
                           </p>
                           <div className="text-3xl font-mono font-bold text-amber-300 my-2">
                             {currGameSt.status === 'won' || currGameSt.status === 'ended' ? fmtTime(currGameSt.time) : 'GAME OVER'}
