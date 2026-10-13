@@ -405,7 +405,7 @@
       );
     }
 
-    function MinesweeperGame({ dateSeed, onEnd }) {
+    function MinesweeperGame({ dateSeed, onEnd, onFirstMove }) {
       const COLS = 9, ROWS = 9;
       const [numMines, setNumMines] = useStickyState(10, `bma_ms_mines_${dateSeed}`);
       const [grid, setGrid] = useStickyState(null, `bma_ms_grid_${dateSeed}`);
@@ -477,6 +477,8 @@
       }, [dateSeed]);
 
       const handleAction = (r, c, act) => {
+        if(onFirstMove) onFirstMove(); // ส่งสัญญาณให้ระบบเริ่มเดินเวลา
+        
         if(!revealed || revealed[r][c]) return;
         if(act === 'flag') {
           const newF = [...flagged.map(row=>[...row])];
@@ -2410,11 +2412,24 @@
       };
 
       // Game Timers & State Global Tracker
+      // ฟังก์ชันสำหรับเกมที่ต้องการให้เริ่มจับเวลาเมื่อขยับเท่านั้น (เช่น Minesweeper)
+      const handleFirstMove = useCallback(() => {
+         setGameAppSt(prev => {
+            const c = prev[activeGameTab] || {};
+            if (c.isPlaying && !c.hasStartedMove) {
+               return { ...prev, [activeGameTab]: { ...c, hasStartedMove: true } };
+            }
+            return prev;
+         });
+      }, [activeGameTab]);
+
+      // Game Timers & State Global Tracker
       useEffect(() => {
         let intv = setInterval(() => {
           setGameAppSt(prev => {
             const c = prev[activeGameTab] || {};
-            if(c.isPlaying && c.status === 'pending' && !c.isPaused) {
+            // เงื่อนไข: กำลังเล่นอยู่, สถานะ pending, ไม่ได้หยุดพัก และเริ่มขยับแล้ว (hasStartedMove)
+            if(c.isPlaying && c.status === 'pending' && !c.isPaused && c.hasStartedMove !== false) {
               return { ...prev, [activeGameTab]: { ...c, time: (c.time||0) + 1 } };
             }
             return prev;
@@ -2868,7 +2883,7 @@
 
                     {!currGameSt.isPlaying && currGameSt.status === 'pending' ? (
                       <div className="flex-1 flex flex-col items-center justify-center">
-                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0}}))} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
+                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0, hasStartedMove: activeGameTab !== 1}}))} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
                         <div className="mt-4 text-xs text-slate-400 bg-[#0F2547] px-4 py-2 rounded-lg">จำกัดสิทธิ์ 1 เกม เล่นได้แค่วันละ 1 ครั้งเท่านั้น</div>
                       </div>
                     ) : currGameSt.isPaused ? (
@@ -2885,7 +2900,7 @@
                     ) : (
                       <div className="flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden">
                         {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                        {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                        {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onFirstMove={handleFirstMove} />}
                         {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                         {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                         {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
