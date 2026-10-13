@@ -2838,22 +2838,23 @@
                         {canManageAudio && (
                            <div className="flex gap-2 shrink-0">
                              <button onClick={() => {
+                                 if (!djState.queue || djState.queue.length === 0) return;
                                  if (!djState.isPlaying) {
-                                     // ถ้ากดเล่นต่อ ให้ดึงค่าตำแหน่งวินาทีที่หยุดไว้ มาคำนวณเวลาย้อนหลัง
                                      const resumePos = djState.pausedPos || 0;
                                      updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
                                  } else {
-                                     // ถ้ากดหยุด ให้บันทึกวินาทีปัจจุบันเก็บไว้ใน Firebase ทันที
                                      const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
                                      updateDjState({ isPlaying: false, pausedPos: currentTime });
                                  }
-                             }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} title="Play/Pause ส่วนกลาง">
+                             }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} disabled={!djState.queue || djState.queue.length === 0} title="Play/Pause ส่วนกลาง">
                                {djState.isPlaying ? '⏸' : '▶'}
                              </button>
                              <button onClick={() => {
-                                if (!djState.queue || djState.queue.length <= 1) return;
-                                updateDjState({ queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]), startedAt: Date.now(), pausedPos: 0 });
-                             }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length <= 1} title="ข้ามเพลงส่วนกลาง">
+                                if (!djState.queue || djState.queue.length === 0) return;
+                                const newQueue = [...djState.queue];
+                                newQueue.shift(); // ใช้วิธีดึงเพลงแรกออกจาก Array โดยตรง (แก้บั๊กกด Skip ไม่ได้)
+                                updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0 });
+                             }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length === 0} title="ข้ามเพลงส่วนกลาง">
                                ⏭
                              </button>
                            </div>
@@ -2919,7 +2920,19 @@
                               <div className="flex items-center gap-1 shrink-0 ml-2">
                                 {canManageAudio && idx > 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx-1], nQ[idx]] = [nQ[idx], nQ[idx-1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↑</button>}
                                 {canManageAudio && idx > 0 && idx < djState.queue.length - 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx+1], nQ[idx]] = [nQ[idx], nQ[idx+1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↓</button>}
-                                {(canManageAudio || q.addedBy === currentUser?.id) && idx > 0 && <button onClick={() => { const nQ = [...djState.queue]; nQ.splice(idx, 1); updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1">✕</button>}
+                                {/* ปลดล็อกให้สามารถลบเพลงตำแหน่งที่ 0 (เพลงที่กำลังเล่น) ได้ และผูกตรรกะรีเซ็ตเวลาเข้าไปด้วย */}
+                                {(canManageAudio || q.addedBy === currentUser?.id) && (
+                                  <button onClick={() => { 
+                                      const nQ = [...djState.queue]; 
+                                      nQ.splice(idx, 1); 
+                                      const payload = { queue: nQ };
+                                      if (idx === 0) { // หากลบเพลงที่กำลังเล่นอยู่ ให้รีเซ็ตเวลาใหม่ด้วย (ทำงานเหมือนการข้ามเพลง)
+                                          payload.startedAt = Date.now();
+                                          payload.pausedPos = 0;
+                                      }
+                                      updateDjState(payload); 
+                                  }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1" title="ลบเพลงนี้">✕</button>
+                                )}
                               </div>
                             </div>
                           ))
