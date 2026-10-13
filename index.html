@@ -2175,22 +2175,23 @@
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
                     const cu = currentUserRef.current;
-                    // อนุญาตให้เฉพาะ DJ หรือคนที่เพิ่มเพลงนี้เป็นคนสั่งรันคิวถัดไป (ป้องกันสิบเครื่องสั่งเปลี่ยนเพลงพร้อมกันจนคิวรวน)
+                    // อนุญาตให้ DJ, Owner, Vice หรือคนที่เพิ่มเพลงนี้ เป็นคนสั่งรันคิวถัดไป เพื่อป้องกันคิวค้าง
                     const isAuthorized = prev.jammerId 
                         ? (cu && prev.jammerId === cu.id) 
-                        : (cu && prev.queue?.[0]?.addedBy === cu.id);
+                        : (cu && (cu.role === 'admin' || cu.role === 'mod' || prev.queue?.[0]?.addedBy === cu.id));
 
                     if (isAuthorized) {
                         if (prev.loopMode === 'single') {
                           updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
                           ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
                         } else if (prev.queue?.length > 0) {
-                          const finishedSong = prev.queue[0];
+                          const newQueue = [...prev.queue];
+                          newQueue.shift(); // ใช้วิธีดึงออกตรงๆ แก้บั๊ก arrayRemove ลบเพลงไม่ไป
                           db.collection('bma_system').doc('discjam').update({ 
-                              queue: firebase.firestore.FieldValue.arrayRemove(finishedSong),
+                              queue: newQueue,
                               startedAt: Date.now(),
                               pausedPos: 0 
-                          });
+                          }).catch(()=>{});
                         }
                     }
                     return prev;
@@ -2208,12 +2209,14 @@
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
          const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
+         
+         // คำนวณเวลาที่จะ Seek ตามสถานะ: ถ้าเล่นให้ลบจาก Date.now ถ้าหยุดให้ดึง pausedPos (ถ้าไม่มีให้เป็น 0)
          const expectedTime = djState.isPlaying 
              ? (djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0)
-             : (djState.pausedPos || 0);
+             : (typeof djState.pausedPos === 'number' ? djState.pausedPos : 0);
 
          if (isNewSong) {
-             if (isLocalPaused) {
+             if (isLocalPaused || !djState.isPlaying) {
                  ytPlayerRef.current.cueVideoById(currentVideoId, expectedTime);
              } else {
                  ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
@@ -2224,15 +2227,15 @@
 
          if (djState.isPlaying && currentVideoId && !isLocalPaused) {
              ytPlayerRef.current.playVideo();
-             if (!isNewSong && djState.startedAt) {
-                 const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
-                 if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
-                     isSeekingRef.current = true;
-                     ytPlayerRef.current.seekTo(expectedTime, true);
-                     setTimeout(() => { isSeekingRef.current = false; }, 2000); // ล็อกการ Seek 2 วินาที ป้องกันบั๊กวาร์ปไปมา
-                 }
+             // ถ้าเพลงเดิมเล่นอยู่ แล้วเวลาในเครื่องเพี้ยนไปเกิน 3 วิ (หรือเพิ่งกด Play จาก Pause) ให้กระชากเวลาให้ตรง
+             const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+             if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
+                 isSeekingRef.current = true;
+                 ytPlayerRef.current.seekTo(expectedTime, true);
+                 setTimeout(() => { isSeekingRef.current = false; }, 2000); 
              }
          } else {
+             // ถ้าไม่ได้อยู่ในโหมดกดเล่น ก็สั่งหยุดวิดีโอ (แล้วไม่ต้อง Seek กลับไป 0)
              ytPlayerRef.current.pauseVideo();
          }
          
@@ -2840,11 +2843,15 @@
                              <button onClick={() => {
                                  if (!djState.queue || djState.queue.length === 0) return;
                                  if (!djState.isPlaying) {
-                                     const resumePos = djState.pausedPos || 0;
+                                     // ดึงค่าตำแหน่งวินาทีที่หยุดไว้ มาคำนวณเวลาเริ่ม (StartedAt) ย้อนหลังให้เป๊ะ
+                                     // โดยจะต้องไม่ไปเคลียร์ pausedPos ทิ้งทันที (ปล่อยให้มันค้างไว้แบบนั้นแหละ)
+                                     const resumePos = typeof djState.pausedPos === 'number' ? djState.pausedPos : 0;
                                      updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
                                  } else {
-                                     const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
-                                     updateDjState({ isPlaying: false, pausedPos: currentTime });
+                                     // กดหยุด: บันทึกวินาทีที่เล่นผ่านไปแล้วแบบเรียลไทม์
+                                     // (เอา Date.now() ลบ startedAt ได้เลย ชัวร์กว่าดึงจาก YouTube Player บางจังหวะที่มันหลับ)
+                                     const playedSeconds = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                     updateDjState({ isPlaying: false, pausedPos: playedSeconds });
                                  }
                              }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} disabled={!djState.queue || djState.queue.length === 0} title="Play/Pause ส่วนกลาง">
                                {djState.isPlaying ? '⏸' : '▶'}
