@@ -2148,7 +2148,8 @@
       const ytPlayerRef = useRef(null);
       
       const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
-      const canManageAudio = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod' || djState.jammerId === currentUser.id);
+      // แก้ไขสิทธิ์: ถ้ามีคนเป็น DJ อยู่ สิทธิ์จะเป็นของ DJ 100% แต่ถ้าไม่มี Owner/Vice ถึงจะคุมได้
+      const canManageAudio = currentUser && (djState.jammerId ? (djState.jammerId === currentUser.id) : (currentUser.role === 'admin' || currentUser.role === 'mod'));
 
       useEffect(() => {
         if (!window.YT) {
@@ -2169,13 +2170,14 @@
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
                     if (prev.loopMode === 'single') {
-                      updateDjState({ startedAt: Date.now() }); // เริ่มนับเวลาใหม่
+                      updateDjState({ startedAt: Date.now(), pausedPos: 0 }); // เคลียร์ค่าหยุด
                       ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
                     } else if (prev.queue?.length > 0) {
                       const finishedSong = prev.queue[0];
                       db.collection('bma_system').doc('discjam').update({ 
                           queue: firebase.firestore.FieldValue.arrayRemove(finishedSong),
-                          startedAt: Date.now() // รีเซ็ตเวลาให้เพลงถัดไป
+                          startedAt: Date.now(),
+                          pausedPos: 0 // เคลียร์ค่าหยุดให้เพลงถัดไป
                       });
                     }
                     return prev;
@@ -2193,19 +2195,24 @@
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
          const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
-         // คำนวณเวลาที่เพลงควรจะเล่นอยู่ ณ ปัจจุบัน (วินาที)
-         const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+         // แก้บั๊กเวลา Pause: ถ้าเล่นอยู่ใช้ startedAt แต่ถ้าหยุดอยู่ให้ดึง pausedPos มาใช้
+         const expectedTime = djState.isPlaying 
+             ? (djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0)
+             : (djState.pausedPos || 0);
 
          if (isNewSong) {
-             // โหลดเพลงใหม่และข้ามเวลาไปจุดที่เล่นอยู่ ณ ปัจจุบันเลย
-             ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
+             if (isLocalPaused) {
+                 // ถ้าผู้ใช้กด Pause อยู่ ให้คิวเพลงไว้เฉยๆ เพื่อป้องกัน YouTube เล่นอัตโนมัติ
+                 ytPlayerRef.current.cueVideoById(currentVideoId, expectedTime);
+             } else {
+                 ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
+             }
          } else if (!currentVideoId || djState.queue?.length === 0) {
              ytPlayerRef.current.stopVideo();
          }
 
          if (djState.isPlaying && currentVideoId && !isLocalPaused) {
              ytPlayerRef.current.playVideo();
-             // หากเวลาในเครื่องต่างจากส่วนกลางเกิน 3 วินาที (เช่น เพิ่งเข้าเว็บมา) ให้ซิงค์เวลาใหม่
              if (!isNewSong && djState.startedAt) {
                  const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
                  if (Math.abs(expectedTime - actualTime) > 3) {
@@ -2217,7 +2224,9 @@
          }
          
          if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
-      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt]);
+         // ใส่ isLocalPaused เข้ามาในกล่อง Dependency ด้วย
+      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused]);
+
       useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
          if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
          if (isDjMuted) {
@@ -2228,23 +2237,20 @@
          }
       }, [isDjMuted, djVolume]);
 
-      // 👇 เพิ่มฟังก์ชันเรดาร์ตามเช็กเวลา (Auto-Sync) แบบวิทยุ ต่อท้ายลงไป
+      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync) แบบวิทยุ
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             // เช็กเวลาเฉพาะตอนที่เปิดเสียงฟังอยู่ และเพลงอยู่ในสถานะกำลังเล่น (และผู้ใช้ไม่ได้หยุดฟังเอง)
              if (!isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
                  const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
                  const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
-                 
-                 // ถ้าระยะเวลาเพี้ยนห่างกันเกิน 3 วินาที (เช่น แถบหน้าต่างหลับ, เน็ตกระตุก) ให้กระชากเวลาให้ตรง
                  if (Math.abs(expectedTime - actualTime) > 3) {
                      ytPlayerRef.current.seekTo(expectedTime, true);
                      ytPlayerRef.current.playVideo();
                  }
              }
-         }, 3000); // ทำงานเช็กเงียบๆ ทุก 3 วินาที
-         return () => clearInterval(syncTimer);
-      }, [isDjMuted, djState.isPlaying, djState.startedAt]);
+         }, 3000); 
+         // ใส่ isLocalPaused เข้ามาด้วย เพื่อให้เรดาร์รับรู้สถานะปัจจุบันเสมอ (แก้บั๊กเพลงเล่นแทรก)
+      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -2644,7 +2650,7 @@
       };
 
       return (
-        <div className={'bg-[#050811] text-white flex flex-col ' + (currentView === 'chat' || currentView === 'daily_game' ? 'h-screen overflow-hidden' : 'min-h-screen')}>
+        <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
           {isAuthLoading && <div className="fixed inset-0 z-[200] bg-[#050811] flex items-center justify-center text-sky-400 font-bold animate-pulse">กำลังเชื่อมต่อ...</div>}
           {zoomImg && <div onClick={() => setZoomImg(null)} className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"><img src={zoomImg} alt="" className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl" /><button className="fixed top-5 right-5 w-10 h-10 rounded-full card font-bold">✕</button></div>}
 
@@ -2794,27 +2800,42 @@
                    </div>
 
                    <div className={`card p-5 space-y-4 ${canManageAudio ? '' : 'opacity-50 pointer-events-none'}`}>
-                      <div className="border-b border-[#1E3A5F] pb-2 flex justify-between items-start">
-                        <div>
-                           <h3 className="font-bold text-amber-400">🎛 DJ Controller</h3>
-                           <p className="text-[10px] text-slate-400 mt-0.5">สถานะ: {djState.jammerId ? `🎤 ${getAuthor(djState.jammerId).displayName}` : 'ไม่มี DJ (เปิด Auto)'}</p>
+                      <div className="border-b border-[#1E3A5F] pb-3 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                           {djState.jammerId ? (
+                               <Avatar user={getAuthor(djState.jammerId)} size="md" showStatus={true} />
+                           ) : (
+                               <div className="flex items-center gap-1">
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase">👑 Owner</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase">🛡️ Vice</span>
+                               </div>
+                           )}
+                           <div>
+                               <h3 className="font-bold text-amber-400 flex items-center gap-1.5">🎛 DJ Controller</h3>
+                               <p className="text-[10px] text-slate-400 mt-0.5">
+                                   {djState.jammerId ? `ควบคุมโดย DJ ${getAuthor(djState.jammerId).displayName}` : 'ไม่มี DJ (Owner/Vice ควบคุม)'}
+                               </p>
+                           </div>
                         </div>
                         {canManageAudio && (
-                           <div className="flex gap-2">
+                           <div className="flex gap-2 shrink-0">
                              <button onClick={() => {
                                  if (!djState.isPlaying) {
-                                     const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
-                                     updateDjState({ isPlaying: true, startedAt: Date.now() - (currentTime * 1000) });
+                                     // ถ้าเล่นต่อ ให้ดึงค่าตำแหน่งที่หยุดไว้มาคำนวณ Date ใหม่
+                                     const resumePos = djState.pausedPos || (ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0);
+                                     updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
                                  } else {
-                                     updateDjState({ isPlaying: false });
+                                     // ถ้ากดหยุด ให้บันทึกวินาทีปัจจุบันเก็บไว้ใน Firebase
+                                     const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+                                     updateDjState({ isPlaying: false, pausedPos: currentTime });
                                  }
-                             }} className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} title="Play/Pause ส่วนกลาง">
+                             }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} title="Play/Pause ส่วนกลาง">
                                {djState.isPlaying ? '⏸' : '▶'}
                              </button>
                              <button onClick={() => {
                                 if (!djState.queue || djState.queue.length <= 1) return;
-                                updateDjState({ queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]), startedAt: Date.now() });
-                             }} className="w-8 h-8 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length <= 1} title="ข้ามเพลงส่วนกลาง">
+                                updateDjState({ queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]), startedAt: Date.now(), pausedPos: 0 });
+                             }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length <= 1} title="ข้ามเพลงส่วนกลาง">
                                ⏭
                              </button>
                            </div>
@@ -2843,11 +2864,13 @@
                         const newId = parsed.videoId;
                         const updatePayload = (songObj) => {
                             const payload = { queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true };
-                            // ถ้าเพิ่มเพลงตอนที่คิวว่าง ให้ตั้งเวลาเริ่มเล่นเป็นเวลาปัจจุบัน
-                            if (!djState.queue || djState.queue.length === 0) payload.startedAt = Date.now();
+                            // ถ้าเพิ่มเพลงตอนที่คิวว่าง ให้ตั้งเวลาเริ่มเล่นเป็นเวลาปัจจุบัน และล้างค่า pause เดิม
+                            if (!djState.queue || djState.queue.length === 0) {
+                                payload.startedAt = Date.now();
+                                payload.pausedPos = 0;
+                            }
                             db.collection('bma_system').doc('discjam').update(payload);
                         };
-
                         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
                             updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
                         }).catch(() => {
