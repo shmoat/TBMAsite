@@ -2544,10 +2544,22 @@
         const a = getAuthor(p.authorId);
         return (currentView === 'bookmarks' ? (p.bookmarks || []).includes(currentUser?.id) : true) && (tagFilter === 'ALL' || getTags(a).includes(tagFilter)) && ((p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.content || '').toLowerCase().includes(searchQ.toLowerCase()) || a.displayName.toLowerCase().includes(searchQ.toLowerCase()) || String(a.id).toLowerCase().includes(searchQ.toLowerCase()));
       }).sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+      // ขยายรองรับ 4 วงโคจร
       const orbitRings = () => {
-        const r1 = [], r2 = [], r3 = [], list = activeMembers.length ? activeMembers : users;
-        list.forEach((u, i) => (i % 3 === 0 ? r1 : i % 3 === 1 ? r2 : r3).push(u));
-        return [{ r: 135, items: r1, rc: 'or1', cc: 'cr1' }, { r: 210, items: r2, rc: 'or2', cc: 'cr2' }, { r: 285, items: r3, rc: 'or3', cc: 'cr3' }];
+        const r1 = [], r2 = [], r3 = [], r4 = [], list = activeMembers.length ? activeMembers : users;
+        list.forEach((u, i) => {
+           if (i % 4 === 0) r1.push(u);
+           else if (i % 4 === 1) r2.push(u);
+           else if (i % 4 === 2) r3.push(u);
+           else r4.push(u);
+        });
+        // ปรับรัศมี (r) ใหม่ให้ไล่ระดับสวยงาม และเพิ่มแอนิเมชันวงที่ 4
+        return [
+           { r: 125, items: r1, rc: 'or1', cc: 'cr1' }, 
+           { r: 190, items: r2, rc: 'or2', cc: 'cr2' }, 
+           { r: 260, items: r3, rc: 'or3', cc: 'cr3' },
+           { r: 335, items: r4, rc: 'or2', cc: 'cr2' } // วงนอกสุด ให้หมุนทวนเข็มเหมือนวงที่ 2
+        ];
       };
 
       const sortScores = (list, gIdx) => {
@@ -2705,7 +2717,7 @@
                 <p className="text-xs text-slate-300">คลิกดาวบริวารเพื่อดูโปรไฟล์และส่งข้อความ หรือเข้าสู่กระดานโพสต์</p>
               </div>
               
-              <div className="relative w-full max-w-[620px] h-[520px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
+              <div className="relative w-full max-w-[760px] h-[700px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
                 <div onClick={() => setCurrentView('feed')} className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition" style={{ background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)', boxShadow: '0 0 60px rgba(37,99,235,0.65)' }}><Logo s={32} /><span className="text-[11px] font-bold uppercase mt-1">Blue Moon</span><span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span></div>
                 {orbitRings().map((ring, ri) => (
                   <div key={ri} className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
@@ -3453,7 +3465,7 @@
                       <form onSubmit={async (e) => { e.preventDefault(); const id = newMId.trim().toUpperCase(); if (!id || users.some((u) => u.id === id)) return alert('รหัสซ้ำ!'); if(id.startsWith('F')) { const suffix = id.substring(1); if(users.some(u => u.id === 'F' + suffix)) return alert('รหัสผู้ติดตามสามารถมี F' + suffix + ' ได้แค่คนเดียวเท่านั้น'); } await db.collection('bma_users').doc(id).set({ id, memberTag: newMTags[0], memberTags: newMTags, role: 'member', isActivated: false, isOnline: false, lastActive: 0, username: '', password: '', displayName: 'รออนุมัติ (' + id + ')', bio: '', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], joinedAt: new Date().toISOString().split('T')[0] }); setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length + 1).padStart(3, '0')); setActSuccessMsg(`ออกรหัส ${id} สำเร็จแล้ว!`); setTimeout(() => setActSuccessMsg(''), 4000); }} className="space-y-3">
                         <div className="flex gap-2 text-[10px]"><button type="button" onClick={() => setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Member (M)</button><button type="button" onClick={() => setNewMId('F' + String(users.filter(u=>u.id.startsWith('F')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Follower (F)</button></div>
                         <div className="flex gap-2"><input type="text" value={newMId} onChange={(e) => setNewMId(e.target.value)} className="inp font-mono uppercase w-32" required /><input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มแท็กใหม่..." className="flex-1 inp" /><button type="button" onClick={() => { if (cTag.trim() && !newMTags.includes(cTag.trim())) setNewMTags([...newMTags, cTag.trim()]); setCTag(''); }} className="btn-b">+ แท็ก</button></div>
-                        <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...PRESET_TAGS, ...newMTags])).map((t) => <button type="button" key={t} onClick={() => setNewMTags(newMTags.includes(t) ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} className={newMTags.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{newMTags.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
+                        <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...newMTags])).map((t) => <button type="button" key={t} onClick={() => setNewMTags(newMTags.includes(t) ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} className={newMTags.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{newMTags.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
                         <button type="submit" className="btn-w">+ สร้างรหัส Member ID</button>
                       </form>
                     </div>
@@ -3474,8 +3486,13 @@
                     {editTagU && (
                       <Modal title={`แก้ไขหมวดหมู่: ${editTagU.id}`} onClose={() => setEditTagU(null)}>
                         <div className="space-y-3 text-xs">
-                          <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...PRESET_TAGS, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
-                          <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2">บันทึก</button>
+                          <div className="flex gap-2 mb-2">
+                             <input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มหมวดหมู่ใหม่..." className="flex-1 inp" />
+                             <button type="button" onClick={() => { if (cTag.trim() && !editTagL.includes(cTag.trim())) setEditTagL([...editTagL, cTag.trim()]); setCTag(''); }} className="btn-b">+ หมวดหมู่ใหม่</button>
+                          </div>
+                          {/* ใช้ allTags เพื่อกวาดหมวดหมู่ที่มีทั้งหมดในระบบมาแสดงให้เลือกด้วย */}
+                          <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
+                          <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2 mt-2">บันทึก</button>
                         </div>
                       </Modal>
                     )}
