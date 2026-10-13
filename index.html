@@ -1018,14 +1018,21 @@
       useEffect(() => {
         const handleKeyDown = (e) => {
           const key = e.key;
+          
+          // ป้องกันหน้าเว็บเลื่อนขึ้นลงเวลากดปุ่มลูกศร
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+             e.preventDefault();
+          }
+          
           if (['ArrowUp', 'w', 'W'].includes(key) && dir.r !== 1) setNextDir({ r: -1, c: 0 });
           if (['ArrowDown', 's', 'S'].includes(key) && dir.r !== -1) setNextDir({ r: 1, c: 0 });
           if (['ArrowLeft', 'a', 'A'].includes(key) && dir.c !== 1) setNextDir({ r: 0, c: -1 });
           if (['ArrowRight', 'd', 'D'].includes(key) && dir.c !== -1) setNextDir({ r: 0, c: 1 });
         };
-        const rootNode = document.getElementById('root');
-        rootNode.addEventListener('keydown', handleKeyDown);
-        return () => rootNode.removeEventListener('keydown', handleKeyDown);
+        
+        // ย้ายมารับคำสั่งที่ระดับ window แทน root
+        window.addEventListener('keydown', handleKeyDown, { passive: false });
+        return () => window.removeEventListener('keydown', handleKeyDown);
       }, [dir]);
 
       useEffect(() => {
