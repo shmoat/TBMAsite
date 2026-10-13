@@ -2141,14 +2141,19 @@
       
       // ================= DISC JAM LOGIC =================
       const [djState, setDjState] = useState({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
-      const [isDjMuted, setIsDjMuted] = useState(true); // เริ่มต้นถูกปิดเสียงเสมอเพื่อไม่ให้คนเข้าเว็บตกใจ
-     // เพิ่มบรรทัดนี้ลงไป (ค่า Volume เริ่มต้นคือ 50)
+      const [isDjMuted, setIsDjMuted] = useState(true); 
       const [djVolume, setDjVolume] = useState(50);
-      const [isLocalPaused, setIsLocalPaused] = useState(false); // สถานะหยุดเพลงเฉพาะเครื่อง
-      const ytPlayerRef = useRef(null);
+      const [isLocalPaused, setIsLocalPaused] = useState(false);
       
+      const ytPlayerRef = useRef(null);
+      const isSeekingRef = useRef(false); // ป้องกันบั๊ก YouTube วาร์ปไปมา
+      const currentUserRef = useRef(currentUser); // อ้างอิง User ล่าสุดป้องกันค่าเก่า
+      
+      useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
       const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
-      // แก้ไขสิทธิ์: ถ้ามีคนเป็น DJ อยู่ สิทธิ์จะเป็นของ DJ 100% แต่ถ้าไม่มี Owner/Vice ถึงจะคุมได้
+      
+      // ล็อกสิทธิ์: ถ้ามี DJ อยู่ สิทธิ์จะเป็นของ DJ 100% (Owner/Vice หมดสิทธิ์แทรกแซง) แต่ถ้าไม่มี DJ ถึงจะคุมได้
       const canManageAudio = currentUser && (djState.jammerId ? (djState.jammerId === currentUser.id) : (currentUser.role === 'admin' || currentUser.role === 'mod'));
 
       useEffect(() => {
@@ -2169,16 +2174,24 @@
               onStateChange: (e) => {
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
-                    if (prev.loopMode === 'single') {
-                      updateDjState({ startedAt: Date.now(), pausedPos: 0 }); // เคลียร์ค่าหยุด
-                      ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
-                    } else if (prev.queue?.length > 0) {
-                      const finishedSong = prev.queue[0];
-                      db.collection('bma_system').doc('discjam').update({ 
-                          queue: firebase.firestore.FieldValue.arrayRemove(finishedSong),
-                          startedAt: Date.now(),
-                          pausedPos: 0 // เคลียร์ค่าหยุดให้เพลงถัดไป
-                      });
+                    const cu = currentUserRef.current;
+                    // อนุญาตให้เฉพาะ DJ หรือคนที่เพิ่มเพลงนี้เป็นคนสั่งรันคิวถัดไป (ป้องกันสิบเครื่องสั่งเปลี่ยนเพลงพร้อมกันจนคิวรวน)
+                    const isAuthorized = prev.jammerId 
+                        ? (cu && prev.jammerId === cu.id) 
+                        : (cu && prev.queue?.[0]?.addedBy === cu.id);
+
+                    if (isAuthorized) {
+                        if (prev.loopMode === 'single') {
+                          updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
+                          ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
+                        } else if (prev.queue?.length > 0) {
+                          const finishedSong = prev.queue[0];
+                          db.collection('bma_system').doc('discjam').update({ 
+                              queue: firebase.firestore.FieldValue.arrayRemove(finishedSong),
+                              startedAt: Date.now(),
+                              pausedPos: 0 
+                          });
+                        }
                     }
                     return prev;
                   });
@@ -2195,14 +2208,12 @@
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
          const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
-         // แก้บั๊กเวลา Pause: ถ้าเล่นอยู่ใช้ startedAt แต่ถ้าหยุดอยู่ให้ดึง pausedPos มาใช้
          const expectedTime = djState.isPlaying 
              ? (djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0)
              : (djState.pausedPos || 0);
 
          if (isNewSong) {
              if (isLocalPaused) {
-                 // ถ้าผู้ใช้กด Pause อยู่ ให้คิวเพลงไว้เฉยๆ เพื่อป้องกัน YouTube เล่นอัตโนมัติ
                  ytPlayerRef.current.cueVideoById(currentVideoId, expectedTime);
              } else {
                  ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
@@ -2215,8 +2226,10 @@
              ytPlayerRef.current.playVideo();
              if (!isNewSong && djState.startedAt) {
                  const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
-                 if (Math.abs(expectedTime - actualTime) > 3) {
+                 if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
+                     isSeekingRef.current = true;
                      ytPlayerRef.current.seekTo(expectedTime, true);
+                     setTimeout(() => { isSeekingRef.current = false; }, 2000); // ล็อกการ Seek 2 วินาที ป้องกันบั๊กวาร์ปไปมา
                  }
              }
          } else {
@@ -2224,8 +2237,7 @@
          }
          
          if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
-         // ใส่ isLocalPaused เข้ามาในกล่อง Dependency ด้วย
-      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused]);
+      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused, djState.pausedPos]);
 
       useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
          if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
@@ -2237,19 +2249,25 @@
          }
       }, [isDjMuted, djVolume]);
 
-      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync) แบบวิทยุ
+      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync)
       useEffect(() => {
          const syncTimer = setInterval(() => {
+             // เช็กเวลาเฉพาะตอนที่เปิดเสียงฟังอยู่ และเพลงอยู่ในสถานะกำลังเล่น (และผู้ใช้ไม่ได้กด Local Pause หยุดฟังเอง)
              if (!isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
                  const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
                  const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
-                 if (Math.abs(expectedTime - actualTime) > 3) {
+                 const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
+                 
+                 // ห้าม Seek ตอนที่ YouTube กำลังโหลดหมุนๆ (State = 3) หรือเพิ่งข้ามเวลาไปเมื่อกี้
+                 if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
+                     isSeekingRef.current = true;
                      ytPlayerRef.current.seekTo(expectedTime, true);
                      ytPlayerRef.current.playVideo();
+                     setTimeout(() => { isSeekingRef.current = false; }, 2000);
                  }
              }
          }, 3000); 
-         // ใส่ isLocalPaused เข้ามาด้วย เพื่อให้เรดาร์รับรู้สถานะปัจจุบันเสมอ (แก้บั๊กเพลงเล่นแทรก)
+         return () => clearInterval(syncTimer);
       }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
@@ -2821,11 +2839,11 @@
                            <div className="flex gap-2 shrink-0">
                              <button onClick={() => {
                                  if (!djState.isPlaying) {
-                                     // ถ้าเล่นต่อ ให้ดึงค่าตำแหน่งที่หยุดไว้มาคำนวณ Date ใหม่
-                                     const resumePos = djState.pausedPos || (ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0);
+                                     // ถ้ากดเล่นต่อ ให้ดึงค่าตำแหน่งวินาทีที่หยุดไว้ มาคำนวณเวลาย้อนหลัง
+                                     const resumePos = djState.pausedPos || 0;
                                      updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
                                  } else {
-                                     // ถ้ากดหยุด ให้บันทึกวินาทีปัจจุบันเก็บไว้ใน Firebase
+                                     // ถ้ากดหยุด ให้บันทึกวินาทีปัจจุบันเก็บไว้ใน Firebase ทันที
                                      const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
                                      updateDjState({ isPlaying: false, pausedPos: currentTime });
                                  }
