@@ -2142,8 +2142,10 @@
       // ================= DISC JAM LOGIC =================
       const [djState, setDjState] = useState({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
       const [isDjMuted, setIsDjMuted] = useState(true); // เริ่มต้นถูกปิดเสียงเสมอเพื่อไม่ให้คนเข้าเว็บตกใจ
+      // เพิ่มบรรทัดนี้ลงไป (ค่า Volume เริ่มต้นคือ 50)
+      const [djVolume, setDjVolume] = useState(50);
       const ytPlayerRef = useRef(null);
-
+      
       const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
       const canManageAudio = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod' || djState.jammerId === currentUser.id);
 
@@ -2166,10 +2168,14 @@
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
                     if (prev.loopMode === 'single') {
+                      updateDjState({ startedAt: Date.now() }); // เริ่มนับเวลาใหม่
                       ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
                     } else if (prev.queue?.length > 0) {
                       const finishedSong = prev.queue[0];
-                      db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayRemove(finishedSong) });
+                      db.collection('bma_system').doc('discjam').update({ 
+                          queue: firebase.firestore.FieldValue.arrayRemove(finishedSong),
+                          startedAt: Date.now() // รีเซ็ตเวลาให้เพลงถัดไป
+                      });
                     }
                     return prev;
                   });
@@ -2185,20 +2191,41 @@
          const currentVideoId = djState.queue?.[0]?.id;
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
-         if (currentVideoId && currentVideoId !== playerVideoId) ytPlayerRef.current.loadVideoById(currentVideoId);
-         else if (!currentVideoId || djState.queue?.length === 0) ytPlayerRef.current.stopVideo();
+         const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
+         // คำนวณเวลาที่เพลงควรจะเล่นอยู่ ณ ปัจจุบัน (วินาที)
+         const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
 
-         if (djState.isPlaying && currentVideoId) ytPlayerRef.current.playVideo();
-         else ytPlayerRef.current.pauseVideo();
+         if (isNewSong) {
+             // โหลดเพลงใหม่และข้ามเวลาไปจุดที่เล่นอยู่ ณ ปัจจุบันเลย
+             ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
+         } else if (!currentVideoId || djState.queue?.length === 0) {
+             ytPlayerRef.current.stopVideo();
+         }
+
+         if (djState.isPlaying && currentVideoId) {
+             ytPlayerRef.current.playVideo();
+             // หากเวลาในเครื่องต่างจากส่วนกลางเกิน 3 วินาที (เช่น เพิ่งเข้าเว็บมา) ให้ซิงค์เวลาใหม่
+             if (!isNewSong && djState.startedAt) {
+                 const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+                 if (Math.abs(expectedTime - actualTime) > 3) {
+                     ytPlayerRef.current.seekTo(expectedTime, true);
+                 }
+             }
+         } else {
+             ytPlayerRef.current.pauseVideo();
+         }
          
          if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
-      }, [djState.queue, djState.isPlaying, djState.speed]);
-
-      useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงบนเครื่อง
+      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt]);
+      useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
          if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
-         if (isDjMuted) ytPlayerRef.current.mute();
-         else { ytPlayerRef.current.unMute(); ytPlayerRef.current.setVolume(50); }
-      }, [isDjMuted]);
+         if (isDjMuted) {
+             ytPlayerRef.current.mute();
+         } else { 
+             ytPlayerRef.current.unMute(); 
+             ytPlayerRef.current.setVolume(djVolume); 
+         }
+      }, [isDjMuted, djVolume]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -2773,7 +2800,18 @@
                       const parsed = parseYouTubeUrl(url);
                       if (parsed?.videoId) {
                         const newId = parsed.videoId;
+                        const updatePayload = (songObj) => {
+                            const payload = { queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true };
+                            // ถ้าเพิ่มเพลงตอนที่คิวว่าง ให้ตั้งเวลาเริ่มเล่นเป็นเวลาปัจจุบัน
+                            if (!djState.queue || djState.queue.length === 0) payload.startedAt = Date.now();
+                            db.collection('bma_system').doc('discjam').update(payload);
+                        };
+
                         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
+                            updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                          }).catch(() => {
+                            updatePayload({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                          });
                             const songObj = { id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() };
                             db.collection('bma_system').doc('discjam').update({ queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true });
                           }).catch(() => {
@@ -3639,13 +3677,24 @@
             <footer className="bg-gradient-to-r from-[#050811] to-[#0B1325] border-t border-sky-900/50 p-2.5 sm:p-3 flex justify-between items-center z-50 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-2 sm:gap-4 w-1/3">
                 {isDjMuted ? (
-                  <button onClick={() => setIsDjMuted(false)} className="btn-w text-[10px] sm:text-xs shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse border-sky-400 border px-2 sm:px-4">
+                  <button onClick={() => setIsDjMuted(false)} className="btn-w text-[10px] sm:text-xs shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse border-sky-400 border px-2 py-1.5 sm:px-4">
                     🔊 กดเปิดรับเสียงเพลง
                   </button>
                 ) : (
-                  <button onClick={() => setIsDjMuted(true)} className="btn-d text-[10px] sm:text-xs px-2 sm:px-4 hover:bg-red-950 hover:text-red-300 hover:border-red-900 transition-colors">
-                    🔇 ปิดเสียงเพลง
-                  </button>
+                  <div className="flex items-center gap-2 bg-[#0B1325] border border-[#1E3A5F] rounded-full pl-1 pr-3 py-1">
+                    <button onClick={() => setIsDjMuted(true)} className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full hover:bg-red-950 text-slate-300 hover:text-red-400 transition-colors" title="ปิดเสียง">
+                      🔊
+                    </button>
+                    {/* แถบเลื่อนปรับระดับเสียง */}
+                    <input 
+                      type="range" 
+                      min="0" max="100" 
+                      value={djVolume} 
+                      onChange={(e) => setDjVolume(parseInt(e.target.value))} 
+                      className="w-16 sm:w-24 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500" 
+                      title={`ระดับเสียง: ${djVolume}%`}
+                    />
+                  </div>
                 )}
               </div>
 
@@ -3661,7 +3710,17 @@
               <div className="flex items-center justify-end gap-1.5 sm:gap-3 w-1/3">
                 <button 
                   onClick={() => {
-                    canManageAudio ? updateDjState({ isPlaying: !djState.isPlaying }) : alert('เฉพาะ Owner, Vice และ Disc Jammer ที่หยุดเพลงหลักได้');
+                    if (canManageAudio) {
+                        if (!djState.isPlaying) {
+                            // ตอนกดกลับมาเล่นต่อ ให้หักลบเวลาที่เพลงเล่นไปแล้วออกจากเวลาปัจจุบัน
+                            const currentTime = ytPlayerRef.current?.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
+                            updateDjState({ isPlaying: true, startedAt: Date.now() - (currentTime * 1000) });
+                        } else {
+                            updateDjState({ isPlaying: false });
+                        }
+                    } else {
+                        alert('เฉพาะ Owner, Vice และ Disc Jammer ที่หยุดเพลงหลักได้');
+                    }
                   }} 
                   className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-lg shadow-lg transition-transform ${canManageAudio ? 'bg-sky-500 text-white hover:scale-110' : 'bg-[#0F2547] text-slate-500 cursor-not-allowed border border-[#1E3A5F]'}`}
                   disabled={!djState.queue || djState.queue.length === 0}
@@ -3671,7 +3730,10 @@
                 {canManageAudio && (
                   <button onClick={() => {
                      if (!djState.queue || djState.queue.length <= 1) return;
-                     updateDjState({ queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]) });
+                     updateDjState({ 
+                         queue: firebase.firestore.FieldValue.arrayRemove(djState.queue[0]),
+                         startedAt: Date.now() // รีเซ็ตเวลาสำหรับเพลงถัดไป
+                     });
                   }} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center text-[10px] sm:text-xs hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length <= 1} title="ข้ามเพลง">
                     ⏭
                   </button>
