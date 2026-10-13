@@ -2175,7 +2175,6 @@
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
                     const cu = currentUserRef.current;
-                    // อนุญาตให้ DJ, Owner, Vice หรือคนที่เพิ่มเพลงนี้ เป็นคนสั่งรันคิวถัดไป เพื่อป้องกันคิวค้าง
                     const isAuthorized = prev.jammerId 
                         ? (cu && prev.jammerId === cu.id) 
                         : (cu && (cu.role === 'admin' || cu.role === 'mod' || prev.queue?.[0]?.addedBy === cu.id));
@@ -2186,12 +2185,18 @@
                           ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
                         } else if (prev.queue?.length > 0) {
                           const newQueue = [...prev.queue];
-                          newQueue.shift(); // ใช้วิธีดึงออกตรงๆ แก้บั๊ก arrayRemove ลบเพลงไม่ไป
-                          db.collection('bma_system').doc('discjam').update({ 
+                          newQueue.shift();
+                          // ถ้าลบเพลงออกไปแล้ว ไม่เหลือเพลงในคิวเลย ให้สั่งหยุดเล่นทันที
+                          const payload = { 
                               queue: newQueue,
                               startedAt: Date.now(),
                               pausedPos: 0 
-                          }).catch(()=>{});
+                          };
+                          if (newQueue.length === 0) {
+                              payload.isPlaying = false; // ปิดสถานะกำลังเล่น
+                              ytPlayerRef.current.stopVideo(); // หยุดวิดีโอ
+                          }
+                          db.collection('bma_system').doc('discjam').update(payload).catch(()=>{});
                         }
                     }
                     return prev;
@@ -2869,10 +2874,18 @@
                                {djState.isPlaying ? '⏸' : '▶'}
                              </button>
                              <button onClick={() => {
+                                <button onClick={() => {
                                 if (!djState.queue || djState.queue.length === 0) return;
                                 const newQueue = [...djState.queue];
-                                newQueue.shift(); // ใช้วิธีดึงเพลงแรกออกจาก Array โดยตรง (แก้บั๊กกด Skip ไม่ได้)
-                                updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0 });
+                                newQueue.shift(); 
+                                
+                                const payload = { queue: newQueue, startedAt: Date.now(), pausedPos: 0 };
+                                // ถ้ากดข้ามเพลง แล้วกลายเป็นว่าคิวว่างเปล่า ให้บังคับหยุดเพลงด้วย
+                                if (newQueue.length === 0) {
+                                    payload.isPlaying = false;
+                                    if (ytPlayerRef.current) ytPlayerRef.current.stopVideo();
+                                }
+                                updateDjState(payload);
                              }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length === 0} title="ข้ามเพลงส่วนกลาง">
                                ⏭
                              </button>
