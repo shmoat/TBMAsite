@@ -2282,22 +2282,25 @@
                     if (isAuthorized) {
                         if (prev.loopMode === 'single') {
                           updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
+                          isSeekingRef.current = true;
                           ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
+                          setTimeout(() => { isSeekingRef.current = false; }, 2000);
                         } else if (prev.queue?.length > 0) {
                           const newQueue = [...prev.queue];
                           newQueue.shift();
-                          // ถ้าลบเพลงออกไปแล้ว ไม่เหลือเพลงในคิวเลย ให้สั่งหยุดเล่นทันที
-                          const payload = { 
-                              queue: newQueue,
-                              startedAt: Date.now(),
-                              pausedPos: 0 
-                          };
+                          
                           if (newQueue.length === 0) {
-                              payload.isPlaying = false; // ปิดสถานะกำลังเล่น
-                              ytPlayerRef.current.stopVideo(); // หยุดวิดีโอ
+                              // คิวว่าง สั่งหยุด
+                              updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
+                              ytPlayerRef.current.stopVideo();
+                          } else {
+                              // มีเพลงต่อ สั่งเล่นเพลงถัดไป
+                              updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
                           }
-                          db.collection('bma_system').doc('discjam').update(payload).catch(()=>{});
                         }
+                    } else if (!isAuthorized && prev.queue?.length === 1) {
+                         // สำหรับคนที่ไม่ได้เป็นคนจัดคิว ถ้าเพลงจบและไม่มีเพลงต่อแล้ว ให้หยุด Player ไปเลย
+                         ytPlayerRef.current.stopVideo();
                     }
                     return prev;
                   });
