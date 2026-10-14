@@ -1967,6 +1967,9 @@
       const [filterLatestOnly, setFilterLatestOnly] = useState(false);
       const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
+      const [rightFilterMenuOpen, setRightFilterMenuOpen] = useState(false);
+      const [rightOnlineOnly, setRightOnlineOnly] = useState(false);
+
       const [visiblePosts, setVisiblePosts] = useState(10); 
       useEffect(() => { setVisiblePosts(10); }, [tagFilter, searchQ, currentView, filterType, filterLatestOnly]);
 
@@ -3194,9 +3197,44 @@
               {rightOpen && (
                 <aside className="absolute md:relative z-10 w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0">
                   <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center font-bold"><span>👥 สมาชิก ({activeMembers.length})</span><button onClick={() => setRightOpen(false)} className="md:hidden">✕</button></div>
-                  <div className="p-2 border-b border-[#1E3A5F] flex flex-wrap gap-1">{['ALL', ...allTags].map((t) => <button key={t} onClick={() => setRightTag(t)} className={rightTag === t ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-white text-[#050811]' : 'px-2 py-0.5 rounded-full text-[10px] bg-[#050811] border border-[#1E3A5F]'}>{t === 'ALL' ? 'ทั้งหมด' : t}</button>)}</div>
+                  
+                  <div className="p-2 border-b border-[#1E3A5F] relative z-20">
+                    <button onClick={() => setRightFilterMenuOpen(!rightFilterMenuOpen)} className={`w-full px-3 py-1.5 rounded-full text-xs font-bold flex justify-center items-center gap-2 border transition-colors ${rightTag !== 'ALL' || rightOnlineOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
+                      <span>⚙️ เลือกดู</span>
+                      {(rightTag !== 'ALL' || rightOnlineOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+                    </button>
+                    
+                    {rightFilterMenuOpen && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setRightFilterMenuOpen(false)}></div>
+                        <div className="absolute top-full mt-2 left-2 right-2 card p-3 z-40 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
+                          <div>
+                            <div className="font-bold text-sky-300 mb-1.5">🏷️ หมวดหมู่สมาชิก</div>
+                            <select value={rightTag} onChange={e => setRightTag(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                              <option value="ALL">ทั้งหมด</option>
+                              {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
+                            <input type="checkbox" checked={rightOnlineOnly} onChange={e => setRightOnlineOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
+                            <span className="font-bold text-slate-200">🟢 ดูเฉพาะคนที่ออนไลน์ 24 ชม.</span>
+                          </label>
+                          {(rightTag !== 'ALL' || rightOnlineOnly) && (
+                            <button onClick={() => { setRightTag('ALL'); setRightOnlineOnly(false); setRightFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
+                              ✕ ล้างฟิลเตอร์ทั้งหมด
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
                   <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-                    {activeMembers.filter((m) => rightTag === 'ALL' || getTags(m).includes(rightTag)).map((m) => <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2"><Avatar user={m} size="xs" showStatus={true} /><div className="min-w-0 flex-1"><div className="font-bold truncate">{m.displayName} ({m.id})</div><TagBadges user={m} /></div></div>)}
+                    {activeMembers.filter((m) => {
+                       if (rightTag !== 'ALL' && !getTags(m).includes(rightTag)) return false;
+                       if (rightOnlineOnly && (Date.now() - (m.lastActive || 0) > 86400000)) return false;
+                       return true;
+                    }).map((m) => <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2"><Avatar user={m} size="xs" showStatus={true} /><div className="min-w-0 flex-1"><div className="font-bold truncate">{m.displayName} ({m.id})</div><TagBadges user={m} /></div></div>)}
                   </div>
                 </aside>
               )}
