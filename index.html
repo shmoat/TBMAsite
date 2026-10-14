@@ -3555,7 +3555,7 @@
                       </div>
                     ) : (
                       <>
-                          <div className={`flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden ${currGameSt.status !== 'pending' ? 'opacity-80 pointer-events-none' : ''}`}>
+                          <div className={`flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden ${currGameSt.status === 'viewing_board' || (currGameSt.status !== 'pending' && !currGameSt.isPlaying) ? 'opacity-80 pointer-events-none' : ''}`}>
                             {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                             {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onFirstMove={handleFirstMove} />}
                             {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
@@ -3566,7 +3566,7 @@
                           </div>
                           
                           {/* เมื่อเล่นจบแล้ว จะมีแบนเนอร์แจ้งเตือนด้านบนกระดานให้กดดูผลลัพธ์ซ้ำได้ */}
-                          {currGameSt.status !== 'pending' && (
+                          {(currGameSt.status === 'viewing_board' || (!currGameSt.isPlaying && currGameSt.status !== 'pending')) && (
                               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur border border-sky-500 text-sky-300 px-4 py-2 rounded-full font-bold text-sm shadow-xl flex items-center gap-3">
                                  <span>เกมวันนี้จบลงแล้ว 👏</span>
                                  <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: true}}))} className="btn-b text-xs py-1">ดูใบสรุปผล</button>
