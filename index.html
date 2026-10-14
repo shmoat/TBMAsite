@@ -1268,7 +1268,7 @@
     // ==========================================
     // CHAT GAMES COMPONENTS
     // ==========================================
-    const CHAT_GAMES_LIST = { chess: 'หมากรุกสากล', checkers: 'หมากฮอสสากล', snl: 'บันไดงู', connect4: 'Connect 4', domino: 'โดมิโน' };
+    const CHAT_GAMES_LIST = { chess: 'หมากรุกสากล', checkers: 'หมากฮอสสากล', snl: 'บันไดงู', connect4: 'Connect 4', domino: 'โดมิโน', sttt: 'Super Tic-Tac-Toe' };
 
     function ChessInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
         const game = useRef(new window.Chess());
@@ -1689,20 +1689,18 @@
         };
 
         const drawDomino = async () => {
-            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove || deck.length === 0 || hasDrawn) return;
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove || deck.length === 0) return;
             const newDeck = [...deck];
             const newPiece = newDeck.pop();
             const newHand = [...myHand, newPiece];
             await db.collection('bma_chat_games').doc(gameId).update({
                 [`gameState.p${myP}Hand`]: newHand,
-                'gameState.deck': newDeck,
-                'gameState.hasDrawn': true
+                'gameState.deck': newDeck
             });
         };
 
         const passTurn = async () => {
-            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove) return;
-            if(!hasDrawn && deck.length > 0) return;
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP || hasAnyMove || deck.length > 0) return;
 
             const newPassCount = (gs.passCount || 0) + 1;
             let st = 'playing'; let w = null;
@@ -1712,7 +1710,6 @@
 
             await db.collection('bma_chat_games').doc(gameId).update({
                 'gameState.turn': myP===1?2:1,
-                'gameState.hasDrawn': false,
                 'gameState.passCount': newPassCount,
                 status: st, winner: w
             });
@@ -1772,10 +1769,10 @@
                 {turn === myP && !isSpectator && (
                     <div className="flex gap-2 items-center bg-[#0F2547] p-2 rounded-xl border border-[#1E3A5F] justify-center mt-2 shadow-lg">
                         {!hasAnyMove && <div className="text-amber-400 text-xs font-bold px-2">ไม่มีไพ่ลงได้!</div>}
-                        {(!hasDrawn && deck.length > 0) && (
+                        {(!hasAnyMove && deck.length > 0) && (
                             <button onClick={drawDomino} className="btn-w py-1.5 px-4 text-xs border-amber-500 shadow hover:scale-105 transition-transform">🃏 จั่วไพ่</button>
                         )}
-                        {(!hasAnyMove || hasDrawn) && (
+                        {(!hasAnyMove && deck.length === 0) && (
                             <button onClick={passTurn} className="btn-b py-1.5 px-4 text-xs text-red-300 border-red-500/50 hover:bg-red-950 transition-colors">⏭️ ข้ามตา</button>
                         )}
                     </div>
@@ -1792,6 +1789,85 @@
             </div>
         );
     }
+
+    function StttInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
+        const gs = gameData.gameState || {};
+        const board = gs.board || Array(9).fill().map(()=>Array(9).fill(0));
+        const wonBoards = gs.wonBoards || Array(9).fill(0);
+        const activeBoard = gs.activeBoard ?? -1;
+        const turn = gs.turn || 1;
+        const myP = isPlayer1 ? 1 : 2;
+
+        const checkWin3x3 = (b, p) => {
+            const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for(let l of lines) if(b[l[0]]===p && b[l[1]]===p && b[l[2]]===p) return true;
+            return false;
+        };
+
+        const onClick = async (bIdx, cIdx) => {
+            if(gameData.status !== 'playing' || isSpectator || turn !== myP) return;
+            if(activeBoard !== bIdx && activeBoard !== -1) return;
+            if(wonBoards[bIdx] !== 0 || board[bIdx][cIdx] !== 0) return;
+
+            let newB = board.map(r => [...r]);
+            newB[bIdx][cIdx] = myP;
+
+            let newW = [...wonBoards];
+            if(checkWin3x3(newB[bIdx], myP)) newW[bIdx] = myP;
+            else if(newB[bIdx].every(c => c !== 0)) newW[bIdx] = 3;
+
+            let st = 'playing'; let w = null;
+            if(checkWin3x3(newW, myP)) { st = 'ended'; w = currentUser.id; }
+            else if(newW.every(b => b !== 0)) { st = 'ended'; w = 'draw'; }
+
+            let nextActive = -1;
+            if (st === 'playing') {
+                const available = [];
+                for(let i=0; i<9; i++) if(newW[i] === 0) available.push(i);
+                if(available.length > 0) nextActive = available[Math.floor(Math.random() * available.length)];
+            }
+
+            await db.collection('bma_chat_games').doc(gameId).update({
+                'gameState.board': newB, 'gameState.wonBoards': newW, 'gameState.activeBoard': nextActive,
+                'gameState.turn': myP===1?2:1, status: st, winner: w
+            });
+        };
+
+        return (
+            <div className="flex flex-col items-center space-y-4 w-full text-center">
+                <div className="text-xs font-bold px-4 py-1.5 rounded-full bg-[#0F2547] border border-[#1E3A5F]">
+                   {activeBoard !== -1 ? <span className="text-amber-300">กระดานที่สุ่มได้: บล็อกที่ {activeBoard+1}</span> : <span className="text-emerald-300">เลือกวางบล็อกไหนก็ได้</span>}
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-slate-600 p-1.5 sm:p-2 rounded-lg shadow-xl w-64 h-64 sm:w-80 sm:h-80 mx-auto border-4 border-slate-700">
+                    {board.map((sub, bIdx) => {
+                        const isAct = activeBoard === bIdx || activeBoard === -1;
+                        const isWon = wonBoards[bIdx];
+                        return (
+                            <div key={bIdx} className={`grid grid-cols-3 gap-0.5 p-0.5 rounded ${isAct && isWon === 0 ? 'bg-amber-400 ring-2 ring-amber-400' : 'bg-slate-800'} relative`}>
+                                {isWon !== 0 && (
+                                    <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/70 rounded backdrop-blur-[1px]">
+                                        {isWon === 1 && <span className="text-4xl text-blue-500 font-bold drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]">O</span>}
+                                        {isWon === 2 && <span className="text-4xl text-red-500 font-bold drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]">X</span>}
+                                        {isWon === 3 && <span className="text-4xl text-slate-400 font-bold">-</span>}
+                                    </div>
+                                )}
+                                {sub.map((cell, cIdx) => (
+                                    <div key={cIdx} onClick={()=>onClick(bIdx, cIdx)} className="bg-[#050811] flex items-center justify-center cursor-pointer text-sm sm:text-lg font-bold">
+                                        {cell === 1 && <span className="text-blue-500">O</span>}
+                                        {cell === 2 && <span className="text-red-500">X</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    })}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-2 text-center px-4">
+                  ผู้เล่น 1 (สีน้ำเงิน O), ผู้เล่น 2 (สีแดง X)
+                </div>
+            </div>
+        )
+    }
+
     function ChatGameModal({ gameId, currentUser, onClose, getAuthor, db, activeRoom, roomKey }) {
         const [gameData, setGameData] = useState(null);
         const [rematchTimer, setRematchTimer] = useState(15);
@@ -1838,12 +1914,15 @@
             }
             if(type === 'snl') return { p1: 1, p2: 1, turn: 1, lastRoll: null };
             if(type === 'connect4') return { board: Array(6).fill(null).map(()=>({cols: Array(7).fill(0)})), turn: 1 };
+            return {};
             if(type === 'domino') {
                 const all = [];
                 for(let i=0; i<=6; i++) for(let j=i; j<=6; j++) all.push({l: i, r: j});
                 for(let i=all.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [all[i], all[j]] = [all[j], all[i]]; }
                 return { p1Hand: all.slice(0,7), p2Hand: all.slice(7,14), boardPieces: [all[14]], deck: all.slice(15), turn: 1, hasDrawn: false, passCount: 0 };
             }
+            return {};
+	    if(type === 'sttt') return { board: Array(9).fill(null).map(()=>Array(9).fill(0)), wonBoards: Array(9).fill(0), activeBoard: Math.floor(Math.random()*9), turn: 1 };
             return {};
         };
 
@@ -1914,6 +1993,7 @@
                         {gameData.type === 'snl' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันกดปุ่มทอยลูกเต๋า</li><li>หากตกที่โคนบันได จะได้เลื่อนขึ้นไปจุดสูงสุดของบันได</li><li>หากตกที่หัวงู จะต้องลื่นลงมาที่หางงู</li><li>ใครเดินทางไปถึงช่อง 100 ได้ก่อน จะเป็นผู้ชนะ</li></ul>}
                         {gameData.type === 'connect4' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันหยอดเหรียญลงในช่อง</li><li>ใครเรียงสีตัวเองให้ติดกันครบ 4 อัน (แนวตั้ง แนวนอน หรือแนวทแยง) ก่อน จะเป็นผู้ชนะ</li></ul>}
                         {gameData.type === 'domino' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ผลัดกันต่อโดมิโนให้แต้มตรงกับปลายด้านใดด้านหนึ่ง</li><li>หากไม่มีไพ่ให้ลง ต้องจั่วไพ่ 1 ครั้ง</li><li>ถ้าจั่วแล้วยังลงไม่ได้ (หรือไพ่กองกลางหมด) ให้กดข้ามตา</li><li>ใครไพ่หมดมือคนแรกชนะ! (ถ้าข้ามตาทั้งคู่เกมจะจบลงแบบเสมอ)</li></ul>}
+			{gameData.type === 'sttt' && <ul className="space-y-2 text-slate-300 list-disc pl-4"><li>ระบบจะสุ่มกระดานย่อยให้คุณเล่นในแต่ละตา</li><li>กระดานไหนที่มีคนชนะแล้วจะถูกล็อกไว้</li><li>ใครชนะกระดานย่อยเรียงติดกัน 3 แนว (เหมือน XO ปกติ) จะเป็นผู้ชนะ!</li></ul>}
                     </div>
 
                     <div className="w-full md:w-2/3 flex justify-center items-center flex-col relative select-none touch-none bg-[#050811] rounded-xl p-2 py-4 border border-[#1E3A5F]">
@@ -1922,6 +2002,7 @@
                         {gameData.type === 'snl' && <SnlInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} getAuthor={getAuthor} />}
                         {gameData.type === 'connect4' && <Connect4Inner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                         {gameData.type === 'domino' && <DominoInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
+			{gameData.type === 'sttt' && <StttInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                     </div>
                 </div>
             </Modal>
@@ -1945,7 +2026,9 @@
       const [zoomImg, setZoomImg] = useState(null);
       openZoom = setZoomImg;
       
-      
+      const [djChatIn, setDjChatIn] = useState('');
+      const djChatRef = useRef(null);
+
       const urlParams = new URLSearchParams(window.location.search);
       const sharedPostId = urlParams.get('post');
       const [currentView, setCurrentView] = useState(() => {
@@ -2360,6 +2443,12 @@
 
       useEffect(() => { if (currentView === 'chat' && chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight; }, [roomKey, currentView, roomMsgs.length]);
 
+      useEffect(() => {
+        if (currentView === 'discjam' && djChatRef.current) {
+            djChatRef.current.scrollTop = djChatRef.current.scrollHeight;
+        }
+      }, [chatMessages, currentView]);
+
       const myNotifs = currentUser ? notifications.filter((n) => {
         if (n.recipientId !== currentUser.id && !(n.recipientId === 'ALL' && n.actorId !== currentUser.id)) return false;
         const p = currentUser.notifPrefs || {};
@@ -2533,6 +2622,17 @@
         if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
         else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
         else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
+      };
+
+      const handleSendDjChat = async (e) => {
+        e.preventDefault();
+        if (!currentUser || !djChatIn.trim()) return;
+        const text = djChatIn.trim();
+        setDjChatIn('');
+        const now = Date.now(), id = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
+        await db.collection('bma_messages').doc(id).set({
+            id, roomKey: 'global-discjam', senderId: currentUser.id, text, attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs()
+        });
       };
 
       const jumpToPost = (postId) => { setTagFilter('ALL'); setSearchQ(''); setCurrentView('feed'); setHiPostId(postId); setTimeout(() => document.getElementById('post-' + postId)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 180); setTimeout(() => setHiPostId(null), 4000); };
@@ -2960,13 +3060,13 @@
                       <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
                    </form>
                    
-                   <div className="card p-4 h-[500px] flex flex-col">
+                   <div className="card p-4 h-[250px] flex flex-col shrink-0">
                       <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0">
                         <span>รายการคิวเพลง ({djState.queue?.length || 0})</span>
                         {djState.loopMode === 'single' && <span className="text-amber-400 text-xs">🔂 วนซ้ำเพลงแรก</span>}
                       </h3>
                       <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
-                        {!djState.queue || djState.queue.length === 0 ? <p className="text-slate-500 text-xs text-center py-10">คิวว่างเปล่า</p> : (
+                        {!djState.queue || djState.queue.length === 0 ? <p className="text-slate-500 text-xs text-center py-6">คิวว่างเปล่า</p> : (
                           djState.queue.map((q, idx) => (
                             <div key={q.key} className={`flex items-center justify-between p-2.5 rounded-xl text-xs border transition-colors ${idx === 0 ? 'bg-sky-900/40 border-sky-500 text-white font-bold shadow-md' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:border-slate-600'}`}>
                               <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -2978,16 +3078,12 @@
                               <div className="flex items-center gap-1 shrink-0 ml-2">
                                 {canManageAudio && idx > 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx-1], nQ[idx]] = [nQ[idx], nQ[idx-1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↑</button>}
                                 {canManageAudio && idx > 0 && idx < djState.queue.length - 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx+1], nQ[idx]] = [nQ[idx], nQ[idx+1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↓</button>}
-                                {/* ปลดล็อกให้สามารถลบเพลงตำแหน่งที่ 0 (เพลงที่กำลังเล่น) ได้ และผูกตรรกะรีเซ็ตเวลาเข้าไปด้วย */}
                                 {(canManageAudio || q.addedBy === currentUser?.id) && (
                                   <button onClick={() => { 
                                       const nQ = [...djState.queue]; 
                                       nQ.splice(idx, 1); 
                                       const payload = { queue: nQ };
-                                      if (idx === 0) { // หากลบเพลงที่กำลังเล่นอยู่ ให้รีเซ็ตเวลาใหม่ด้วย (ทำงานเหมือนการข้ามเพลง)
-                                          payload.startedAt = Date.now();
-                                          payload.pausedPos = 0;
-                                      }
+                                      if (idx === 0) { payload.startedAt = Date.now(); payload.pausedPos = 0; }
                                       updateDjState(payload); 
                                   }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1" title="ลบเพลงนี้">✕</button>
                                 )}
@@ -2996,6 +3092,33 @@
                           ))
                         )}
                       </div>
+                   </div>
+
+                   <div className="card p-4 flex-1 min-h-[300px] flex flex-col">
+                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400">💬 แชตกับ DJ (Global)</h3>
+                      <div ref={djChatRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                         {chatMessages.filter(m => m.roomKey === 'global-discjam').map((msg) => {
+                             const s = getAuthor(msg.senderId);
+                             const isDJ = djState.jammerId === msg.senderId;
+                             return (
+                                 <div key={msg.id} className="flex items-start gap-2.5">
+                                     <Avatar user={s} size="sm" />
+                                     <div className="flex-1 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F]">
+                                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                             <span className="text-[11px] font-bold text-sky-300">{s.displayName}</span>
+                                             {isDJ && <span className="px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[9px] font-bold uppercase shadow-[0_0_8px_rgba(192,38,211,0.5)]">🎧 DJ</span>}
+                                             <span className="text-[9px] text-slate-400">{getTimeStr(msg)}</span>
+                                         </div>
+                                         <div className="text-xs text-slate-200 break-words">{msg.isDeleted ? <span className="italic text-slate-500">🚫 ข้อความถูกยกเลิก</span> : msg.text}</div>
+                                     </div>
+                                 </div>
+                             );
+                         })}
+                      </div>
+                      <form onSubmit={handleSendDjChat} className="mt-3 flex gap-2 shrink-0">
+                         <input type="text" value={djChatIn} onChange={e=>setDjChatIn(e.target.value)} placeholder="พิมพ์ข้อความคุยกับ DJ..." className="flex-1 inp text-xs" />
+                         <button type="submit" className="btn-w text-xs">ส่ง</button>
+                      </form>
                    </div>
                 </div>
               </div>
@@ -3163,7 +3286,7 @@
                         <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="btn-b py-1 font-bold text-sky-300 border-sky-500/50 bg-sky-950/30 shadow">🎮 ชวนเล่นเกม</button>
                         {cGameOpen && (
                           <div className="absolute bottom-full left-0 mb-2 w-44 card py-1.5 z-50 shadow-2xl border-white/20 text-xs">
-                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'}].map(g => (
+                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'},{id:'sttt',n:'Super Tic-Tac-Toe',i:'✖️'}].map(g => (
                               <button key={g.id} type="button" onClick={async () => { 
                                 setCGameOpen(false); 
                                 const gid = 'cg-' + Date.now(); 
