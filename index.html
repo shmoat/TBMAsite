@@ -3519,7 +3519,7 @@
                       <div className="flex gap-1.5 overflow-x-auto">{['ALL', ...allTags].map((t) => <button key={t} onClick={() => setTagFilter(t)} className={tagFilter === t ? 'px-2.5 py-1 rounded-full text-xs font-bold bg-white text-[#050811] shrink-0' : 'px-2.5 py-1 rounded-full text-xs bg-[#050811] border border-[#1E3A5F] shrink-0'}>{t === 'ALL' ? 'ทั้งหมด' : t}</button>)}</div>
                     </div>
 
-                    {filteredPosts.map((post) => {
+                    {filteredPosts.slice(0, visiblePosts).map((post) => {
                       const author = getAuthor(post.authorId), isLiked = currentUser && (post.likes || []).includes(currentUser.id), isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
                       const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt, totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
                       const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
