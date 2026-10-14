@@ -2709,11 +2709,10 @@
               <div className="flex items-center gap-2 shrink-0">
                 {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
                 {currentUser ? (
-                  {currentUser ? (
                    <div className="flex items-center gap-1.5 shrink-0">
-    		     <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline whitespace-nowrap">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
-  		   </div>
-		 ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); setCurrentView('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
+                     <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline whitespace-nowrap">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
+                   </div>
+                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); setCurrentView('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
               </div>
             </div>
           </header>
