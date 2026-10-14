@@ -51,10 +51,17 @@
 
     // Base utilities
     const parseYouTubeUrl = (url) => {
+      const result = { videoId: null, listId: null };
+      
+      const listRegExp = /[?&]list=([^#\&\?]+)/;
+      const listMatch = url.match(listRegExp);
+      if (listMatch && listMatch[1]) result.listId = listMatch[1];
+
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
-      if (match && match[2].length === 11) return { videoId: match[2] };
-      return null;
+      if (match && match[2].length === 11) result.videoId = match[2];
+      
+      return (result.videoId || result.listId) ? result : null;
     };
     const getMs = (d) => d?.serverCreatedAt?.toMillis ? d.serverCreatedAt.toMillis() : (d?.serverCreatedAt?.seconds ? d.serverCreatedAt.seconds * 1000 : (d?.timestamp || 0));
     const getTimeStr = (d) => d?.serverCreatedAt?.toDate ? d.serverCreatedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : (d?.time || '');
@@ -3031,26 +3038,76 @@
                       e.preventDefault();
                       const url = e.target.elements.ytUrl.value;
                       const parsed = parseYouTubeUrl(url);
-                      if (parsed?.videoId) {
-                        const newId = parsed.videoId;
+                      
+                      if (parsed?.listId || parsed?.videoId) {
+                        const newId = parsed.listId || parsed.videoId;
+                        const isPlaylist = !!parsed.listId;
+                        
                         const updatePayload = (songObj) => {
                             const payload = { queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true };
-                            // ถ้าเพิ่มเพลงตอนที่คิวว่าง ให้ตั้งเวลาเริ่มเล่นเป็นเวลาปัจจุบัน และล้างค่า pause เดิม
                             if (!djState.queue || djState.queue.length === 0) {
                                 payload.startedAt = Date.now();
                                 payload.pausedPos = 0;
                             }
                             db.collection('bma_system').doc('discjam').update(payload);
                         };
-                        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
-                            updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                        }).catch(() => {
-                            updatePayload({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                        });
-                      } else alert('รองรับเฉพาะ URL ของวิดีโอ YouTube เดี่ยวๆ เท่านั้น');
+
+                        if (isPlaylist && ytPlayerRef.current) {
+                             alert("กำลังประมวลผล Playlist กรุณารอสักครู่ (อาจใช้เวลาไม่กี่วินาที)");
+                             
+                             // บังคับให้ YouTube Player โหลด Playlist ขึ้นมา
+                             ytPlayerRef.current.loadPlaylist({list: parsed.listId});
+                             
+                             // รอให้ IFrame ดึงข้อมูลกลับมา (หน่วงเวลาสัก 2 วินาที)
+                             setTimeout(() => {
+                                 // ดึงรายการ Playlist ที่ IFrame อ่านเจอ
+                                 const playlistArr = ytPlayerRef.current.getPlaylist ? ytPlayerRef.current.getPlaylist() : null;
+                                 
+                                 if (playlistArr && playlistArr.length > 0) {
+                                     // จำกัด 50 เพลงแรกกันระบบหน่วง
+                                     const limitedArr = playlistArr.slice(0, 50);
+                                     
+                                     // แกะเป็น Object เพื่อเตรียมอัปโหลด
+                                     const songsToAdd = limitedArr.map((vid, index) => ({
+                                        id: vid,
+                                        title: `YouTube Video (จาก Playlist)`, 
+                                        addedBy: currentUser.id,
+                                        key: Date.now() + index + Math.random()
+                                     }));
+                                     
+                                     const payload = { queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd), isPlaying: true };
+                                     if (!djState.queue || djState.queue.length === 0) {
+                                         payload.startedAt = Date.now();
+                                         payload.pausedPos = 0;
+                                     }
+                                     db.collection('bma_system').doc('discjam').update(payload);
+                                     alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length} เพลงลงในคิวแล้ว`);
+                                     
+                                     // บังคับสลับกลับมาเล่นเพลงแรกของคิว เพื่อความต่อเนื่อง
+                                     setTimeout(() => {
+                                         const currentVId = djState.queue?.[0]?.id || songsToAdd[0].id;
+                                         ytPlayerRef.current.loadVideoById(currentVId);
+                                     }, 500);
+
+                                 } else {
+                                     alert("ไม่พบเพลง หรือ Playlist นี้ถูกตั้งเป็นส่วนตัว (Private)");
+                                     // โหลดเพลงเดิมกลับมาแก้บั๊กการเล่นเพลงผิดเพี้ยน
+                                     if(djState.queue?.[0]?.id) ytPlayerRef.current.loadVideoById(djState.queue[0].id);
+                                 }
+                             }, 2500);
+
+                        } else {
+                             // ดึงแบบปกติ 1 เพลง
+                             fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
+                                 updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                             }).catch(() => {
+                                 updatePayload({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                             });
+                        }
+                      } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
                       e.target.reset();
                    }} className="flex gap-2">
-                      <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
+                      <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
                       <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
                    </form>
                    
