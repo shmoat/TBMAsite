@@ -2274,35 +2274,26 @@
               onStateChange: (e) => {
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
-                    const cu = currentUserRef.current;
-                    const isAuthorized = prev.jammerId 
-                        ? (cu && prev.jammerId === cu.id) 
-                        : (cu && (cu.role === 'admin' || cu.role === 'mod' || prev.queue?.[0]?.addedBy === cu.id));
-
-                    if (isAuthorized) {
-                        if (prev.loopMode === 'single') {
-                          updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
-                          isSeekingRef.current = true;
-                          ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
-                          setTimeout(() => { isSeekingRef.current = false; }, 2000);
-                        } else if (prev.queue?.length > 0) {
-                          const newQueue = [...prev.queue];
-                          newQueue.shift();
+                    // ไม่ต้องเช็กสิทธิ์ว่าใครเป็นคนแอด ใครที่ Player รับรู้ว่าเพลงจบแล้ว ให้เป็นคนส่งสัญญาณไป Firestore ทันที
+                    if (prev.loopMode === 'single') {
+                        updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
+                        isSeekingRef.current = true;
+                        ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
+                        setTimeout(() => { isSeekingRef.current = false; }, 2000);
+                    } else if (prev.queue?.length > 0) {
+                        const newQueue = [...prev.queue];
+                        newQueue.shift(); // ลบเพลงปัจจุบันออก
                           
-                          if (newQueue.length === 0) {
-                              // คิวว่าง สั่งหยุด
-                              updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
-                              ytPlayerRef.current.stopVideo();
-                          } else {
-                              // มีเพลงต่อ สั่งเล่นเพลงถัดไป
-                              updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
-                          }
+                        if (newQueue.length === 0) {
+                            // คิวว่าง สั่งหยุดให้ทุกคน
+                            updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
+                            ytPlayerRef.current.stopVideo();
+                        } else {
+                            // เลื่อนคิว
+                            updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
                         }
-                    } else if (!isAuthorized && prev.queue?.length === 1) {
-                         // สำหรับคนที่ไม่ได้เป็นคนจัดคิว ถ้าเพลงจบและไม่มีเพลงต่อแล้ว ให้หยุด Player ไปเลย
-                         ytPlayerRef.current.stopVideo();
                     }
-                    return prev;
+                    return prev; // ให้ return prev เสมอ เพื่อไม่ให้ State ในเครื่องพัง
                   });
                 }
               }
