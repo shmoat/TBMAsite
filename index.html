@@ -3576,22 +3576,29 @@
                     )}
 
                     {/* GAME OVER MODAL POP-UP */}
-                    {currGameSt.showModal && (
-                      <Modal title={currGameSt.status === 'won' ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: false, status: 'viewing_board'}}))}>
+                    {currGameSt.showModal && (() => {
+                      // ดึงสถิติของตัวเองที่ถูกบันทึกลงฐานข้อมูลวันนี้มาใช้ เพื่อให้ข้อความแม่นยำแม้รีเฟรชหน้าเว็บ
+                      const myScore = gameScores.find(x => x.userId === currentUser?.id);
+                      const finalStatus = myScore ? myScore.status : currGameSt.status;
+                      const finalScore = myScore ? myScore.score : currGameSt.score;
+                      const finalTime = myScore ? myScore.timeMs : currGameSt.time;
+
+                      return (
+                      <Modal title={finalStatus === 'won' || (finalStatus === 'ended' && finalScore > 0) ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: false, status: 'viewing_board'}}))}>
                         <div className="space-y-4">
                           <p className="text-slate-300 text-sm">
-                            {currGameSt.status === 'won' && activeGameTab === 2 ? `สุดยอด! คุณทายถูกทั้งหมด ${currGameSt.score}/3 ประเทศ` : 
-                             currGameSt.status === 'won' && activeGameTab === 4 ? `ยินดีด้วย! คุณทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง` : 
-                             currGameSt.status === 'won' ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
-                             currGameSt.status === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
-                             currGameSt.status === 'lost' && activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไป ${currGameSt.score}/3 ประเทศ` :
-                             currGameSt.status === 'lost' && activeGameTab === 4 ? `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ` :
-                             currGameSt.status === 'ended' && activeGameTab === 5 ? `เกมโอเวอร์! คุณกินแอปเปิลไปได้ ${currGameSt.score} 🍎` :
-                             currGameSt.status === 'ended' && activeGameTab === 6 ? `จบเกม! คุณทำคะแนนรวมไปได้ ${currGameSt.score} คะแนน โดยได้เลขสูงสุดคือ [${currGameSt.maxTile || 0}] 🟨` :
+                            {finalStatus === 'won' && activeGameTab === 2 ? `สุดยอด! คุณทายถูกทั้งหมด ${finalScore}/3 ประเทศ` : 
+                             finalStatus === 'won' && activeGameTab === 4 ? `ยินดีด้วย! คุณทายคำศัพท์สำเร็จใน ${finalScore} ครั้ง` : 
+                             finalStatus === 'won' || (finalStatus === 'ended' && activeGameTab < 4) ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
+                             finalStatus === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
+                             finalStatus === 'lost' && activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไปแค่ ${finalScore}/3 ประเทศ` :
+                             finalStatus === 'lost' && activeGameTab === 4 ? `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ` :
+                             finalStatus === 'ended' && activeGameTab === 5 ? `เกมโอเวอร์! คุณกินแอปเปิลไปได้ ${finalScore} 🍎` :
+                             finalStatus === 'ended' && activeGameTab === 6 ? `จบเกม! คุณทำคะแนนรวมไปได้ ${finalScore} คะแนน` :
                              `จบเกม! โควตาวันนี้ของคุณหมดแล้ว`}
                           </p>
                           <div className="text-3xl font-mono font-bold text-amber-300 my-2">
-                            {currGameSt.status === 'won' || currGameSt.status === 'ended' ? fmtTime(currGameSt.time) : 'GAME OVER'}
+                            {finalStatus === 'lost_bomb' || (finalStatus === 'lost' && activeGameTab !== 2 && activeGameTab !== 4) ? 'GAME OVER' : fmtTime(finalTime)}
                           </div>
                           {currGameSt.answer && activeGameTab === 4 && (
                             <div className="text-lg font-bold text-sky-300 my-2 bg-[#0F2547] p-2 rounded-lg border border-[#1E3A5F]">
