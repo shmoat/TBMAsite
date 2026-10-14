@@ -1962,6 +1962,9 @@
       const [searchQ, setSearchQ] = useState('');
       const [hiPostId, setHiPostId] = useState(null);
       const [memberModal, setMemberModal] = useState(null);
+      
+      const [visiblePosts, setVisiblePosts] = useState(10); 
+      useEffect(() => { setVisiblePosts(10); }, [tagFilter, searchQ, currentView]);
 
       const [authMode, setAuthMode] = useState('signin');
       const [lUser, setLUser] = useState(''); const [lPass, setLPass] = useState('');
@@ -3465,7 +3468,7 @@
                 </div>
               </aside>
 
-              <main className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2">
+              <main onScroll={(e) => { const { scrollTop, scrollHeight, clientHeight } = e.target; if (scrollHeight - scrollTop <= clientHeight + 200 && visiblePosts < filteredPosts.length) { setVisiblePosts(v => v + 10); } }} className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2 custom-scrollbar">
                 {currentView === 'admin' && currentUser?.role === 'admin' ? (
                   <div className="space-y-5 text-xs">
                     <div className="card p-5 space-y-3">
@@ -3613,6 +3616,11 @@
                         </article>
                       );
                     })}
+                    {visiblePosts < filteredPosts.length && (
+                      <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
+                        ⏳ กำลังโหลดโพสต์เพิ่มเติม...
+                      </div>
+                    )}
                   </>
                 )}
               </main>
