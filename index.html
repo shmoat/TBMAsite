@@ -2709,11 +2709,11 @@
               <div className="flex items-center gap-2 shrink-0">
                 {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
                 {currentUser ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline whitespace-nowrap">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
-                    <button onClick={async () => { await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="btn-d text-xs">ออก</button>
-                  </div>
-                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); setCurrentView('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
+                  {currentUser ? (
+                   <div className="flex items-center gap-1.5 shrink-0">
+    		     <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline whitespace-nowrap">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
+  		   </div>
+		 ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); setCurrentView('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
               </div>
             </div>
           </header>
@@ -3750,9 +3750,12 @@
                   {eSocs.map((s) => <div key={s.id} className="flex justify-between px-2 py-1 rounded bg-[#0B1325]"><span>{s.label}: {s.url}</span><button type="button" onClick={() => setESocs(eSocs.filter((x) => x.id !== s.id))} className="text-red-400">ลบ</button></div>)}
                 </div>
                 {profErr && <div className="p-2 rounded bg-red-950 text-red-200">{profErr}</div>}
-                <button type="submit" className="w-full btn-w py-2">บันทึกโปรไฟล์</button>
-              </form>
-            </Modal>
+        	<div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[#1E3A5F]">
+         	  <button type="submit" className="w-full btn-w py-2">บันทึกโปรไฟล์</button>
+	          <button type="button" onClick={async () => { setEditProf(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors">🚪 ออกจากระบบ</button>
+	        </div>
+	      </form>
+	    </Modal>
           )}
 
           {createPost && (
