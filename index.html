@@ -2980,8 +2980,8 @@
                           <img src={`https://img.youtube.com/vi/${djState.queue[0].id}/hqdefault.jpg`} alt="Thumbnail" className="w-full aspect-video object-cover rounded-xl border-2 border-[#1E3A5F] shadow-lg" />
                           <div className="font-bold text-sm flex items-start justify-between gap-2">
                              <div className="line-clamp-2 flex-1">{djState.queue[0].title}</div>
-                             {/* ปุ่มให้ DJ หรือคนแอดเพลงกดแก้ไขชื่อได้ */}
-                             {(canManageAudio || djState.queue[0].addedBy === currentUser?.id) && (
+                             {/* ปุ่มให้ DJ หรือผู้มีสิทธิ์จัดการระบบ (Owner/Vice) กดแก้ไขชื่อได้ */}
+                             {canManageAudio && (
                                 <button onClick={() => {
                                    const newTitle = prompt("แก้ไขชื่อเพลง:", djState.queue[0].title);
                                    if(newTitle && newTitle.trim()) {
