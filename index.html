@@ -2557,7 +2557,8 @@
       let basePosts = posts.filter((p) => {
         if (!currentUser && !p.isGuestAllowed) return false;
         const a = getAuthor(p.authorId);
-        if (currentView === 'bookmarks' && !(p.bookmarks || []).includes(currentUser?.id)) return false;
+        const myBm = currentUser ? (p.bookmarks || []).includes(currentUser.id) : false;
+        if (currentView === 'bookmarks' && !myBm) return false;
         if (tagFilter !== 'ALL' && !getTags(a).includes(tagFilter)) return false;
         if (searchQ && !((p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.content || '').toLowerCase().includes(searchQ.toLowerCase()) || a.displayName.toLowerCase().includes(searchQ.toLowerCase()) || String(a.id).toLowerCase().includes(searchQ.toLowerCase()))) return false;
         
@@ -3536,7 +3537,7 @@
                   <>
                     <div className="card p-3.5 space-y-2.5">
                       <div className="flex gap-2">
-                        <input type="text" value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
+                        <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
                         {currentUser && <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap">+ เขียนโพสต์ / โพลล์</button>}
                       </div>
                       <div className="relative">
