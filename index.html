@@ -1060,10 +1060,9 @@
     }
 
 
-    function SnakeGame({ dateSeed, onEnd }) {
+    function SnakeGame({ dateSeed, isPlaying, isPaused, onEnd }) {
       const ROWS = 15;
       const COLS = 15;
-      // เปลี่ยนจาก useState เป็น useStickyState ตามวัน
       const [snake, setSnake] = useStickyState([{ r: 7, c: 7 }], `bma_snake_s_${dateSeed}`);
       const [food, setFood] = useStickyState({ r: 3, c: 3 }, `bma_snake_f_${dateSeed}`);
       const [dir, setDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_d_${dateSeed}`);
@@ -1084,55 +1083,48 @@
       useEffect(() => {
         const handleKeyDown = (e) => {
           const key = e.key;
-          
-          // ป้องกันหน้าเว็บเลื่อนขึ้นลงเวลากดปุ่มลูกศร
-          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
-             e.preventDefault();
-          }
-          
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) e.preventDefault();
           if (['ArrowUp', 'w', 'W'].includes(key) && dir.r !== 1) setNextDir({ r: -1, c: 0 });
           if (['ArrowDown', 's', 'S'].includes(key) && dir.r !== -1) setNextDir({ r: 1, c: 0 });
           if (['ArrowLeft', 'a', 'A'].includes(key) && dir.c !== 1) setNextDir({ r: 0, c: -1 });
           if (['ArrowRight', 'd', 'D'].includes(key) && dir.c !== -1) setNextDir({ r: 0, c: 1 });
         };
-        
-        // ย้ายมารับคำสั่งที่ระดับ window แทน root
         window.addEventListener('keydown', handleKeyDown, { passive: false });
         return () => window.removeEventListener('keydown', handleKeyDown);
       }, [dir]);
 
       useEffect(() => {
-        if (isGameOver) return;
+        // ถ้างูตายแล้ว หรือยังไม่ได้กดเริ่มเกม (isPlaying=false) หรือกดหยุดพักไว้ ให้งูหยุดอยู่กับที่
+        if (isGameOver || !isPlaying || isPaused) return;
+        
         const interval = setInterval(() => {
-          setSnake(prevSnake => {
-            const newSnake = [...prevSnake];
-            const head = newSnake[0];
+            const head = snake[0];
             const d = nextDir;
             let newR = (head.r + d.r + ROWS) % ROWS;
             let newC = (head.c + d.c + COLS) % COLS;
             
             const newHead = { r: newR, c: newC };
             
-            if (newSnake.some((s, idx) => idx !== newSnake.length - 1 && s.r === newR && s.c === newC)) {
+            // เช็กการชนตัวตัวเอง
+            if (snake.some((s, idx) => idx !== snake.length - 1 && s.r === newR && s.c === newC)) {
               setIsGameOver(true);
               onEnd('ended', { score: score });
-              return prevSnake;
+              return;
             }
             
-            newSnake.unshift(newHead);
-            
+            const newSnake = [newHead, ...snake];
             if (newR === food.r && newC === food.c) {
-              setScore(s => s + 1);
+              setScore(score + 1);
               setFood(spawnFood(newSnake));
             } else {
               newSnake.pop();
             }
+            
+            setSnake(newSnake);
             setDir(d);
-            return newSnake;
-          });
         }, 150);
         return () => clearInterval(interval);
-      }, [nextDir, food, isGameOver, score, onEnd]);
+      }, [snake, nextDir, food, isGameOver, score, isPlaying, isPaused, onEnd]);
 
       return (
         <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none touch-none">
@@ -2751,7 +2743,7 @@
         // กรองตามเงื่อนไขใหม่ที่ระบุ
         if (filterType === 'GAME' && !p.dailyGameShare) return false;
         if (filterType === 'MEDIA' && !(p.attachments?.length > 0)) return false;
-        if (filterType === 'NORMAL' && (p.dailyGameShare || p.attachments?.length > 0)) return false;
+        if (filterType === 'NORMAL' && p.dailyGameShare) return false;
 
         return true;
       });
@@ -3258,8 +3250,8 @@
                       </div>
                    </div>
 
-                   <div className="card p-4 flex-1 min-h-[300px] flex flex-col">
-                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400">💬 แชตกับ DJ (Global)</h3>
+                   <div className="card p-4 h-[300px] sm:h-[400px] flex flex-col shrink-0">
+                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400 shrink-0">💬 แชตกับ DJ (Global)</h3>
                       <div ref={djChatRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                          {chatMessages.filter(m => m.roomKey === 'global-discjam').map((msg) => {
                              const s = getAuthor(msg.senderId);
@@ -3587,7 +3579,7 @@
                             {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                             {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                             {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                            {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} isPlaying={currGameSt.isPlaying} isPaused={currGameSt.isPaused} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                             {activeGameTab === 6 && <Game2048 dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                           </div>
                           
@@ -3901,9 +3893,9 @@
                               <div className="font-bold text-sky-300 mb-1.5">📝 ประเภทโพสต์</div>
                               <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
                                 <option value="ALL">ทั้งหมด</option>
-                                <option value="NORMAL">โพสต์ทั่วไป (ไม่มีสื่อ/เกม)</option>
-                                <option value="GAME">🎮 แชร์ผลเกม</option>
-                                <option value="MEDIA">🖼️ โพสต์มีสื่อ (รูป/วิดีโอ/ไฟล์)</option>
+                                <option value="NORMAL">โพสต์ทั่วไป</option>
+                                <option value="GAME">🎮 ผล Daily Games</option>
+                                <option value="MEDIA">🖼️ มีสื่อ</option>
                               </select>
                             </div>
 
