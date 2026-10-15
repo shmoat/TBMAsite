@@ -1063,12 +1063,13 @@
     function SnakeGame({ dateSeed, onEnd }) {
       const ROWS = 15;
       const COLS = 15;
-      const [snake, setSnake] = useState([{ r: 7, c: 7 }]);
-      const [food, setFood] = useState({ r: 3, c: 3 });
-      const [dir, setDir] = useState({ r: 0, c: 1 });
-      const [nextDir, setNextDir] = useState({ r: 0, c: 1 });
-      const [isGameOver, setIsGameOver] = useState(false);
-      const [score, setScore] = useState(0);
+      // เปลี่ยนจาก useState เป็น useStickyState ตามวัน
+      const [snake, setSnake] = useStickyState([{ r: 7, c: 7 }], `bma_snake_s_${dateSeed}`);
+      const [food, setFood] = useStickyState({ r: 3, c: 3 }, `bma_snake_f_${dateSeed}`);
+      const [dir, setDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_d_${dateSeed}`);
+      const [nextDir, setNextDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_nd_${dateSeed}`);
+      const [isGameOver, setIsGameOver] = useStickyState(false, `bma_snake_go_${dateSeed}`);
+      const [score, setScore] = useStickyState(0, `bma_snake_sc_${dateSeed}`);
 
       const spawnFood = (currSnake) => {
         let r, c, isSafe;
@@ -1173,12 +1174,12 @@
     function Game2048({ dateSeed, onEnd }) {
       const [board, setBoard] = useStickyState(Array(4).fill().map(()=>Array(4).fill(0)), `bma_2048_b_${dateSeed}`);
       const [score, setScore] = useStickyState(0, `bma_2048_s_${dateSeed}`);
-      const [moves, setMoves] = useStickyState(100, `bma_2048_m_${dateSeed}`); // 100 moves limit
+      const [moves, setMoves] = useStickyState(100, `bma_2048_m_${dateSeed}`);
+      const [maxTile, setMaxTile] = useStickyState(0, `bma_2048_max_${dateSeed}`); // เพิ่มตัวแปรเก็บเลขสูงสุด
       const [isFirst, setIsFirst] = useStickyState(true, `bma_2048_f_${dateSeed}`);
       const [rngState, setRngState] = useStickyState(0, `bma_2048_r_${dateSeed}`);
       
       const rng = useRef(new PRNG(dateSeed + '_2048'));
-
       // Forward RNG ให้ไปตรงกับ State ที่เซฟไว้
       useEffect(() => {
          for(let i=0; i<rngState; i++) rng.current.next();
@@ -1203,6 +1204,9 @@
           b = addRandomTile(b);
           setBoard(b);
           setIsFirst(false);
+          let mT = 0;
+          for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(b[r][c] > mT) mT = b[r][c];
+          setMaxTile(mT);
         }
       }, [isFirst]);
 
@@ -1267,8 +1271,9 @@
             setMoves(m => m - 1);
             
             // หาเลขบล็อกสูงสุดบนกระดาน
-            let maxT = 0;
+            let maxT = maxTile;
             for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(finalB[r][c] > maxT) maxT = finalB[r][c];
+            setMaxTile(maxT);
             
             if (moves - 1 <= 0) {
                onEnd('ended', { score: score + gainedScore, maxTile: maxT });
@@ -1315,7 +1320,9 @@
          <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div className="flex gap-4 w-full max-w-[300px] justify-between text-center font-bold">
                <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-sky-300">คะแนน</div><div className="text-xl">{score}</div></div>
-               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-amber-300">เลื่อนได้อีก</div><div className="text-xl text-amber-400">{moves}</div></div>
+               {/* กล่องแสดง Max Tile ที่เพิ่มมาใหม่ */}
+               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-emerald-300">สูงสุด</div><div className="text-xl text-emerald-400">{maxTile}</div></div>
+               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-amber-300">ขยับได้อีก</div><div className="text-xl text-amber-400">{moves}</div></div>
             </div>
             
             <div className="bg-[#1E3A5F] p-2 rounded-xl border-[4px] border-[#0F2547] shadow-xl w-full max-w-[300px] aspect-square grid grid-cols-4 grid-rows-4 gap-2">
@@ -1979,15 +1986,13 @@
             }
             if(type === 'snl') return { p1: 1, p2: 1, turn: 1, lastRoll: null };
             if(type === 'connect4') return { board: Array(6).fill(null).map(()=>({cols: Array(7).fill(0)})), turn: 1 };
-            return {};
             if(type === 'domino') {
                 const all = [];
                 for(let i=0; i<=6; i++) for(let j=i; j<=6; j++) all.push({l: i, r: j});
                 for(let i=all.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [all[i], all[j]] = [all[j], all[i]]; }
                 return { p1Hand: all.slice(0,7), p2Hand: all.slice(7,14), boardPieces: [all[14]], deck: all.slice(15), turn: 1, hasDrawn: false, passCount: 0 };
             }
-            return {};
-	    if(type === 'sttt') return { board: Array(9).fill(null).map(()=>Array(9).fill(0)), wonBoards: Array(9).fill(0), activeBoard: Math.floor(Math.random()*9), turn: 1 };
+            if(type === 'sttt') return { board: Array(9).fill(null).map(()=>Array(9).fill(0)), wonBoards: Array(9).fill(0), activeBoard: -1, turn: 1 };
             return {};
         };
 
@@ -2355,7 +2360,7 @@
 
                 if (e.data === 0) { // เมื่อเพลงเล่นจบ
                   setDjState(prev => {
-                    // ไม่ต้องเช็กสิทธิ์ว่าใครเป็นคนแอด ใครที่ Player รับรู้ว่าเพลงจบแล้ว ให้เป็นคนส่งสัญญาณไป Firestore ทันที
+	                                // ถ้าเพลงจบแล้ว จะยอมให้เปลี่ยนคิวได้ก็ต่อเมื่อยังไม่เคยเปลี่ยนในช่วง 2 วินาทีที่ผ่านมา (กันเบิ้ล)
                     if (prev.loopMode === 'single') {
                         updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
                         isSeekingRef.current = true;
@@ -2366,15 +2371,14 @@
                         newQueue.shift(); // ลบเพลงปัจจุบันออก
                           
                         if (newQueue.length === 0) {
-                            // คิวว่าง สั่งหยุดให้ทุกคน
                             updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
                             ytPlayerRef.current.stopVideo();
                         } else {
-                            // เลื่อนคิว
+                            // สั่งอัปเดตและรอให้ Effect จัดการตัว Player
                             updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
                         }
                     }
-                    return prev; // ให้ return prev เสมอ เพื่อไม่ให้ State ในเครื่องพัง
+                    return prev;
                   });
                 }
               }
@@ -2432,12 +2436,16 @@
       // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync)
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             // แก้บั๊ก 3 วิ: เรดาร์จะทำงานก็ต่อเมื่อ "มีเพลงในคิวอย่างน้อย 1 เพลง" เท่านั้น!
+             // เช็กให้แน่ใจว่าไม่ได้อยู่ใกล้จุดจบของเพลง (เหลือไม่ถึง 2 วิ ไม่ต้องซิงค์กันเพลงวนซ้ำ)
              if (djState.queue?.length > 0 && !isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
                  const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
                  const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
+                 const duration = ytPlayerRef.current.getDuration ? ytPlayerRef.current.getDuration() : 0;
                  const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
                  
+                 // ถ้าเพลงใกล้จบ (ห่างจากจุดสิ้นสุดไม่ถึง 2 วินาที) หรือกำลังโหลดบัฟเฟอร์ (3) จะไม่ฝืนขยับไทม์ไลน์
+                 if (duration > 0 && (duration - actualTime < 2 || duration - expectedTime < 2)) return;
+
                  if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
                      isSeekingRef.current = true;
                      ytPlayerRef.current.seekTo(expectedTime, true);
@@ -2740,6 +2748,7 @@
         if (tagFilter !== 'ALL' && !getTags(a).includes(tagFilter)) return false;
         if (searchQ && !((p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.content || '').toLowerCase().includes(searchQ.toLowerCase()) || a.displayName.toLowerCase().includes(searchQ.toLowerCase()) || String(a.id).toLowerCase().includes(searchQ.toLowerCase()))) return false;
         
+        // กรองตามเงื่อนไขใหม่ที่ระบุ
         if (filterType === 'GAME' && !p.dailyGameShare) return false;
         if (filterType === 'MEDIA' && !(p.attachments?.length > 0)) return false;
         if (filterType === 'NORMAL' && (p.dailyGameShare || p.attachments?.length > 0)) return false;
@@ -2908,7 +2917,7 @@
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
               <button onClick={() => setCurrentView('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
               <nav className="flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-x-auto">
-                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam']].map(([v, l]) => <button key={v} onClick={() => (v === 'chat' || v === 'daily_game' || v === 'discjam') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white whitespace-nowrap'}>{l}</button>)}
+                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam']].map(([v, l]) => <button key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={currentView === v ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 hover:text-white whitespace-nowrap'}>{l}</button>)}
                 {currentUser?.role === 'admin' && <button onClick={() => setCurrentView('admin')} className={currentView === 'admin' ? 'px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#050811] whitespace-nowrap' : 'px-3.5 py-1.5 rounded-full text-xs text-slate-300 whitespace-nowrap'}>👑 Owner</button>}
               </nav>
               <div className="flex items-center gap-2 shrink-0">
@@ -3118,9 +3127,10 @@
                    </div>
                 </div>
 
-                {/* ด้านขวา: Queue */}
+                                           {/* ด้านขวา: Queue */}
                 <div className="lg:col-span-7 space-y-4">
-                   <form onSubmit={(e) => {
+                   {currentUser ? (
+                     <form onSubmit={(e) => {
                       e.preventDefault();
                       const url = e.target.elements.ytUrl.value;
                       const parsed = parseYouTubeUrl(url);
@@ -3193,15 +3203,32 @@
                       } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
                       e.target.reset();
                    }} className="flex gap-2">
-                      <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
-                      <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
-                   </form>
+                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
+                        <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
+                     </form>
+                   ) : (
+                     <div className="bg-blue-900/30 text-blue-200 p-3 rounded-xl border border-blue-800 text-xs text-center font-bold">
+                        🎵 คุณกำลังรับชมในฐานะผู้มาเยือน สามารถฟังเพลงร่วมกับสมาคมได้ แต่ไม่สามารถเพิ่มเพลงหรือพิมพ์แชตได้
+                     </div>
+                   )}
                    
                    <div className="card p-4 h-[250px] flex flex-col shrink-0">
-                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0">
-                        <span>รายการคิวเพลง ({djState.queue?.length || 0})</span>
-                        {djState.loopMode === 'single' && <span className="text-amber-400 text-xs">🔂 วนซ้ำเพลงแรก</span>}
+                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0 items-center">
+                        <div className="flex gap-2 items-center">
+                            <span>รายการคิวเพลง ({djState.queue?.length || 0})</span>
+                            {djState.loopMode === 'single' && <span className="text-amber-400 text-xs">🔂 วนซ้ำเพลงแรก</span>}
+                        </div>
+                        {canManageAudio && djState.queue?.length > 1 && (
+                            <button onClick={() => {
+                                if(confirm('คุณต้องการลบเพลงที่เหลือทั้งหมดออกจากคิวหรือไม่? (เพลงแรกที่กำลังเล่นจะยังอยู่)')) {
+                                    updateDjState({ queue: [djState.queue[0]] });
+                                }
+                            }} className="text-xs px-2 py-1 bg-red-900/50 text-red-300 rounded hover:bg-red-900 transition-colors">
+                                🗑️ ล้างคิว
+                            </button>
+                        )}
                       </h3>
+                      {/* ... ตัว map ลิสต์เพลงเหมือนเดิม ... */}
                       <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
                         {!djState.queue || djState.queue.length === 0 ? <p className="text-slate-500 text-xs text-center py-6">คิวว่างเปล่า</p> : (
                           djState.queue.map((q, idx) => (
@@ -4181,8 +4208,8 @@
               </form>
             </Modal>
           )}
-        {/* Global Audio Player Bar (แสดงทุกหน้า) */}
-          {currentUser && (
+        {/* Global Audio Player Bar (แสดงทุกหน้าแม้ไม่ได้เข้าสู่ระบบ แต่ซ่อนในหน้า Login) */}
+          {currentView !== 'login' && (
             <footer className="bg-gradient-to-r from-[#050811] to-[#0B1325] border-t border-sky-900/50 p-2.5 sm:p-3 flex justify-between items-center z-50 shrink-0 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
               <div className="flex items-center gap-2 sm:gap-4 w-1/3">
                 {isDjMuted ? (
