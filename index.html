@@ -2425,17 +2425,50 @@
          else { ytPlayerRef.current.unMute(); ytPlayerRef.current.setVolume(djVolume); }
       }, [isDjMuted, djVolume]);
 
-      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync)
+      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync) และ Timekeeper จัดการข้ามเพลงเวลาไม่มีคนเปิดเสียง
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             // เช็กให้แน่ใจว่าไม่ได้อยู่ใกล้จุดจบของเพลง (เหลือไม่ถึง 2 วิ ไม่ต้องซิงค์กันเพลงวนซ้ำ)
-             if (djState.queue?.length > 0 && !isDjMuted && djState.isPlaying && !isLocalPaused && djState.startedAt && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-                 const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
-                 const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
-                 const duration = ytPlayerRef.current.getDuration ? ytPlayerRef.current.getDuration() : 0;
-                 const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
-                 
-                 // ถ้าเพลงใกล้จบ (ห่างจากจุดสิ้นสุดไม่ถึง 2 วินาที) หรือกำลังโหลดบัฟเฟอร์ (3) จะไม่ฝืนขยับไทม์ไลน์
+             // ถ้าคิวว่างเปล่า, ไม่ได้เล่น, เครื่องผู้ใช้หยุดพักเอง หรือ API พัง ให้ข้ามไปเลย
+             if (!djState.queue || djState.queue.length === 0 || !djState.isPlaying || isLocalPaused || !djState.startedAt || !ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
+
+             const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
+             const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
+             const duration = ytPlayerRef.current.getDuration ? ytPlayerRef.current.getDuration() : 0;
+             const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
+
+             // 1. Timekeeper (ระบบสั่งข้ามเพลงอัตโนมัติเมื่อหมดเวลาจริง)
+             // แก้ปัญหา: คิวค้างเมื่อไม่มีคนกดเปิดเสียง หรือผู้ใช้พับจอแล้วเบราว์เซอร์บังคับหยุดวิดีโอ
+             if (duration > 0 && expectedTime > duration + 2) {
+                 // ป้องกันการยิงคำสั่งเปลี่ยนเพลงซ้อนกัน: มอบสิทธิ์ให้ Jammer, Admin หรือคนที่เพิ่มเพลงนี้ เป็นคนสั่งข้าม
+                 const canForceSkip = djState.jammerId 
+                     ? djState.jammerId === currentUser?.id 
+                     : (currentUser?.role === 'admin' || djState.queue[0].addedBy === currentUser?.id);
+                     
+                 if (canForceSkip && !isSeekingRef.current) {
+                     isSeekingRef.current = true;
+                     setDjState(prev => {
+                          if (prev.loopMode === 'single') {
+                              updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
+                          } else if (prev.queue?.length > 0) {
+                              const newQueue = [...prev.queue];
+                              newQueue.shift(); 
+                              if (newQueue.length === 0) {
+                                  updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
+                                  if(ytPlayerRef.current.stopVideo) ytPlayerRef.current.stopVideo();
+                              } else {
+                                  updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
+                              }
+                          }
+                          return prev;
+                     });
+                     setTimeout(() => { isSeekingRef.current = false; }, 3000);
+                 }
+                 return; // สั่งข้ามแล้ว ไม่ต้องทำ Sync ต่อ
+             }
+
+             // 2. ระบบ Sync เวลา สำหรับคนที่เปิดรับเสียงอยู่ (Radar เดิม)
+             if (!isDjMuted) {
+                 // ถ้าเพลงใกล้จบ (ห่างจากจุดสิ้นสุดไม่ถึง 2 วินาที) หรือกำลังโหลดบัฟเฟอร์ จะไม่ฝืนขยับไทม์ไลน์
                  if (duration > 0 && (duration - actualTime < 2 || duration - expectedTime < 2)) return;
 
                  if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
@@ -2447,7 +2480,7 @@
              }
          }, 3000); 
          return () => clearInterval(syncTimer);
-      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue]);
+      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue, djState.jammerId, currentUser]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -2781,6 +2814,7 @@
           if(gIdx === 2) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           if(gIdx === 4) return (a.score||99) - (b.score||99) || a.timeMs - b.timeMs;
           if(gIdx === 5) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
+          if(gIdx === 6) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           return a.timeMs - b.timeMs;
         });
       };
@@ -2833,6 +2867,7 @@
               if(activeGameTab===2) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
               else if(activeGameTab===4) isB = sc.score < best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
               else if(activeGameTab===5) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===6) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
               else isB = sc.timeMs < best[sc.userId].timeMs;
               if(isB) best[sc.userId] = sc;
             }
@@ -2857,12 +2892,13 @@
             else if(activeGameTab===2 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
             else if(activeGameTab===4 && (sVal < (ext.score||99) || (sVal === (ext.score||99) && fTime < ext.timeMs))) up = true;
             else if(activeGameTab===5 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
-            else if(activeGameTab!==2 && activeGameTab!==4 && activeGameTab!==5 && fTime < ext.timeMs) up = true;
+            else if(activeGameTab===6 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
+            else if(activeGameTab!==2 && activeGameTab!==4 && activeGameTab!==5 && activeGameTab!==6 && fTime < ext.timeMs) up = true;
 
             if(up) {
               db.collection('bma_daily_scores').doc(`${todayStr}_${activeGameTab}_${currentUser.id}`).set({
                 userId: currentUser.id, displayName: currentUser.displayName, date: todayStr,
-                timeMs: fTime, status: st, gameIndex: activeGameTab, score: sVal, timestamp: Date.now()
+                timeMs: fTime, status: st, gameIndex: activeGameTab, score: sVal, maxTile: payload.maxTile || null, timestamp: Date.now()
               });
             }
           }
@@ -3656,11 +3692,12 @@
                             {activeGameTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
                             {activeGameTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
                             {activeGameTab === 5 && <span className="text-[10px] text-slate-400">{s.score||0} 🍎</span>}
+                            {activeGameTab === 6 && <span className="text-[10px] text-slate-400">สูงสุด [{s.maxTile||0}] 🟨</span>}
                             {lbTab === 'monthly' && <span className="text-[9px] text-slate-500">{s.date}</span>}
                           </div>
                         </div>
                         <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb||isLost ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
-                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : fmtTime(s.timeMs)}
+                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : (activeGameTab === 6 ? `${s.score||0} pt` : fmtTime(s.timeMs))}
                         </span>
                       </div>
                     );
