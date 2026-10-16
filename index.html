@@ -893,9 +893,9 @@
           
           <div className="flex justify-between flex-1 relative min-h-[220px]">
             {st.tab.map((col, i) => (
-              <div key={i} data-drop="tab" data-idx={i} className="flex flex-col w-10 sm:w-12 min-h-[4rem]">
+              <div key={i} data-drop="tab" data-idx={i} className="flex flex-col w-10 sm:w-12 min-h-[4rem] relative z-0">
                 {col.length === 0 ? renderCard(null) : col.map((c, j) => (
-                  <div key={c.id} style={{ marginTop: j > 0 ? '-2.5rem' : '0', zIndex: j }} className="relative">
+                  <div key={c.id} style={{ marginTop: j > 0 ? '-2.5rem' : '0' }} className="relative">
                     {renderCard(c, 'tab', i, j)}
                   </div>
                 ))}
