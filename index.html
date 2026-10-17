@@ -24,6 +24,12 @@
     .or1 { animation: ocw 38s linear infinite; } .or2 { animation: occw 55s linear infinite; } .or3 { animation: ocw 75s linear infinite; }
     .cr1 { animation: occw 38s linear infinite; } .cr2 { animation: ocw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
     .orbit-sys:hover div { animation-play-state: paused; }
+/* Halloween Effects */
+    @keyframes floatGhost { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 50% { transform: translateY(-20px) scale(1.1); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 0.8; } }
+    .ghost-hunt { position: fixed; font-size: 2.5rem; cursor: crosshair; animation: floatGhost 3s ease-in-out infinite; z-index: 60; user-select: none; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+    @keyframes jumpScare { 0% { transform: scale(0.1); opacity: 0; } 50% { transform: scale(3); opacity: 1; } 100% { transform: scale(8); opacity: 0; } }
+    .jump-scare-overlay { position: fixed; inset: 0; z-index: 9999; pointer-events: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); }
+    .scare-img { font-size: 10rem; animation: jumpScare 1.2s ease-out forwards; text-shadow: 0 0 50px red; }
     
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem 0.85rem; color: #fff; outline: none; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
@@ -2088,6 +2094,49 @@
       const [zoomImg, setZoomImg] = useState(null);
       openZoom = setZoomImg;
       
+	// 🎃 ตรวจสอบช่วงเวลา Halloween อัตโนมัติ (19-31 ตุลาคม ของทุกปี)
+      const checkIsHalloween = () => {
+          const now = new Date();
+          const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const bkkDate = new Date(utcMs + (7 * 3600000));
+          const month = bkkDate.getMonth() + 1;
+          const date = bkkDate.getDate();
+          return (month === 10 && date >= 19 && date <= 31);
+      };
+      const IS_HALLOWEEN = checkIsHalloween();
+
+      // 🎃 Halloween States & Effects
+      const [ghosts, setGhosts] = useState([]);
+      const [scareTriggered, setScareTriggered] = useState(false);
+      const [cursedUserId, setCursedUserId] = useState(null);
+
+      // สุ่มคนโดนสาป (Cursed Satellite)
+      useEffect(() => {
+         if (IS_HALLOWEEN && users.length > 0) {
+             const members = users.filter(u => u.isActivated);
+             if(members.length > 0 && !cursedUserId) {
+                 setCursedUserId(members[Math.floor(Math.random() * members.length)].id);
+             }
+         }
+      }, [users, cursedUserId]);
+
+      // ระบบเกิดผี (Ghost Hunt)
+      useEffect(() => {
+         if (!IS_HALLOWEEN) return;
+         const interval = setInterval(() => {
+             if (Math.random() < 0.35 && ghosts.length < 5) {
+                 setGhosts(prev => [...prev, {
+                     id: 'g-' + Date.now(),
+                     x: Math.random() * 90 + 5, // 5-95 vw
+                     y: Math.random() * 80 + 10  // 10-90 vh
+                 }]);
+             }
+         }, 4000);
+         return () => clearInterval(interval);
+      }, [ghosts.length]);
+      
+      const catchGhost = (id) => setGhosts(prev => prev.filter(g => g.id !== id));
+
       const [djChatIn, setDjChatIn] = useState('');
       const djChatRef = useRef(null);
 
@@ -2724,9 +2773,18 @@
         }
         const text = chatIn.trim(), atts = [...chatAtts], rep = repMsg;
         if ((!text && !atts.length) || activeCh?.isSystemReadOnly || activeGrp?.isArchived) return;
+        
+        // 🎃 Ghost in the Chat: สุ่มเติมข้อความหลอนๆ (มีโอกาส 15%)
+        let finalText = text;
+        if (IS_HALLOWEEN && finalText.length > 0 && Math.random() < 0.15) {
+            const spookySuffixes = [" 👻", " 🎃", " 🕸️", " 🦇", " ...ระวังหลังให้ดีนะ", " ...แฮ่!"];
+            finalText += spookySuffixes[Math.floor(Math.random() * spookySuffixes.length)];
+        }
+
         setChatIn(''); setChatAtts([]); setRepMsg(null); setMentOpen(false); setTyping(false);
         const now = Date.now(), id = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
-        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
+        // สังเกตว่าเปลี่ยน text ปกติ ให้บันทึกเป็น finalText
+        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: finalText, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
         if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
         else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
         else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
@@ -2972,7 +3030,17 @@
                   <div key={ri} className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
                     {ring.items.map((m, mi) => {
                       const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
-                      return <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}><button onClick={() => setMemberModal(m)} className="flex flex-col items-center"><Avatar user={m} size="md" showStatus={true} /><div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div></button></div>;
+                      return <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}><button onClick={() => {
+                          // 🎃 Cursed Satellite
+                          if (IS_HALLOWEEN && m.id === cursedUserId) {
+                              setScareTriggered(true);
+                              setTimeout(() => setScareTriggered(false), 1200); // หน้าสยองขึ้นโชว์ 1.2 วิ
+                              const mems = activeMembers.filter(x => x.id !== m.id);
+                              setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null); // เปลี่ยนเป้าหมายคนโดนสาปใหม่
+                          } else {
+                              setMemberModal(m);
+                          }
+                      }} className="flex flex-col items-center"><Avatar user={m} size="md" showStatus={true} /><div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div></button></div>;
                     })}
                   </div>
                 ))}
@@ -4304,6 +4372,16 @@
                 </button>
               </div>
             </footer>
+          )}
+
+	  {/* 🎃 Halloween Overlays */}
+          {IS_HALLOWEEN && ghosts.map(g => (
+             <div key={g.id} onClick={() => catchGhost(g.id)} className="ghost-hunt" style={{ left: g.x + 'vw', top: g.y + 'vh' }} title="จับผี!">👻</div>
+          ))}
+          {scareTriggered && (
+             <div className="jump-scare-overlay">
+                <div className="scare-img">👻</div>
+             </div>
           )}
 
           {/* ซ่อนตัวเล่นวิดีโอ IFrame เอาไว้เบื้องหลัง */}
