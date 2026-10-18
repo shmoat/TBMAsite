@@ -70,7 +70,15 @@
       return (result.videoId || result.listId) ? result : null;
     };
     const getMs = (d) => d?.serverCreatedAt?.toMillis ? d.serverCreatedAt.toMillis() : (d?.serverCreatedAt?.seconds ? d.serverCreatedAt.seconds * 1000 : (d?.timestamp || 0));
-    const getTimeStr = (d) => d?.serverCreatedAt?.toDate ? d.serverCreatedAt.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : (d?.time || '');
+    const getTimeStr = (d) => {
+      if (d?.serverCreatedAt?.toDate) {
+        const dt = d.serverCreatedAt.toDate();
+        const dStr = dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        const tStr = dt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        return `${dStr} ${tStr}`;
+      }
+      return d?.time || '';
+    };
     const getTags = (u) => Array.isArray(u?.memberTags) && u.memberTags.length ? u.memberTags : [u?.memberTag || 'Others'];
     const safeUrl = (u) => (!u ? '#' : /^https?:\/\//i.test(u.trim()) ? u.trim() : 'https://' + u.trim());
     const fmtTime = (s) => (!isFinite(s) || s === Infinity) ? "Bomb" : `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
@@ -2140,6 +2148,26 @@
       const [djChatIn, setDjChatIn] = useState('');
       const djChatRef = useRef(null);
 
+      // 🌙 ตรวจสอบเวลา 22:00 - 05:59 น.
+      const isLateNight = () => {
+          const now = new Date();
+          const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const bkkDate = new Date(utcMs + (7 * 3600000));
+          const h = bkkDate.getHours();
+          return h >= 22 || h < 6; 
+      };
+      const [lateNight, setLateNight] = useState(isLateNight());
+      
+      // อัปเดตเช็คเวลาทุกๆ 1 นาที
+      useEffect(() => {
+          const interval = setInterval(() => setLateNight(isLateNight()), 60000);
+          return () => clearInterval(interval);
+      }, []);
+
+      // 💀 ลิงก์รูป GIF และเพลงยามสถานีปิด (Ladyfingers by Herb Alpert)
+      const CLOSED_GIF = "jazzskull-trumpet.gif"; 
+      const CLOSED_SONG_ID = "_ZjoEQyDq2c";
+
       const urlParams = new URLSearchParams(window.location.search);
       const sharedPostId = urlParams.get('post');
       const [currentView, setCurrentView] = useState(() => {
@@ -2430,6 +2458,24 @@
 
       useEffect(() => { // ซิงค์เพลงและสถานะ
          if (!ytPlayerRef.current || !ytPlayerRef.current.playVideo) return;
+         
+         const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
+         const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0);
+
+         // 🌙 ถ้าสถานีปิดแบบสมบูรณ์ (คิวหมดเกลี้ยงและไม่มีคนคุมห้อง) ให้เล่นเพลงวิกาล
+         if(isFullyClosedSync) {
+             const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+             if (playerVideoId !== CLOSED_SONG_ID) {
+                 ytPlayerRef.current.loadVideoById(CLOSED_SONG_ID);
+                 ytPlayerRef.current.setLoop(true); // สั่งวนซ้ำ
+             }
+             if (!isLocalPaused) ytPlayerRef.current.playVideo();
+             return; // หยุดการซิงค์แบบปกติ
+         }
+         
+         // คืนค่าโหมดวนลูปให้เป็นปกติหากสลับกลับมาทำงาน
+         if(ytPlayerRef.current.setLoop) ytPlayerRef.current.setLoop(false);
+
          const currentVideoId = djState.queue?.[0]?.id;
          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
          
@@ -2783,8 +2829,9 @@
 
         setChatIn(''); setChatAtts([]); setRepMsg(null); setMentOpen(false); setTyping(false);
         const now = Date.now(), id = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
-        // สังเกตว่าเปลี่ยน text ปกติ ให้บันทึกเป็น finalText
-        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: finalText, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
+        const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        const fullTime = `${dStr} ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
+        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: finalText, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: fullTime, timestamp: now, serverCreatedAt: svrTs() });
         if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
         else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
         else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
@@ -2796,10 +2843,11 @@
         const text = djChatIn.trim();
         setDjChatIn('');
         const now = Date.now(), id = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
+        const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        const fullTime = `${dStr} ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
         await db.collection('bma_messages').doc(id).set({
-            id, roomKey: 'global-discjam', senderId: currentUser.id, text, attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs()
+            id, roomKey: 'global-discjam', senderId: currentUser.id, text, attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, time: fullTime, timestamp: now, serverCreatedAt: svrTs()
         });
-      };
 
       const jumpToPost = (postId) => { setTagFilter('ALL'); setSearchQ(''); setCurrentView('feed'); setHiPostId(postId); setTimeout(() => document.getElementById('post-' + postId)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 180); setTimeout(() => setHiPostId(null), 4000); };
       const mentionList = () => {
@@ -2990,6 +3038,13 @@
         setCurrentView('feed');
       };
 
+// ==========================================
+      // คำนวณสถานะวิทยุปิดยามวิกาล (จะปิดได้ก็ต่อเมื่อ Owner กดปุ่มปิดตอนหลังสี่ทุ่ม)
+      const radioClosed = lateNight && djState.forceClosed === true;
+      const isInputBlocked = radioClosed && !djState.jammerId; 
+      const isFullyClosed = isInputBlocked && (!djState.queue || djState.queue.length === 0);
+      // ==========================================
+
       return (
         <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
           {isAuthLoading && <div className="fixed inset-0 z-[200] bg-[#050811] flex items-center justify-center text-sky-400 font-bold animate-pulse">กำลังเชื่อมต่อ...</div>}
@@ -3120,17 +3175,25 @@
                   <h2 className="text-2xl font-bold text-sky-400">💿 Disc Jam</h2>
                   <p className="text-xs text-slate-400 mt-1">ระบบคิวเพลงส่วนกลาง เล่นพร้อมกันทุกคนในสมาคม</p>
                 </div>
-                {currentUser && currentUser.role === 'member' && (
-                  <div>
-                    {!djState.jammerId ? (
-                      <button onClick={() => updateDjState({ jammerId: currentUser.id })} className="btn-w text-xs px-4 py-2 border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]">🎤 รับสิทธิ์ Disc Jammer</button>
-                    ) : djState.jammerId === currentUser.id ? (
-                      <button onClick={() => updateDjState({ jammerId: null })} className="bg-red-950 text-red-300 px-4 py-2 rounded-xl text-xs font-bold border border-red-900">⏹ คืนสิทธิ์ Jammer</button>
-                    ) : (
-                      <div className="text-xs text-slate-500 bg-[#0B1325] px-3 py-1.5 rounded-lg border border-[#1E3A5F]">มีสมาชิกยึดตำแหน่ง Jammer อยู่</div>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-3">
+                  {/* ปุ่มปิดสถานีสำหรับ Owner (โผล่ตอนหลัง 4 ทุ่ม) */}
+                  {lateNight && currentUser?.role === 'admin' && (
+                     <button onClick={() => updateDjState({ forceClosed: !djState.forceClosed })} className={`text-xs px-4 py-2 border-2 rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.5)] font-bold transition-colors ${djState.forceClosed ? 'bg-emerald-950 text-emerald-400 border-emerald-900' : 'bg-red-950 text-red-400 border-red-900'}`}>
+                        {djState.forceClosed ? '🟢 เปิดสถานี (คืนค่า)' : '🌙 ปิดสถานีวิทยุ'}
+                     </button>
+                  )}
+                  {currentUser && currentUser.role === 'member' && (
+                    <div>
+                      {!djState.jammerId ? (
+                        <button onClick={() => updateDjState({ jammerId: currentUser.id })} className="btn-w text-xs px-4 py-2 border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]">🎤 รับสิทธิ์ Disc Jammer</button>
+                      ) : djState.jammerId === currentUser.id ? (
+                        <button onClick={() => updateDjState({ jammerId: null })} className="bg-red-950 text-red-300 px-4 py-2 rounded-xl text-xs font-bold border border-red-900">⏹ คืนสิทธิ์ Jammer</button>
+                      ) : (
+                        <div className="text-xs text-slate-500 bg-[#0B1325] px-3 py-1.5 rounded-lg border border-[#1E3A5F]">มีสมาชิกยึดตำแหน่ง Jammer อยู่</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -3138,11 +3201,18 @@
                 <div className="lg:col-span-5 space-y-4">
                    <div className="card p-5 border-sky-500/50 shadow-[inset_0_0_20px_rgba(14,165,233,0.1)]">
                       <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><span>▶️</span> Now Playing</h3>
-                      {djState.queue?.length > 0 ? (
+                      
+                      {isFullyClosed ? (
+                        <div className="space-y-3 text-center">
+                          <img src={CLOSED_GIF} alt="Station Closed" className="w-full aspect-video object-contain rounded-xl border-2 border-[#1E3A5F] shadow-lg bg-black" />
+                          <div className="font-bold text-sm text-red-400">สถานีปิดยามวิกาล เปิดอีกครั้งเวลาย่ำรุ่ง</div>
+                        </div>
+                      ) : djState.queue?.length > 0 ? (
                         <div className="space-y-3">
                           <img src={`https://img.youtube.com/vi/${djState.queue[0].id}/hqdefault.jpg`} alt="Thumbnail" className="w-full aspect-video object-cover rounded-xl border-2 border-[#1E3A5F] shadow-lg" />
                           <div className="font-bold text-sm flex items-start justify-between gap-2">
                              <div className="line-clamp-2 flex-1">{djState.queue[0].title}</div>
+                             {/* ปุ่มให้ DJ หรือผู้มีสิทธิ์จัดการระบบ (Owner/Vice) กดแก้ไขชื่อได้ */}
                              {canManageAudio && (
                                 <button onClick={() => {
                                    const newTitle = prompt("แก้ไขชื่อเพลง:", djState.queue[0].title);
@@ -3225,9 +3295,16 @@
 
                                            {/* ด้านขวา: Queue */}
                 <div className="lg:col-span-7 space-y-4">
-                   {currentUser ? (
+		   {currentUser ? (
                      <form onSubmit={(e) => {
                       e.preventDefault();
+                      
+                      // ⛔ บล็อกการเพิ่มเพลงเมื่อสถานีถึงเวลาปิด และไม่มีใครเป็น DJ
+                      if(isInputBlocked) {
+                         alert("สถานีปิดรับคิวเพลงแล้ว เพลงที่เหลือจะเล่นจนจบก่อนปิดสถานี จะเปิดรับคิวใหม่เวลา 06:00 น.");
+                         return;
+                      }
+                      
                       const url = e.target.elements.ytUrl.value;
                       const parsed = parseYouTubeUrl(url);
                       
@@ -3299,8 +3376,8 @@
                       } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
                       e.target.reset();
                    }} className="flex gap-2">
-                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
-                        <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
+                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required disabled={isInputBlocked} />
+                        <button type="submit" className={`btn-b text-xs font-bold px-6 shadow hover:scale-105 ${isInputBlocked ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isInputBlocked}>เพิ่มเข้าคิว</button>
                      </form>
                    ) : (
                      <div className="bg-blue-900/30 text-blue-200 p-3 rounded-xl border border-blue-800 text-xs text-center font-bold">
@@ -3326,8 +3403,15 @@
                       </h3>
                       {/* ... ตัว map ลิสต์เพลงเหมือนเดิม ... */}
                       <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
-                        {!djState.queue || djState.queue.length === 0 ? <p className="text-slate-500 text-xs text-center py-6">คิวว่างเปล่า</p> : (
-                          djState.queue.map((q, idx) => (
+                        {isFullyClosed ? (
+                             <div className="text-red-400 font-bold text-xs text-center py-6">สถานีปิดยามวิกาล เปิดสถานีอีกครั้งเวลาย่ำรุ่ง</div>
+                        ) : (!djState.queue || djState.queue.length === 0) ? (
+                             <p className="text-slate-500 text-xs text-center py-6">คิวว่างเปล่า</p> 
+                        ) : (
+                          <>
+                            {isInputBlocked && <div className="bg-red-950/30 text-red-400 p-2 text-center text-[10px] font-bold mb-2 rounded border border-red-900/50">⚠️ ปิดรับคิวเพลงแล้ว สถานีจะปิดตัวลงเมื่อคิวสุดท้ายเล่นจบ</div>}
+                            {djState.queue.map((q, idx) => (
+                              // ... (โค้ด Loop รายการเพลงแบบเดิม) ...
                             <div key={q.key} className={`flex items-center justify-between p-2.5 rounded-xl text-xs border transition-colors ${idx === 0 ? 'bg-sky-900/40 border-sky-500 text-white font-bold shadow-md' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:border-slate-600'}`}>
                               <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 <img src={`https://img.youtube.com/vi/${q.id}/default.jpg`} className="w-10 h-7 object-cover rounded opacity-80 shrink-0" alt="" />
@@ -4344,7 +4428,7 @@
                   💿 Disc Jam {djState.isPlaying && !isDjMuted ? '🎵' : ''}
                 </div>
                 <div className="text-xs sm:text-sm font-bold truncate max-w-[120px] sm:max-w-xs text-center text-slate-200">
-                  {djState.queue?.length > 0 ? djState.queue[0].title : 'ไม่มีเพลงกำลังเล่น'}
+                  {isFullyClosed ? '🌙 สถานีปิดยามวิกาล (AutoPlay)' : (djState.queue?.length > 0 ? djState.queue[0].title : 'ไม่มีเพลงกำลังเล่น')}
                 </div>
               </div>
 
