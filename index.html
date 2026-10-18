@@ -2848,6 +2848,7 @@
         await db.collection('bma_messages').doc(id).set({
             id, roomKey: 'global-discjam', senderId: currentUser.id, text, attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, time: fullTime, timestamp: now, serverCreatedAt: svrTs()
         });
+      };
 
       const jumpToPost = (postId) => { setTagFilter('ALL'); setSearchQ(''); setCurrentView('feed'); setHiPostId(postId); setTimeout(() => document.getElementById('post-' + postId)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 180); setTimeout(() => setHiPostId(null), 4000); };
       const mentionList = () => {
