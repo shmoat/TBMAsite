@@ -1825,10 +1825,10 @@ function Game24({ dateSeed, onEnd }) {
                       <span key={pid}>ผู้เล่น {i+1} ({getAuthor(pid).displayName})</span>
                    ))}
                 </div>
+            </div>
         );
     }
 
-    
     function Connect4Inner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, currentUser }) {
         const rawB = gameData.gameState?.board; const board = rawB ? (rawB[0]?.cols ? rawB.map(r => r.cols) : rawB) : Array(6).fill(null).map(()=>Array(7).fill(0));
         const turn = gameData.gameState?.turn || 1;
@@ -2675,15 +2675,15 @@ function Game24({ dateSeed, onEnd }) {
          const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0);
 
          // 🌙 ถ้าสถานีปิดแบบสมบูรณ์ (คิวหมดเกลี้ยงและไม่มีคนคุมห้อง) ให้เล่นเพลงวิกาล
-         if(isFullyClosedSync) {
-             const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
-             if (playerVideoId !== CLOSED_SONG_ID) {
-                 ytPlayerRef.current.loadVideoById(CLOSED_SONG_ID);
-                 ytPlayerRef.current.setLoop(true); // สั่งวนซ้ำ
-             }
-             if (!isLocalPaused) ytPlayerRef.current.playVideo();
-             return; // หยุดการซิงค์แบบปกติ
-         }
+      if(isFullyClosedSync) {
+          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+          if (playerVideoId !== CLOSED_SONG_ID) {
+              ytPlayerRef.current.loadVideoById(CLOSED_SONG_ID);
+              ytPlayerRef.current.setLoop(true); // สั่งวนซ้ำ
+          }
+          if (!isLocalPaused) ytPlayerRef.current.playVideo();
+          return; // หยุดการซิงค์แบบปกติ
+      }
          
          // คืนค่าโหมดวนลูปให้เป็นปกติหากสลับกลับมาทำงาน
          if(ytPlayerRef.current.setLoop) ytPlayerRef.current.setLoop(false);
