@@ -25,9 +25,9 @@
     .cr1 { animation: occw 38s linear infinite; } .cr2 { animation: ocw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
     .orbit-sys:hover div { animation-play-state: paused; }
 /* Halloween Effects */
-    body.halloween-theme, .halloween-theme.bg-\[\#050811\], .halloween-theme .bg-\[\#050811\] { background-color: #220733 !important; }
-    .halloween-theme.bg-\[\#0B1325\], .halloween-theme .bg-\[\#0B1325\] { background-color: #3b1156 !important; }
-    .halloween-theme.bg-\[\#0F2547\], .halloween-theme .bg-\[\#0F2547\] { background-color: #551b7a !important; }
+    body.halloween-theme, .halloween-theme.bg-\[\#050811\], .halloween-theme .bg-\[\#050811\] { background-color: #110419 !important; }
+    .halloween-theme.bg-\[\#0B1325\], .halloween-theme .bg-\[\#0B1325\] { background-color: #260a37 !important; }
+    .halloween-theme.bg-\[\#0F2547\], .halloween-theme .bg-\[\#0F2547\] { background-color: #3b1156 !important; }
     .halloween-theme.border-\[\#1E3A5F\], .halloween-theme .border-\[\#1E3A5F\] { border-color: #EA580C !important; }
     .halloween-theme .text-sky-300, .halloween-theme .text-blue-200 { color: #FDBA74 !important; }
     .halloween-theme .text-sky-400, .halloween-theme .text-blue-300 { color: #F97316 !important; }
@@ -37,14 +37,14 @@
     .halloween-theme .bg-sky-600 { background-color: #C2410C !important; }
     .halloween-theme .border-sky-400, .halloween-theme .border-blue-400 { border-color: #F97316 !important; }
     .halloween-theme .border-sky-500, .halloween-theme .border-blue-400\/50 { border-color: #EA580C !important; }
-    .halloween-theme .inp { background-color: #220733 !important; border-color: #EA580C !important; }
-    .halloween-theme .card { background-color: #3b1156 !important; border-color: #EA580C !important; }
-    .halloween-theme .btn-b { background-color: #551b7a !important; border-color: #EA580C !important; }
-    .halloween-theme .btn-d { background-color: #220733 !important; border-color: #EA580C !important; }
-    .halloween-theme ::-webkit-scrollbar-track { background: #220733 !important; }
+    .halloween-theme .inp { background-color: #110419 !important; border-color: #EA580C !important; }
+    .halloween-theme .card { background-color: #260a37 !important; border-color: #EA580C !important; }
+    .halloween-theme .btn-b { background-color: #3b1156 !important; border-color: #EA580C !important; }
+    .halloween-theme .btn-d { background-color: #110419 !important; border-color: #EA580C !important; }
+    .halloween-theme ::-webkit-scrollbar-track { background: #110419 !important; }
     .halloween-theme ::-webkit-scrollbar-thumb { background: #EA580C !important; }
-    .halloween-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #F97316, #C2410C 45%, #3B0764 80%, #0A0012 100%) !important; box-shadow: 0 0 60px rgba(234,88,12,0.65) !important; }
-    .halloween-theme .orbit-sys svg path { fill: #3B0764 !important; stroke: #F97316 !important; }
+    .halloween-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #F97316, #C2410C 45%, #260a37 80%, #110419 100%) !important; box-shadow: 0 0 60px rgba(234,88,12,0.65) !important; }
+    .halloween-theme .orbit-sys svg path { fill: #260a37 !important; stroke: #F97316 !important; }
 
     @keyframes floatGhost { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 50% { transform: translateY(-20px) scale(1.1); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 0.8; } }
     .ghost-hunt { position: fixed; font-size: 2.5rem; cursor: crosshair; animation: floatGhost 3s ease-in-out infinite; z-index: 60; user-select: none; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
@@ -1784,7 +1784,7 @@ function Game24({ dateSeed, onEnd }) {
                                 {gameData.players.map((pid, idx) => {
                                     if(positions[idx] !== num) return null;
                                     const u = getAuthor(pid);
-                                    if (u.avatarUrl) {
+                                    if (u && u.avatarUrl) {
                                         return <img key={idx} src={u.avatarUrl} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border border-white shadow-lg object-cover z-20`} alt="" />;
                                     }
                                     return <div key={idx} className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full ${bgColors[idx]} border border-white shadow-lg z-20 flex items-center justify-center text-[6px] text-white`}>{idx+1}</div>;
