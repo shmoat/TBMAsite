@@ -2774,10 +2774,17 @@ function Game24({ dateSeed, onEnd }) {
                  return; // สั่งข้ามแล้ว ไม่ต้องทำ Sync ต่อ
              }
 
-             // 2. ระบบ Sync เวลา สำหรับคนที่เปิดรับเสียงอยู่ (Radar เดิม)
+            // 2. ระบบ Sync เวลา สำหรับคนที่เปิดรับเสียงอยู่ (Radar เดิม)
              if (!isDjMuted) {
                  // ถ้าเพลงใกล้จบ (ห่างจากจุดสิ้นสุดไม่ถึง 2 วินาที) หรือกำลังโหลดบัฟเฟอร์ จะไม่ฝืนขยับไทม์ไลน์
                  if (duration > 0 && (duration - actualTime < 2 || duration - expectedTime < 2)) return;
+
+                 const isFullyClosedNow = lateNight && djState.forceClosed && !djState.jammerId && (!djState.queue || djState.queue.length === 0);
+                 const expectedVideoId = isFullyClosedNow ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
+                 const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+                 
+                 // ถ้าวิดีโอในเครื่องยังไม่เปลี่ยนเป็นเพลงใหม่ ห้ามสั่ง Seek เด็ดขาด (ป้องกันการเอาเพลงเก่ามาเล่นวน 3 วิ)
+                 if (expectedVideoId && playerVideoId && expectedVideoId !== playerVideoId) return;
 
                  if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
                      isSeekingRef.current = true;
@@ -4706,10 +4713,18 @@ function Game24({ dateSeed, onEnd }) {
                           {isDjMuted ? (
                             <button onClick={() => {
                                 setIsDjMuted(false);
-                                if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed) && djState.startedAt) {
-                                    const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
-                                    ytPlayerRef.current.seekTo(expectedTime, true);
-                                    ytPlayerRef.current.playVideo();
+                                if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
+                                    const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                    const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
+                                    const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+                                    
+                                    // โหลดเพลงใหม่ทันทีถ้าเพลงในเครื่องไม่ตรงกับสถานี
+                                    if (currentVideoId && currentVideoId !== playerVideoId) {
+                                        ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
+                                    } else {
+                                        ytPlayerRef.current.seekTo(expectedTime, true);
+                                        ytPlayerRef.current.playVideo();
+                                    }
                                 }
                             }} className="btn-w text-[10px] shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse px-3 py-1.5 w-full">
                               🔊 กดเปิดรับเสียงเพลง
@@ -4722,16 +4737,24 @@ function Game24({ dateSeed, onEnd }) {
                           )}
                        </div>
                        
-                       {/* ปุ่มเล่น/หยุด (Play/Pause) */}
+                      {/* ปุ่มเล่น/หยุด (Play/Pause) */}
                        <div className="flex justify-end w-4/12">
                          <button 
                            onClick={() => {
                               if (isLocalPaused) {
                                   setIsLocalPaused(false);
-                                  if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed) && djState.startedAt) {
-                                      const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
-                                      ytPlayerRef.current.seekTo(expectedTime, true);
-                                      ytPlayerRef.current.playVideo();
+                                  if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
+                                      const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                      const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
+                                      const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+                                      
+                                      // โหลดเพลงใหม่ทันทีถ้าเพลงในเครื่องไม่ตรงกับสถานี
+                                      if (currentVideoId && currentVideoId !== playerVideoId) {
+                                          ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
+                                      } else {
+                                          ytPlayerRef.current.seekTo(expectedTime, true);
+                                          ytPlayerRef.current.playVideo();
+                                      }
                                   }
                               } else {
                                   setIsLocalPaused(true);
