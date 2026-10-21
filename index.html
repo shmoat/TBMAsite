@@ -1716,7 +1716,7 @@ function Game24({ dateSeed, onEnd }) {
         );
     }
 
-    function SnlInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, getAuthor }) {
+    function SnlInner({ gameData, isPlayer1, isPlayer2, isSpectator, gameId, db, getAuthor, currentUser }) {
         const pNum = gameData.players.length;
         const p1 = gameData.gameState?.p1 || 1;
         const p2 = gameData.gameState?.p2 || 1;
@@ -2280,7 +2280,7 @@ function Game24({ dateSeed, onEnd }) {
                     <div className="w-full md:w-2/3 flex justify-center items-center flex-col relative select-none touch-none bg-[#050811] rounded-xl p-2 py-4 border border-[#1E3A5F]">
                         {gameData.type === 'chess' && <ChessInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                         {gameData.type === 'checkers' && <CheckersInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
-                        {gameData.type === 'snl' && <SnlInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} getAuthor={getAuthor} />}
+                        {gameData.type === 'snl' && <SnlInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} getAuthor={getAuthor} currentUser={currentUser} />}
                         {gameData.type === 'connect4' && <Connect4Inner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
                         {gameData.type === 'domino' && <DominoInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
 			{gameData.type === 'sttt' && <StttInner gameData={gameData} isPlayer1={isPlayer1} isPlayer2={isPlayer2} isSpectator={isSpectator} gameId={gameId} db={db} currentUser={currentUser} />}
