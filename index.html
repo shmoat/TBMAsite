@@ -795,11 +795,13 @@
         let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
         let stack = [];
         if(area === 'waste') { if(!ns.waste.length) return; stack = [ns.waste.pop()]; }
+        else if(area === 'fnd') { if(!ns.fnd[colIdx].length) return; stack = [ns.fnd[colIdx].pop()]; } // 🛠️ เพิ่มให้ดึงไพ่จาก fnd ได้
         else if(area === 'tab') { if(cardIdx < 0 || !ns.tab[colIdx][cardIdx].up) return; stack = ns.tab[colIdx].splice(cardIdx); } 
         else return;
 
         let moved = false;
-        if(stack.length === 1) {
+        // 🛠️ เช็กว่าถ้าไม่ได้มาจาก fnd ถึงจะให้ลองไปเข้า fnd ได้ (กันบั๊กวนลูปเข้าที่เดิม)
+        if(area !== 'fnd' && stack.length === 1) {
           let fIdx = ['♠','♥','♣','♦'].indexOf(stack[0].s);
           moved = tryMove(ns, stack, area, colIdx, 'fnd', fIdx);
         }
@@ -816,7 +818,7 @@
           if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
           setSt(ns); checkWin(ns);
         } else {
-          if(area === 'waste') setSt({...st}); else setSt({...st}); 
+          setSt({...st}); 
         }
       };
 
@@ -844,7 +846,12 @@
                  const tIdx = parseInt(dropTarget.getAttribute('data-idx') || '0', 10);
                  
                  let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
-                 let stack = drag.area === 'waste' ? [ns.waste.pop()] : ns.tab[drag.colIdx].splice(drag.cardIdx);
+                 
+                 // 🛠️ เปลี่ยนการดึง stack ให้รองรับกองไพ่ fnd
+                 let stack = [];
+                 if (drag.area === 'waste') stack = [ns.waste.pop()];
+                 else if (drag.area === 'fnd') stack = [ns.fnd[drag.colIdx].pop()];
+                 else stack = ns.tab[drag.colIdx].splice(drag.cardIdx);
                  
                  if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
                     saveHistory(st);
@@ -878,13 +885,15 @@
             onPointerDown={(e) => {
               if (e.button && e.button !== 0) return;
               e.stopPropagation(); e.preventDefault();
-              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              // 🛠️ อนุญาตให้ดึงใบเดี่ยวๆ ออกจาก fnd ได้
+              let stack = area === 'waste' ? [c] : (area === 'fnd' ? [c] : st.tab[col].slice(idx));
               const rect = e.currentTarget.getBoundingClientRect();
               setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
             }}
             onTouchStart={(e) => {
               e.stopPropagation();
-              let stack = area === 'waste' ? [c] : st.tab[col].slice(idx);
+              // 🛠️ อนุญาตให้ดึงใบเดี่ยวๆ ออกจาก fnd ได้
+              let stack = area === 'waste' ? [c] : (area === 'fnd' ? [c] : st.tab[col].slice(idx));
               const rect = e.currentTarget.getBoundingClientRect();
               setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.touches[0].clientX, startY: e.touches[0].clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
             }}
