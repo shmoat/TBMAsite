@@ -2548,41 +2548,46 @@ function Game24({ dateSeed, onEnd }) {
       useEffect(() => { const fn = () => { setCtxMenu(null); setCommMenu(null); }; window.addEventListener('click', fn); return () => window.removeEventListener('click', fn); }, []);
 
       useEffect(() => {
-        const u1 = db.collection('bma_users').onSnapshot(async (s) => {
-          if (s.empty) {
-             await db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
-             setIsUsersLoaded(true);
-             return;
+        // 1. ตรวจสอบและสร้างข้อมูลเริ่มต้นอย่างปลอดภัย (เช็กจากเซิร์ฟเวอร์โดยตรงและทำแค่ครั้งเดียว)
+        const seedInitialData = async () => {
+          const m000 = await db.collection('bma_users').doc(OWNER_SEED.id).get();
+          if (!m000.exists) db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
+
+          const dj = await db.collection('bma_system').doc('discjam').get();
+          if (!dj.exists) db.collection('bma_system').doc('discjam').set({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
+
+          for (const c of DEF_CH) {
+            const cDoc = await db.collection('bma_channels').doc(c.id).get();
+            if (!cDoc.exists) db.collection('bma_channels').doc(c.id).set(c);
           }
+        };
+        seedInitialData();
+
+        // 2. ดึงข้อมูลแบบเรียลไทม์ (ตัดคำสั่งเซ็ตข้อมูลทับเมื่อแคชว่างออกทั้งหมด)
+        const u1 = db.collection('bma_users').onSnapshot((s) => {
           const l = s.docs.map((d) => d.data()).filter((u) => u.id !== 'BMA-000' && u.password !== 'bma-root-password' && u.password !== 'moon-8842');
-          if (!l.some((u) => u.id === 'M000')) await db.collection('bma_users').doc(OWNER_SEED.id).set(OWNER_SEED);
           l.sort((a, b) => String(a.id).localeCompare(String(b.id))); 
-          setUsers(l);
+          setUsers(l.length > 0 ? l : [OWNER_SEED]);
           const max = l.reduce((m, u) => { const r = String(u.id).match(/^M(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           const maxF = l.reduce((m, u) => { const r = String(u.id).match(/^F(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
           setNewMId('M' + String(max + 1).padStart(3, '0'));
           setIsUsersLoaded(true);
         });
+        
         const u2 = db.collection('bma_posts').orderBy('timestamp', 'desc').limit(150).onSnapshot((s) => setPosts(s.docs.map((d) => d.data())));
-        const u3 = db.collection('bma_channels').onSnapshot(async (s) => {
-          if (s.empty) { for (const c of DEF_CH) await db.collection('bma_channels').doc(c.id).set(c); }
-          else {
-            const l = s.docs.map((d) => d.data());
-            if (!l.some((c) => c.id === 'global-lobby')) await db.collection('bma_channels').doc('global-lobby').set(DEF_CH[0]);
-            if (!l.some((c) => c.id === 'global-announce')) await db.collection('bma_channels').doc('global-announce').set(DEF_CH[1]);
-            if (!l.some((c) => c.id === 'happy-birthday-dear')) await db.collection('bma_channels').doc('happy-birthday-dear').set(DEF_CH[2]);
-            setChannels(l.sort((a, b) => getMs(a) - getMs(b)));
-          }
+        
+        const u3 = db.collection('bma_channels').onSnapshot((s) => {
+          const l = s.docs.map((d) => d.data());
+          setChannels(l.length > 0 ? l.sort((a, b) => getMs(a) - getMs(b)) : DEF_CH);
         });
+        
         const u4 = db.collection('bma_groups').onSnapshot((s) => setGroups(s.docs.map((d) => d.data()).sort((a, b) => getMs(b) - getMs(a))));
         const u5 = db.collection('bma_messages').orderBy('timestamp', 'desc').limit(400).onSnapshot((s) => setChatMessages(s.docs.map((d) => d.data()).reverse()));
         const u6 = db.collection('bma_typing').onSnapshot((s) => setTypingStatuses(s.docs.map((d) => d.data()).filter((t) => t.isTyping)), () => {});
         const u7 = db.collection('bma_notifications').orderBy('timestamp', 'desc').limit(100).onSnapshot((s) => setNotifications(s.docs.map((d) => d.data())), () => {});
         
-        // ดึงสถานะคิวเพลงส่วนกลาง
         const u8 = db.collection('bma_system').doc('discjam').onSnapshot((s) => {
            if (s.exists) setDjState(s.data());
-           else db.collection('bma_system').doc('discjam').set({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
         });
         
         return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
@@ -2620,7 +2625,7 @@ function Game24({ dateSeed, onEnd }) {
         function initYTPlayer() {
           ytPlayerRef.current = new window.YT.Player('yt-player-global', {
             height: '0', width: '0', videoId: '',
-            playerVars: { autoplay: 1, controls: 0, disablekb: 1 },
+            playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 }, // 🛠️ เพิ่ม playsinline เพื่อไม่ให้ iPad บล็อกการรันเพลง
             events: {
               onReady: (e) => { if (isDjMuted) e.target.mute(); },
               onStateChange: (e) => {
@@ -2713,6 +2718,13 @@ function Game24({ dateSeed, onEnd }) {
 
          if (djState.isPlaying && !isLocalPaused) {
              ytPlayerRef.current.playVideo();
+             
+             // 🛠️ ย้ำคำสั่งเปิดเสียงและระดับเสียงทุกครั้งที่เปลี่ยนเพลง (แก้บั๊ก iPad บังคับปิดเสียง)
+             if (!isDjMuted && ytPlayerRef.current.unMute) {
+                 ytPlayerRef.current.unMute();
+                 ytPlayerRef.current.setVolume(djVolume);
+             }
+
              const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
              if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
                  isSeekingRef.current = true;
@@ -2724,7 +2736,7 @@ function Game24({ dateSeed, onEnd }) {
          }
          
          if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
-      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused, djState.pausedPos]);
+      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused, djState.pausedPos, isDjMuted, djVolume, lateNight]);
 
       // (ไม่ต้องลบ useEffect ของ djVolume นะครับ ปล่อยไว้เหมือนเดิม)
       useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
@@ -2783,8 +2795,17 @@ function Game24({ dateSeed, onEnd }) {
                  const expectedVideoId = isFullyClosedNow ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
                  const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
                  
-                 // ถ้าวิดีโอในเครื่องยังไม่เปลี่ยนเป็นเพลงใหม่ ห้ามสั่ง Seek เด็ดขาด (ป้องกันการเอาเพลงเก่ามาเล่นวน 3 วิ)
+                 // ถ้าวิดีโอในเครื่องยังไม่เปลี่ยนเป็นเพลงใหม่ ห้ามสั่ง Seek เด็ดขาด
                  if (expectedVideoId && playerVideoId && expectedVideoId !== playerVideoId) return;
+
+                 // 🛠️ ตรวจจับถ้าระบบของมือถือ/iPad แอบหยุดเล่นเพลงเอง (State: -1 หรือ 2) ให้กระตุ้นให้เล่นต่อและเปิดเสียงอีกรอบ
+                 if (playerState === -1 || playerState === 2) {
+                     ytPlayerRef.current.playVideo();
+                     if (ytPlayerRef.current.unMute) {
+                         ytPlayerRef.current.unMute();
+                         ytPlayerRef.current.setVolume(djVolume);
+                     }
+                 }
 
                  if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
                      isSeekingRef.current = true;
@@ -2795,7 +2816,7 @@ function Game24({ dateSeed, onEnd }) {
              }
          }, 3000); 
          return () => clearInterval(syncTimer);
-      }, [isDjMuted, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue, djState.jammerId, currentUser]);
+      }, [isDjMuted, djVolume, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue, djState.jammerId, currentUser, lateNight]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
