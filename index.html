@@ -51,6 +51,8 @@
     @keyframes jumpScare { 0% { transform: scale(0.1); opacity: 0; } 50% { transform: scale(3); opacity: 1; } 100% { transform: scale(8); opacity: 0; } }
     .jump-scare-overlay { position: fixed; inset: 0; z-index: 9999; pointer-events: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); }
     .scare-img { font-size: 10rem; animation: jumpScare 1.2s ease-out forwards; text-shadow: 0 0 50px red; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    .animate-shake { animation: shake 0.2s ease-in-out 3; }
     
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem 0.85rem; color: #fff; outline: none; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
@@ -660,7 +662,11 @@
         {c:'nl',n:'Netherlands'},{c:'be',n:'Belgium'},{c:'gr',n:'Greece'},{c:'tr',n:'Turkey'},
         {c:'eg',n:'Egypt'},{c:'nz',n:'New Zealand'},{c:'ph',n:'Philippines'},{c:'id',n:'Indonesia'},
         {c:'my',n:'Malaysia'},{c:'pt',n:'Portugal'},{c:'ie',n:'Ireland'},{c:'dk',n:'Denmark'},
-        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'}
+        {c:'pl',n:'Poland'},{c:'il',n:'Israel'},{c:'ua',n:'Ukraine'},{c:'tw',n:'Taiwan'},
+        {c:'sa',n:'Saudi Arabia'},{c:'ae',n:'UAE'},{c:'mm',n:'Myanmar'},{c:'kh',n:'Cambodia'},
+        {c:'la',n:'Laos'},{c:'at',n:'Austria'},{c:'cz',n:'Czechia'},{c:'hu',n:'Hungary'},
+        {c:'hr',n:'Croatia'},{c:'ma',n:'Morocco'},{c:'pe',n:'Peru'},{c:'co',n:'Colombia'},
+        {c:'ve',n:'Venezuela'},{c:'cu',n:'Cuba'},{c:'is',n:'Iceland'}
       ];
       
       const [rounds, setRounds] = useStickyState([], `bma_fg_rds_${dateSeed}`);
@@ -1453,6 +1459,9 @@ function Game24({ dateSeed, onEnd }) {
       const [targetTol, setTargetTol] = useStickyState(null, `bma_res_tol_${dateSeed}`);
       const [colors, setColors] = useStickyState([], `bma_res_c_${dateSeed}`);
       const [expected, setExpected] = useStickyState([], `bma_res_exp_${dateSeed}`);
+      const [lives, setLives] = useStickyState(3, `bma_res_l_${dateSeed}`);
+      const [isExploding, setIsExploding] = useState(false);
+      const [errAnim, setErrAnim] = useState(false);
 
       const COLORS = ['Black', 'Brown', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet', 'Gray', 'White', 'Gold', 'Silver'];
       const COL_HEX = ['#000000', '#8B4513', '#FF0000', '#FFA500', '#FFFF00', '#008000', '#0000FF', '#EE82EE', '#808080', '#FFFFFF', '#FFD700', '#C0C0C0'];
@@ -1462,7 +1471,7 @@ function Game24({ dateSeed, onEnd }) {
         if(targetVal) return;
         const rng = new PRNG(dateSeed + '_resistor');
         const base = E12[rng.nextInt(0, E12.length-1)];
-        const multIdx = rng.nextInt(0, 6); // Black to Blue
+        const multIdx = rng.nextInt(0, 6); 
         const val = base * Math.pow(10, multIdx);
         const tol = rng.nextInt(0,1) === 0 ? 'Gold' : 'Silver';
         
@@ -1470,7 +1479,7 @@ function Game24({ dateSeed, onEnd }) {
         const b2 = base%10;
         const exp = [COLORS[b1], COLORS[b2], COLORS[multIdx], tol];
         
-        setTargetVal(val); setTargetTol(tol==='Gold'?'5%':'10%'); setExpected(exp);
+        setTargetVal(val); setTargetTol(tol==='Gold'?'5%':'10%'); setExpected(exp); setLives(3);
       }, [dateSeed]);
 
       const formatVal = (v) => {
@@ -1480,14 +1489,25 @@ function Game24({ dateSeed, onEnd }) {
       };
 
       const handlePick = (c) => {
-        if(colors.length >= 4) return;
+        if(colors.length >= 4 || lives <= 0 || isExploding) return;
         const nC = [...colors, c];
         setColors(nC);
         if(nC.length === 4) {
            if(nC.join(',') === expected.join(',')) {
-              setTimeout(()=>onEnd('won', {score: 100}), 800);
+              setTimeout(()=>onEnd('won', {score: lives * 100}), 800);
            } else {
-              setTimeout(()=>onEnd('lost', {score: 0}), 1500);
+              if (lives > 1) {
+                  setErrAnim(true);
+                  setTimeout(() => {
+                      setLives(l => l - 1);
+                      setColors([]);
+                      setErrAnim(false);
+                  }, 800);
+              } else {
+                  setLives(0);
+                  setIsExploding(true);
+                  setTimeout(()=>onEnd('lost', {score: 0}), 1500);
+              }
            }
         }
       };
@@ -1499,16 +1519,18 @@ function Game24({ dateSeed, onEnd }) {
            <div className="text-center bg-[#0F2547] p-4 rounded-xl border border-[#1E3A5F]">
               <div className="text-sm text-slate-300">ค่าความต้านทานเป้าหมาย</div>
               <div className="text-2xl sm:text-3xl font-bold text-amber-300 tracking-wider font-mono">{formatVal(targetVal)} ± {targetTol}</div>
+              <div className="mt-2 text-xs font-bold text-red-400">โอกาสตอบ: {lives} / 3 ครั้ง</div>
            </div>
            
-           <div className="relative w-64 h-24 sm:w-80 sm:h-28 flex items-center justify-center my-4">
+           <div className={`relative w-64 h-24 sm:w-80 sm:h-28 flex items-center justify-center my-4 ${errAnim ? 'animate-shake' : ''}`}>
               <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
-              <div className="relative w-40 sm:w-48 h-16 sm:h-20 bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-3 shadow-inner">
+              <div className={`relative w-40 sm:w-48 h-16 sm:h-20 bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-3 shadow-inner transition-all ${isExploding ? 'brightness-50 grayscale' : ''}`}>
                  <div className="w-4 h-full" style={{ backgroundColor: colors[0] ? COL_HEX[COLORS.indexOf(colors[0])] : 'transparent' }}></div>
                  <div className="w-4 h-full" style={{ backgroundColor: colors[1] ? COL_HEX[COLORS.indexOf(colors[1])] : 'transparent' }}></div>
                  <div className="w-4 h-full" style={{ backgroundColor: colors[2] ? COL_HEX[COLORS.indexOf(colors[2])] : 'transparent' }}></div>
                  <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
                  <div className="w-4 h-full" style={{ backgroundColor: colors[3] ? COL_HEX[COLORS.indexOf(colors[3])] : 'transparent' }}></div>
+                 {isExploding && <div className="absolute inset-0 flex items-center justify-center text-5xl z-20 animate-ping">💥</div>}
               </div>
            </div>
 
@@ -2642,7 +2664,7 @@ function Game24({ dateSeed, onEnd }) {
                 if (e.data === 1) { // 1 = PLAYING
                     setDjState(prev => {
                        // ถ้าชื่อเพลงในคิวปัจจุบันยังเป็นค่าเริ่มต้นจาก Playlist
-                       if (prev.queue?.length > 0 && prev.queue[0].title === "YouTube Video (จาก Playlist)") {
+                       if (prev.queue?.length > 0 && prev.queue[0].title.startsWith("YouTube Video")) {
                            const currentTitle = e.target.getVideoData().title;
                            if (currentTitle) {
                                const updatedQueue = [...prev.queue];
@@ -2714,7 +2736,7 @@ function Game24({ dateSeed, onEnd }) {
 
          const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
          const expectedTime = djState.isPlaying 
-             ? (djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0)
+             ? (djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0)
              : (typeof djState.pausedPos === 'number' ? djState.pausedPos : 0);
 
          if (isNewSong) {
@@ -2760,7 +2782,7 @@ function Game24({ dateSeed, onEnd }) {
              // ถ้าคิวว่างเปล่า, ไม่ได้เล่น, เครื่องผู้ใช้หยุดพักเอง หรือ API พัง ให้ข้ามไปเลย
              if (!djState.queue || djState.queue.length === 0 || !djState.isPlaying || isLocalPaused || !djState.startedAt || !ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
 
-             const expectedTime = Math.max(0, (Date.now() - djState.startedAt) / 1000);
+             const expectedTime = Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1));
              const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
              const duration = ytPlayerRef.current.getDuration ? ytPlayerRef.current.getDuration() : 0;
              const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
@@ -3172,6 +3194,7 @@ function Game24({ dateSeed, onEnd }) {
           if(gIdx === 4) return (a.score||99) - (b.score||99) || a.timeMs - b.timeMs;
           if(gIdx === 5) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           if(gIdx === 6) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
+          if(gIdx === 8) return (b.score||0) - (a.score||0) || a.timeMs - b.timeMs;
           return a.timeMs - b.timeMs;
         });
       };
@@ -3250,7 +3273,8 @@ function Game24({ dateSeed, onEnd }) {
             else if(activeGameTab===4 && (sVal < (ext.score||99) || (sVal === (ext.score||99) && fTime < ext.timeMs))) up = true;
             else if(activeGameTab===5 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
             else if(activeGameTab===6 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
-            else if(activeGameTab!==2 && activeGameTab!==4 && activeGameTab!==5 && activeGameTab!==6 && fTime < ext.timeMs) up = true;
+            else if(activeGameTab===8 && (sVal > (ext.score||0) || (sVal === (ext.score||0) && fTime < ext.timeMs))) up = true;
+            else if(activeGameTab!==2 && activeGameTab!==4 && activeGameTab!==5 && activeGameTab!==6 && activeGameTab!==8 && fTime < ext.timeMs) up = true;
 
             if(up) {
               db.collection('bma_daily_scores').doc(`${todayStr}_${activeGameTab}_${currentUser.id}`).set({
@@ -3270,10 +3294,12 @@ function Game24({ dateSeed, onEnd }) {
         if (currGameSt.status === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
         else if (currGameSt.status === 'lost' && activeGameTab === 2) msg = `ทายธงพลาด! ถูกไปแค่ ${currGameSt.score}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} 🏳️`;
         else if (currGameSt.status === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
+        else if (currGameSt.status === 'lost' && activeGameTab === 8) msg = `ต่อวงจรระเบิดตู้ม! ทายผิด 3 ครั้งในเกม ${GAMES[activeGameTab].name} 💥`; // <-- เพิ่มแพ้ Resistor
         else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
         else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
         else if (activeGameTab === 5) msg = `ทำคะแนนได้ ${currGameSt.score} 🍎 ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🐍`;
         else if (activeGameTab === 6) msg = `ทำคะแนนรวมไปได้ ${currGameSt.score} คะแนน โดยได้เลขสูงสุดคือ [${currGameSt.maxTile || 0}] 🟨 ในเกม ${GAMES[activeGameTab].name}! 😎`;
+        else if (activeGameTab === 8) msg = `ต่อวงจรสำเร็จใน ${4 - (currGameSt.score/100)} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔌`; // <-- เพิ่มชนะ Resistor
         else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
 
         const postId = 'post-' + Date.now();
@@ -3506,9 +3532,9 @@ function Game24({ dateSeed, onEnd }) {
                                  if (!djState.queue || djState.queue.length === 0) return;
                                  if (!djState.isPlaying) {
                                      const resumePos = typeof djState.pausedPos === 'number' ? djState.pausedPos : 0;
-                                     updateDjState({ isPlaying: true, startedAt: Date.now() - (resumePos * 1000) });
+                                     updateDjState({ isPlaying: true, startedAt: Date.now() - ((resumePos / (djState.speed || 1)) * 1000) });
                                  } else {
-                                     const playedSeconds = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                     const playedSeconds = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
                                      updateDjState({ isPlaying: false, pausedPos: playedSeconds });
                                  }
                              }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} disabled={!djState.queue || djState.queue.length === 0} title="Play/Pause ส่วนกลาง">
@@ -3539,7 +3565,15 @@ function Game24({ dateSeed, onEnd }) {
                       </div>
                       <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
                         <div className="flex justify-between text-xs font-bold mb-2"><span>ความเร็ว (Speed)</span><span className="text-sky-400">{djState.speed || 1}x</span></div>
-                        <input type="range" min="0.25" max="2" step="0.25" value={djState.speed || 1} onChange={(e) => updateDjState({ speed: parseFloat(e.target.value) })} className="w-full accent-sky-500" />
+                        <input type="range" min="0.25" max="2" step="0.25" value={djState.speed || 1} onChange={(e) => {
+                            const nSpd = parseFloat(e.target.value);
+                            let payload = { speed: nSpd };
+                            if (djState.isPlaying && djState.startedAt && ytPlayerRef.current?.getCurrentTime) {
+                                const curTime = ytPlayerRef.current.getCurrentTime();
+                                payload.startedAt = Date.now() - ((curTime / nSpd) * 1000);
+                            }
+                            updateDjState(payload);
+                        }} className="w-full accent-sky-500" />
                       </div>
 
                       {/* Quick Playlists Section */}
@@ -3557,6 +3591,8 @@ function Game24({ dateSeed, onEnd }) {
                                         if (parsed?.listId && ytPlayerRef.current) {
                                             alert("กำลังนำเข้าเพลย์ลิสต์...");
                                             ytPlayerRef.current.loadPlaylist({list: parsed.listId});
+                                            if (ytPlayerRef.current.playVideo) ytPlayerRef.current.playVideo(); // 🛠️ ปลุก API สำหรับมือถือ
+                                            
                                             setTimeout(() => {
                                                  const playlistArr = ytPlayerRef.current.getPlaylist ? ytPlayerRef.current.getPlaylist() : null;
                                                  if (playlistArr && playlistArr.length > 0) {
@@ -3639,6 +3675,10 @@ function Game24({ dateSeed, onEnd }) {
                              
                              // บังคับให้ YouTube Player โหลด Playlist ขึ้นมา
                              ytPlayerRef.current.loadPlaylist({list: parsed.listId});
+                                            if (ytPlayerRef.current.playVideo) ytPlayerRef.current.playVideo(); // 🛠️ ปลุก API สำหรับมือถือ
+                                            
+                                            setTimeout(() => {
+                                                 const playlistArr = ytPlayerRef.current.getPlaylist ? ytPlayerRef.current.getPlaylist() : null;
                              
                              // รอให้ IFrame ดึงข้อมูลกลับมา (หน่วงเวลาสัก 2 วินาที)
                              setTimeout(() => {
@@ -3689,7 +3729,7 @@ function Game24({ dateSeed, onEnd }) {
                       } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
                       e.target.reset();
                    }} className="flex gap-2">
-                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube เดี่ยว ๆ หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required disabled={isInputBlocked} />
+                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube Video หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required disabled={isInputBlocked} />
                         <button type="submit" className={`btn-b text-xs font-bold px-6 shadow hover:scale-105 ${isInputBlocked ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isInputBlocked}>เพิ่มเข้าคิว</button>
                      </form>
                    ) : (
@@ -3755,7 +3795,7 @@ function Game24({ dateSeed, onEnd }) {
                    <div className="card p-4 h-[300px] sm:h-[400px] flex flex-col shrink-0">
                       <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400 shrink-0">💬 แชตกับ DJ (Global)</h3>
                       <div ref={djChatRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                         {chatMessages.filter(m => m.roomKey === 'global-discjam').map((msg) => {
+                         {chatMessages.filter(m => m.roomKey === 'global-discjam' && (Date.now() - m.timestamp < 86400000)).map((msg) => {
                              const s = getAuthor(msg.senderId);
                              const isDJ = djState.jammerId === msg.senderId;
                              return (
@@ -3774,7 +3814,7 @@ function Game24({ dateSeed, onEnd }) {
                          })}
                       </div>
                       <form onSubmit={handleSendDjChat} className="mt-3 flex gap-2 shrink-0">
-                         <input type="text" value={djChatIn} onChange={e=>setDjChatIn(e.target.value)} placeholder="พิมพ์ข้อความคุยกับ DJ..." className="flex-1 inp text-xs" />
+                         <input type="text" value={djChatIn} onChange={e=>setDjChatIn(e.target.value)} placeholder="คุยกับ DJ..." className="flex-1 inp text-xs" />
                          <button type="submit" className="btn-w text-xs">ส่ง</button>
                       </form>
                    </div>
@@ -3968,7 +4008,7 @@ function Game24({ dateSeed, onEnd }) {
                       )}
                     </div>
                     <div className="flex gap-2 items-end">
-                      <textarea rows={1} value={chatIn} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(e); } }} onChange={(e) => { const v = e.target.value; setChatIn(v); setTyping(v.trim().length > 0); clearTimeout(typTimer.current); typTimer.current = setTimeout(() => setTyping(false), 3500); const lw = v.split(/\s+/).pop() || ''; if (lw.startsWith('@')) { setMentOpen(true); setMentF(lw.slice(1).toLowerCase()); } else setMentOpen(false); }} placeholder="พิมพ์ข้อความ... (Shift+Enter เพื่อขึ้นบรรทัดใหม่)" className="flex-1 inp text-sm resize-none max-h-24" />
+                      <textarea rows={1} value={chatIn} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(e); } }} onChange={(e) => { const v = e.target.value; setChatIn(v); setTyping(v.trim().length > 0); clearTimeout(typTimer.current); typTimer.current = setTimeout(() => setTyping(false), 3500); const lw = v.split(/\s+/).pop() || ''; if (lw.startsWith('@')) { setMentOpen(true); setMentF(lw.slice(1).toLowerCase()); } else setMentOpen(false); }} placeholder="เริ่มบทสนทนา..." className="flex-1 inp text-sm resize-none max-h-24" />
                       <button type="submit" className="btn-w text-sm">ส่ง</button>
                     </div>
                   </form>
@@ -4159,13 +4199,13 @@ function Game24({ dateSeed, onEnd }) {
                             <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
                             {activeGameTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
                             {activeGameTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
-                            {activeGameTab === 5 && <span className="text-[10px] text-slate-400">{s.score||0} 🍎</span>}
                             {activeGameTab === 6 && <span className="text-[10px] text-slate-400">สูงสุด [{s.maxTile||0}] 🟨</span>}
+                            {activeGameTab === 8 && <span className="text-[10px] text-slate-400">ทายถูกใน {4 - ((s.score||0)/100)} ครั้ง</span>}
                             {lbTab === 'monthly' && <span className="text-[9px] text-slate-500">{s.date}</span>}
                           </div>
                         </div>
                         <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb||isLost ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
-                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : (activeGameTab === 6 ? `${s.score||0} pt` : fmtTime(s.timeMs))}
+                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : (activeGameTab === 6 ? `${s.score||0} pt` : activeGameTab === 5 ? `${s.score||0} 🍎` : fmtTime(s.timeMs))}
                         </span>
                       </div>
                     );
@@ -4290,7 +4330,7 @@ function Game24({ dateSeed, onEnd }) {
                                 {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
                                 <div className="flex flex-col gap-2">
                                     <div className="flex gap-2 items-end">
-                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น... (Shift+Enter เพื่อขึ้นบรรทัดใหม่)" className="flex-1 inp text-xs resize-none max-h-24" />
+                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
                                         <button onClick={() => handleAddComment(post.id, null)} className="btn-b text-xs">ส่ง</button>
                                     </div>
                                     <div className="flex items-center gap-1.5">
@@ -4501,7 +4541,7 @@ function Game24({ dateSeed, onEnd }) {
                                 {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
                                 <div className="flex flex-col gap-2">
                                     <div className="flex gap-2 items-end">
-                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น... (Shift+Enter เพื่อขึ้นบรรทัดใหม่)" className="flex-1 inp text-xs resize-none max-h-24" />
+                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
                                         <button onClick={() => handleAddComment(post.id, null)} className="btn-b text-xs">ส่ง</button>
                                     </div>
                                     <div className="flex items-center gap-1.5">
@@ -4566,7 +4606,7 @@ function Game24({ dateSeed, onEnd }) {
           {cGrpOpen && (
             <Modal title="👥 สร้างกลุ่มแชตใหม่" onClose={() => { setCGrpOpen(false); setGrpName(''); setGrpMems([]); }}>
               <form onSubmit={async (e) => { e.preventDefault(); if(!grpName.trim() || grpMems.length === 0) return alert('กรุณาตั้งชื่อกลุ่มและเลือกสมาชิกอย่างน้อย 1 คน'); const id = 'grp-' + Date.now(); await db.collection('bma_groups').doc(id).set({ id, name: grpName.trim(), members: [currentUser.id, ...grpMems], createdBy: currentUser.id, isArchived: false, timestamp: Date.now(), serverCreatedAt: svrTs() }); setCGrpOpen(false); setGrpName(''); setGrpMems([]); setActiveRoom({type: 'group', id}); }} className="space-y-3 text-xs">
-                <input type="text" value={grpName} onChange={(e) => setGrpName(e.target.value)} placeholder="ชื่อกลุ่ม..." className="w-full inp" required />
+                <input type="text" value={grpName} onChange={(e) => setGrpName(e.target.value)} placeholder="ตั้งชื่อกลุ่ม..." className="w-full inp" required />
                 <div className="card p-2 max-h-48 overflow-y-auto space-y-1">
                    <div className="text-slate-400 mb-1 px-1">เลือกสมาชิก:</div>
                    {activeMembers.filter(m => m.id !== currentUser.id).map(m => (
@@ -4588,7 +4628,7 @@ function Game24({ dateSeed, onEnd }) {
                    <input type="text" value={chIcon} onChange={(e) => setChIcon(e.target.value)} className="inp w-16 text-center text-lg" placeholder="อีโมจิ" required />
                    <input type="text" value={chName} onChange={(e) => setChName(e.target.value)} placeholder="ชื่อห้องแชต (เช่น general-talk)..." className="flex-1 inp font-mono" required />
                 </div>
-                <input type="text" value={chDesc} onChange={(e) => setChDesc(e.target.value)} placeholder="คำอธิบายห้องแชตสั้นๆ..." className="w-full inp" />
+                <input type="text" value={chDesc} onChange={(e) => setChDesc(e.target.value)} placeholder="คำอธิบายห้องแชตสั้น ๆ ..." className="w-full inp" />
                 <button type="submit" className="w-full btn-w py-2">สร้างห้องแชต</button>
               </form>
             </Modal>
@@ -4744,7 +4784,7 @@ function Game24({ dateSeed, onEnd }) {
                             <button onClick={() => {
                                 setIsDjMuted(false);
                                 if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
-                                    const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                    const expectedTime = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
                                     const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
                                     const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
                                     
@@ -4774,7 +4814,7 @@ function Game24({ dateSeed, onEnd }) {
                               if (isLocalPaused) {
                                   setIsLocalPaused(false);
                                   if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
-                                      const expectedTime = djState.startedAt ? Math.max(0, (Date.now() - djState.startedAt) / 1000) : 0;
+                                      const expectedTime = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
                                       const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
                                       const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
                                       
