@@ -2756,36 +2756,54 @@ function Game24({ dateSeed, onEnd }) {
              const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
              if (isInputBlockedSync && !djState.deckA?.id && !djState.deckB?.id) return;
 
+             const isDeckA = (djState.crossfade || 0) < 50;
+
              // --- ระบบ Auto-Start & ตรวจจับเพลงจบ (Fallback) ---
-             if (isDJ && djState.djMode === 'auto' && !isFadingRef.current && djState.queue?.length > 0) {
-                 const isDeckA = (djState.crossfade || 0) < 50;
+             if (isDJ && !isFadingRef.current) {
                  const activePlayer = isDeckA ? ytA.current : ytB.current;
                  const activeState = activePlayer?.getPlayerState ? activePlayer.getPlayerState() : -1;
+                 const activePlayData = isDeckA ? djState.playA : djState.playB;
+                 const activeDeckData = isDeckA ? djState.deckA : djState.deckB;
 
-                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงปัจจุบันเล่นจบไปแล้ว (0) ให้ดึงคิวมาเล่นสลับ Deck ทันทีโดยไม่ต้องรอจังหวะ Fade
+                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงปัจจุบันเล่นจบไปแล้ว (0)
                  if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeState === 0) {
-                     isFadingRef.current = true;
-                     const nextSong = djState.queue[0];
-                     const newQ = djState.queue.slice(1);
-                     const targetIsB = isDeckA; // ถ้า A จบ/นิ่ง ให้โยนไปเล่น B
                      
-                     const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
-                     if (targetIsB) { 
-                         up.deckB = nextSong; 
-                         up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                         up.playA = { isPlaying: false, startedAt: 0, pausedPos: 0 };
-                     } else { 
-                         up.deckA = nextSong; 
-                         up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                         up.playB = { isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     // 1. ตรวจสอบการวนซ้ำ (Loop) ก่อน
+                     if (activePlayData?.isLooping && activeDeckData?.id) {
+                         isFadingRef.current = true;
+                         const up = {};
+                         if (isDeckA) up.playA = { ...djState.playA, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                         else up.playB = { ...djState.playB, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                         updateDjState(up);
+                         setTimeout(() => { isFadingRef.current = false; }, 1000);
+                         return;
                      }
-                     updateDjState(up);
-                     setTimeout(() => { isFadingRef.current = false; }, 1000);
-                     return;
+
+                     // 2. ถ้าไม่ได้วนซ้ำ และอยู่ในโหมด Auto DJ ให้สลับแผ่น
+                     if (djState.djMode === 'auto' && djState.queue?.length > 0) {
+                         isFadingRef.current = true;
+                         const nextSong = djState.queue[0];
+                         const newQ = djState.queue.slice(1);
+                         const targetIsB = isDeckA;
+                         
+                         const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
+                         if (targetIsB) { 
+                             up.deckB = nextSong; 
+                             up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                             up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                         } else { 
+                             up.deckA = nextSong; 
+                             up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                             up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                         }
+                         updateDjState(up);
+                         setTimeout(() => { isFadingRef.current = false; }, 1000);
+                         return;
+                     }
                  }
              }
 
-             const syncPlayer = (player, playData, isActive) => {
+             const syncPlayer = (player, playData, isActive, deckId) => {
                  if (!player?.getCurrentTime || !playData?.isPlaying || isLocalPaused) return;
                  
                  const currentSpeed = djState.speed || 1;
@@ -2811,33 +2829,45 @@ function Game24({ dateSeed, onEnd }) {
                      setTimeout(() => { isSeekingRef.current = false; }, 2000);
                  }
                  
-                 // --- AUTO-DJ CROSSFADE TRIGGER ---
-                 if (isDJ && djState.djMode === 'auto' && isActive && !isFadingRef.current && djState.queue?.length > 0) {
+                 // --- AUTO-DJ CROSSFADE TRIGGER & LOOP TRIGGER ---
+                 if (isDJ && isActive && !isFadingRef.current) {
                      if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5) * currentSpeed) {
-                         isFadingRef.current = true;
-                         const nextSong = djState.queue[0];
-                         const newQ = djState.queue.slice(1);
-                         const isDeckA = (djState.crossfade || 0) < 50;
-                         const fadeDurMs = (djState.fadeDuration || 5) * 1000;
                          
-                         const up = { queue: newQ, fadeCommand: { target: isDeckA ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
-                         if (isDeckA) { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
-                         else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
-                         updateDjState(up);
-                         
-                         setTimeout(() => {
-                             const fUp = { fadeCommand: null, crossfade: isDeckA ? 100 : 0 };
-                             if (isDeckA) fUp.playA = { isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             else fUp.playB = { isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             updateDjState(fUp);
-                             isFadingRef.current = false;
-                         }, fadeDurMs + 500);
+                         // 1. ถ้าเปิด Loop ไว้ ให้ย้อนกลับไปเริ่มใหม่
+                         if (playData.isLooping) {
+                             isFadingRef.current = true;
+                             const up = {};
+                             if (deckId === 'A') up.playA = { ...djState.playA, startedAt: Date.now(), pausedPos: 0 };
+                             else up.playB = { ...djState.playB, startedAt: Date.now(), pausedPos: 0 };
+                             updateDjState(up);
+                             setTimeout(() => { isFadingRef.current = false; }, 1500);
+                         } 
+                         // 2. ถ้าไม่ได้เปิด Loop และโหมด Auto DJ ให้เฟดเปลี่ยนเพลง
+                         else if (djState.djMode === 'auto' && djState.queue?.length > 0) {
+                             isFadingRef.current = true;
+                             const nextSong = djState.queue[0];
+                             const newQ = djState.queue.slice(1);
+                             const fadeDurMs = (djState.fadeDuration || 5) * 1000;
+                             
+                             const up = { queue: newQ, fadeCommand: { target: deckId === 'A' ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
+                             if (deckId === 'A') { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
+                             else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
+                             updateDjState(up);
+                             
+                             setTimeout(() => {
+                                 const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
+                                 if (deckId === 'A') fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                 else fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                 updateDjState(fUp);
+                                 isFadingRef.current = false;
+                             }, fadeDurMs + 500);
+                         }
                      }
                  }
              };
 
-             syncPlayer(ytA.current, djState.playA, (djState.crossfade||0) < 50);
-             syncPlayer(ytB.current, djState.playB, (djState.crossfade||0) >= 50);
+             syncPlayer(ytA.current, djState.playA, isDeckA, 'A');
+             syncPlayer(ytB.current, djState.playB, !isDeckA, 'B');
          }, 2500); 
          return () => clearInterval(syncTimer);
       }, [djState, isDjMuted, isLocalPaused, canManageAudio, lateNight]);
@@ -2924,7 +2954,7 @@ function Game24({ dateSeed, onEnd }) {
             if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
           }, 100);
         }
-      }, [roomKey, currentView, roomMsgs]);
+      }, [roomKey, currentView, roomMsgs.length]); // แก้ไขเป็น roomMsgs.length
 
       useEffect(() => {
         if (currentView === 'discjam' && djChatRef.current) {
@@ -2932,7 +2962,7 @@ function Game24({ dateSeed, onEnd }) {
             if (djChatRef.current) djChatRef.current.scrollTop = djChatRef.current.scrollHeight;
           }, 100);
         }
-      }, [chatMessages, currentView]);
+      }, [chatMessages.length, currentView]); // แก้ไขเป็น chatMessages.length
 
       const myNotifs = currentUser ? notifications.filter((n) => {
         if (n.recipientId !== currentUser.id && !(n.recipientId === 'ALL' && n.actorId !== currentUser.id)) return false;
@@ -3569,16 +3599,51 @@ function Game24({ dateSeed, onEnd }) {
                              {djState.deckA?.id ? <img src={`https://img.youtube.com/vi/${djState.deckA.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
                           </div>
                        </div>
-                       <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckA?.title || 'Empty Deck'}</div>
-                       {djState.djMode === 'manual' && djState.deckA?.id && (
-                          <button onClick={() => {
-                              const isP = djState.playA?.isPlaying;
-                              const cPos = ytA.current?.getCurrentTime() || 0;
-                              const spd = djState.speed || 1;
-                              updateDjState({ playA: { isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
-                          }} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
-                            {djState.playA?.isPlaying ? '⏸ Pause A' : '▶ Play A'}
-                          </button>
+                       {/* ปุ่มควบคุม Deck A */}
+                       {djState.deckA?.id && (
+                          <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                              {djState.djMode === 'manual' && (
+                                 <button onClick={() => {
+                                     const isP = djState.playA?.isPlaying;
+                                     const cPos = ytA.current?.getCurrentTime() || 0;
+                                     const spd = djState.speed || 1;
+                                     updateDjState({ playA: { ...djState.playA, isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
+                                 }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
+                                   {djState.playA?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                 </button>
+                              )}
+                              
+                              {djState.djMode === 'auto' && localCrossfade < 50 && (
+                                 <>
+                                     <button onClick={() => {
+                                         const isP = djState.playA?.isPlaying;
+                                         const cPos = ytA.current?.getCurrentTime() || 0;
+                                         const spd = djState.speed || 1;
+                                         updateDjState({ playA: { ...djState.playA, isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
+                                     }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                                       {djState.playA?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                     </button>
+                                     <button onClick={() => {
+                                         if(djState.queue?.length > 0) {
+                                             const nextSong = djState.queue[0];
+                                             const newQ = djState.queue.slice(1);
+                                             updateDjState({ queue: newQ, crossfade: 100, fadeCommand: null, deckB: nextSong, playB: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playA: { ...djState.playA, isPlaying: false } });
+                                         } else {
+                                             updateDjState({ playA: { ...djState.playA, isPlaying: false } });
+                                         }
+                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
+                                       ⏭ ข้าม
+                                     </button>
+                                 </>
+                              )}
+                              
+                              {/* ปุ่มวนซ้ำ (Loop) */}
+                              <button onClick={() => {
+                                  updateDjState({ playA: { ...djState.playA, isLooping: !djState.playA?.isLooping } });
+                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playA?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                                  {djState.playA?.isLooping ? '🔂 วนซ้ำ' : '🔁 ไม่วน'}
+                              </button>
+                          </div>
                        )}
                     </div>
 
@@ -3591,15 +3656,51 @@ function Game24({ dateSeed, onEnd }) {
                           </div>
                        </div>
                        <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckB?.title || 'Empty Deck'}</div>
-                       {djState.djMode === 'manual' && djState.deckB?.id && (
-                          <button onClick={() => {
-                              const isP = djState.playB?.isPlaying;
-                              const cPos = ytB.current?.getCurrentTime() || 0;
-                              const spd = djState.speed || 1;
-                              updateDjState({ playB: { isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
-                          }} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playB?.isPlaying ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white'}`}>
-                            {djState.playB?.isPlaying ? '⏸ Pause B' : '▶ Play B'}
-                          </button>
+                       {/* ปุ่มควบคุม Deck B */}
+                       {djState.deckB?.id && (
+                          <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                              {djState.djMode === 'manual' && (
+                                 <button onClick={() => {
+                                     const isP = djState.playB?.isPlaying;
+                                     const cPos = ytB.current?.getCurrentTime() || 0;
+                                     const spd = djState.speed || 1;
+                                     updateDjState({ playB: { ...djState.playB, isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
+                                 }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playB?.isPlaying ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white'}`}>
+                                   {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                 </button>
+                              )}
+                              
+                              {djState.djMode === 'auto' && localCrossfade >= 50 && (
+                                 <>
+                                     <button onClick={() => {
+                                         const isP = djState.playB?.isPlaying;
+                                         const cPos = ytB.current?.getCurrentTime() || 0;
+                                         const spd = djState.speed || 1;
+                                         updateDjState({ playB: { ...djState.playB, isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
+                                     }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playB?.isPlaying ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                                       {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                     </button>
+                                     <button onClick={() => {
+                                         if(djState.queue?.length > 0) {
+                                             const nextSong = djState.queue[0];
+                                             const newQ = djState.queue.slice(1);
+                                             updateDjState({ queue: newQ, crossfade: 0, fadeCommand: null, deckA: nextSong, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playB: { ...djState.playB, isPlaying: false } });
+                                         } else {
+                                             updateDjState({ playB: { ...djState.playB, isPlaying: false } });
+                                         }
+                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
+                                       ⏭ ข้าม
+                                     </button>
+                                 </>
+                              )}
+                              
+                              {/* ปุ่มวนซ้ำ (Loop) */}
+                              <button onClick={() => {
+                                  updateDjState({ playB: { ...djState.playB, isLooping: !djState.playB?.isLooping } });
+                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playB?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                                  {djState.playB?.isLooping ? '🔂 วนซ้ำ' : '🔁 ไม่วน'}
+                              </button>
+                          </div>
                        )}
                     </div>
                  </div>
