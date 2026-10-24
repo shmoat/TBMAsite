@@ -2756,10 +2756,17 @@ function Game24({ dateSeed, onEnd }) {
              const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
              if (isInputBlockedSync && !djState.deckA?.id && !djState.deckB?.id) return;
 
+             // ตรวจสอบว่า DJ ออฟไลน์หรือไม่ (ไม่มี jammer หรือ ไม่ออนไลน์เกิน 2 นาที)
+             const activeDJ = users.find(u => u.id === djState.jammerId);
+             const isDJOffline = !activeDJ || !activeDJ.isOnline || (Date.now() - (activeDJ.lastActive || 0) > 120000);
+             
+             // ให้สิทธิ์ระบบนี้ทำงานเมื่อเป็น DJ เอง หรือ DJ หายไปแล้วอยู่ในโหมด Auto
+             const canAutoRun = isDJ || (isDJOffline && djState.djMode === 'auto');
+
              const isDeckA = (djState.crossfade || 0) < 50;
 
              // --- ระบบ Auto-Start & ตรวจจับเพลงจบ (Fallback + Clear Deck) ---
-             if (isDJ && !isFadingRef.current) {
+             if (canAutoRun && !isFadingRef.current) {
                  const activePlayer = isDeckA ? ytA.current : ytB.current;
                  const activePlayData = isDeckA ? djState.playA : djState.playB;
                  const activeDeckData = isDeckA ? djState.deckA : djState.deckB;
@@ -2771,16 +2778,13 @@ function Game24({ dateSeed, onEnd }) {
                  const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
                  const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
-                 // กันเหนียว: มองว่า "จบ" คือ state === 0 หรือเวลาเดินมาสุดแล้ว
                  const isEndedA = (stateA === 0 || (durA > 0 && durA - curA <= 0.5)) && djState.deckA?.id;
                  const isEndedB = (stateB === 0 || (durB > 0 && durB - curB <= 0.5)) && djState.deckB?.id;
                  
                  const activeIsEnded = isDeckA ? isEndedA : isEndedB;
 
-                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงที่กำลังเป็น Active เล่นจบไปแล้ว
                  if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeIsEnded) {
                      
-                     // 1. ตรวจสอบการวนซ้ำ (Loop) ของแผ่น Active ก่อน
                      if (activePlayData?.isLooping && activeDeckData?.id) {
                          isFadingRef.current = true;
                          const up = {};
@@ -2791,7 +2795,6 @@ function Game24({ dateSeed, onEnd }) {
                          return;
                      }
 
-                     // 2. ถ้าไม่ได้วนซ้ำ และอยู่ในโหมด Auto DJ ให้สลับแผ่นและดึงคิวมาเล่น
                      if (djState.djMode === 'auto' && djState.queue?.length > 0) {
                          isFadingRef.current = true;
                          const nextSong = djState.queue[0];
@@ -2803,12 +2806,12 @@ function Game24({ dateSeed, onEnd }) {
                              up.deckB = nextSong; 
                              up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
                              up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             up.deckA = null; // เคลียร์แผ่นเก่าออก
+                             up.deckA = null; 
                          } else { 
                              up.deckA = nextSong; 
                              up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
                              up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             up.deckB = null; // เคลียร์แผ่นเก่าออก
+                             up.deckB = null; 
                          }
                          updateDjState(up);
                          setTimeout(() => { isFadingRef.current = false; }, 1000);
@@ -2816,23 +2819,21 @@ function Game24({ dateSeed, onEnd }) {
                      }
                  }
                  
-                 // 3. จัดการเคลียร์แผ่น (Deck) ที่ไม่ได้ถูกวนซ้ำ และเล่นจบแล้ว
                  let cleared = false;
                  const upClear = {};
                  if (isEndedA && !djState.playA?.isLooping) {
                      upClear.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                     upClear.deckA = null; // สั่งเคลียร์แผ่น A
+                     upClear.deckA = null;
                      cleared = true;
                  }
                  if (isEndedB && !djState.playB?.isLooping) {
                      upClear.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                     upClear.deckB = null; // สั่งเคลียร์แผ่น B
+                     upClear.deckB = null;
                      cleared = true;
                  }
                  
                  if (cleared) {
                      updateDjState(upClear);
-                     // ถ้าแผ่น Active ทะลุมาถึงตรงนี้และถูกเคลียร์ ให้ตัดจบ Cycle นี้เลย
                      if (activeIsEnded) return;
                  }
              }
@@ -2854,6 +2855,7 @@ function Game24({ dateSeed, onEnd }) {
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
                  if (dur > 0 && dur - cur < 2) return;
+                 if (dur > 0 && exp >= dur) return; // ป้องกันการดึงเวลากลับถ้าเวลาข้ามความยาวเพลงไปแล้ว (แก้ไขบั๊กวนซ้ำ 3 วิ)
                  
                  if (Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
                      if (expRaw < 0 && cur < 15) return; 
@@ -2864,7 +2866,7 @@ function Game24({ dateSeed, onEnd }) {
                  }
                  
                  // --- AUTO-DJ CROSSFADE TRIGGER & LOOP TRIGGER ---
-                 if (isDJ && isActive && !isFadingRef.current) {
+                 if (canAutoRun && isActive && !isFadingRef.current) {
                      if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5) * currentSpeed) {
                          
                          if (playData.isLooping) {
@@ -2891,10 +2893,10 @@ function Game24({ dateSeed, onEnd }) {
                                      const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
                                      if (deckId === 'A') {
                                          fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                         fUp.deckA = null; // เคลียร์แผ่น A เพราะเพิ่ง fade ไปแผ่น B สำเร็จ
+                                         fUp.deckA = null; 
                                      } else {
                                          fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                         fUp.deckB = null; // เคลียร์แผ่น B เพราะเพิ่ง fade ไปแผ่น A สำเร็จ
+                                         fUp.deckB = null; 
                                      }
                                      updateDjState(fUp);
                                      isFadingRef.current = false;
@@ -2919,6 +2921,57 @@ function Game24({ dateSeed, onEnd }) {
              updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(songObj) });
          }
       };
+// ================= ระบบดึงข้อมูลชื่อเพลงเบื้องหลัง (Background Async Fetcher) =================
+      useEffect(() => {
+          if (!canManageAudio || !djState) return;
+          let updated = false;
+          const newQ = [...(djState.queue || [])];
+          
+          const fetchTitle = async (vid) => {
+              try {
+                  const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vid}`);
+                  const data = await res.json();
+                  return data.title || null;
+              } catch(e) { return null; }
+          };
+
+          const processTitles = async () => {
+              const promises = newQ.map(async (q, i) => {
+                  if (q.title === 'กำลังโหลดข้อมูล...') {
+                      const title = await fetchTitle(q.id);
+                      if (title) { newQ[i].title = title; updated = true; }
+                  }
+              });
+              
+              let dA = djState.deckA;
+              let dB = djState.deckB;
+              
+              const pA = (async () => {
+                  if(dA?.title === 'กำลังโหลดข้อมูล...') {
+                      const title = await fetchTitle(dA.id);
+                      if(title) { dA = {...dA, title}; updated = true; }
+                  }
+              })();
+              const pB = (async () => {
+                  if(dB?.title === 'กำลังโหลดข้อมูล...') {
+                      const title = await fetchTitle(dB.id);
+                      if(title) { dB = {...dB, title}; updated = true; }
+                  }
+              })();
+
+              await Promise.all([...promises, pA, pB]);
+              
+              if (updated) {
+                  const ups = {};
+                  if(JSON.stringify(newQ) !== JSON.stringify(djState.queue)) ups.queue = newQ;
+                  if(dA && JSON.stringify(dA) !== JSON.stringify(djState.deckA)) ups.deckA = dA;
+                  if(dB && JSON.stringify(dB) !== JSON.stringify(djState.deckB)) ups.deckB = dB;
+                  if(Object.keys(ups).length > 0) updateDjState(ups);
+              }
+          };
+          
+          processTitles();
+      }, [djState.queue, djState.deckA, djState.deckB, canManageAudio]);
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -3768,18 +3821,46 @@ function Game24({ dateSeed, onEnd }) {
           ) : (
             /* 🎶 มุมมองสำหรับ Listener ทั่วไป 🎶 */
             <div className="space-y-6">
+              
+              {/* เพิ่มป้ายแสดงชื่อ DJ สำหรับคนฟัง */}
+              <div className="flex justify-center -mb-2 mt-4">
+                  <div className="bg-[#050811] border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] px-4 py-2.5 rounded-full flex items-center gap-3 max-w-full overflow-x-auto no-scrollbar">
+                     <span className="text-sky-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest flex items-center gap-1.5 shrink-0">
+                        <span className="animate-pulse">🎧</span> Current DJ
+                     </span>
+                     <div className="w-[1px] h-5 bg-slate-700 shrink-0"></div>
+                     <div className="flex items-center gap-1.5 shrink-0">
+                        {djState.jammerId ? (
+                           <>
+                              <Avatar user={getAuthor(djState.jammerId)} size="xs" showStatus={true} />
+                              <span className="text-xs sm:text-sm font-bold text-white">{getAuthor(djState.jammerId).displayName}</span>
+                              <RoleBadge role={getAuthor(djState.jammerId).role} />
+                           </>
+                        ) : (
+                           <>
+                              <span className="text-xs sm:text-sm font-bold text-white mr-1">Owner และ Vice</span>
+                              <RoleBadge role="admin" />
+                              <RoleBadge role="mod" />
+                           </>
+                        )}
+                     </div>
+                  </div>
+              </div>
+
               <div className="flex flex-col items-center justify-center p-8 bg-[#0a0210] rounded-2xl border border-slate-700/50 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent opacity-50"></div>
                   <div className="text-sky-400 font-bold text-xs sm:text-sm mb-6 uppercase tracking-widest px-6 py-1.5 bg-sky-900/30 rounded-full border border-sky-500/30 shadow-lg flex items-center gap-2">
                       <span className="animate-pulse">🔴</span> Now Playing
                   </div>
                   
-                  <div className={`w-48 h-48 sm:w-64 sm:h-64 rounded-full border-[10px] border-slate-800 shadow-[0_0_40px_rgba(14,165,233,0.2)] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center relative ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
-                          {activeDeckSong?.id ? <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
+                  {/* แก้ไขเข็มแผ่นเสียง (Tonearm) ไม่ให้หมุนไปพร้อมกับแผ่น */}
+                  <div className="relative w-48 h-48 sm:w-64 sm:h-64">
+                      <div className={`absolute inset-0 rounded-full border-[10px] border-slate-800 shadow-[0_0_40px_rgba(14,165,233,0.2)] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
+                              {activeDeckSong?.id ? <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
+                          </div>
                       </div>
-                      {/* ก้านเครื่องเล่นแผ่นเสียง (ตกแต่ง) */}
-                      <div className="absolute top-[-10px] right-[-20px] w-4 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full origin-top transform rotate-12 shadow-lg hidden sm:block border-2 border-slate-800"></div>
+                      <div className="absolute top-[-10px] right-[-20px] w-4 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full origin-top transform rotate-12 shadow-lg hidden sm:block border-2 border-slate-800 z-10"></div>
                   </div>
                   
                   <div className="mt-8 w-full max-w-md px-4">
@@ -3839,7 +3920,7 @@ function Game24({ dateSeed, onEnd }) {
                                         setTimeout(() => {
                                              const playlistArr = helper.getPlaylist ? helper.getPlaylist() : null;
                                              if (playlistArr && playlistArr.length > 0) {
-                                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `YouTube Video (จาก ${qp.name})`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
+                                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `กำลังโหลดข้อมูล...`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
                                                  handleAddTrack(songsToAdd.shift());
                                                  if (songsToAdd.length > 0) updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd) });
                                                  alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length + 1} เพลงเรียบร้อย`);
@@ -3898,18 +3979,14 @@ function Game24({ dateSeed, onEnd }) {
                          setTimeout(() => {
                              const playlistArr = helper.getPlaylist ? helper.getPlaylist() : null;
                              if (playlistArr && playlistArr.length > 0) {
-                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `YouTube Video (จาก Playlist)`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
+                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `กำลังโหลดข้อมูล...`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
                                  handleAddTrack(songsToAdd.shift());
                                  if (songsToAdd.length > 0) updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd) });
                                  alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length + 1} เพลงลงในคิวแล้ว`);
                              } else alert("ไม่พบเพลง หรือ Playlist นี้ถูกตั้งเป็นส่วนตัว (Private)");
                          }, 3500);
                     } else {
-                         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
-                             handleAddTrack({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                         }).catch(() => {
-                             handleAddTrack({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                         });
+                         handleAddTrack({ id: newId, title: `กำลังโหลดข้อมูล...`, addedBy: currentUser.id, key: Date.now()+Math.random() });
                     }
                   } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
                   e.target.reset();
