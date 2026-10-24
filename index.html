@@ -2274,7 +2274,7 @@ function Game24({ dateSeed, onEnd }) {
                             if(!pId) return null;
                             return (
                                 <div key={i} className="flex items-center gap-2 bg-[#050811] px-3 py-1.5 rounded-full border border-white/10">
-                                    <Avatar size="sm" user="{getAuthor(pId)}"/>
+                                    <Avatar size="sm" user={getAuthor(pId)} />
                                     <span className={isTurn ? 'font-bold text-amber-300 text-xs' : 'text-slate-300 text-xs'}>{getAuthor(pId).displayName}</span>
                                 </div>
                             );
@@ -2644,22 +2644,25 @@ function Game24({ dateSeed, onEnd }) {
       }, [chatMessages, currentUser, db]);
       
       // ================= DISC JAM LOGIC =================
-      const [djState, setDjState] = useState({ queue: [], isPlaying: false, loopMode: 'none', speed: 1, jammerId: null });
+      // ================= DUAL DECK AUDIO ENGINE =================
+      const [djState, setDjState] = useState({ queue: [], deckA: null, deckB: null, playA: {}, playB: {}, crossfade: 0, djMode: 'auto', fadeDuration: 5, fadeCommand: null, jammerId: null, forceClosed: false, quickPlaylists: [] });
+      const [localCrossfade, setLocalCrossfade] = useState(0);
       const [isDjMuted, setIsDjMuted] = useState(true); 
       const [djVolume, setDjVolume] = useState(50);
       const [isLocalPaused, setIsLocalPaused] = useState(false);
-      const [isPlayerFloatingOpen, setIsPlayerFloatingOpen] = useState(true); // เพิ่มบรรทัดนี้
+      const [isPlayerFloatingOpen, setIsPlayerFloatingOpen] = useState(true);
       
-      const ytPlayerRef = useRef(null);
-      const isSeekingRef = useRef(false); // ป้องกันบั๊ก YouTube วาร์ปไปมา
-      const currentUserRef = useRef(currentUser); // อ้างอิง User ล่าสุดป้องกันค่าเก่า
-      
+      const ytA = useRef(null);
+      const ytB = useRef(null);
+      const isSeekingRef = useRef(false);
+      const isFadingRef = useRef(false);
+      const currentUserRef = useRef(currentUser);
       useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
       const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
-      
-      // ล็อกสิทธิ์: ถ้ามี DJ อยู่ สิทธิ์จะเป็นของ DJ 100% (Owner/Vice หมดสิทธิ์แทรกแซง) แต่ถ้าไม่มี DJ ถึงจะคุมได้
       const canManageAudio = currentUser && (djState.jammerId ? (djState.jammerId === currentUser.id) : (currentUser.role === 'admin' || currentUser.role === 'mod'));
+      const activeDeckSong = localCrossfade < 50 ? djState.deckA : djState.deckB;
+      const isDeckPlaying = localCrossfade < 50 ? djState.playA?.isPlaying : djState.playB?.isPlaying;
 
       useEffect(() => {
         if (!window.YT) {
@@ -2668,203 +2671,141 @@ function Game24({ dateSeed, onEnd }) {
           const firstScriptTag = document.getElementsByTagName('script')[0];
           firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
           window.onYouTubeIframeAPIReady = initYTPlayer;
-        } else if (!ytPlayerRef.current) initYTPlayer();
+        } else if (!ytA.current || !ytB.current) initYTPlayer();
         
         function initYTPlayer() {
-          ytPlayerRef.current = new window.YT.Player('yt-player-global', {
-            height: '0', width: '0', videoId: '',
-            playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 }, // 🛠️ เพิ่ม playsinline เพื่อไม่ให้ iPad บล็อกการรันเพลง
-            events: {
-              onReady: (e) => { if (isDjMuted) e.target.mute(); },
-              onStateChange: (e) => {
-                // 🎵 เพิ่มลอจิกดึงชื่อเพลงเมื่อวิดีโอถูกเล่น
-                if (e.data === 1) { // 1 = PLAYING
-                    setDjState(prev => {
-                       // ถ้าชื่อเพลงในคิวปัจจุบันยังเป็นค่าเริ่มต้นจาก Playlist
-                       if (prev.queue?.length > 0 && prev.queue[0].title.startsWith("YouTube Video")) {
-                           const currentTitle = e.target.getVideoData().title;
-                           if (currentTitle) {
-                               const updatedQueue = [...prev.queue];
-                               updatedQueue[0].title = currentTitle;
-                               updateDjState({ queue: updatedQueue });
-                           }
-                       }
-                       return prev;
-                    });
-                }
-
-                if (e.data === 0) { // เมื่อเพลงเล่นจบ
-                  setDjState(prev => {
-	                                // ถ้าเพลงจบแล้ว จะยอมให้เปลี่ยนคิวได้ก็ต่อเมื่อยังไม่เคยเปลี่ยนในช่วง 2 วินาทีที่ผ่านมา (กันเบิ้ล)
-                    if (prev.loopMode === 'single') {
-                        updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
-                        isSeekingRef.current = true;
-                        ytPlayerRef.current.seekTo(0); ytPlayerRef.current.playVideo();
-                        setTimeout(() => { isSeekingRef.current = false; }, 2000);
-                    } else if (prev.queue?.length > 0) {
-                        const newQueue = [...prev.queue];
-                        newQueue.shift(); // ลบเพลงปัจจุบันออก
-                          
-                        if (newQueue.length === 0) {
-                            updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
-                            ytPlayerRef.current.stopVideo();
-                        } else {
-                            // สั่งอัปเดตและรอให้ Effect จัดการตัว Player
-                            updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
-                        }
-                    }
-                    return prev;
-                  });
-                }
-              }
-            }
-          });
+          const conf = { height: '0', width: '0', playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 } };
+          ytA.current = new window.YT.Player('yt-player-a', { ...conf, events: { onReady: e => { if(isDjMuted) e.target.mute(); } } });
+          ytB.current = new window.YT.Player('yt-player-b', { ...conf, events: { onReady: e => { if(isDjMuted) e.target.mute(); } } });
         }
       }, []);
 
-      useEffect(() => { // ซิงค์เพลงและสถานะ
-         if (!ytPlayerRef.current || !ytPlayerRef.current.playVideo) return;
+      // ระบบจับอนิเมชัน Crossfade แบบลื่นไหล
+      useEffect(() => {
+        if(!djState.fadeCommand) { setLocalCrossfade(djState.crossfade || 0); return; }
+        const { target, startTime, duration } = djState.fadeCommand;
+        const now = Date.now();
+        if (now - startTime > duration + 2000) { setLocalCrossfade(djState.crossfade || 0); return; }
+        
+        const startVal = target === 'B' ? 0 : 100;
+        const endVal = target === 'B' ? 100 : 0;
+        
+        let frameId;
+        const animate = () => {
+            const el = Date.now() - startTime;
+            if(el >= duration) { setLocalCrossfade(endVal); return; }
+            setLocalCrossfade(startVal + (endVal - startVal) * (el / duration));
+            frameId = requestAnimationFrame(animate);
+        };
+        frameId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frameId);
+      }, [djState.fadeCommand, djState.crossfade]);
+
+      // ระบบควบคุมระดับเสียงแยก 2 แผ่น และการเล่นวิดีโอ
+      useEffect(() => {
+         if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
          
          const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
-         const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0);
+         const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0) && !djState.deckA?.id && !djState.deckB?.id;
 
-         // 🌙 ถ้าสถานีปิดแบบสมบูรณ์ (คิวหมดเกลี้ยงและไม่มีคนคุมห้อง) ให้เล่นเพลงวิกาล
-      if(isFullyClosedSync) {
-          const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
-          if (playerVideoId !== CLOSED_SONG_ID) {
-              ytPlayerRef.current.loadVideoById(CLOSED_SONG_ID);
-              ytPlayerRef.current.setLoop(true); // สั่งวนซ้ำ
-          }
-          if (!isLocalPaused) ytPlayerRef.current.playVideo();
-          return; // หยุดการซิงค์แบบปกติ
-      }
-         
-         // คืนค่าโหมดวนลูปให้เป็นปกติหากสลับกลับมาทำงาน
-         if(ytPlayerRef.current.setLoop) ytPlayerRef.current.setLoop(false);
-
-         const currentVideoId = djState.queue?.[0]?.id;
-         const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
-         
-         // ป้องกันบั๊ก: ถ้าคิวเพลงว่างเปล่า ให้หยุดเครื่องเล่นทันทีและไม่ต้องทำอะไรต่อ
-         if (!currentVideoId || !djState.queue || djState.queue.length === 0) {
-             ytPlayerRef.current.stopVideo();
-             return; 
+         if (isFullyClosedSync) {
+            if (ytA.current.getVideoData && ytA.current.getVideoData().video_id !== CLOSED_SONG_ID) {
+                ytA.current.loadVideoById(CLOSED_SONG_ID); ytA.current.setLoop(true);
+            }
+            if (!isLocalPaused) ytA.current.playVideo();
+            if (isDjMuted) ytA.current.mute(); else { ytA.current.unMute(); ytA.current.setVolume(djVolume); }
+            ytB.current.pauseVideo();
+            return;
          }
 
-         const isNewSong = currentVideoId && currentVideoId !== playerVideoId;
-         const expectedTime = djState.isPlaying 
-             ? (djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0)
-             : (typeof djState.pausedPos === 'number' ? djState.pausedPos : 0);
-
-         if (isNewSong) {
-             if (isLocalPaused || !djState.isPlaying) {
-                 ytPlayerRef.current.cueVideoById(currentVideoId, expectedTime);
-             } else {
-                 ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
-             }
-         }
-
-         if (djState.isPlaying && !isLocalPaused) {
-             ytPlayerRef.current.playVideo();
-             
-             // 🛠️ ย้ำคำสั่งเปิดเสียงและระดับเสียงทุกครั้งที่เปลี่ยนเพลง (แก้บั๊ก iPad บังคับปิดเสียง)
-             if (!isDjMuted && ytPlayerRef.current.unMute) {
-                 ytPlayerRef.current.unMute();
-                 ytPlayerRef.current.setVolume(djVolume);
-             }
-
-             const actualTime = ytPlayerRef.current.getCurrentTime ? ytPlayerRef.current.getCurrentTime() : 0;
-             if (Math.abs(expectedTime - actualTime) > 3 && !isSeekingRef.current) {
-                 isSeekingRef.current = true;
-                 ytPlayerRef.current.seekTo(expectedTime, true);
-                 setTimeout(() => { isSeekingRef.current = false; }, 2000); 
-             }
-         } else {
-             ytPlayerRef.current.pauseVideo();
-         }
+         const cVal = localCrossfade;
+         const volA = cVal < 50 ? 100 : 100 - ((cVal - 50) * 2);
+         const volB = cVal > 50 ? 100 : cVal * 2;
          
-         if (ytPlayerRef.current.setPlaybackRate) ytPlayerRef.current.setPlaybackRate(djState.speed || 1);
-      }, [djState.queue, djState.isPlaying, djState.speed, djState.startedAt, isLocalPaused, djState.pausedPos, isDjMuted, djVolume, lateNight]);
+         const manageDeck = (player, deckData, playData, vol) => {
+            if (!player.getVideoData) return;
+            const curId = player.getVideoData().video_id;
+            if (deckData?.id && curId !== deckData.id) {
+                player.loadVideoById(deckData.id, playData?.startedAt ? Math.max(0, (Date.now() - playData.startedAt) / 1000) : 0);
+            }
+            if (playData?.isPlaying && !isLocalPaused) {
+                player.playVideo();
+                if(isDjMuted) player.mute();
+                else { player.unMute(); player.setVolume(Math.max(0, (vol * djVolume)/100)); }
+            } else {
+                player.pauseVideo();
+            }
+         };
 
-      // (ไม่ต้องลบ useEffect ของ djVolume นะครับ ปล่อยไว้เหมือนเดิม)
-      useEffect(() => { // ซิงค์ปุ่มเปิด/ปิดเสียงและระดับเสียงในเครื่อง
-         if (!ytPlayerRef.current || !ytPlayerRef.current.unMute) return;
-         if (isDjMuted) { ytPlayerRef.current.mute(); } 
-         else { ytPlayerRef.current.unMute(); ytPlayerRef.current.setVolume(djVolume); }
-      }, [isDjMuted, djVolume]);
+         manageDeck(ytA.current, djState.deckA, djState.playA, volA);
+         manageDeck(ytB.current, djState.deckB, djState.playB, volB);
+      }, [djState.deckA, djState.deckB, djState.playA, djState.playB, localCrossfade, isLocalPaused, isDjMuted, djVolume, lateNight]);
 
-      // 👇 เรดาร์ตามเช็กเวลา (Auto-Sync) และ Timekeeper จัดการข้ามเพลงเวลาไม่มีคนเปิดเสียง
+      // เรดาร์ Auto-Sync + Auto-DJ Trigger
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             // ถ้าคิวว่างเปล่า, ไม่ได้เล่น, เครื่องผู้ใช้หยุดพักเอง หรือ API พัง ให้ข้ามไปเลย
-             if (!djState.queue || djState.queue.length === 0 || !djState.isPlaying || isLocalPaused || !djState.startedAt || !ytPlayerRef.current || !ytPlayerRef.current.getCurrentTime) return;
+             const isDJ = canManageAudio;
+             const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
+             if (isInputBlockedSync && !djState.deckA?.id && !djState.deckB?.id) return;
 
-             const expectedTime = Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1));
-             const actualTime = ytPlayerRef.current.getCurrentTime() || 0;
-             const duration = ytPlayerRef.current.getDuration ? ytPlayerRef.current.getDuration() : 0;
-             const playerState = ytPlayerRef.current.getPlayerState ? ytPlayerRef.current.getPlayerState() : -1;
-
-             // 1. Timekeeper (ระบบสั่งข้ามเพลงอัตโนมัติเมื่อหมดเวลาจริง)
-             // แก้ปัญหา: คิวค้างเมื่อไม่มีคนกดเปิดเสียง หรือผู้ใช้พับจอแล้วเบราว์เซอร์บังคับหยุดวิดีโอ
-             if (duration > 0 && expectedTime > duration + 2) {
-                 // ป้องกันการยิงคำสั่งเปลี่ยนเพลงซ้อนกัน: มอบสิทธิ์ให้ Jammer, Admin หรือคนที่เพิ่มเพลงนี้ เป็นคนสั่งข้าม
-                 const canForceSkip = djState.jammerId 
-                     ? djState.jammerId === currentUser?.id 
-                     : (currentUser?.role === 'admin' || djState.queue[0].addedBy === currentUser?.id);
-                     
-                 if (canForceSkip && !isSeekingRef.current) {
-                     isSeekingRef.current = true;
-                     setDjState(prev => {
-                          if (prev.loopMode === 'single') {
-                              updateDjState({ startedAt: Date.now(), pausedPos: 0 }); 
-                          } else if (prev.queue?.length > 0) {
-                              const newQueue = [...prev.queue];
-                              newQueue.shift(); 
-                              if (newQueue.length === 0) {
-                                  updateDjState({ queue: [], isPlaying: false, startedAt: null, pausedPos: 0 });
-                                  if(ytPlayerRef.current.stopVideo) ytPlayerRef.current.stopVideo();
-                              } else {
-                                  updateDjState({ queue: newQueue, startedAt: Date.now(), pausedPos: 0, isPlaying: true });
-                              }
-                          }
-                          return prev;
-                     });
-                     setTimeout(() => { isSeekingRef.current = false; }, 3000);
-                 }
-                 return; // สั่งข้ามแล้ว ไม่ต้องทำ Sync ต่อ
-             }
-
-            // 2. ระบบ Sync เวลา สำหรับคนที่เปิดรับเสียงอยู่ (Radar เดิม)
-             if (!isDjMuted) {
-                 // ถ้าเพลงใกล้จบ (ห่างจากจุดสิ้นสุดไม่ถึง 2 วินาที) หรือกำลังโหลดบัฟเฟอร์ จะไม่ฝืนขยับไทม์ไลน์
-                 if (duration > 0 && (duration - actualTime < 2 || duration - expectedTime < 2)) return;
-
-                 const isFullyClosedNow = lateNight && djState.forceClosed && !djState.jammerId && (!djState.queue || djState.queue.length === 0);
-                 const expectedVideoId = isFullyClosedNow ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
-                 const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
+             const syncPlayer = (player, playData, isActive) => {
+                 if (!player?.getCurrentTime || !playData?.isPlaying || isLocalPaused || isDjMuted) return;
+                 const exp = Math.max(0, (Date.now() - (playData.startedAt||Date.now())) / 1000);
+                 const cur = player.getCurrentTime();
+                 const state = player.getPlayerState ? player.getPlayerState() : -1;
                  
-                 // ถ้าวิดีโอในเครื่องยังไม่เปลี่ยนเป็นเพลงใหม่ ห้ามสั่ง Seek เด็ดขาด
-                 if (expectedVideoId && playerVideoId && expectedVideoId !== playerVideoId) return;
-
-                 // 🛠️ ตรวจจับถ้าระบบของมือถือ/iPad แอบหยุดเล่นเพลงเอง (State: -1 หรือ 2) ให้กระตุ้นให้เล่นต่อและเปิดเสียงอีกรอบ
-                 if (playerState === -1 || playerState === 2) {
-                     ytPlayerRef.current.playVideo();
-                     if (ytPlayerRef.current.unMute) {
-                         ytPlayerRef.current.unMute();
-                         ytPlayerRef.current.setVolume(djVolume);
-                     }
+                 if (state === -1 || state === 2) {
+                     player.playVideo();
+                     if (player.unMute) player.unMute();
                  }
-
-                 if (Math.abs(expectedTime - actualTime) > 3 && playerState !== 3 && !isSeekingRef.current) {
+                 
+                 const dur = player.getDuration ? player.getDuration() : 0;
+                 if (dur > 0 && dur - cur < 2) return;
+                 if (Math.abs(exp - cur) > 3 && state !== 3 && !isSeekingRef.current) {
                      isSeekingRef.current = true;
-                     ytPlayerRef.current.seekTo(expectedTime, true);
-                     ytPlayerRef.current.playVideo();
+                     player.seekTo(exp, true); player.playVideo();
                      setTimeout(() => { isSeekingRef.current = false; }, 2000);
                  }
-             }
-         }, 3000); 
+                 
+                 // --- AUTO-DJ TRIGGER (ทำงานเฉพาะเครื่อง DJ) ---
+                 if (isDJ && djState.djMode === 'auto' && isActive && !isFadingRef.current && djState.queue?.length > 0) {
+                     if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5)) {
+                         isFadingRef.current = true;
+                         const nextSong = djState.queue[0];
+                         const newQ = djState.queue.slice(1);
+                         const isDeckA = (djState.crossfade || 0) < 50;
+                         const fadeDurMs = (djState.fadeDuration || 5) * 1000;
+                         
+                         const up = { queue: newQ, fadeCommand: { target: isDeckA ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
+                         if (isDeckA) { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
+                         else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
+                         updateDjState(up);
+                         
+                         setTimeout(() => {
+                             const fUp = { fadeCommand: null, crossfade: isDeckA ? 100 : 0 };
+                             if (isDeckA) fUp.playA = { isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             else fUp.playB = { isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             updateDjState(fUp);
+                             isFadingRef.current = false;
+                         }, fadeDurMs + 500);
+                     }
+                 }
+             };
+
+             syncPlayer(ytA.current, djState.playA, (djState.crossfade||0) < 50);
+             syncPlayer(ytB.current, djState.playB, (djState.crossfade||0) >= 50);
+         }, 2500); 
          return () => clearInterval(syncTimer);
-      }, [isDjMuted, djVolume, djState.isPlaying, djState.startedAt, isLocalPaused, djState.queue, djState.jammerId, currentUser, lateNight]);
+      }, [djState, isDjMuted, isLocalPaused, canManageAudio, lateNight]);
+
+      // ฟังก์ชันช่วยเหลือสำหรับดีเจเพิ่มเพลง
+      const handleAddTrack = (songObj) => {
+         if (!djState.deckA?.id && !djState.deckB?.id) {
+             updateDjState({ deckA: songObj, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, crossfade: 0 });
+         } else {
+             updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(songObj) });
+         }
+      };
       // ==================================================
       const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
       
@@ -3463,365 +3404,315 @@ function Game24({ dateSeed, onEnd }) {
           )}
 
 	  {currentView === 'discjam' && (
-            <div className="max-w-7xl mx-auto w-full px-4 py-8 overflow-y-auto h-full space-y-6 pb-24">
-              <div className="flex justify-between items-end border-b border-[#1E3A5F] pb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-sky-400">💿 Disc Jam</h2>
-                  <p className="text-xs text-slate-400 mt-1">ระบบคิวเพลงส่วนกลาง เล่นพร้อมกันทุกคนในสมาคม</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* ปุ่มปิดสถานีสำหรับ Owner (โผล่ตอนหลัง 4 ทุ่ม) */}
-                  {lateNight && currentUser?.role === 'admin' && (
-                     <button onClick={() => updateDjState({ forceClosed: !djState.forceClosed })} className={`text-xs px-4 py-2 border-2 rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.5)] font-bold transition-colors ${djState.forceClosed ? 'bg-emerald-950 text-emerald-400 border-emerald-900' : 'bg-red-950 text-red-400 border-red-900'}`}>
-                        {djState.forceClosed ? '🟢 เปิดสถานี (คืนค่า)' : '🌙 ปิดสถานีวิทยุ'}
-                     </button>
-                  )}
-                  {currentUser && currentUser.role === 'member' && (
-                    <div>
-                      {!djState.jammerId ? (
-                        <button onClick={() => updateDjState({ jammerId: currentUser.id })} className="btn-w text-xs px-4 py-2 border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]">🎤 รับสิทธิ์ Disc Jammer</button>
-                      ) : djState.jammerId === currentUser.id ? (
-                        <button onClick={() => updateDjState({ jammerId: null })} className="bg-red-950 text-red-300 px-4 py-2 rounded-xl text-xs font-bold border border-red-900">⏹ คืนสิทธิ์ Jammer</button>
-                      ) : (
-                        <div className="text-xs text-slate-500 bg-[#0B1325] px-3 py-1.5 rounded-lg border border-[#1E3A5F]">มีสมาชิกยึดตำแหน่ง Jammer อยู่</div>
-                      )}
-                    </div>
-                  )}
-                </div>
+            <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-5 flex-1 overflow-y-auto">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-sky-400">
+                  💿 Disc Jam {djState.djMode === 'auto' ? '🤖' : '🎧'}
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">ระบบวิทยุสมาคมรูปแบบ Dual-Deck</p>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-               {/* ด้านซ้าย: Now Playing & DJ Controls */}
-                <div className="lg:col-span-5 space-y-4">
-                   <div className="card p-5 border-sky-500/50 shadow-[inset_0_0_20px_rgba(14,165,233,0.1)]">
-                      <h3 className="font-bold text-sky-400 mb-3 flex items-center gap-2"><span>▶️</span> Now Playing</h3>
-                      
-                      {isFullyClosed ? (
-                        <div className="space-y-3 text-center">
-                          <img src={CLOSED_GIF} alt="Station Closed" className="w-full aspect-video object-contain rounded-xl border-2 border-[#1E3A5F] shadow-lg bg-black" />
-                          <div className="font-bold text-sm text-red-400">สถานีปิดยามวิกาล เปิดอีกครั้งเวลาย่ำรุ่ง</div>
-                        </div>
-                      ) : djState.queue?.length > 0 ? (
-                        <div className="space-y-3">
-                          <img src={`https://img.youtube.com/vi/${djState.queue[0].id}/hqdefault.jpg`} alt="Thumbnail" className="w-full aspect-video object-cover rounded-xl border-2 border-[#1E3A5F] shadow-lg" />
-                          <div className="font-bold text-sm flex items-start justify-between gap-2">
-                             <div className="line-clamp-2 flex-1">{djState.queue[0].title}</div>
-                             {/* ปุ่มให้ DJ หรือผู้มีสิทธิ์จัดการระบบ (Owner/Vice) กดแก้ไขชื่อได้ */}
-                             {canManageAudio && (
-                                <button onClick={() => {
-                                   const newTitle = prompt("แก้ไขชื่อเพลง:", djState.queue[0].title);
-                                   if(newTitle && newTitle.trim()) {
-                                      const nQ = [...djState.queue];
-                                      nQ[0].title = newTitle.trim();
-                                      updateDjState({ queue: nQ });
-                                   }
-                                }} className="text-amber-300 text-xs px-2 py-1 bg-amber-900/30 rounded border border-amber-500/50 hover:bg-amber-900 shrink-0">✎ แก้ไขชื่อ</button>
-                             )}
+              <div className="flex justify-center gap-2">
+                {lateNight && currentUser?.role === 'admin' && (
+                  <button onClick={() => updateDjState({ forceClosed: !djState.forceClosed })} className={`text-xs px-4 py-2 border-2 rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.5)] font-bold transition-colors ${djState.forceClosed ? 'bg-emerald-950 text-emerald-400 border-emerald-900' : 'bg-red-950 text-red-400 border-red-900'}`}>
+                    {djState.forceClosed ? '🟢 เปิดสถานี (คืนค่า)' : '🌙 ปิดสถานีวิทยุ'}
+                  </button>
+                )}
+                {currentUser && currentUser.role === 'member' && (
+                  !djState.jammerId ? (
+                    <button onClick={() => updateDjState({ jammerId: currentUser.id })} className="btn-w text-xs px-4 py-2 border-2 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]">
+                      🎤 รับสิทธิ์ Disc Jammer
+                    </button>
+                  ) : djState.jammerId === currentUser.id ? (
+                    <button onClick={() => updateDjState({ jammerId: null })} className="bg-red-950 text-red-300 px-4 py-2 rounded-xl text-xs font-bold border border-red-900">
+                      ⏹ คืนสิทธิ์ Jammer
+                    </button>
+                  ) : (
+                    <div className="text-amber-400 text-xs font-bold px-4 py-2 bg-amber-950/50 rounded-xl border border-amber-900">
+                      มีสมาชิกยึดตำแหน่ง Jammer อยู่
+                    </div>
+                  )
+                )}
+              </div>
+
+          {/* 🎧 มุมมองสำหรับ DJ หรือผู้มีสิทธิ์จัดการ 🎧 */}
+          {canManageAudio ? (
+            <div className="space-y-6">
+              <div className="card p-4 sm:p-6 bg-[#0a0210] border-fuchsia-900/50 shadow-2xl">
+                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                    <div className="flex gap-2">
+                       <button onClick={() => updateDjState({ djMode: 'auto' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'auto' ? 'bg-emerald-500 text-[#050811] shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🤖 Auto DJ</button>
+                       <button onClick={() => updateDjState({ djMode: 'manual' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'manual' ? 'bg-fuchsia-500 text-[#050811] shadow-[0_0_15px_rgba(217,70,239,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🎧 Manual Pro</button>
+                    </div>
+                    {djState.djMode === 'auto' && (
+                       <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                         ระยะเวลาเฟด:
+                         <input type="number" min="1" max="15" value={djState.fadeDuration || 5} onChange={e => updateDjState({ fadeDuration: parseInt(e.target.value) })} className="bg-black border border-slate-600 rounded w-12 text-center text-white outline-none ml-1" />
+                         วิ
+                       </div>
+                    )}
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-4 sm:gap-8">
+                    {/* DECK A */}
+                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade < 50 ? 'border-sky-500 bg-sky-900/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]' : 'border-slate-800 bg-black/50'}`}>
+                       <div className="text-sky-400 font-bold text-xs mb-3 bg-sky-900/30 px-3 py-1 rounded-full uppercase tracking-widest">Deck A</div>
+                       <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-8 border-slate-800 shadow-xl bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${djState.playA?.isPlaying && !isLocalPaused ? 'animate-[ocw_4s_linear_infinite]' : ''}`}>
+                          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
+                             {djState.deckA?.id ? <img src={`https://img.youtube.com/vi/${djState.deckA.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
                           </div>
-                          <div className="text-xs text-slate-400">เพิ่มโดย: {getAuthor(djState.queue[0].addedBy).displayName}</div>
-                        </div>
-                      ) : (
-                        <div className="aspect-video bg-black/50 rounded-xl flex items-center justify-center border-2 border-dashed border-[#1E3A5F] text-slate-500 text-sm">ไม่มีเพลงกำลังเล่น</div>
-                      )}
-                   </div>
+                       </div>
+                       <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckA?.title || 'Empty Deck'}</div>
+                       {djState.djMode === 'manual' && djState.deckA?.id && (
+                          <button onClick={() => updateDjState({ playA: { isPlaying: !djState.playA?.isPlaying, startedAt: djState.playA?.isPlaying ? 0 : Date.now() } })} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
+                            {djState.playA?.isPlaying ? '⏸ Pause A' : '▶ Play A'}
+                          </button>
+                       )}
+                    </div>
 
-                   <div className={`card p-5 space-y-4 ${canManageAudio ? '' : 'opacity-50 pointer-events-none'}`}>
-                      <div className="border-b border-[#1E3A5F] pb-3 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                           {djState.jammerId ? (
-                               <Avatar user={getAuthor(djState.jammerId)} size="md" showStatus={true} />
-                           ) : (
-                               <div className="flex items-center gap-1">
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-400 text-[#050811] text-[10px] font-bold uppercase">👑 Owner</span>
-                                  <span className="px-1.5 py-0.5 rounded bg-sky-400 text-[#050811] text-[10px] font-bold uppercase">🛡️ Vice</span>
-                               </div>
-                           )}
-                           <div>
-                               <h3 className="font-bold text-amber-400 flex items-center gap-1.5">🎛 DJ Controller</h3>
-                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                   {djState.jammerId ? `ควบคุมโดย DJ ${getAuthor(djState.jammerId).displayName}` : 'ไม่มี DJ (Owner/Vice ควบคุม)'}
-                               </p>
-                           </div>
-                        </div>
-                        {canManageAudio && (
-                           <div className="flex gap-2 shrink-0">
-                             <button onClick={() => {
-                                 if (!djState.queue || djState.queue.length === 0) return;
-                                 if (!djState.isPlaying) {
-                                     const resumePos = typeof djState.pausedPos === 'number' ? djState.pausedPos : 0;
-                                     updateDjState({ isPlaying: true, startedAt: Date.now() - ((resumePos / (djState.speed || 1)) * 1000) });
-                                 } else {
-                                     const playedSeconds = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
-                                     updateDjState({ isPlaying: false, pausedPos: playedSeconds });
-                                 }
-                             }} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-lg transition-transform ${djState.isPlaying ? 'bg-amber-500 text-[#050811] hover:scale-110' : 'bg-emerald-500 text-white hover:scale-110'}`} disabled={!djState.queue || djState.queue.length === 0} title="Play/Pause ส่วนกลาง">
-                               {djState.isPlaying ? '⏸' : '▶'}
-                             </button>
-                             <button onClick={() => {
-                                if (!djState.queue || djState.queue.length === 0) return;
-                                const newQueue = [...djState.queue];
-                                newQueue.shift(); 
-                                
-                                const payload = { queue: newQueue, startedAt: Date.now(), pausedPos: 0 };
-                                if (newQueue.length === 0) {
-                                    payload.isPlaying = false;
-                                    if (ytPlayerRef.current) ytPlayerRef.current.stopVideo();
-                                }
-                                updateDjState(payload);
-                             }} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#0F2547] text-white border border-[#1E3A5F] flex items-center justify-center hover:bg-slate-800 transition-colors" disabled={!djState.queue || djState.queue.length === 0} title="ข้ามเพลงส่วนกลาง">
-                               ⏭
-                             </button>
-                           </div>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
-                        <span className="text-xs font-bold">โหมดเล่นซ้ำ (Loop)</span>
-                        <button onClick={() => updateDjState({ loopMode: djState.loopMode === 'none' ? 'single' : 'none' })} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.loopMode === 'single' ? 'bg-amber-500 text-[#050811]' : 'bg-[#0F2547] text-slate-300'}`}>
-                          {djState.loopMode === 'single' ? '🔂 วนซ้ำเพลงนี้' : '➡ เล่นตามคิว'}
-                        </button>
-                      </div>
-                      <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
-                        <div className="flex justify-between text-xs font-bold mb-2"><span>ความเร็ว (Speed)</span><span className="text-sky-400">{djState.speed || 1}x</span></div>
-                        <input type="range" min="0.25" max="2" step="0.25" value={djState.speed || 1} onChange={(e) => {
-                            const nSpd = parseFloat(e.target.value);
-                            let payload = { speed: nSpd };
-                            if (djState.isPlaying && djState.startedAt && ytPlayerRef.current?.getCurrentTime) {
-                                const curTime = ytPlayerRef.current.getCurrentTime();
-                                payload.startedAt = Date.now() - ((curTime / nSpd) * 1000);
-                            }
-                            updateDjState(payload);
-                        }} className="w-full accent-sky-500" />
-                      </div>
+                    {/* DECK B */}
+                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade >= 50 ? 'border-amber-500 bg-amber-900/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-slate-800 bg-black/50'}`}>
+                       <div className="text-amber-400 font-bold text-xs mb-3 bg-amber-900/30 px-3 py-1 rounded-full uppercase tracking-widest">Deck B</div>
+                       <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-8 border-slate-800 shadow-xl bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${djState.playB?.isPlaying && !isLocalPaused ? 'animate-[ocw_4s_linear_infinite]' : ''}`}>
+                          <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
+                             {djState.deckB?.id ? <img src={`https://img.youtube.com/vi/${djState.deckB.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
+                          </div>
+                       </div>
+                       <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckB?.title || 'Empty Deck'}</div>
+                       {djState.djMode === 'manual' && djState.deckB?.id && (
+                          <button onClick={() => updateDjState({ playB: { isPlaying: !djState.playB?.isPlaying, startedAt: djState.playB?.isPlaying ? 0 : Date.now() } })} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playB?.isPlaying ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white'}`}>
+                            {djState.playB?.isPlaying ? '⏸ Pause B' : '▶ Play B'}
+                          </button>
+                       )}
+                    </div>
+                 </div>
 
-                      {/* Quick Playlists Section */}
-                      <div className="border-t border-[#1E3A5F] pt-3 mt-2">
-                        <div className="text-[11px] font-bold text-sky-300 mb-2">📁 Quick Playlists</div>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
-                            {(djState.quickPlaylists || []).length === 0 && <span className="text-[10px] text-slate-500 italic">ยังไม่มีเพลย์ลิสต์</span>}
-                            {(djState.quickPlaylists || []).map((qp, i) => (
-                                <div key={i} className="flex items-center rounded-lg bg-[#050811] border border-[#1E3A5F] overflow-hidden group">
-                                    <button onClick={() => {
-                                        if(!djState.jammerId || djState.jammerId !== currentUser?.id) {
-                                            if(!canManageAudio) return alert('เฉพาะ DJ เท่านั้นที่สามารถกดเล่นเพลย์ลิสต์ได้');
-                                        }
-                                        const parsed = parseYouTubeUrl(qp.url);
-                                        if (parsed?.listId && ytPlayerRef.current) {
-                                            alert("กำลังนำเข้าเพลย์ลิสต์...");
-                                            ytPlayerRef.current.loadPlaylist({list: parsed.listId});
-                                            if (ytPlayerRef.current.playVideo) ytPlayerRef.current.playVideo(); 
-                                            
-                                            setTimeout(() => {
-                                                 const playlistArr = ytPlayerRef.current.getPlaylist ? ytPlayerRef.current.getPlaylist() : null;
-                                                 if (playlistArr && playlistArr.length > 0) {
-                                                     const limitedArr = playlistArr.slice(0, 50);
-                                                     const songsToAdd = limitedArr.map((vid, index) => ({
-                                                        id: vid, title: `YouTube Video (จาก ${qp.name})`, addedBy: currentUser.id, key: Date.now() + index + Math.random()
-                                                     }));
-                                                     const payload = { queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd), isPlaying: true };
-                                                     if (!djState.queue || djState.queue.length === 0) { payload.startedAt = Date.now(); payload.pausedPos = 0; }
-                                                     updateDjState(payload);
-                                                     alert(`เพิ่ม ${songsToAdd.length} เพลงลงคิวเรียบร้อย`);
-                                                     setTimeout(() => { ytPlayerRef.current.loadVideoById(djState.queue?.[0]?.id || songsToAdd[0].id); }, 500);
-                                                 } else {
-                                                     alert("ไม่พบเพลงในเพลย์ลิสต์นี้ หรือเพลย์ลิสต์ถูกตั้งเป็นส่วนตัว");
-                                                     if(djState.queue?.[0]?.id) ytPlayerRef.current.loadVideoById(djState.queue[0].id);
-                                                 }
-                                            }, 3500);
-                                        }
-                                    }} className="px-2 py-1 text-[10px] text-slate-300 hover:bg-sky-900/40 hover:text-sky-300 transition-colors">▶ {qp.name}</button>
-                                    {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
-                                        <button onClick={() => {
-                                            if(confirm(`ลบเพลย์ลิสต์ ${qp.name} ?`)) {
-                                                const newQp = [...djState.quickPlaylists];
-                                                newQp.splice(i, 1);
-                                                updateDjState({ quickPlaylists: newQp });
-                                            }
-                                        }} className="px-1.5 py-1 text-[10px] bg-red-950/40 text-red-400 hover:bg-red-500 hover:text-white border-l border-[#1E3A5F]">✕</button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
-                            <form onSubmit={(e) => {
-                                e.preventDefault();
-                                const nm = e.target.qpName.value.trim();
-                                const ur = e.target.qpUrl.value.trim();
-                                if(!nm || !ur) return;
-                                updateDjState({ quickPlaylists: [...(djState.quickPlaylists||[]), {name: nm, url: ur}] });
-                                e.target.reset();
-                            }} className="flex gap-1">
-                                <input name="qpName" type="text" placeholder="ชื่อ" className="w-16 inp py-1 px-1.5 text-[10px]" required />
-                                <input name="qpUrl" type="url" placeholder="ลิงก์ YouTube Playlist" className="flex-1 inp py-1 px-1.5 text-[10px]" required />
-                                <button type="submit" className="btn-w py-1 px-2 text-[10px]">+</button>
-                            </form>
-                        )}
+                 {/* CROSSFADER */}
+                 <div className="mt-8 bg-[#110419] p-4 rounded-xl border border-slate-700">
+                    <div className="flex justify-between text-[10px] text-slate-400 font-bold mb-3 uppercase tracking-widest">
+                       <span className="text-sky-400">← Deck A</span>
+                       {djState.djMode === 'auto' ? <span className="text-emerald-400 animate-pulse">🤖 Auto Crossfade Control</span> : <span className="text-fuchsia-400">🎧 Manual Crossfader</span>}
+                       <span className="text-amber-400">Deck B →</span>
+                    </div>
+                    <input 
+                       type="range" min="0" max="100" 
+                       value={localCrossfade} 
+                       onChange={(e) => { if(djState.djMode === 'manual') setLocalCrossfade(parseInt(e.target.value)); }} 
+                       onMouseUp={(e) => { if(djState.djMode === 'manual') updateDjState({ crossfade: parseInt(e.target.value) }); }}
+                       onTouchEnd={(e) => { if(djState.djMode === 'manual') updateDjState({ crossfade: parseInt(e.target.value) }); }}
+                       className={`w-full h-2 bg-slate-800 rounded-lg appearance-none outline-none shadow-inner ${djState.djMode === 'auto' ? 'opacity-50 cursor-not-allowed' : 'cursor-ew-resize accent-fuchsia-500'}`}
+                       disabled={djState.djMode === 'auto'}
+                    />
+                 </div>
+              </div>
+            </div>
+          ) : (
+            /* 🎶 มุมมองสำหรับ Listener ทั่วไป 🎶 */
+            <div className="space-y-6">
+              <div className="flex flex-col items-center justify-center p-8 bg-[#0a0210] rounded-2xl border border-slate-700/50 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent opacity-50"></div>
+                  <div className="text-sky-400 font-bold text-xs sm:text-sm mb-6 uppercase tracking-widest px-6 py-1.5 bg-sky-900/30 rounded-full border border-sky-500/30 shadow-lg flex items-center gap-2">
+                      <span className="animate-pulse">🔴</span> Now Playing
+                  </div>
+                  
+                  <div className={`w-48 h-48 sm:w-64 sm:h-64 rounded-full border-[10px] border-slate-800 shadow-[0_0_40px_rgba(14,165,233,0.2)] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center relative ${isDeckPlaying && !isLocalPaused ? 'animate-[ocw_4s_linear_infinite]' : ''}`}>
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
+                          {activeDeckSong?.id ? <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
                       </div>
-                   </div>
-                </div>
-
-                                           {/* ด้านขวา: Queue */}
-                <div className="lg:col-span-7 space-y-4">
-		   {currentUser ? (
-                     <form onSubmit={(e) => {
-                      e.preventDefault();
-                      
-                      // ⛔ บล็อกการเพิ่มเพลงเมื่อสถานีถึงเวลาปิด และไม่มีใครเป็น DJ
-                      if(isInputBlocked) {
-                         alert("สถานีปิดรับคิวเพลงแล้ว เพลงที่เหลือจะเล่นจนจบก่อนปิดสถานี จะเปิดรับคิวใหม่เวลา 06:00 น.");
-                         return;
-                      }
-                      
-                      const url = e.target.elements.ytUrl.value;
-                      const parsed = parseYouTubeUrl(url);
-                      
-                      if (parsed?.listId || parsed?.videoId) {
-                        const newId = parsed.listId || parsed.videoId;
-                        const isPlaylist = !!parsed.listId;
-                        
-                        const updatePayload = (songObj) => {
-                            const payload = { queue: firebase.firestore.FieldValue.arrayUnion(songObj), isPlaying: true };
-                            if (!djState.queue || djState.queue.length === 0) {
-                                payload.startedAt = Date.now();
-                                payload.pausedPos = 0;
-                            }
-                            db.collection('bma_system').doc('discjam').update(payload);
-                        };
-
-                        if (isPlaylist && ytPlayerRef.current) {
-                             alert("กำลังประมวลผล Playlist กรุณารอสักครู่...");
-                             ytPlayerRef.current.loadPlaylist({list: parsed.listId});
-                             if (ytPlayerRef.current.playVideo) ytPlayerRef.current.playVideo();
-                             
-                             setTimeout(() => {
-                                 const playlistArr = ytPlayerRef.current.getPlaylist ? ytPlayerRef.current.getPlaylist() : null;
-                                 if (playlistArr && playlistArr.length > 0) {
-                                     const limitedArr = playlistArr.slice(0, 50);
-                                     const songsToAdd = limitedArr.map((vid, index) => ({
-                                        id: vid,
-                                        title: `YouTube Video (จาก Playlist)`, 
-                                        addedBy: currentUser.id,
-                                        key: Date.now() + index + Math.random()
-                                     }));
-                                     const payload = { queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd), isPlaying: true };
-                                     if (!djState.queue || djState.queue.length === 0) {
-                                         payload.startedAt = Date.now();
-                                         payload.pausedPos = 0;
-                                     }
-                                     db.collection('bma_system').doc('discjam').update(payload);
-                                     alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length} เพลงลงในคิวแล้ว`);
-                                     setTimeout(() => {
-                                         const currentVId = djState.queue?.[0]?.id || songsToAdd[0].id;
-                                         ytPlayerRef.current.loadVideoById(currentVId);
-                                     }, 500);
-                                 } else {
-                                     alert("ไม่พบเพลง หรือ Playlist นี้ถูกตั้งเป็นส่วนตัว (Private)");
-                                     if(djState.queue?.[0]?.id) ytPlayerRef.current.loadVideoById(djState.queue[0].id);
-                                 }
-                             }, 3500);
-                        } else {
-                             // ดึงแบบปกติ 1 เพลง
-                             fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
-                                 updatePayload({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                             }).catch(() => {
-                                 updatePayload({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
-                             });
-                        }
-                      } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
-                      e.target.reset();
-                   }} className="flex gap-2">
-                        <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube Video หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required disabled={isInputBlocked} />
-                        <button type="submit" className={`btn-b text-xs font-bold px-6 shadow hover:scale-105 ${isInputBlocked ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isInputBlocked}>เพิ่มเข้าคิว</button>
-                     </form>
-                   ) : (
-                     <div className="bg-blue-900/30 text-blue-200 p-3 rounded-xl border border-blue-800 text-xs text-center font-bold">
-                        🎵 คุณกำลังรับชมในฐานะผู้มาเยือน สามารถฟังเพลงร่วมกับสมาคมได้ แต่ไม่สามารถเพิ่มเพลงหรือพิมพ์แชตได้
-                     </div>
-                   )}
-                   
-                   <div className="card p-4 h-[250px] flex flex-col shrink-0">
-                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0 items-center">
-                        <div className="flex gap-2 items-center">
-                            <span>รายการคิวเพลง ({djState.queue?.length || 0})</span>
-                            {djState.loopMode === 'single' && <span className="text-amber-400 text-xs">🔂 วนซ้ำเพลงแรก</span>}
-                        </div>
-                        {canManageAudio && djState.queue?.length > 1 && (
-                            <button onClick={() => {
-                                if(confirm('คุณต้องการลบเพลงที่เหลือทั้งหมดออกจากคิวหรือไม่? (เพลงแรกที่กำลังเล่นจะยังอยู่)')) {
-                                    updateDjState({ queue: [djState.queue[0]] });
-                                }
-                            }} className="text-xs px-2 py-1 bg-red-900/50 text-red-300 rounded hover:bg-red-900 transition-colors">
-                                🗑️ ล้างคิว
-                            </button>
-                        )}
-                      </h3>
-                      {/* ... ตัว map ลิสต์เพลงเหมือนเดิม ... */}
-                      <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
-                        {isFullyClosed ? (
-                             <div className="text-red-400 font-bold text-xs text-center py-6">สถานีปิดยามวิกาล เปิดสถานีอีกครั้งเวลาย่ำรุ่ง</div>
-                        ) : (!djState.queue || djState.queue.length === 0) ? (
-                             <p className="text-slate-500 text-xs text-center py-6">คิวว่างเปล่า</p> 
-                        ) : (
-                          <>
-                            {isInputBlocked && <div className="bg-red-950/30 text-red-400 p-2 text-center text-[10px] font-bold mb-2 rounded border border-red-900/50">⚠️ ปิดรับคิวเพลงแล้ว สถานีจะปิดตัวลงเมื่อคิวสุดท้ายเล่นจบ</div>}
-                            {djState.queue.map((q, idx) => (
-                              // ... (โค้ด Loop รายการเพลงแบบเดิม) ...
-                            <div key={q.key} className={`flex items-center justify-between p-2.5 rounded-xl text-xs border transition-colors ${idx === 0 ? 'bg-sky-900/40 border-sky-500 text-white font-bold shadow-md' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:border-slate-600'}`}>
-                              <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <img src={`https://img.youtube.com/vi/${q.id}/default.jpg`} className="w-10 h-7 object-cover rounded opacity-80 shrink-0" alt="" />
-                                <div className="flex flex-col min-w-0">
-                                  <span className="truncate">{q.title}</span><span className="text-[9px] text-slate-500 font-normal">โดย {getAuthor(q.addedBy).displayName}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0 ml-2">
-                                {canManageAudio && idx > 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx-1], nQ[idx]] = [nQ[idx], nQ[idx-1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↑</button>}
-                                {canManageAudio && idx > 0 && idx < djState.queue.length - 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx+1], nQ[idx]] = [nQ[idx], nQ[idx+1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↓</button>}
-                                {(canManageAudio || q.addedBy === currentUser?.id) && (
-                                  <button onClick={() => { 
-                                      const nQ = [...djState.queue]; 
-                                      nQ.splice(idx, 1); 
-                                      const payload = { queue: nQ };
-                                      if (idx === 0) { payload.startedAt = Date.now(); payload.pausedPos = 0; }
-                                      updateDjState(payload); 
-                                  }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1" title="ลบเพลงนี้">✕</button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                          </>
-                        )}
-                      </div>
-                   </div>
-
-                   <div className="card p-4 h-[300px] sm:h-[400px] flex flex-col shrink-0">
-                      <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400 shrink-0">💬 แชตกับ DJ (Global)</h3>
-                      <div ref={djChatRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                         {chatMessages.filter(m => m.roomKey === 'global-discjam' && (Date.now() - m.timestamp < 86400000)).map((msg) => {
-                             const s = getAuthor(msg.senderId);
-                             const isDJ = djState.jammerId === msg.senderId;
-                             return (
-                                 <div key={msg.id} className="flex items-start gap-2.5">
-                                     <Avatar user={s} size="sm" />
-                                     <div className="flex-1 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F]">
-                                         <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                             <span className="text-[11px] font-bold text-sky-300">{s.displayName}</span>
-                                             {isDJ && <span className="px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[9px] font-bold uppercase shadow-[0_0_8px_rgba(192,38,211,0.5)]">🎧 DJ</span>}
-                                             <span className="text-[9px] text-slate-400">{getTimeStr(msg)}</span>
-                                         </div>
-                                         <div className="text-xs text-slate-200 break-words">{msg.isDeleted ? <span className="italic text-slate-500">🚫 ข้อความถูกยกเลิก</span> : msg.text}</div>
-                                     </div>
-                                 </div>
-                             );
-                         })}
-                      </div>
-                      <form onSubmit={handleSendDjChat} className="mt-3 flex gap-2 shrink-0">
-                         <input type="text" value={djChatIn} onChange={e=>setDjChatIn(e.target.value)} placeholder="คุยกับ DJ..." className="flex-1 inp text-xs" />
-                         <button type="submit" className="btn-w text-xs">ส่ง</button>
-                      </form>
-                   </div>
-                </div>
-             </div>
-          </div>
+                      {/* ก้านเครื่องเล่นแผ่นเสียง (ตกแต่ง) */}
+                      <div className="absolute top-[-10px] right-[-20px] w-4 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full origin-top transform rotate-12 shadow-lg hidden sm:block border-2 border-slate-800"></div>
+                  </div>
+                  
+                  <div className="mt-8 w-full max-w-md px-4">
+                      <div className="text-lg sm:text-xl font-bold text-white truncate text-center">{activeDeckSong?.id ? activeDeckSong.title : 'ไม่มีเพลงกำลังเล่น'}</div>
+                      {activeDeckSong?.addedBy && <div className="text-[10px] text-slate-400 text-center mt-2 font-mono">Added by: {getAuthor(activeDeckSong.addedBy).displayName}</div>}
+                  </div>
+              </div>
+            </div>
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-5 space-y-4">
+               <div className="card p-4 h-[350px] flex flex-col shrink-0 border-sky-900/50">
+                  <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm text-sky-400 shrink-0">💬 แชตกับ DJ (Global)</h3>
+                  <div ref={djChatRef} className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                     {chatMessages.filter(m => m.roomKey === 'global-discjam').map((msg) => {
+                         const s = getAuthor(msg.senderId);
+                         const isDJ = djState.jammerId === msg.senderId;
+                         return (
+                             <div key={msg.id} className="flex items-start gap-2.5">
+                                 <Avatar size="sm" user={s} />
+                                 <div className="flex-1 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F]">
+                                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                         <span className="text-[11px] font-bold text-sky-300">{s.displayName}</span>
+                                         {isDJ && <span className="px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[9px] font-bold uppercase shadow-[0_0_8px_rgba(192,38,211,0.5)]">🎧 DJ</span>}
+                                         <span className="text-[9px] text-slate-400">{getTimeStr(msg)}</span>
+                                     </div>
+                                     <div className="text-xs text-slate-200 break-words">{msg.isDeleted ? <span className="italic text-slate-500">🚫 ข้อความถูกยกเลิก</span> : msg.text}</div>
+                                 </div>
+                             </div>
+                         );
+                     })}
+                  </div>
+                  <form onSubmit={handleSendDjChat} className="mt-3 flex gap-2 shrink-0">
+                     <input type="text" value={djChatIn} onChange={e=>setDjChatIn(e.target.value)} placeholder="เริ่มบทสนทนา..." className="flex-1 inp text-xs" />
+                     <button type="submit" className="btn-w text-xs">ส่ง</button>
+                  </form>
+               </div>
+               
+               {/* Quick Playlists */}
+               <div className="card p-4 border-fuchsia-900/40">
+                    <div className="text-sm font-bold text-fuchsia-400 mb-3 border-b border-[#1E3A5F] pb-2">📁 Quick Playlists</div>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                        {(djState.quickPlaylists || []).length === 0 && <span className="text-[10px] text-slate-500 italic">ยังไม่มีเพลย์ลิสต์</span>}
+                        {(djState.quickPlaylists || []).map((qp, i) => (
+                            <div key={i} className="flex items-center rounded-lg bg-[#050811] border border-[#1E3A5F] overflow-hidden group shadow-md">
+                                <button onClick={() => {
+                                    if(!djState.jammerId || djState.jammerId !== currentUser?.id) {
+                                        if(!canManageAudio) return alert('เฉพาะ DJ เท่านั้นที่สามารถกดนำเข้าเพลย์ลิสต์ได้');
+                                    }
+                                    const parsed = parseYouTubeUrl(qp.url);
+                                    if (parsed?.listId && (ytA.current || ytB.current)) {
+                                        alert("กำลังนำเข้าเพลย์ลิสต์...");
+                                        const helper = ytA.current || ytB.current;
+                                        helper.loadPlaylist({list: parsed.listId});
+                                        if (helper.playVideo) helper.playVideo();
+                                        setTimeout(() => {
+                                             const playlistArr = helper.getPlaylist ? helper.getPlaylist() : null;
+                                             if (playlistArr && playlistArr.length > 0) {
+                                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `YouTube Video (จาก ${qp.name})`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
+                                                 handleAddTrack(songsToAdd.shift());
+                                                 if (songsToAdd.length > 0) updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd) });
+                                                 alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length + 1} เพลงเรียบร้อย`);
+                                             } else alert("ไม่พบเพลงในเพลย์ลิสต์นี้ หรือเพลย์ลิสต์ถูกตั้งเป็นส่วนตัว");
+                                        }, 3500);
+                                    }
+                                }} className="px-3 py-1.5 text-xs text-slate-300 hover:bg-fuchsia-900/40 hover:text-fuchsia-300 transition-colors">▶ {qp.name}</button>
+                                {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
+                                    <button onClick={() => {
+                                        if(confirm(`ลบเพลย์ลิสต์ ${qp.name} ?`)) {
+                                            const newQp = [...djState.quickPlaylists];
+                                            newQp.splice(i, 1);
+                                            updateDjState({ quickPlaylists: newQp });
+                                        }
+                                    }} className="px-2 py-1.5 text-xs bg-red-950/40 text-red-400 hover:bg-red-500 hover:text-white border-l border-[#1E3A5F]">✕</button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const nm = e.target.qpName.value.trim(), ur = e.target.qpUrl.value.trim();
+                            if(!nm || !ur) return;
+                            updateDjState({ quickPlaylists: [...(djState.quickPlaylists||[]), {name: nm, url: ur}] });
+                            e.target.reset();
+                        }} className="flex gap-1.5">
+                            <input name="qpName" type="text" placeholder="ชื่อ" className="w-20 inp py-1.5 px-2 text-xs" required />
+                            <input name="qpUrl" type="url" placeholder="ลิงก์ YouTube Playlist" className="flex-1 inp py-1.5 px-2 text-xs" required />
+                            <button type="submit" className="btn-b py-1.5 px-3 text-xs bg-fuchsia-900/50 border-fuchsia-700">+</button>
+                        </form>
+                    )}
+               </div>
+            </div>
+
+            <div className="lg:col-span-7 space-y-4">
+	   {currentUser ? (
+                 <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const radioClosed = lateNight && djState.forceClosed === true;
+                  const isInputBlocked = radioClosed && !djState.jammerId; 
+                  if(isInputBlocked) return alert("สถานีปิดรับคิวเพลงแล้ว เพลงที่เหลือจะเล่นจนจบก่อนปิดสถานี จะเปิดรับคิวใหม่เวลา 06:00 น.");
+                  
+                  const url = e.target.elements.ytUrl.value;
+                  const parsed = parseYouTubeUrl(url);
+                  
+                  if (parsed?.listId || parsed?.videoId) {
+                    const newId = parsed.listId || parsed.videoId;
+                    const isPlaylist = !!parsed.listId;
+
+                    if (isPlaylist && (ytA.current || ytB.current)) {
+                         alert("กำลังประมวลผล Playlist กรุณารอสักครู่...");
+                         const helper = ytA.current || ytB.current;
+                         helper.loadPlaylist({list: parsed.listId});
+                         if (helper.playVideo) helper.playVideo();
+                         setTimeout(() => {
+                             const playlistArr = helper.getPlaylist ? helper.getPlaylist() : null;
+                             if (playlistArr && playlistArr.length > 0) {
+                                 const songsToAdd = playlistArr.slice(0, 50).map((vid, index) => ({ id: vid, title: `YouTube Video (จาก Playlist)`, addedBy: currentUser.id, key: Date.now() + index + Math.random() }));
+                                 handleAddTrack(songsToAdd.shift());
+                                 if (songsToAdd.length > 0) updateDjState({ queue: firebase.firestore.FieldValue.arrayUnion(...songsToAdd) });
+                                 alert(`เพิ่มเพลงจาก Playlist จำนวน ${songsToAdd.length + 1} เพลงลงในคิวแล้ว`);
+                             } else alert("ไม่พบเพลง หรือ Playlist นี้ถูกตั้งเป็นส่วนตัว (Private)");
+                         }, 3500);
+                    } else {
+                         fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${newId}`).then(res => res.json()).then(data => {
+                             handleAddTrack({ id: newId, title: data.title || `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                         }).catch(() => {
+                             handleAddTrack({ id: newId, title: `YouTube Video`, addedBy: currentUser.id, key: Date.now()+Math.random() });
+                         });
+                    }
+                  } else alert('กรุณาระบุ URL วิดีโอ หรือ Playlist ของ YouTube ให้ถูกต้อง');
+                  e.target.reset();
+               }} className="flex gap-2">
+                    <input name="ytUrl" type="url" placeholder="วางลิงก์ YouTube Video หรือ Playlist เพื่อเพิ่มเข้าคิวที่นี่..." className="inp flex-1 text-xs" required />
+                    <button type="submit" className="btn-b text-xs font-bold px-6 shadow hover:scale-105">เพิ่มเข้าคิว</button>
+                 </form>
+               ) : (
+                 <div className="bg-blue-900/30 text-blue-200 p-3 rounded-xl border border-blue-800 text-xs text-center font-bold">
+                    🎵 คุณกำลังรับชมในฐานะผู้มาเยือน สามารถฟังเพลงร่วมกับสมาคมได้ แต่ไม่สามารถเพิ่มเพลงหรือพิมพ์แชตได้
+                 </div>
+               )}
+               
+               <div className="card p-4 h-[500px] flex flex-col shrink-0">
+                  <h3 className="font-bold mb-3 border-b border-[#1E3A5F] pb-2 text-sm flex justify-between shrink-0 items-center">
+                    <div className="flex gap-2 items-center">
+                        <span>{canManageAudio && djState.djMode === 'manual' ? 'กล่องเก็บเพลง (Track Pool)' : 'รายการคิวเพลง (Auto Queue)'}</span>
+                        <span className="text-amber-400 text-xs">({djState.queue?.length || 0} เพลง)</span>
+                    </div>
+                    {canManageAudio && djState.queue?.length > 0 && (
+                        <button onClick={() => { if(confirm('คุณต้องการลบเพลงในคิวทิ้งทั้งหมดหรือไม่?')) updateDjState({ queue: [] }); }} className="text-[10px] px-2 py-1 bg-red-900/50 text-red-300 rounded hover:bg-red-900 transition-colors">🗑️ ล้างคิว</button>
+                    )}
+                  </h3>
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
+                    {(!djState.queue || djState.queue.length === 0) ? (
+                         <p className="text-slate-500 text-xs text-center py-6">ไม่มีเพลงในระบบ</p> 
+                    ) : (
+                      <>
+                        {djState.queue.map((q, idx) => (
+                        <div key={q.key} className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-[#050811] border border-[#1E3A5F] hover:border-slate-600 transition-colors">
+                          <div className="flex items-center gap-3 overflow-hidden flex-1">
+                            <img src={`https://img.youtube.com/vi/${q.id}/default.jpg`} className="w-10 h-7 object-cover rounded opacity-80 shrink-0" alt="" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="truncate text-slate-200">{q.title}</span><span className="text-[9px] text-slate-500 font-normal">โดย {getAuthor(q.addedBy).displayName}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                            {canManageAudio && djState.djMode === 'manual' ? (
+                               <div className="flex gap-1 shrink-0 ml-2">
+                                  <button onClick={() => { const nQ = djState.queue.filter(x => x.key !== q.key); updateDjState({ queue: nQ, deckA: q, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 } }); }} className="bg-sky-900/50 hover:bg-sky-600 text-sky-200 px-2 py-1 text-[10px] rounded border border-sky-700 transition">เข้า A</button>
+                                  <button onClick={() => { const nQ = djState.queue.filter(x => x.key !== q.key); updateDjState({ queue: nQ, deckB: q, playB: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 } }); }} className="bg-amber-900/50 hover:bg-amber-600 text-amber-200 px-2 py-1 text-[10px] rounded border border-amber-700 transition">เข้า B</button>
+                               </div>
+                            ) : (
+                               idx === 0 && <span className="text-[9px] font-bold bg-emerald-900/50 text-emerald-400 px-2 py-0.5 rounded animate-pulse shrink-0">คิวถัดไป</span>
+                            )}
+                            {canManageAudio && idx > 0 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx-1], nQ[idx]] = [nQ[idx], nQ[idx-1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↑</button>}
+                            {canManageAudio && idx < djState.queue.length - 1 && <button onClick={() => { const nQ = [...djState.queue]; [nQ[idx+1], nQ[idx]] = [nQ[idx], nQ[idx+1]]; updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-[#0F2547] rounded hover:bg-white hover:text-black">↓</button>}
+                            {(canManageAudio || q.addedBy === currentUser?.id) && (
+                              <button onClick={() => { const nQ = [...djState.queue]; nQ.splice(idx, 1); updateDjState({ queue: nQ }); }} className="w-6 h-6 flex items-center justify-center bg-red-950/50 text-red-400 rounded hover:bg-red-500 hover:text-white ml-1" title="ลบเพลงนี้">✕</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      </>
+                    )}
+                  </div>
+               </div>
+
+            </div>
+         </div>
+      </div>
+      )}
 
           {activeChatGameId && <ChatGameModal gameId={activeChatGameId} currentUser={currentUser} onClose={() => setActiveChatGameId(null)} getAuthor={getAuthor} db={db} activeRoom={activeRoom} roomKey={roomKey} />}
           {currentView === 'chat' && (
@@ -4380,22 +4271,30 @@ function Game24({ dateSeed, onEnd }) {
                 )}
                 
                 <div className="card p-2 space-y-1 text-xs">
-                  <button onClick={() => { setSearchQ(''); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ !== currentUser?.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                    <span>📝 กระดานโพสต์รวม</span>
-                  </button>
-                  
-                  {currentUser && (
-                    <button onClick={() => { setSearchQ(currentUser.id); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ === currentUser.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-sky-500 text-white shadow-lg' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                      <span>👤 โพสต์ของฉัน</span>
-                      <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono">{posts.filter((p) => p.authorId === currentUser.id).length}</span>
+                  {currentView === 'admin' ? (
+                    <button className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md cursor-default">
+                      <span>👑 หน้าจัดการสมาชิก (Owner)</span>
                     </button>
-                  )}
-                  
-                  {currentUser && (
-                    <button onClick={() => setCurrentView('bookmarks')} className={currentView === 'bookmarks' ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-amber-400 text-amber-950 shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                      <span>★ โพสต์ที่บันทึกไว้</span>
-                      <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono text-slate-300">{posts.filter((p) => (p.bookmarks || []).includes(currentUser.id)).length}</span>
-                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => { setSearchQ(''); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ !== currentUser?.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
+                        <span>📝 กระดานโพสต์รวม</span>
+                      </button>
+                      
+                      {currentUser && (
+                        <button onClick={() => { setSearchQ(currentUser.id); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ === currentUser.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-sky-500 text-white shadow-lg' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
+                          <span>👤 โพสต์ของฉัน</span>
+                          <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono">{posts.filter((p) => p.authorId === currentUser.id).length}</span>
+                        </button>
+                      )}
+                      
+                      {currentUser && (
+                        <button onClick={() => setCurrentView('bookmarks')} className={currentView === 'bookmarks' ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-amber-400 text-amber-950 shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
+                          <span>★ โพสต์ที่บันทึกไว้</span>
+                          <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono text-slate-300">{posts.filter((p) => (p.bookmarks || []).includes(currentUser.id)).length}</span>
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               </aside>
@@ -4781,7 +4680,6 @@ function Game24({ dateSeed, onEnd }) {
           {currentView !== 'login' && (
             <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[100] flex flex-col items-end pointer-events-none">
               
-              {/* ปุ่มวงกลมตอนย่อหน้าต่าง (คลิกเพื่อขยาย) */}
               {!isPlayerFloatingOpen && (
                 <button 
                   onClick={() => setIsPlayerFloatingOpen(true)}
@@ -4791,44 +4689,24 @@ function Game24({ dateSeed, onEnd }) {
                 </button>
               )}
 
-              {/* หน้าต่างลอยตอนขยาย */}
               {isPlayerFloatingOpen && (
                 <div className="w-[300px] sm:w-[340px] bg-black/80 backdrop-blur-xl border border-sky-900/50 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col transition-all pointer-events-auto">
-                  
-                  {/* แถบด้านบน (Header) */}
                   <div className="bg-[#1A0A26]/80 px-4 py-2 flex justify-between items-center border-b border-[#1E3A5F]">
                      <div className="text-[10px] text-sky-400 font-bold tracking-widest uppercase flex items-center gap-2 cursor-pointer hover:text-sky-300" onClick={() => setCurrentView('discjam')}>
-                       💿 Disc Jam {djState.isPlaying && !isDjMuted ? '🎵' : ''}
+                       💿 Disc Jam {isDeckPlaying && !isDjMuted ? '🎵' : ''}
                      </div>
                      <button onClick={() => setIsPlayerFloatingOpen(false)} className="text-slate-400 hover:text-red-400 font-bold text-lg leading-none mb-1" title="ย่อหน้าต่าง">−</button>
                   </div>
                   
-                  {/* เนื้อหาด้านใน (ชื่อเพลง & ปุ่มควบคุม) */}
                   <div className="p-4 flex flex-col gap-4">
                      <div className="text-xs sm:text-sm font-bold truncate text-center text-slate-200 cursor-pointer hover:scale-105 transition-transform" onClick={() => setCurrentView('discjam')}>
-                       {isFullyClosed ? '🌙 สถานีปิดยามวิกาล (AutoPlay)' : (djState.queue?.length > 0 ? djState.queue[0].title : 'ไม่มีเพลงกำลังเล่น')}
+                       {(!djState.deckA?.id && !djState.deckB?.id && lateNight && djState.forceClosed) ? '🌙 สถานีปิดยามวิกาล (AutoPlay)' : (activeDeckSong?.title || 'ไม่มีเพลงกำลังเล่น')}
                      </div>
                      
                      <div className="flex justify-between items-center">
-                       {/* ควบคุมระดับเสียง */}
                        <div className="flex items-center gap-2 w-7/12">
                           {isDjMuted ? (
-                            <button onClick={() => {
-                                setIsDjMuted(false);
-                                if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
-                                    const expectedTime = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
-                                    const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
-                                    const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
-                                    
-                                    // โหลดเพลงใหม่ทันทีถ้าเพลงในเครื่องไม่ตรงกับสถานี
-                                    if (currentVideoId && currentVideoId !== playerVideoId) {
-                                        ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
-                                    } else {
-                                        ytPlayerRef.current.seekTo(expectedTime, true);
-                                        ytPlayerRef.current.playVideo();
-                                    }
-                                }
-                            }} className="btn-w text-[10px] shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse px-3 py-1.5 w-full">
+                            <button onClick={() => setIsDjMuted(false)} className="btn-w text-[10px] shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse px-3 py-1.5 w-full">
                               🔊 กดเปิดรับเสียงเพลง
                             </button>
                           ) : (
@@ -4839,35 +4717,14 @@ function Game24({ dateSeed, onEnd }) {
                           )}
                        </div>
                        
-                      {/* ปุ่มเล่น/หยุด (Play/Pause) */}
                        <div className="flex justify-end w-4/12">
                          <button 
-                           onClick={() => {
-                              if (isLocalPaused) {
-                                  setIsLocalPaused(false);
-                                  if (ytPlayerRef.current && (djState.isPlaying || isFullyClosed)) {
-                                      const expectedTime = djState.startedAt ? Math.max(0, ((Date.now() - djState.startedAt) / 1000) * (djState.speed || 1)) : 0;
-                                      const currentVideoId = isFullyClosed ? CLOSED_SONG_ID : djState.queue?.[0]?.id;
-                                      const playerVideoId = ytPlayerRef.current.getVideoData ? ytPlayerRef.current.getVideoData().video_id : null;
-                                      
-                                      // โหลดเพลงใหม่ทันทีถ้าเพลงในเครื่องไม่ตรงกับสถานี
-                                      if (currentVideoId && currentVideoId !== playerVideoId) {
-                                          ytPlayerRef.current.loadVideoById(currentVideoId, expectedTime);
-                                      } else {
-                                          ytPlayerRef.current.seekTo(expectedTime, true);
-                                          ytPlayerRef.current.playVideo();
-                                      }
-                                  }
-                              } else {
-                                  setIsLocalPaused(true);
-                                  if (ytPlayerRef.current) ytPlayerRef.current.pauseVideo();
-                              }
-                           }} 
+                           onClick={() => setIsLocalPaused(!isLocalPaused)} 
                            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm sm:text-lg shadow-lg transition-transform bg-[#0F2547] border border-[#1E3A5F] text-white hover:scale-110`}
-                           disabled={(!djState.queue || djState.queue.length === 0 || !djState.isPlaying) && !isFullyClosed}
+                           disabled={!activeDeckSong?.id && !lateNight}
                            title="หยุด/เล่น เสียงชั่วคราวในเครื่องคุณ"
                          >
-                           {!isLocalPaused && (djState.isPlaying || isFullyClosed) ? '⏸' : '▶'}
+                           {!isLocalPaused && isDeckPlaying ? '⏸' : '▶'}
                          </button>
                        </div>
                      </div>
@@ -4887,10 +4744,10 @@ function Game24({ dateSeed, onEnd }) {
              </div>
           )}
 
-              {/* ซ่อนตัวเล่นวิดีโอ IFrame เอาไว้เบื้องหลัง */}
-              {/* ซ่อนตัวเล่นวิดีโอ IFrame เอาไว้เบื้องหลังโดยห่อ div ไว้หนึ่งชั้นป้องกัน React Crash */}
+             {/* ซ่อนตัวเล่นวิดีโอ IFrame เอาไว้เบื้องหลัง */}
               <div className="hidden">
-                <div id="yt-player-global"></div>
+                <div id="yt-player-a"></div>
+                <div id="yt-player-b"></div>
               </div>
             </div>
           );
