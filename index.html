@@ -2456,6 +2456,8 @@ function Game24({ dateSeed, onEnd }) {
       const [pTitle, setPTitle] = useState(''); const [pCont, setPCont] = useState(''); const [pGuest, setPGuest] = useState(false); const [pPinned, setPPinned] = useState(false);
       const [pAtts, setPAtts] = useState([]); const [aUrl, setAUrl] = useState(''); const [aType, setAType] = useState('image');
       const pFileRef = useRef(null);
+      const [pTags, setPTags] = useState([]); const [tagInput, setTagInput] = useState('');
+      const allPostTags = Array.from(new Set(posts.flatMap(p => p.tags || [])));
       const [cInputs, setCInputs] = useState({}); const [repComm, setRepComm] = useState({}); const [commMenu, setCommMenu] = useState(null);
       const [hasPoll, setHasPoll] = useState(false); const [pollQ, setPollQ] = useState(''); const [pollOpts, setPollOpts] = useState(['', '']); const [pollClose, setPollClose] = useState(''); const [pollAnon, setPollAnon] = useState(false);
 
@@ -2663,6 +2665,7 @@ function Game24({ dateSeed, onEnd }) {
       const canManageAudio = currentUser && (djState.jammerId ? (djState.jammerId === currentUser.id) : (currentUser.role === 'admin' || currentUser.role === 'mod'));
       const activeDeckSong = localCrossfade < 50 ? djState.deckA : djState.deckB;
       const isDeckPlaying = localCrossfade < 50 ? djState.playA?.isPlaying : djState.playB?.isPlaying;
+      const isFullyClosedSync = lateNight && djState.forceClosed && !djState.jammerId && (!djState.queue || djState.queue.length === 0) && !djState.deckA?.id && !djState.deckB?.id;
 
       useEffect(() => {
         if (!window.YT) {
@@ -2704,18 +2707,31 @@ function Game24({ dateSeed, onEnd }) {
       // ระบบควบคุมระดับเสียงแยก 2 แผ่น และการเล่นวิดีโอ
       useEffect(() => {
          if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
-         
-         const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
-         const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0) && !djState.deckA?.id && !djState.deckB?.id;
 
          if (isFullyClosedSync) {
-            // แก้ไขที่ 1: เติม ?. ก่อนอ่านค่า video_id เพื่อกันระบบล่ม
+            // ระบบ Global Loop: ซิงก์เวลาจากเครื่องให้ทุกคนฟังเพลงท่อนเดียวกัน
+            const songDurationMs = 163000; // ความยาวเพลง Ladyfingers (2 นาที 43 วินาที)
+            const currentGlobalTime = Date.now();
+            const targetTime = (currentGlobalTime % songDurationMs) / 1000;
+
             if (ytA.current.getVideoData && ytA.current.getVideoData()?.video_id !== CLOSED_SONG_ID) {
-                ytA.current.loadVideoById(CLOSED_SONG_ID); ytA.current.setLoop(true);
+                ytA.current.loadVideoById(CLOSED_SONG_ID, targetTime); 
+                ytA.current.setLoop(true);
             }
-            if (!isLocalPaused) ytA.current.playVideo();
+            
+            const cur = ytA.current.getCurrentTime ? ytA.current.getCurrentTime() : 0;
+            const state = ytA.current.getPlayerState ? ytA.current.getPlayerState() : -1;
+            
+            // ดึงให้เวลาตรงกับ Global หากหนีห่างเกิน 3 วินาที
+            if (Math.abs(targetTime - cur) > 3 && state !== 3) {
+                if(ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
+            }
+
+            if (state !== 1 && !isLocalPaused) {
+                if(ytA.current.playVideo) ytA.current.playVideo();
+            }
             if (isDjMuted) ytA.current.mute(); else { ytA.current.unMute(); ytA.current.setVolume(djVolume); }
-            ytB.current.pauseVideo();
+            if (ytB.current.pauseVideo) ytB.current.pauseVideo();
             return;
          }
 
@@ -2725,19 +2741,15 @@ function Game24({ dateSeed, onEnd }) {
          
          const manageDeck = (player, deckData, playData, vol) => {
             if (!player.getVideoData) return;
-            
-            // แก้ไข: เติม ?. เพื่อดักจับกรณีที่ YouTube Player ยังไม่พร้อมส่งค่ากลับมา
             const curId = player.getVideoData()?.video_id;
-            
             const currentSpeed = djState.speed || 1;
             
             if (deckData?.id && curId !== deckData.id) {
-                // โหลดวิดีโอโดยคำนวณชดเชยเวลาให้ตรงกับความเร็วปัจจุบัน
                 player.loadVideoById(deckData.id, playData?.startedAt ? Math.max(0, ((Date.now() - playData.startedAt) / 1000) * currentSpeed) : 0);
             }
             if (playData?.isPlaying && !isLocalPaused) {
                 player.playVideo();
-                if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed); // ปรับความเร็ว
+                if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
                 if(isDjMuted) player.mute();
                 else { player.unMute(); player.setVolume(Math.max(0, (vol * djVolume)/100)); }
             } else {
@@ -2747,7 +2759,7 @@ function Game24({ dateSeed, onEnd }) {
 
          manageDeck(ytA.current, djState.deckA, djState.playA, volA);
          manageDeck(ytB.current, djState.deckB, djState.playB, volB);
-      }, [djState.deckA, djState.deckB, djState.playA, djState.playB, localCrossfade, isLocalPaused, isDjMuted, djVolume, lateNight]);
+      }, [djState.deckA, djState.deckB, djState.playA, djState.playB, localCrossfade, isLocalPaused, isDjMuted, djVolume, lateNight, isFullyClosedSync]);
 
       // เรดาร์ Auto-Sync + Auto-DJ Trigger
       useEffect(() => {
@@ -3161,7 +3173,7 @@ function Game24({ dateSeed, onEnd }) {
       };
 
       const handleEditPostReq = (post) => {
-        setPTitle(post.title || ''); setPCont(post.content || ''); setPGuest(post.isGuestAllowed); setPAtts(post.attachments || []); 
+        setPTitle(post.title || ''); setPCont(post.content || ''); setPGuest(post.isGuestAllowed); setPAtts(post.attachments || []); setPTags(post.tags || []);
         setPPinned(post.isPinned || false); if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
         else { setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setPollClose(''); }
         setEditPostData(post.id); setCreatePost(true);
@@ -3177,18 +3189,17 @@ function Game24({ dateSeed, onEnd }) {
         }
         if (!pCont.trim() && !pTitle.trim() && !pAtts.length && !poll) return;
         if(editPostData) {
-          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, isPinned: pPinned });
-          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
+          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, isPinned: pPinned, tags: pTags });
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
         } else {
           const now = Date.now(), postId = 'post-' + now;
-          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, poll, mutedBy: [], isPinned: pPinned, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
-          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
+          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, tags: pTags, poll, mutedBy: [], isPinned: pPinned, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
           await db.collection('bma_posts').doc(postId).set(postObj);
           await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
           await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
         }
       };
-
       const handleAddComment = async (postId, attachment = null) => {
         if (!currentUser) return setCurrentView('login');
         const raw = cInputs[postId] || '';
@@ -3282,7 +3293,12 @@ function Game24({ dateSeed, onEnd }) {
         const myBm = currentUser ? (p.bookmarks || []).includes(currentUser.id) : false;
         if (currentView === 'bookmarks' && !myBm) return false;
         if (tagFilter !== 'ALL' && !getTags(a).includes(tagFilter)) return false;
-        if (searchQ && !((p.title || '').toLowerCase().includes(searchQ.toLowerCase()) || (p.content || '').toLowerCase().includes(searchQ.toLowerCase()) || a.displayName.toLowerCase().includes(searchQ.toLowerCase()) || String(a.id).toLowerCase().includes(searchQ.toLowerCase()))) return false;
+        if (searchQ) {
+            const q = searchQ.toLowerCase();
+            const matchText = (p.title || '').toLowerCase().includes(q) || (p.content || '').toLowerCase().includes(q) || a.displayName.toLowerCase().includes(q) || String(a.id).toLowerCase().includes(q);
+            const matchTag = (p.tags || []).some(t => t.toLowerCase().includes(q));
+            if (!matchText && !matchTag) return false;
+        }
         
         // กรองตามเงื่อนไขใหม่ที่ระบุ
         if (filterType === 'GAME' && !p.dailyGameShare) return false;
@@ -3657,7 +3673,7 @@ function Game24({ dateSeed, onEnd }) {
                     </div>
                  </div>
 
-                 {/* เพิ่มป้ายแสดงชื่อ DJ ตรงกลางแผงควบคุม (แทรกโค้ดบล็อกนี้ลงไป) */}
+                {/* เพิ่มป้ายแสดงชื่อ DJ ตรงกลางแผงควบคุม */}
                  <div className="flex justify-center mb-6 -mt-2">
                     <div className="bg-[#050811] border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] px-4 py-2.5 rounded-full flex items-center gap-3 max-w-full overflow-x-auto no-scrollbar">
                        <span className="text-sky-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest flex items-center gap-1.5 shrink-0">
@@ -3665,7 +3681,9 @@ function Game24({ dateSeed, onEnd }) {
                        </span>
                        <div className="w-[1px] h-5 bg-slate-700 shrink-0"></div>
                        <div className="flex items-center gap-1.5 shrink-0">
-                          {djState.jammerId ? (
+                          {isFullyClosedSync ? (
+                             <span className="text-xs sm:text-sm font-bold text-red-400 mr-1">🌙 ปิดสถานียามวิกาล</span>
+                          ) : djState.jammerId ? (
                              <>
                                 <Avatar user={getAuthor(djState.jammerId)} size="xs" showStatus={true} />
                                 <span className="text-xs sm:text-sm font-bold text-white">{getAuthor(djState.jammerId).displayName}</span>
@@ -3688,7 +3706,13 @@ function Game24({ dateSeed, onEnd }) {
                        <div className="text-sky-400 font-bold text-xs mb-3 bg-sky-900/30 px-3 py-1 rounded-full uppercase tracking-widest">Deck A</div>
                        <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-8 border-slate-800 shadow-xl bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${djState.playA?.isPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
                           <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
-                             {djState.deckA?.id ? <img src={`https://img.youtube.com/vi/${djState.deckA.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
+                             {isFullyClosedSync ? (
+                                <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover scale-150" alt="" />
+                             ) : djState.deckA?.id ? (
+                                <img src={`https://img.youtube.com/vi/${djState.deckA.id}/default.jpg`} className="w-full h-full object-cover" alt="" />
+                             ) : (
+                                <div className="w-full h-full bg-slate-900"></div>
+                             )}
                           </div>
                        </div>
                        {/* ปุ่มควบคุม Deck A */}
@@ -3822,7 +3846,7 @@ function Game24({ dateSeed, onEnd }) {
             /* 🎶 มุมมองสำหรับ Listener ทั่วไป 🎶 */
             <div className="space-y-6">
               
-              {/* เพิ่มป้ายแสดงชื่อ DJ สำหรับคนฟัง */}
+             {/* เพิ่มป้ายแสดงชื่อ DJ สำหรับคนฟัง */}
               <div className="flex justify-center -mb-2 mt-4">
                   <div className="bg-[#050811] border border-slate-700 shadow-[0_0_15px_rgba(0,0,0,0.5)] px-4 py-2.5 rounded-full flex items-center gap-3 max-w-full overflow-x-auto no-scrollbar">
                      <span className="text-sky-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest flex items-center gap-1.5 shrink-0">
@@ -3830,7 +3854,9 @@ function Game24({ dateSeed, onEnd }) {
                      </span>
                      <div className="w-[1px] h-5 bg-slate-700 shrink-0"></div>
                      <div className="flex items-center gap-1.5 shrink-0">
-                        {djState.jammerId ? (
+                        {isFullyClosedSync ? (
+                           <span className="text-xs sm:text-sm font-bold text-red-400 mr-1">🌙 ปิดสถานียามวิกาล</span>
+                        ) : djState.jammerId ? (
                            <>
                               <Avatar user={getAuthor(djState.jammerId)} size="xs" showStatus={true} />
                               <span className="text-xs sm:text-sm font-bold text-white">{getAuthor(djState.jammerId).displayName}</span>
@@ -3857,9 +3883,23 @@ function Game24({ dateSeed, onEnd }) {
                   <div className="relative w-48 h-48 sm:w-64 sm:h-64">
                       <div className={`absolute inset-0 rounded-full border-[10px] border-slate-800 shadow-[0_0_40px_rgba(14,165,233,0.2)] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
                           <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
-                              {activeDeckSong?.id ? <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full bg-slate-900"></div>}
+                              {isFullyClosedSync ? (
+                                  <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover scale-150" alt="" />
+                              ) : activeDeckSong?.id ? (
+                                  <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                  <div className="w-full h-full bg-slate-900"></div>
+                              )}
                           </div>
                       </div>
+                      <div className="absolute top-[-10px] right-[-20px] w-4 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full origin-top transform rotate-12 shadow-lg hidden sm:block border-2 border-slate-800 z-10"></div>
+                  </div>
+                  
+                  <div className="mt-8 w-full max-w-md px-4">
+                      <div className="text-lg sm:text-xl font-bold text-white truncate text-center">{isFullyClosedSync ? 'สถานีปิดรับคิวเพลงชั่วคราว' : (activeDeckSong?.id ? activeDeckSong.title : 'ไม่มีเพลงกำลังเล่น')}</div>
+                      {activeDeckSong?.addedBy && !isFullyClosedSync && <div className="text-[10px] text-slate-400 text-center mt-2 font-mono">Added by: {getAuthor(activeDeckSong.addedBy).displayName}</div>}
+                  </div>
+              </div>
                       <div className="absolute top-[-10px] right-[-20px] w-4 h-24 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full origin-top transform rotate-12 shadow-lg hidden sm:block border-2 border-slate-800 z-10"></div>
                   </div>
                   
@@ -4507,7 +4547,16 @@ function Game24({ dateSeed, onEnd }) {
                           </div>
                           {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
                           {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
-                          
+                          {post.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {post.tags.map(t => (
+                                      <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[10px] border border-sky-800 transition-colors shadow-sm">
+                                          #{t}
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+
                           {post.dailyGameShare && (
                             <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
                               <div className="text-amber-300 font-bold">🎯 {GAMES[post.dailyGameShare.gameIndex]?.name || 'Daily Game'}</div>
@@ -4757,6 +4806,15 @@ function Game24({ dateSeed, onEnd }) {
                           </div>
                           {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
                           {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
+			  {post.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {post.tags.map(t => (
+                                      <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[10px] border border-sky-800 transition-colors shadow-sm">
+                                          #{t}
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
                           
                           {post.dailyGameShare && (
                             <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
@@ -4989,6 +5047,31 @@ function Game24({ dateSeed, onEnd }) {
                     <input type="checkbox" checked={pPinned} onChange={(e) => setPPinned(e.target.checked)} />
                   </label>
                 )}
+		{/* ระบบแท็ก */}
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2 relative">
+                  <div className="font-bold">🏷️ เพิ่มแท็กให้โพสต์</div>
+                  <div className="flex gap-2">
+                      <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (tagInput.trim() && !pTags.includes(tagInput.trim())) { setPTags([...pTags, tagInput.trim()]); setTagInput(''); } } }} placeholder="พิมพ์ชื่อแท็ก (เช่น ข่าวสาร, อัปเดต)..." className="flex-1 inp text-xs" />
+                      <button type="button" onClick={() => { if(tagInput.trim() && !pTags.includes(tagInput.trim())) { setPTags([...pTags, tagInput.trim()]); setTagInput(''); } }} className="btn-b text-xs px-4 font-bold">+ เพิ่ม</button>
+                  </div>
+                  {tagInput.trim() && allPostTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !pTags.includes(t)).length > 0 && (
+                      <div className="absolute top-16 left-3 right-3 bg-[#0B1325] border border-sky-500/50 rounded-lg p-2 z-50 flex flex-wrap gap-1.5 shadow-2xl max-h-32 overflow-y-auto">
+                          <div className="w-full text-[10px] text-slate-400 mb-1">แท็กที่มีคนใช้แล้ว (คลิกเพื่อเลือก):</div>
+                          {allPostTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !pTags.includes(t)).map(t => (
+                              <button key={t} type="button" onClick={() => { setPTags([...pTags, t]); setTagInput(''); }} className="px-2 py-1 bg-sky-900/50 hover:bg-sky-600 text-sky-200 rounded text-xs transition-colors border border-sky-800/50">#{t}</button>
+                          ))}
+                      </div>
+                  )}
+                  {pTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[#1E3A5F]/50">
+                          {pTags.map(t => (
+                              <span key={t} className="px-2 py-1 bg-[#1E3A5F] text-white rounded-md text-xs flex items-center gap-1.5 shadow-sm">
+                                  #{t} <button type="button" onClick={() => setPTags(pTags.filter(x => x !== t))} className="text-red-400 hover:text-red-300 font-bold bg-black/20 rounded-full w-4 h-4 flex items-center justify-center">✕</button>
+                              </span>
+                          ))}
+                      </div>
+                  )}
+                </div>
                 <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
                   <div className="flex justify-between items-center"><span className="font-bold">📊 โพลล์สำรวจความคิดเห็น</span><button type="button" onClick={() => setHasPoll(!hasPoll)} className="btn-b py-1">{hasPoll ? '✓ เปิดโพลล์แล้ว' : '+ เพิ่มโพลล์'}</button></div>
                   {hasPoll && (
