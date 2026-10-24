@@ -2725,7 +2725,10 @@ function Game24({ dateSeed, onEnd }) {
          
          const manageDeck = (player, deckData, playData, vol) => {
             if (!player.getVideoData) return;
-            const curId = player.getVideoData().video_id;
+            
+            // แก้ไข: เติม ?. เพื่อดักจับกรณีที่ YouTube Player ยังไม่พร้อมส่งค่ากลับมา
+            const curId = player.getVideoData()?.video_id;
+            
             const currentSpeed = djState.speed || 1;
             
             if (deckData?.id && curId !== deckData.id) {
