@@ -2758,17 +2758,29 @@ function Game24({ dateSeed, onEnd }) {
 
              const isDeckA = (djState.crossfade || 0) < 50;
 
-             // --- ระบบ Auto-Start & ตรวจจับเพลงจบ (Fallback) ---
+             // --- ระบบ Auto-Start & ตรวจจับเพลงจบ (Fallback + Clear Deck) ---
              if (isDJ && !isFadingRef.current) {
                  const activePlayer = isDeckA ? ytA.current : ytB.current;
-                 const activeState = activePlayer?.getPlayerState ? activePlayer.getPlayerState() : -1;
                  const activePlayData = isDeckA ? djState.playA : djState.playB;
                  const activeDeckData = isDeckA ? djState.deckA : djState.deckB;
+                 
+                 const durA = ytA.current?.getDuration ? ytA.current.getDuration() : 0;
+                 const curA = ytA.current?.getCurrentTime ? ytA.current.getCurrentTime() : 0;
+                 const durB = ytB.current?.getDuration ? ytB.current.getDuration() : 0;
+                 const curB = ytB.current?.getCurrentTime ? ytB.current.getCurrentTime() : 0;
+                 const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
+                 const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
-                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงปัจจุบันเล่นจบไปแล้ว (0)
-                 if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeState === 0) {
+                 // กันเหนียว: มองว่า "จบ" คือ state === 0 หรือเวลาเดินมาสุดแล้ว
+                 const isEndedA = (stateA === 0 || (durA > 0 && durA - curA <= 0.5)) && djState.deckA?.id;
+                 const isEndedB = (stateB === 0 || (durB > 0 && durB - curB <= 0.5)) && djState.deckB?.id;
+                 
+                 const activeIsEnded = isDeckA ? isEndedA : isEndedB;
+
+                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงที่กำลังเป็น Active เล่นจบไปแล้ว
+                 if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeIsEnded) {
                      
-                     // 1. ตรวจสอบการวนซ้ำ (Loop) ก่อน
+                     // 1. ตรวจสอบการวนซ้ำ (Loop) ของแผ่น Active ก่อน
                      if (activePlayData?.isLooping && activeDeckData?.id) {
                          isFadingRef.current = true;
                          const up = {};
@@ -2779,41 +2791,49 @@ function Game24({ dateSeed, onEnd }) {
                          return;
                      }
 
-                     // 2. ถ้าไม่ได้วนซ้ำ และอยู่ในโหมด Auto DJ ให้สลับแผ่น
-                     if (djState.djMode === 'auto') {
-                         if (djState.queue?.length > 0) {
-                             isFadingRef.current = true;
-                             const nextSong = djState.queue[0];
-                             const newQ = djState.queue.slice(1);
-                             const targetIsB = isDeckA;
-                             
-                             const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
-                             if (targetIsB) { 
-                                 up.deckB = nextSong; 
-                                 up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                                 up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             } else { 
-                                 up.deckA = nextSong; 
-                                 up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                                 up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                             }
-                             updateDjState(up);
-                             setTimeout(() => { isFadingRef.current = false; }, 1000);
-                             return;
-                         } else if (activeState === 0) {
-                             // 3. เคลียร์แผ่นทิ้งถ้าไม่มีคิวและเพลงเล่นจบแล้ว
-                             const up = {};
-                             if (isDeckA) {
-                                 up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                 up.deckA = null;
-                             } else {
-                                 up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                 up.deckB = null;
-                             }
-                             updateDjState(up);
-                             return;
+                     // 2. ถ้าไม่ได้วนซ้ำ และอยู่ในโหมด Auto DJ ให้สลับแผ่นและดึงคิวมาเล่น
+                     if (djState.djMode === 'auto' && djState.queue?.length > 0) {
+                         isFadingRef.current = true;
+                         const nextSong = djState.queue[0];
+                         const newQ = djState.queue.slice(1);
+                         const targetIsB = isDeckA;
+                         
+                         const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
+                         if (targetIsB) { 
+                             up.deckB = nextSong; 
+                             up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                             up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             up.deckA = null; // เคลียร์แผ่นเก่าออก
+                         } else { 
+                             up.deckA = nextSong; 
+                             up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                             up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             up.deckB = null; // เคลียร์แผ่นเก่าออก
                          }
+                         updateDjState(up);
+                         setTimeout(() => { isFadingRef.current = false; }, 1000);
+                         return;
                      }
+                 }
+                 
+                 // 3. จัดการเคลียร์แผ่น (Deck) ที่ไม่ได้ถูกวนซ้ำ และเล่นจบแล้ว
+                 let cleared = false;
+                 const upClear = {};
+                 if (isEndedA && !djState.playA?.isLooping) {
+                     upClear.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     upClear.deckA = null; // สั่งเคลียร์แผ่น A
+                     cleared = true;
+                 }
+                 if (isEndedB && !djState.playB?.isLooping) {
+                     upClear.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     upClear.deckB = null; // สั่งเคลียร์แผ่น B
+                     cleared = true;
+                 }
+                 
+                 if (cleared) {
+                     updateDjState(upClear);
+                     // ถ้าแผ่น Active ทะลุมาถึงตรงนี้และถูกเคลียร์ ให้ตัดจบ Cycle นี้เลย
+                     if (activeIsEnded) return;
                  }
              }
 
@@ -2835,7 +2855,6 @@ function Game24({ dateSeed, onEnd }) {
                  const dur = player.getDuration ? player.getDuration() : 0;
                  if (dur > 0 && dur - cur < 2) return;
                  
-                 // เพิ่มเงื่อนไข state !== 0 ดักไว้ ป้องกันระบบดึงเวลาตอนเพลงจบ
                  if (Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
                      if (expRaw < 0 && cur < 15) return; 
                      
@@ -2870,8 +2889,13 @@ function Game24({ dateSeed, onEnd }) {
                                  
                                  setTimeout(() => {
                                      const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
-                                     if (deckId === 'A') fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                     else fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                     if (deckId === 'A') {
+                                         fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                         fUp.deckA = null; // เคลียร์แผ่น A เพราะเพิ่ง fade ไปแผ่น B สำเร็จ
+                                     } else {
+                                         fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                         fUp.deckB = null; // เคลียร์แผ่น B เพราะเพิ่ง fade ไปแผ่น A สำเร็จ
+                                     }
                                      updateDjState(fUp);
                                      isFadingRef.current = false;
                                  }, fadeDurMs + 500);
