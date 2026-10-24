@@ -2725,15 +2725,16 @@ function Game24({ dateSeed, onEnd }) {
          
          const manageDeck = (player, deckData, playData, vol) => {
             if (!player.getVideoData) return;
-            
-            // แก้ไขที่ 2: เติม ?. ก่อนอ่านค่า video_id เพื่อกันระบบล่ม
-            const curId = player.getVideoData()?.video_id;
+            const curId = player.getVideoData().video_id;
+            const currentSpeed = djState.speed || 1;
             
             if (deckData?.id && curId !== deckData.id) {
-                player.loadVideoById(deckData.id, playData?.startedAt ? Math.max(0, (Date.now() - playData.startedAt) / 1000) : 0);
+                // โหลดวิดีโอโดยคำนวณชดเชยเวลาให้ตรงกับความเร็วปัจจุบัน
+                player.loadVideoById(deckData.id, playData?.startedAt ? Math.max(0, ((Date.now() - playData.startedAt) / 1000) * currentSpeed) : 0);
             }
             if (playData?.isPlaying && !isLocalPaused) {
                 player.playVideo();
+                if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed); // ปรับความเร็ว
                 if(isDjMuted) player.mute();
                 else { player.unMute(); player.setVolume(Math.max(0, (vol * djVolume)/100)); }
             } else {
@@ -2752,35 +2753,64 @@ function Game24({ dateSeed, onEnd }) {
              const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
              if (isInputBlockedSync && !djState.deckA?.id && !djState.deckB?.id) return;
 
+             // --- ระบบ Auto-Start & ตรวจจับเพลงจบ (Fallback) ---
+             if (isDJ && djState.djMode === 'auto' && !isFadingRef.current && djState.queue?.length > 0) {
+                 const isDeckA = (djState.crossfade || 0) < 50;
+                 const activePlayer = isDeckA ? ytA.current : ytB.current;
+                 const activeState = activePlayer?.getPlayerState ? activePlayer.getPlayerState() : -1;
+
+                 // ถ้าระบบไม่ได้เล่นเพลงเลย หรือ เพลงปัจจุบันเล่นจบไปแล้ว (0) ให้ดึงคิวมาเล่นสลับ Deck ทันทีโดยไม่ต้องรอจังหวะ Fade
+                 if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeState === 0) {
+                     isFadingRef.current = true;
+                     const nextSong = djState.queue[0];
+                     const newQ = djState.queue.slice(1);
+                     const targetIsB = isDeckA; // ถ้า A จบ/นิ่ง ให้โยนไปเล่น B
+                     
+                     const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
+                     if (targetIsB) { 
+                         up.deckB = nextSong; 
+                         up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                         up.playA = { isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     } else { 
+                         up.deckA = nextSong; 
+                         up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                         up.playB = { isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     }
+                     updateDjState(up);
+                     setTimeout(() => { isFadingRef.current = false; }, 1000);
+                     return;
+                 }
+             }
+
              const syncPlayer = (player, playData, isActive) => {
-                 // นำ isDjMuted ออก เพื่อให้ระบบยังตามเวลาเพลงได้แม้ดีเจจะปิดเสียงตัวเอง
                  if (!player?.getCurrentTime || !playData?.isPlaying || isLocalPaused) return;
                  
-                 const expRaw = (Date.now() - (playData.startedAt||Date.now())) / 1000;
+                 const currentSpeed = djState.speed || 1;
+                 const expRaw = ((Date.now() - (playData.startedAt||Date.now())) / 1000) * currentSpeed;
                  const exp = Math.max(0, expRaw);
                  const cur = player.getCurrentTime();
                  const state = player.getPlayerState ? player.getPlayerState() : -1;
                  
                  if (state === -1 || state === 2) {
                      player.playVideo();
+                     if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
                      if (player.unMute && !isDjMuted) player.unMute();
                  }
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
                  if (dur > 0 && dur - cur < 2) return;
                  
-                 // ยืดความทนทานต่อ Time Drift และป้องกันการวนลูปเมื่อเวลาเครื่องเดินช้ากว่า
                  if (Math.abs(exp - cur) > 4 && state !== 3 && !isSeekingRef.current) {
-                     if (expRaw < 0 && cur < 15) return; // หากเวลาตามหลังและเพลงพึ่งเริ่ม ให้ข้ามการรีเซ็ต
+                     if (expRaw < 0 && cur < 15) return; 
                      
                      isSeekingRef.current = true;
                      player.seekTo(exp, true); player.playVideo();
                      setTimeout(() => { isSeekingRef.current = false; }, 2000);
                  }
                  
-                 // --- AUTO-DJ TRIGGER (ทำงานเฉพาะเครื่อง DJ) ---
+                 // --- AUTO-DJ CROSSFADE TRIGGER ---
                  if (isDJ && djState.djMode === 'auto' && isActive && !isFadingRef.current && djState.queue?.length > 0) {
-                     if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5)) {
+                     if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5) * currentSpeed) {
                          isFadingRef.current = true;
                          const nextSong = djState.queue[0];
                          const newQ = djState.queue.slice(1);
@@ -3458,18 +3488,48 @@ function Game24({ dateSeed, onEnd }) {
           {canManageAudio ? (
             <div className="space-y-6">
               <div className="card p-4 sm:p-6 bg-[#0a0210] border-fuchsia-900/50 shadow-2xl">
-                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 flex-wrap gap-3">
                     <div className="flex gap-2">
                        <button onClick={() => updateDjState({ djMode: 'auto' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'auto' ? 'bg-emerald-500 text-[#050811] shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🤖 Auto DJ</button>
                        <button onClick={() => updateDjState({ djMode: 'manual' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'manual' ? 'bg-fuchsia-500 text-[#050811] shadow-[0_0_15px_rgba(217,70,239,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🎧 Manual Pro</button>
                     </div>
-                    {djState.djMode === 'auto' && (
-                       <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
-                         ระยะเวลาเฟด:
-                         <input type="number" min="1" max="15" value={djState.fadeDuration || 5} onChange={e => updateDjState({ fadeDuration: parseInt(e.target.value) })} className="bg-black border border-slate-600 rounded w-12 text-center text-white outline-none ml-1" />
-                         วิ
-                       </div>
-                    )}
+                    
+                    <div className="flex gap-3 items-center flex-wrap">
+                        {/* ระบบเร่ง-หน่วงความเร็ว */}
+                        <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                            ความเร็ว:
+                            <select value={djState.speed || 1} onChange={(e) => {
+                                const newSpeed = parseFloat(e.target.value);
+                                const updates = { speed: newSpeed };
+                                // เมื่อเปลี่ยนความเร็ว ต้องคำนวณเวลาเริ่มเล่น (startedAt) ใหม่เพื่อไม่ให้เพลงกระตุกย้อนกลับ
+                                if (djState.playA?.isPlaying && ytA.current) {
+                                    const cPos = ytA.current.getCurrentTime() || 0;
+                                    updates.playA = { ...djState.playA, startedAt: Date.now() - (cPos / newSpeed) * 1000 };
+                                }
+                                if (djState.playB?.isPlaying && ytB.current) {
+                                    const cPos = ytB.current.getCurrentTime() || 0;
+                                    updates.playB = { ...djState.playB, startedAt: Date.now() - (cPos / newSpeed) * 1000 };
+                                }
+                                updateDjState(updates);
+                            }} className="bg-black border border-slate-600 rounded text-center text-white outline-none ml-1 py-0.5 cursor-pointer">
+                                <option value="0.25">0.25x</option>
+                                <option value="0.5">0.5x</option>
+                                <option value="0.75">0.75x</option>
+                                <option value="1">1.0x (ปกติ)</option>
+                                <option value="1.25">1.25x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2.0x</option>
+                            </select>
+                        </div>
+
+                        {djState.djMode === 'auto' && (
+                           <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                             เฟด:
+                             <input type="number" min="1" max="15" value={djState.fadeDuration || 5} onChange={e => updateDjState({ fadeDuration: parseInt(e.target.value) })} className="bg-black border border-slate-600 rounded w-10 text-center text-white outline-none ml-1" />
+                             วิ
+                           </div>
+                        )}
+                    </div>
                  </div>
 
                  {/* เพิ่มป้ายแสดงชื่อ DJ ตรงกลางแผงควบคุม (แทรกโค้ดบล็อกนี้ลงไป) */}
@@ -3511,7 +3571,8 @@ function Game24({ dateSeed, onEnd }) {
                           <button onClick={() => {
                               const isP = djState.playA?.isPlaying;
                               const cPos = ytA.current?.getCurrentTime() || 0;
-                              updateDjState({ playA: { isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (djState.playA?.pausedPos || 0) * 1000, pausedPos: isP ? cPos : 0 } });
+                              const spd = djState.speed || 1;
+                              updateDjState({ playA: { isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
                           }} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
                             {djState.playA?.isPlaying ? '⏸ Pause A' : '▶ Play A'}
                           </button>
@@ -3531,7 +3592,8 @@ function Game24({ dateSeed, onEnd }) {
                           <button onClick={() => {
                               const isP = djState.playB?.isPlaying;
                               const cPos = ytB.current?.getCurrentTime() || 0;
-                              updateDjState({ playB: { isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (djState.playB?.pausedPos || 0) * 1000, pausedPos: isP ? cPos : 0 } });
+                              const spd = djState.speed || 1;
+                              updateDjState({ playB: { isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
                           }} className={`mt-3 px-4 py-1.5 rounded-lg text-xs font-bold ${djState.playB?.isPlaying ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white'}`}>
                             {djState.playB?.isPlaying ? '⏸ Pause B' : '▶ Play B'}
                           </button>
@@ -3723,7 +3785,9 @@ function Game24({ dateSeed, onEnd }) {
                         <span className="text-amber-400 text-xs">({djState.queue?.length || 0} เพลง)</span>
                     </div>
                     {canManageAudio && djState.queue?.length > 0 && (
-                        <button onClick={() => { if(confirm('คุณต้องการลบเพลงในคิวทิ้งทั้งหมดหรือไม่?')) updateDjState({ queue: [] }); }} className="text-[10px] px-2 py-1 bg-red-900/50 text-red-300 rounded hover:bg-red-900 transition-colors">🗑️ ล้างคิว</button>
+                        <button onClick={() => { if(confirm('คุณต้องการลบเพลงในคิวทิ้งทั้งหมดหรือไม่?')) updateDjState({ queue: [] }); }} className="text-[10px] px-2.5 py-1 bg-red-950/80 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors border border-red-900 shadow">
+                           🗑️ ล้างคิว
+                        </button>
                     )}
                   </h3>
                   <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
