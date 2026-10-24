@@ -2780,25 +2780,39 @@ function Game24({ dateSeed, onEnd }) {
                      }
 
                      // 2. ถ้าไม่ได้วนซ้ำ และอยู่ในโหมด Auto DJ ให้สลับแผ่น
-                     if (djState.djMode === 'auto' && djState.queue?.length > 0) {
-                         isFadingRef.current = true;
-                         const nextSong = djState.queue[0];
-                         const newQ = djState.queue.slice(1);
-                         const targetIsB = isDeckA;
-                         
-                         const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
-                         if (targetIsB) { 
-                             up.deckB = nextSong; 
-                             up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                             up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                         } else { 
-                             up.deckA = nextSong; 
-                             up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                             up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     if (djState.djMode === 'auto') {
+                         if (djState.queue?.length > 0) {
+                             isFadingRef.current = true;
+                             const nextSong = djState.queue[0];
+                             const newQ = djState.queue.slice(1);
+                             const targetIsB = isDeckA;
+                             
+                             const up = { queue: newQ, crossfade: targetIsB ? 100 : 0 };
+                             if (targetIsB) { 
+                                 up.deckB = nextSong; 
+                                 up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                                 up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             } else { 
+                                 up.deckA = nextSong; 
+                                 up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                                 up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                             }
+                             updateDjState(up);
+                             setTimeout(() => { isFadingRef.current = false; }, 1000);
+                             return;
+                         } else if (activeState === 0) {
+                             // 3. เคลียร์แผ่นทิ้งถ้าไม่มีคิวและเพลงเล่นจบแล้ว
+                             const up = {};
+                             if (isDeckA) {
+                                 up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                 up.deckA = null;
+                             } else {
+                                 up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                 up.deckB = null;
+                             }
+                             updateDjState(up);
+                             return;
                          }
-                         updateDjState(up);
-                         setTimeout(() => { isFadingRef.current = false; }, 1000);
-                         return;
                      }
                  }
              }
@@ -2821,7 +2835,8 @@ function Game24({ dateSeed, onEnd }) {
                  const dur = player.getDuration ? player.getDuration() : 0;
                  if (dur > 0 && dur - cur < 2) return;
                  
-                 if (Math.abs(exp - cur) > 4 && state !== 3 && !isSeekingRef.current) {
+                 // เพิ่มเงื่อนไข state !== 0 ดักไว้ ป้องกันระบบดึงเวลาตอนเพลงจบ
+                 if (Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
                      if (expRaw < 0 && cur < 15) return; 
                      
                      isSeekingRef.current = true;
@@ -2833,7 +2848,6 @@ function Game24({ dateSeed, onEnd }) {
                  if (isDJ && isActive && !isFadingRef.current) {
                      if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5) * currentSpeed) {
                          
-                         // 1. ถ้าเปิด Loop ไว้ ให้ย้อนกลับไปเริ่มใหม่
                          if (playData.isLooping) {
                              isFadingRef.current = true;
                              const up = {};
@@ -2842,25 +2856,26 @@ function Game24({ dateSeed, onEnd }) {
                              updateDjState(up);
                              setTimeout(() => { isFadingRef.current = false; }, 1500);
                          } 
-                         // 2. ถ้าไม่ได้เปิด Loop และโหมด Auto DJ ให้เฟดเปลี่ยนเพลง
-                         else if (djState.djMode === 'auto' && djState.queue?.length > 0) {
-                             isFadingRef.current = true;
-                             const nextSong = djState.queue[0];
-                             const newQ = djState.queue.slice(1);
-                             const fadeDurMs = (djState.fadeDuration || 5) * 1000;
-                             
-                             const up = { queue: newQ, fadeCommand: { target: deckId === 'A' ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
-                             if (deckId === 'A') { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
-                             else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
-                             updateDjState(up);
-                             
-                             setTimeout(() => {
-                                 const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
-                                 if (deckId === 'A') fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                 else fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
-                                 updateDjState(fUp);
-                                 isFadingRef.current = false;
-                             }, fadeDurMs + 500);
+                         else if (djState.djMode === 'auto') {
+                             if (djState.queue?.length > 0) {
+                                 isFadingRef.current = true;
+                                 const nextSong = djState.queue[0];
+                                 const newQ = djState.queue.slice(1);
+                                 const fadeDurMs = (djState.fadeDuration || 5) * 1000;
+                                 
+                                 const up = { queue: newQ, fadeCommand: { target: deckId === 'A' ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
+                                 if (deckId === 'A') { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
+                                 else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
+                                 updateDjState(up);
+                                 
+                                 setTimeout(() => {
+                                     const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
+                                     if (deckId === 'A') fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                     else fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                                     updateDjState(fUp);
+                                     isFadingRef.current = false;
+                                 }, fadeDurMs + 500);
+                             }
                          }
                      }
                  }
@@ -3629,7 +3644,8 @@ function Game24({ dateSeed, onEnd }) {
                                              const newQ = djState.queue.slice(1);
                                              updateDjState({ queue: newQ, crossfade: 100, fadeCommand: null, deckB: nextSong, playB: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playA: { ...djState.playA, isPlaying: false } });
                                          } else {
-                                             updateDjState({ playA: { ...djState.playA, isPlaying: false } });
+                                             // เคลียร์แผ่นถ้าไม่มีคิวเหลือแล้ว
+                                             updateDjState({ playA: { ...djState.playA, isPlaying: false }, deckA: null });
                                          }
                                      }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
                                        ⏭ ข้าม
@@ -3681,12 +3697,14 @@ function Game24({ dateSeed, onEnd }) {
                                        {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
                                      </button>
                                      <button onClick={() => {
+                                         <button onClick={() => {
                                          if(djState.queue?.length > 0) {
                                              const nextSong = djState.queue[0];
                                              const newQ = djState.queue.slice(1);
                                              updateDjState({ queue: newQ, crossfade: 0, fadeCommand: null, deckA: nextSong, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playB: { ...djState.playB, isPlaying: false } });
                                          } else {
-                                             updateDjState({ playB: { ...djState.playB, isPlaying: false } });
+                                             // เคลียร์แผ่นถ้าไม่มีคิวเหลือแล้ว
+                                             updateDjState({ playB: { ...djState.playB, isPlaying: false }, deckB: null });
                                          }
                                      }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
                                        ⏭ ข้าม
