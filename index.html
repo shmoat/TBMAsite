@@ -2709,7 +2709,8 @@ function Game24({ dateSeed, onEnd }) {
          const isFullyClosedSync = isInputBlockedSync && (!djState.queue || djState.queue.length === 0) && !djState.deckA?.id && !djState.deckB?.id;
 
          if (isFullyClosedSync) {
-            if (ytA.current.getVideoData && ytA.current.getVideoData().video_id !== CLOSED_SONG_ID) {
+            // แก้ไขที่ 1: เติม ?. ก่อนอ่านค่า video_id เพื่อกันระบบล่ม
+            if (ytA.current.getVideoData && ytA.current.getVideoData()?.video_id !== CLOSED_SONG_ID) {
                 ytA.current.loadVideoById(CLOSED_SONG_ID); ytA.current.setLoop(true);
             }
             if (!isLocalPaused) ytA.current.playVideo();
@@ -2724,7 +2725,10 @@ function Game24({ dateSeed, onEnd }) {
          
          const manageDeck = (player, deckData, playData, vol) => {
             if (!player.getVideoData) return;
-            const curId = player.getVideoData().video_id;
+            
+            // แก้ไขที่ 2: เติม ?. ก่อนอ่านค่า video_id เพื่อกันระบบล่ม
+            const curId = player.getVideoData()?.video_id;
+            
             if (deckData?.id && curId !== deckData.id) {
                 player.loadVideoById(deckData.id, playData?.startedAt ? Math.max(0, (Date.now() - playData.startedAt) / 1000) : 0);
             }
