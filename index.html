@@ -3697,7 +3697,6 @@ function Game24({ dateSeed, onEnd }) {
                                        {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
                                      </button>
                                      <button onClick={() => {
-                                         <button onClick={() => {
                                          if(djState.queue?.length > 0) {
                                              const nextSong = djState.queue[0];
                                              const newQ = djState.queue.slice(1);
