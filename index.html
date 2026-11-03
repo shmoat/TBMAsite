@@ -245,11 +245,19 @@
     }
 
     const getStatusInfo = (u) => {
-      if(!u || !u.isOnline) return { c: 'bg-slate-500', t: 'Offline' };
+      if(!u) return { c: 'bg-slate-500', t: 'Offline' };
       const diff = Date.now() - (u.lastActive || 0);
-      if(diff < 300000) return { c: 'bg-emerald-400', t: 'Online' };
-      if(diff < 900000) return { c: 'bg-amber-400', t: 'AFK' };
-      return { c: 'bg-slate-500', t: 'Offline' };
+      if(u.isOnline && diff < 300000) return { c: 'bg-emerald-400', t: 'Online' };
+      if(u.isOnline && diff < 900000) return { c: 'bg-amber-400', t: 'AFK' };
+      
+      let offTxt = 'Offline';
+      if(u.lastActive) {
+        const min = Math.floor(diff / 60000);
+        if(min < 60) offTxt = `Offline (${min} นาทีที่แล้ว)`;
+        else if(min < 1440) offTxt = `Offline (${Math.floor(min/60)} ชั่วโมงที่แล้ว)`;
+        else offTxt = `Offline (${Math.floor(min/1440)} วันที่แล้ว)`;
+      }
+      return { c: 'bg-slate-500', t: offTxt };
     };
 
     const Avatar = ({ user, size = 'md', showStatus = false }) => {
@@ -794,7 +802,9 @@
       }, [dateSeed]);
 
       const saveHistory = (currentSt) => {
-        setHistory(prev => [...prev, JSON.parse(JSON.stringify(currentSt))]);
+        // Deep copy snapshot ไว้ทันทีก่อนที่ React จะนำไปต่อคิวเซฟ ป้องกัน Reference ชนกัน
+        const snap = JSON.parse(JSON.stringify(currentSt));
+        setHistory(prev => [...prev, snap]);
       };
 
       const handleUndo = () => {
@@ -2975,7 +2985,7 @@ function Game24({ dateSeed, onEnd }) {
          syncDeckTrack(ytB.current, loadedIdB, djState.deckB, djState.playB);
       }, [djState.deckA?.id, djState.deckB?.id, djState.playA?.isPlaying, djState.playB?.isPlaying, djState.speed, isLocalPaused, lateNight, isFullyClosedSync]);
 
-      // 2) แยกการปรับระดับเสียงและ Mute/Unmute ให้ทำงานเบาที่สุด ไม่รบกวนการโหลดเพลงของ Safari
+            // 2) แยกการปรับระดับเสียงและ Mute/Unmute ให้ทำงานเบาที่สุด
       useEffect(() => {
          if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
 
@@ -2990,11 +3000,12 @@ function Game24({ dateSeed, onEnd }) {
          const volB = cVal > 50 ? 100 : cVal * 2;
 
          if (djState.playA?.isPlaying && !isLocalPaused) {
-            if (isDjMuted) ytA.current.mute();
+            // Mute ไว้ก่อนเมื่อ Volume เป็น 0 เพื่อหลอกให้ Safari อนุญาต Autoplay เพลงถัดไป
+            if (isDjMuted || volA === 0) ytA.current.mute();
             else { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
          }
          if (djState.playB?.isPlaying && !isLocalPaused) {
-            if (isDjMuted) ytB.current.mute();
+            if (isDjMuted || volB === 0) ytB.current.mute();
             else { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
          }
       }, [localCrossfade, isDjMuted, djVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
@@ -3895,9 +3906,12 @@ function Game24({ dateSeed, onEnd }) {
 
           {currentView === 'members' && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-5 flex-1 overflow-y-auto">
-              <div className="card p-5 flex flex-wrap justify-between gap-3">
+              <div className="card p-5 flex flex-wrap justify-between items-center gap-3">
                 <h2 className="text-lg font-bold">ทำเนียบสมาชิก ({activeMembers.length})</h2>
-                <div className="flex flex-wrap gap-1.5">{['ALL', ...allTags].map((t) => <button key={t} onClick={() => setDirTag(t)} className={dirTag === t ? 'px-3 py-1 rounded-full text-xs font-bold bg-white text-[#050811]' : 'px-3 py-1 rounded-full text-xs bg-[#050811] border border-[#1E3A5F]'}>{t === 'ALL' ? 'ทั้งหมด' : t}</button>)}</div>
+                <select value={dirTag} onChange={(e) => setDirTag(e.target.value)} className="inp py-1.5 text-xs text-white max-w-[200px] w-full bg-[#050811] border border-[#1E3A5F]">
+                  <option value="ALL">หมวดหมู่ทั้งหมด</option>
+                  {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                 {activeMembers.filter((u) => dirTag === 'ALL' || getTags(u).includes(dirTag)).map((m) => (
@@ -4032,7 +4046,7 @@ function Game24({ dateSeed, onEnd }) {
                              )}
                           </div>
                        </div>
-                       {/* ปุ่มควบคุม Deck A */}
+                     	 {/* ปุ่มควบคุม Deck A */}
                        {djState.deckA?.id && (
                           <div className="mt-3 flex flex-wrap gap-2 justify-center">
                               {djState.djMode === 'manual' && (
@@ -4042,27 +4056,24 @@ function Game24({ dateSeed, onEnd }) {
                                      const spd = djState.speed || 1;
                                      updateDjState({ playA: { ...djState.playA, isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
                                  }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
-                                   {djState.playA?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                   {djState.playA?.isPlaying ? '⏸ Global Pause' : '▶ Global Play'}
                                  </button>
                               )}
                               
                               {djState.djMode === 'auto' && localCrossfade < 50 && (
                                  <>
-                                     <button onClick={() => {
-                                         const isP = djState.playA?.isPlaying;
-                                         const cPos = ytA.current?.getCurrentTime() || 0;
-                                         const spd = djState.speed || 1;
-                                         updateDjState({ playA: { ...djState.playA, isPlaying: !isP, startedAt: isP ? djState.playA.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
-                                     }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playA?.isPlaying ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                                       {djState.playA?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                     <button onClick={() => setIsLocalPaused(!isLocalPaused)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${isLocalPaused ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                                       {isLocalPaused ? '▶ Local Play' : '⏸ Local Pause'}
                                      </button>
                                      <button onClick={() => {
-                                         if(djState.queue?.length > 0) {
+                                         if (djState.fadeCommand) {
+                                             // ถ้ากำลังครอสเฟดอยู่ ให้บังคับจบเฟดไปที่อีกแผ่นทันที (ป้องกันการดึงเพลงใหม่มาแทรก)
+                                             updateDjState({ crossfade: 100, fadeCommand: null, playA: { ...djState.playA, isPlaying: false }, deckA: null });
+                                         } else if(djState.queue?.length > 0) {
                                              const nextSong = djState.queue[0];
                                              const newQ = djState.queue.slice(1);
                                              updateDjState({ queue: newQ, crossfade: 100, fadeCommand: null, deckB: nextSong, playB: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playA: { ...djState.playA, isPlaying: false } });
                                          } else {
-                                             // เคลียร์แผ่นถ้าไม่มีคิวเหลือแล้ว
                                              updateDjState({ playA: { ...djState.playA, isPlaying: false }, deckA: null });
                                          }
                                      }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
@@ -4071,7 +4082,6 @@ function Game24({ dateSeed, onEnd }) {
                                  </>
                               )}
                               
-                              {/* ปุ่มวนซ้ำ (Loop) */}
                               <button onClick={() => {
                                   updateDjState({ playA: { ...djState.playA, isLooping: !djState.playA?.isLooping } });
                               }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playA?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
@@ -4090,7 +4100,7 @@ function Game24({ dateSeed, onEnd }) {
                           </div>
                        </div>
                        <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckB?.title || 'Empty Deck'}</div>
-                       {/* ปุ่มควบคุม Deck B */}
+                       	{/* ปุ่มควบคุม Deck B */}
                        {djState.deckB?.id && (
                           <div className="mt-3 flex flex-wrap gap-2 justify-center">
                               {djState.djMode === 'manual' && (
@@ -4099,28 +4109,24 @@ function Game24({ dateSeed, onEnd }) {
                                      const cPos = ytB.current?.getCurrentTime() || 0;
                                      const spd = djState.speed || 1;
                                      updateDjState({ playB: { ...djState.playB, isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
-                                 }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playB?.isPlaying ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white'}`}>
-                                   {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                 }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playB?.isPlaying ? 'bg-amber-600 text-white' : 'bg-sky-600 text-white'}`}>
+                                   {djState.playB?.isPlaying ? '⏸ Global Pause' : '▶ Global Play'}
                                  </button>
                               )}
                               
                               {djState.djMode === 'auto' && localCrossfade >= 50 && (
                                  <>
-                                     <button onClick={() => {
-                                         const isP = djState.playB?.isPlaying;
-                                         const cPos = ytB.current?.getCurrentTime() || 0;
-                                         const spd = djState.speed || 1;
-                                         updateDjState({ playB: { ...djState.playB, isPlaying: !isP, startedAt: isP ? djState.playB.startedAt : Date.now() - (cPos / spd) * 1000, pausedPos: isP ? cPos : 0 } });
-                                     }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${djState.playB?.isPlaying ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                                       {djState.playB?.isPlaying ? '⏸ Pause' : '▶ Play'}
+                                     <button onClick={() => setIsLocalPaused(!isLocalPaused)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${isLocalPaused ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                                       {isLocalPaused ? '▶ Local Play' : '⏸ Local Pause'}
                                      </button>
                                      <button onClick={() => {
-                                         if(djState.queue?.length > 0) {
+                                         if (djState.fadeCommand) {
+                                             updateDjState({ crossfade: 0, fadeCommand: null, playB: { ...djState.playB, isPlaying: false }, deckB: null });
+                                         } else if(djState.queue?.length > 0) {
                                              const nextSong = djState.queue[0];
                                              const newQ = djState.queue.slice(1);
                                              updateDjState({ queue: newQ, crossfade: 0, fadeCommand: null, deckA: nextSong, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }, playB: { ...djState.playB, isPlaying: false } });
                                          } else {
-                                             // เคลียร์แผ่นถ้าไม่มีคิวเหลือแล้ว
                                              updateDjState({ playB: { ...djState.playB, isPlaying: false }, deckB: null });
                                          }
                                      }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
@@ -4129,7 +4135,6 @@ function Game24({ dateSeed, onEnd }) {
                                  </>
                               )}
                               
-                              {/* ปุ่มวนซ้ำ (Loop) */}
                               <button onClick={() => {
                                   updateDjState({ playB: { ...djState.playB, isLooping: !djState.playB?.isLooping } });
                               }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playB?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
@@ -5301,15 +5306,29 @@ function Game24({ dateSeed, onEnd }) {
           )}
 
           {memberModal && (
-            <Modal title={'โปรไฟล์: ' + memberModal.id} onClose={() => setMemberModal(null)}>
-              <div className="text-center space-y-3 text-xs">
-                <div className="flex justify-center"><Avatar user={memberModal} size="xl" showStatus={true} /></div>
-                <div className="flex justify-center"><TagBadges user={memberModal} /></div>
-                <div><h3 className="text-base font-bold">{memberModal.displayName}</h3><p className="font-mono text-slate-400">@{memberModal.username}</p></div>
-                <p className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] text-left">{memberModal.bio || 'ยังไม่ได้ระบุคำอธิบายตัวตน'}</p>
-                {memberModal.socialLinks?.length > 0 && <div className="flex flex-wrap gap-1.5">{memberModal.socialLinks.map((s) => <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="btn-d py-1">{SOCIALS.find((x) => x.id === s.platform)?.icon || '🔗'} {s.label} ↗</a>)}</div>}
-                {currentUser?.id !== memberModal.id && <button onClick={() => { if (!currentUser) return setCurrentView('login'); if (!openDms.includes(memberModal.id)) setOpenDms([...openDms, memberModal.id]); setMemberModal(null); setActiveRoom({ type: 'dm', id: memberModal.id }); setCurrentView('chat'); }} className="w-full btn-w py-2.5">💬 ส่งข้อความส่วนตัว (DM)</button>}
-                <button onClick={() => { setSearchQ(memberModal.id); setTagFilter('ALL'); setCurrentView('feed'); setMemberModal(null); }} className="w-full btn-b py-2.5 mt-1.5 border border-white/20 hover:border-sky-400">📝 ดูโพสต์ทั้งหมดของสมาชิกนี้</button>
+            <Modal title="โปรไฟล์สมาชิก" onClose={() => setMemberModal(null)}>
+              <div className="flex flex-col items-center text-center space-y-3">
+                <Avatar user={memberModal} size="xl" showStatus={true} />
+                <div>
+                  <h3 className="text-lg font-bold flex justify-center items-center gap-1.5">{memberModal.displayName} <RoleBadge role={memberModal.role} /></h3>
+                  <p className="text-sm font-mono text-slate-400">@{memberModal.username} • {memberModal.id}</p>
+                </div>
+                <TagBadges user={memberModal} />
+                
+                {memberModal.birthDate && (
+                   <div className="px-3 py-1.5 bg-[#0F2547] border border-[#1E3A5F] rounded-full text-xs font-bold text-sky-300 shadow-md">
+                     🎂 วันเกิด: {new Date(memberModal.birthDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long' })}
+                   </div>
+                )}
+                
+                <div className="w-full bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] text-sm text-slate-200 mt-2">
+                  {memberModal.bio || 'ยังไม่มีคำแนะนำตัว'}
+                </div>
+                <div className="flex gap-2 w-full mt-2">
+                  {currentUser && currentUser.id !== memberModal.id && (
+                     <button onClick={() => { setActiveRoom({ type: 'dm', id: memberModal.id }); setCurrentView('chat'); setMemberModal(null); }} className="flex-1 btn-b py-2 shadow hover:scale-105 transition-transform">💬 ส่งข้อความส่วนตัว</button>
+                  )}
+                </div>
               </div>
             </Modal>
           )}
