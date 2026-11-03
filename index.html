@@ -108,28 +108,17 @@
     .card-ui.face-down { background: repeating-linear-gradient(45deg, #1E3A5F, #1E3A5F 5px, #0F2547 5px, #0F2547 10px); border-color: #0F2547; }
     .text-red { color: #EF4444; } .text-black { color: #050811; }
 
-    /* Transition Animations for View */
-    @keyframes viewFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-view { animation: viewFadeIn 0.3s ease-out forwards; }
-
-    /* Blue Moon Page Transition */
-    @keyframes moonSweep {
-      0% { transform: translateX(100%) scale(0.5); opacity: 0; }
-      40% { transform: translateX(0) scale(4); opacity: 1; border-radius: 50%; }
-      60% { transform: translateX(0) scale(5); opacity: 1; border-radius: 0; }
-      100% { transform: translateX(-100%) scale(0.5); opacity: 0; }
+    /* Floating Music Note Animation */
+    @keyframes floatMusicNote {
+      0% { transform: translateY(0) scale(0.8) rotate(-10deg); opacity: 1; }
+      100% { transform: translateY(-60px) scale(1.5) rotate(20deg); opacity: 0; }
     }
-    .page-transition-moon {
-      position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .page-transition-moon::before {
-      content: '';
-      width: 150vh; height: 150vh;
-      background: radial-gradient(circle at center, #1D4ED8, #0F2547 70%, #050811);
-      box-shadow: 0 0 100px rgba(59,130,246,0.8);
-      border-radius: 50%;
-      animation: moonSweep 1.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    .animate-music-note {
+      position: absolute;
+      top: 0;
+      animation: floatMusicNote 1s ease-out forwards;
+      pointer-events: none;
+      z-index: 100;
     }
 
   </style>
@@ -2590,17 +2579,24 @@ function Game24({ dateSeed, onEnd }) {
           if (sharedPostId) return 'single_post';
           return sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home';
       });
-      const [isTransitioning, setIsTransitioning] = useState(false);
 
-      const changeViewWithTransition = (viewId) => {
-         if (viewId === currentView || isTransitioning) return;
-         setIsTransitioning(true);
-         setTimeout(() => {
-             setCurrentView(viewId);
-         }, 600); // เปลี่ยนหน้าตรงช่วงที่พระจันทร์บังเต็มจอ (40%-60% ของแอนิเมชัน)
-         setTimeout(() => {
-             setIsTransitioning(false);
-         }, 1200);
+      const [activeRoom, setActiveRoom] = useState(() => { try { return JSON.parse(sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room')) || { type: 'channel', id: 'global-lobby' }; } catch { return { type: 'channel', id: 'global-lobby' }; } });
+      useEffect(() => { sessionStorage.setItem('tbma_last_view', currentView); localStorage.setItem('tbma_last_view', currentView); }, [currentView]);
+      useEffect(() => { const s = JSON.stringify(activeRoom); sessionStorage.setItem('tbma_last_room', s); localStorage.setItem('tbma_last_room', s); }, [activeRoom]);
+
+      // State ควบคุมแอนิเมชันตัวโน้ตเมื่อกดรับเสียง
+      const [flyingNotes, setFlyingNotes] = useState([]);
+      const handleToggleLocalAudio = () => {
+          setIsLocalPaused(!isLocalPaused);
+          if (isLocalPaused) { // เมื่อถูกกดเพื่อรับเสียงให้เล่นดนตรี
+              const newNotes = [
+                  { id: Date.now(), left: '10%', char: '🎵' },
+                  { id: Date.now() + 1, left: '40%', char: '🎶' },
+                  { id: Date.now() + 2, left: '70%', char: '🎵' }
+              ];
+              setFlyingNotes(newNotes);
+              setTimeout(() => setFlyingNotes([]), 1000);
+          }
       };
 
       const [activeRoom, setActiveRoom] = useState(() => { try { return JSON.parse(sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room')) || { type: 'channel', id: 'global-lobby' }; } catch { return { type: 'channel', id: 'global-lobby' }; } });
@@ -3849,7 +3845,7 @@ function Game24({ dateSeed, onEnd }) {
               <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
               
               <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-hidden">
-                {/* Active Background Pill */}
+                {/* Active Background Pill (แถบเลื่อนไฮไลต์) */}
                 <div className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none" 
                      style={{
                         left: document.getElementById('nav-' + currentView)?.offsetLeft || 4,
@@ -3858,9 +3854,9 @@ function Game24({ dateSeed, onEnd }) {
                 ></div>
                 
                 {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam']].map(([v, l]) => 
-                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? changeViewWithTransition('login') : changeViewWithTransition(v)} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>{l}</button>
+                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>{l}</button>
                 )}
-                {currentUser?.role === 'admin' && <button id="nav-admin" onClick={() => changeViewWithTransition('admin')} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>👑 Owner</button>}
+                {currentUser?.role === 'admin' && <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>👑 Owner</button>}
               </nav>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -4005,26 +4001,32 @@ function Game24({ dateSeed, onEnd }) {
                     </div>
                   )
                 )}
-{/* 🌟 Floating Local Play/Pause Control (แสดงเฉพาะตอนหน้า Disc Jam เปิดอยู่ และเมื่อมีเพลงเล่น) 🌟 */}
+	      {/* 🌟 Floating Local Play/Pause Control (เหลืออันเดียว) 🌟 */}
               {(djState.playA?.isPlaying || djState.playB?.isPlaying) && (
                 <div className={`fixed bottom-6 right-6 z-50 transition-transform duration-300 ${isPlayerFloatingOpen ? 'translate-x-0' : 'translate-x-44'}`}>
-                   <div className="bg-[#0B1325]/90 backdrop-blur-md border-2 border-[#1E3A5F] shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-full p-2 flex items-center gap-3 pr-4 group hover:border-sky-500/50 transition-colors">
+                   <div className="bg-[#0B1325]/90 backdrop-blur-md border-2 border-[#1E3A5F] shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-full p-2 flex items-center gap-3 pr-4 group hover:border-sky-500/50 transition-colors relative">
                       <button onClick={() => setIsPlayerFloatingOpen(!isPlayerFloatingOpen)} className="w-6 h-6 rounded-full bg-[#050811] border border-[#1E3A5F] flex items-center justify-center text-[10px] text-slate-400 hover:text-white">
                          {isPlayerFloatingOpen ? '▶' : '◀'}
                       </button>
                       
-                      <button 
-                         onClick={() => setIsLocalPaused(!isLocalPaused)} 
-                         className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isLocalPaused ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-sky-500 text-sky-950 shadow-[0_0_15px_rgba(14,165,233,0.5)]'}`}
-                         title="เล่น/หยุดเพลง (มีผลเฉพาะเครื่องคุณ)"
-                      >
-                         {isLocalPaused ? '▶' : '⏸'}
-                      </button>
+                      <div className="relative">
+                          <button 
+                             onClick={handleToggleLocalAudio} 
+                             className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isLocalPaused ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-sky-500 text-sky-950 shadow-[0_0_15px_rgba(14,165,233,0.5)]'}`}
+                             title="รับเสียงวิทยุ / ปิดเสียง (มีผลเฉพาะเครื่องคุณ)"
+                          >
+                             {isLocalPaused ? '🎵' : '⏸'}
+                          </button>
+                          {/* แอนิเมชันตัวโน้ตดนตรี จะลอยขึ้นมาตอนกดรับเสียง */}
+                          {flyingNotes.map(n => (
+                             <div key={n.id} className="animate-music-note" style={{ left: n.left }}>{n.char}</div>
+                          ))}
+                      </div>
                       
                       <div className="flex flex-col">
                          <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-0.5">Local Audio</span>
                          <span className="text-[9px] text-slate-400 max-w-[120px] truncate leading-tight">
-                            {isLocalPaused ? 'คุณกดหยุดเพลงชั่วคราว' : (activeDeckSong?.title || 'กำลังเล่นเพลง...')}
+                            {isLocalPaused ? 'คุณปิดเสียงวิทยุไว้' : (activeDeckSong?.title || 'กำลังเล่นเพลง...')}
                          </span>
                       </div>
                    </div>
