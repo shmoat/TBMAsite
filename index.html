@@ -54,6 +54,47 @@
     @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     .animate-shake { animation: shake 0.2s ease-in-out 3; }
     
+/* ================= Loy Krathong CSS ================= */
+    .river-reflection {
+      position: absolute; top: 0; left: 0; right: 0; height: 100%;
+      background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(251, 191, 36, 0.08) 15px, rgba(251, 191, 36, 0.08) 30px);
+      animation: waterMove 5s linear infinite;
+    }
+    @keyframes waterMove { from { transform: translateY(0); } to { transform: translateY(30px); } }
+    @keyframes floatKrathongImg {
+      0% { left: -100px; transform: translateY(-50%) rotate(-5deg); }
+      25% { transform: translateY(-30%) rotate(3deg) scale(1.1); }
+      50% { transform: translateY(-60%) rotate(-2deg); }
+      75% { transform: translateY(-40%) rotate(4deg) scale(0.9); }
+      100% { left: calc(100% + 50px); transform: translateY(-50%) rotate(-3deg); }
+    }
+    .full-moon {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FEF08A, #F59E0B 60%, #B45309 90%, #040914 100%);
+      box-shadow: 0 0 80px rgba(245, 158, 11, 0.8), inset -10px -10px 20px rgba(0,0,0,0.5);
+      margin: 0.5rem auto; animation: pulseMoon 4s infinite alternate;
+    }
+    @keyframes pulseMoon {
+      0% { box-shadow: 0 0 60px rgba(245, 158, 11, 0.6), inset -10px -10px 20px rgba(0,0,0,0.5); transform: scale(1); }
+      100% { box-shadow: 0 0 100px rgba(245, 158, 11, 0.9), inset -10px -10px 20px rgba(0,0,0,0.5); transform: scale(1.03); }
+    }
+    @keyframes floatGameItem { 0% { left: -50px; transform: rotate(0deg); } 100% { left: 100%; transform: rotate(360deg); } }
+
+/* Loy Krathong Effects */
+    body.loykrathong-theme, .loykrathong-theme.bg-\[\#050811\], .loykrathong-theme .bg-\[\#050811\] { background-color: #040914 !important; }
+    .loykrathong-theme.bg-\[\#0B1325\], .loykrathong-theme .bg-\[\#0B1325\] { background-color: #0A162C !important; }
+    .loykrathong-theme.bg-\[\#0F2547\], .loykrathong-theme .bg-\[\#0F2547\] { background-color: #13284C !important; }
+    .loykrathong-theme.border-\[\#1E3A5F\], .loykrathong-theme .border-\[\#1E3A5F\] { border-color: #D97706 !important; }
+    .loykrathong-theme .text-sky-300, .loykrathong-theme .text-blue-200 { color: #FDE68A !important; }
+    .loykrathong-theme .text-sky-400, .loykrathong-theme .text-blue-300 { color: #FBBF24 !important; }
+    .loykrathong-theme .text-sky-500, .loykrathong-theme .text-blue-400 { color: #F59E0B !important; }
+    .loykrathong-theme .bg-sky-400, .loykrathong-theme .bg-sky-500 { background-color: #D97706 !important; }
+    .loykrathong-theme .inp { background-color: #040914 !important; border-color: #D97706 !important; }
+    .loykrathong-theme .card { background-color: #0A162C !important; border-color: #D97706 !important; }
+    .loykrathong-theme .btn-b { background-color: #13284C !important; border-color: #F59E0B !important; }
+    .loykrathong-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #FEF08A, #F59E0B 45%, #B45309 80%, #040914 100%) !important; box-shadow: 0 0 70px rgba(251,191,36,0.75) !important; }
+    .loykrathong-theme .orbit-sys svg path { fill: #0A162C !important; stroke: #FBBF24 !important; }
+
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem 0.85rem; color: #fff; outline: none; }
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
     .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; cursor: pointer; }
@@ -2391,6 +2432,100 @@ function Game24({ dateSeed, onEnd }) {
       
       const catchGhost = (id) => setGhosts(prev => prev.filter(g => g.id !== id));
 
+      // 🪷 ตรวจสอบ "วันลอยกระทง"
+      const checkIsLoyKrathong = () => {
+          const now = new Date();
+          const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const bkkDate = new Date(utcMs + (7 * 3600000));
+          const year = bkkDate.getFullYear();
+          const mmdd = `${String(bkkDate.getMonth() + 1).padStart(2, '0')}-${String(bkkDate.getDate()).padStart(2, '0')}`;
+
+          const OFFICIAL_LOY_KRATHONG = {
+              2026: '11-24', 2027: '11-13', 2028: '11-01', 2029: '11-20', 2030: '11-09',
+              2031: '10-28', 2032: '11-17', 2033: '11-06', 2034: '11-25', 2035: '11-15',
+              2036: '11-03', 2037: '11-22', 2038: '11-11', 2039: '10-31', 2040: '11-18'
+          };
+          if (OFFICIAL_LOY_KRATHONG[year]) return mmdd === OFFICIAL_LOY_KRATHONG[year];
+
+          const m = bkkDate.getMonth() + 1;
+          if (m !== 10 && m !== 11) return false;
+          const synodicMonth = 29.530588853;
+          const refFullMoon = Date.UTC(2026, 10, 24, 14, 53, 0); 
+          const diffDays = (bkkDate.getTime() - refFullMoon) / 86400000;
+          const phase = ((diffDays % synodicMonth) + synodicMonth) % synodicMonth;
+          return (phase < 0.5 || phase > synodicMonth - 0.5) && (m === 11 || bkkDate.getDate() >= 25);
+      };
+
+      const IS_LOY_KRATHONG = checkIsLoyKrathong();
+      useEffect(() => {
+          if (IS_LOY_KRATHONG) document.body.classList.add('loykrathong-theme');
+          else document.body.classList.remove('loykrathong-theme');
+      }, [IS_LOY_KRATHONG]);
+
+      // 🪷 State หน้าต่างต้อนรับและมินิเกม
+      const [showWelcome, setShowWelcome] = useState(() => {
+          return IS_LOY_KRATHONG && !sessionStorage.getItem('bma_loykrathong_seen');
+      });
+      const [loyTab, setLoyTab] = useState('krathong');
+      const [loyWish, setLoyWish] = useState('');
+      const [loyKrathongs, setLoyKrathongs] = useState([]);
+      const [siemsiMsg, setSiemsiMsg] = useState(null);
+      const [isSiemsiShaking, setIsSiemsiShaking] = useState(false);
+      
+      const [loyGameTime, setLoyGameTime] = useState(0);
+      const [loyGameScore, setLoyGameScore] = useState(0);
+      const [loyGameItems, setLoyGameItems] = useState([]);
+      const loyGameTimerRef = useRef(null);
+      const loyGameSpawnRef = useRef(null);
+
+      // 🪷 ฟังก์ชันควบคุมกิจกรรมลอยกระทง
+      const handleFloatKrathong = () => {
+          if(!loyWish.trim()) return alert('กรุณาพิมพ์คำอธิษฐานก่อนลอยกระทงครับ');
+          const newK = { id: Date.now(), top: Math.random() * 40 + 30 };
+          setLoyKrathongs(prev => [...prev, newK]);
+          alert(`คำอธิษฐาน "${loyWish.trim()}" ลอยไปกับสายน้ำแล้ว!`);
+          setLoyWish('');
+          setTimeout(() => setLoyKrathongs(prev => prev.filter(k => k.id !== newK.id)), 8500);
+      };
+
+      const handleSiemsi = () => {
+          setIsSiemsiShaking(true); setSiemsiMsg(null);
+          setTimeout(() => {
+              setIsSiemsiShaking(false);
+              const fortunes = ["ดวงชะตาสว่างไสวดั่งพระจันทร์เต็มดวง หยิบจับอะไรก็เป็นเงินเป็นทอง", "เรื่องร้ายๆ จะลอยไปกับสายน้ำ นับจากนี้เตรียมรับแต่สิ่งดีๆ", "ความรักจะผลิบานเหมือนดอกบัว คนโสดจะพบคนถูกใจ", "การงานและการเรียนจะราบรื่น ไร้อุปสรรค", "มีเกณฑ์ได้รับโชคลาภจากการเดินทาง หรือได้รับข่าวดีจากแดนไกล"];
+              setSiemsiMsg(fortunes[Math.floor(Math.random() * fortunes.length)]);
+          }, 1500);
+      };
+
+      const startLoyGame = () => {
+          setLoyGameScore(0); setLoyGameTime(20); setLoyGameItems([]);
+          if(loyGameTimerRef.current) clearInterval(loyGameTimerRef.current);
+          if(loyGameSpawnRef.current) clearInterval(loyGameSpawnRef.current);
+
+          loyGameTimerRef.current = setInterval(() => {
+              setLoyGameTime(prev => {
+                  if (prev <= 1) { clearInterval(loyGameTimerRef.current); clearInterval(loyGameSpawnRef.current); return 0; }
+                  return prev - 1;
+              });
+          }, 1000);
+
+          loyGameSpawnRef.current = setInterval(() => {
+              setLoyGameItems(prev => {
+                  const isGarbage = Math.random() > 0.35;
+                  const garbages = ['🥤', '🗑️', '🍂', '📦'];
+                  const newItem = { id: Date.now() + Math.random(), isGarbage, txt: isGarbage ? garbages[Math.floor(Math.random() * garbages.length)] : '🪷', top: Math.random() * 70 + 10, duration: Math.random() * 2 + 3, clicked: false };
+                  setTimeout(() => setLoyGameItems(current => current.filter(i => i.id !== newItem.id)), 5000);
+                  return [...prev, newItem];
+              });
+          }, 600);
+      };
+
+      const handleGameItemClick = (item) => {
+          if(item.clicked || loyGameTime <= 0) return;
+          setLoyGameItems(prev => prev.map(i => i.id === item.id ? { ...i, clicked: true } : i));
+          setLoyGameScore(s => item.isGarbage ? s + 10 : s - 5);
+      };
+
       const [djChatIn, setDjChatIn] = useState('');
       const djChatRef = useRef(null);
 
@@ -3581,7 +3716,80 @@ function Game24({ dateSeed, onEnd }) {
 
       return (
         <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
-          {isAuthLoading && <div className="fixed inset-0 z-[200] bg-[#050811] flex items-center justify-center text-sky-400 font-bold animate-pulse">กำลังเชื่อมต่อ...</div>}
+	  {showWelcome && (
+            <div id="welcome-overlay" className="fixed inset-0 bg-[#040914] z-[1000] flex flex-col items-center overflow-y-auto pt-4 transition-all pb-10">
+              <div className="max-w-[800px] w-full px-4 text-center relative z-10 flex flex-col items-center">
+                <div className="full-moon"></div>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#FBBF24] mt-2 drop-shadow-md">ยินดีต้อนรับสู่ The Blue Moon Association</h1>
+                <h2 className="text-sm sm:text-lg text-white mt-1">✨ กิจกรรมพิเศษเทศกาลวันลอยกระทง ✨</h2>
+                
+                <div className="flex justify-center gap-2 my-4 flex-wrap">
+                  <button onClick={() => setLoyTab('krathong')} className={`px-4 py-2 text-xs sm:text-sm rounded-full font-bold border transition-colors ${loyTab === 'krathong' ? 'bg-[#13284C] text-[#FBBF24] border-[#FBBF24] shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'bg-[#0A162C] text-[#FDE68A] border-[#D97706]'}`}>🪷 ลอยกระทงออนไลน์</button>
+                  <button onClick={() => setLoyTab('siemsi')} className={`px-4 py-2 text-xs sm:text-sm rounded-full font-bold border transition-colors ${loyTab === 'siemsi' ? 'bg-[#13284C] text-[#FBBF24] border-[#FBBF24] shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'bg-[#0A162C] text-[#FDE68A] border-[#D97706]'}`}>🎋 เซียมซีเสี่ยงทาย</button>
+                  <button onClick={() => setLoyTab('game')} className={`px-4 py-2 text-xs sm:text-sm rounded-full font-bold border transition-colors ${loyTab === 'game' ? 'bg-[#13284C] text-[#FBBF24] border-[#FBBF24] shadow-[0_0_10px_rgba(251,191,36,0.3)]' : 'bg-[#0A162C] text-[#FDE68A] border-[#D97706]'}`}>🎮 มินิเกมรักษ์โลก</button>
+                </div>
+
+                {loyTab === 'krathong' && (
+                  <div className="bg-[#0A162C] border-2 border-[#D97706] rounded-2xl p-4 sm:p-6 shadow-2xl w-full max-w-[600px] mx-auto animate-fade-in">
+                    <h3 className="text-white text-base sm:text-lg font-bold">ร่วมอธิษฐานลอยกระทง</h3>
+                    <p className="text-xs sm:text-sm text-slate-300 mb-2">พิมพ์คำอธิษฐานแล้วกดลอยกระทงก่อนเข้าเว็บ</p>
+                    <input type="text" value={loyWish} onChange={e => setLoyWish(e.target.value)} className="w-full bg-[#040914] border border-[#D97706] text-[#FDE68A] p-2.5 rounded-lg outline-none text-xs sm:text-sm" placeholder="พิมพ์คำอธิษฐานของคุณที่นี่..." />
+                    <button onClick={handleFloatKrathong} className="mt-4 px-6 py-2 bg-[#13284C] border-2 border-[#FBBF24] text-[#FDE68A] text-xs sm:text-sm font-bold rounded-full hover:bg-[#D97706] hover:text-white transition-all">✨ ลอยกระทงเลย!</button>
+                    <div className="relative h-[150px] sm:h-[180px] w-full mt-6 rounded-xl border border-[#D97706] overflow-hidden bg-gradient-to-b from-[#040914] to-[#0a192f]">
+                      <div className="river-reflection"></div>
+                      {loyKrathongs.map(k => (
+                        <img key={k.id} src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Lotus_flower_icon.svg/512px-Lotus_flower_icon.svg.png" className="absolute w-[50px] sm:w-[60px] h-auto -left-[100px] z-20" style={{ top: `${k.top}%`, animation: 'floatKrathongImg 8s linear forwards', filter: 'drop-shadow(0 15px 15px rgba(255, 200, 0, 0.6))' }} alt="krathong" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {loyTab === 'siemsi' && (
+                  <div className="bg-[#0A162C] border-2 border-[#D97706] rounded-2xl p-4 sm:p-6 shadow-2xl w-full max-w-[600px] mx-auto animate-fade-in flex flex-col items-center">
+                    <h3 className="text-white text-base sm:text-lg font-bold">เซียมซีเสี่ยงทาย รับวันเพ็ญ</h3>
+                    <div className={`text-[4rem] sm:text-[5rem] transition-transform origin-bottom ${isSiemsiShaking ? 'animate-shake' : ''}`}>🎋</div>
+                    <div className="bg-black/30 border border-dashed border-[#D97706] rounded-xl p-4 w-full min-h-[80px] flex items-center justify-center text-white mt-4 text-xs sm:text-sm">
+                      {isSiemsiShaking ? <span className="text-slate-300">กำลังเสี่ยงทาย...</span> : siemsiMsg ? <span className="text-[#FBBF24] font-bold">"{siemsiMsg}"</span> : <span className="text-slate-400">คลิกปุ่มเพื่อเสี่ยงทาย</span>}
+                    </div>
+                    <button onClick={handleSiemsi} disabled={isSiemsiShaking} className="mt-4 px-6 py-2 bg-[#13284C] border-2 border-[#FBBF24] text-[#FDE68A] text-xs sm:text-sm font-bold rounded-full hover:bg-[#D97706] hover:text-white transition-all">อธิษฐานแล้วเขย่าเลย</button>
+                  </div>
+                )}
+
+                {loyTab === 'game' && (
+                  <div className="bg-[#0A162C] border-2 border-[#D97706] rounded-2xl p-4 sm:p-6 shadow-2xl w-full max-w-[600px] mx-auto animate-fade-in">
+                    <h3 className="text-white text-base sm:text-lg font-bold">มินิเกม: ตักตวงบุญ รักษ์สายน้ำ</h3>
+                    <div className="flex justify-between font-bold text-sm sm:text-base mb-2">
+                      <span className="text-emerald-400">คะแนน: {loyGameScore}</span>
+                      <span className="text-red-400">เวลา: {loyGameTime}s</span>
+                    </div>
+                    <div className="relative h-[200px] sm:h-[250px] w-full rounded-xl border-2 border-[#D97706] bg-gradient-to-b from-[#061124] to-[#0a192f] overflow-hidden cursor-crosshair">
+                      {loyGameTime === 0 && loyGameScore === 0 ? (
+                        <div className="flex h-full items-center justify-center">
+                          <button onClick={startLoyGame} className="px-6 py-2 bg-[#13284C] border-2 border-[#FBBF24] text-[#FDE68A] text-xs sm:text-sm font-bold rounded-full hover:bg-[#D97706] hover:text-white z-10">▶ เริ่มเกม (20 วินาที)</button>
+                        </div>
+                      ) : loyGameTime === 0 ? (
+                        <div className="absolute inset-0 bg-black/70 z-50 flex flex-col items-center justify-center">
+                          <h3 className="text-white text-lg m-0">หมดเวลา!</h3>
+                          <p className="text-[#FBBF24] font-bold text-base my-2">คะแนนของคุณ: {loyGameScore}</p>
+                          <button onClick={startLoyGame} className="mt-2 px-4 py-1.5 bg-[#13284C] border border-[#FBBF24] text-[#FDE68A] text-xs rounded-full hover:bg-[#D97706] hover:text-white">เล่นอีกครั้ง</button>
+                        </div>
+                      ) : (
+                        loyGameItems.map(item => (
+                          <div key={item.id} onClick={() => handleGameItemClick(item)} className="absolute text-2xl sm:text-3xl select-none" style={{ top: `${item.top}%`, animation: `floatGameItem ${item.duration}s linear forwards`, filter: item.clicked ? (item.isGarbage ? 'drop-shadow(0 0 10px #4ade80)' : 'drop-shadow(0 0 10px #f87171)') : 'drop-shadow(0 5px 5px rgba(0,0,0,0.5))' }}>
+                            {item.clicked ? (item.isGarbage ? '✨' : '❌') : (item.isGarbage ? item.txt : <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Lotus_flower_icon.svg/512px-Lotus_flower_icon.svg.png" style={{width:'40px'}}/>)}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={() => { setShowWelcome(false); sessionStorage.setItem('bma_loykrathong_seen', 'true'); }} className="mt-8 px-8 py-3 text-sm sm:text-base font-bold bg-gradient-to-br from-[#F59E0B] to-[#b45309] text-white border-2 border-[#fef08a] rounded-full shadow-[0_0_20px_rgba(245,158,11,0.5)] animate-bounce hover:scale-105 hover:animate-none">เข้าสู่เว็บไซต์หลัก</button>
+              </div>
+            </div>
+          )}
+
+	  {isAuthLoading && <div className="fixed inset-0 z-[200] bg-[#050811] flex items-center justify-center text-sky-400 font-bold animate-pulse">กำลังเชื่อมต่อ...</div>}
           {zoomImg && <div onClick={() => setZoomImg(null)} className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"><img src={zoomImg} alt="" className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl" /><button className="fixed top-5 right-5 w-10 h-10 rounded-full card font-bold">✕</button></div>}
 
           <div className="fixed top-16 right-4 z-40 space-y-2 w-80 pointer-events-none">
