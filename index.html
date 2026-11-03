@@ -2587,12 +2587,15 @@ function Game24({ dateSeed, onEnd }) {
       // State ควบคุมแอนิเมชันตัวโน้ตเมื่อกดรับเสียง
       const [flyingNotes, setFlyingNotes] = useState([]);
       const handleToggleLocalAudio = () => {
+          const willPlay = isLocalPaused; // ถ้าสถานะเดิมคือ Pause แปลว่าเรากำลังจะกดเพื่อ "รับเสียง"
           setIsLocalPaused(!isLocalPaused);
-          if (isLocalPaused) { // เมื่อถูกกดเพื่อรับเสียงให้เล่นดนตรี
+          
+          // ถ้ากดรับเสียง และมีเพลงจาก Deck A หรือ B เล่นอยู่ ให้แสดงตัวโน้ต
+          if (willPlay && (djState.playA?.isPlaying || djState.playB?.isPlaying)) { 
               const newNotes = [
-                  { id: Date.now(), left: '10%', char: '🎵' },
-                  { id: Date.now() + 1, left: '40%', char: '🎶' },
-                  { id: Date.now() + 2, left: '70%', char: '🎵' }
+                  { id: Date.now(), left: '15%', char: '🎵' },
+                  { id: Date.now() + 1, left: '50%', char: '🎶' },
+                  { id: Date.now() + 2, left: '85%', char: '✨' }
               ];
               setFlyingNotes(newNotes);
               setTimeout(() => setFlyingNotes([]), 1000);
@@ -3994,39 +3997,6 @@ function Game24({ dateSeed, onEnd }) {
                       มีสมาชิกยึดตำแหน่ง Jammer อยู่
                     </div>
                   )
-                )}
-	      {/* 🌟 Floating Local Play/Pause Control (เหลืออันเดียว) 🌟 */}
-              {(djState.playA?.isPlaying || djState.playB?.isPlaying) && (
-                <div className={`fixed bottom-6 right-6 z-50 transition-transform duration-300 ${isPlayerFloatingOpen ? 'translate-x-0' : 'translate-x-44'}`}>
-                   <div className="bg-[#0B1325]/90 backdrop-blur-md border-2 border-[#1E3A5F] shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-full p-2 flex items-center gap-3 pr-4 group hover:border-sky-500/50 transition-colors relative">
-                      <button onClick={() => setIsPlayerFloatingOpen(!isPlayerFloatingOpen)} className="w-6 h-6 rounded-full bg-[#050811] border border-[#1E3A5F] flex items-center justify-center text-[10px] text-slate-400 hover:text-white">
-                         {isPlayerFloatingOpen ? '▶' : '◀'}
-                      </button>
-                      
-                      <div className="relative">
-                          <button 
-                             onClick={handleToggleLocalAudio} 
-                             className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isLocalPaused ? 'bg-amber-500 text-amber-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-sky-500 text-sky-950 shadow-[0_0_15px_rgba(14,165,233,0.5)]'}`}
-                             title="รับเสียงวิทยุ / ปิดเสียง (มีผลเฉพาะเครื่องคุณ)"
-                          >
-                             {isLocalPaused ? '🎵' : '⏸'}
-                          </button>
-                          {/* แอนิเมชันตัวโน้ตดนตรี จะลอยขึ้นมาตอนกดรับเสียง */}
-                          {flyingNotes.map(n => (
-                             <div key={n.id} className="animate-music-note" style={{ left: n.left }}>{n.char}</div>
-                          ))}
-                      </div>
-                      
-                      <div className="flex flex-col">
-                         <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-0.5">Local Audio</span>
-                         <span className="text-[9px] text-slate-400 max-w-[120px] truncate leading-tight">
-                            {isLocalPaused ? 'คุณปิดเสียงวิทยุไว้' : (activeDeckSong?.title || 'กำลังเล่นเพลง...')}
-                         </span>
-                      </div>
-                   </div>
-                </div>
-              )}
-              </div>
 
           {/* 🎧 มุมมองสำหรับ DJ หรือผู้มีสิทธิ์จัดการ 🎧 */}
           {canManageAudio ? (
@@ -5490,63 +5460,6 @@ function Game24({ dateSeed, onEnd }) {
               </form>
             </Modal>
           )}
-        {/* Global Floating Audio Player */}
-          {currentView !== 'login' && (
-            <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[100] flex flex-col items-end pointer-events-none">
-              
-              {!isPlayerFloatingOpen && (
-                <button 
-                  onClick={() => setIsPlayerFloatingOpen(true)}
-                  className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#0F2547] to-[#1E3A5F] border border-sky-500 shadow-[0_0_20px_rgba(56,189,248,0.5)] flex items-center justify-center hover:scale-110 transition-transform pointer-events-auto"
-                >
-                  <span className="text-2xl animate-pulse">🎵</span>
-                </button>
-              )}
-
-              {isPlayerFloatingOpen && (
-                <div className="w-[300px] sm:w-[340px] bg-black/80 backdrop-blur-xl border border-sky-900/50 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col transition-all pointer-events-auto">
-                  <div className="bg-[#1A0A26]/80 px-4 py-2 flex justify-between items-center border-b border-[#1E3A5F]">
-                     <div className="text-[10px] text-sky-400 font-bold tracking-widest uppercase flex items-center gap-2 cursor-pointer hover:text-sky-300" onClick={() => setCurrentView('discjam')}>
-                       💿 Disc Jam {isDeckPlaying && !isDjMuted ? '🎵' : ''}
-                     </div>
-                     <button onClick={() => setIsPlayerFloatingOpen(false)} className="text-slate-400 hover:text-red-400 font-bold text-lg leading-none mb-1" title="ย่อหน้าต่าง">−</button>
-                  </div>
-                  
-                  <div className="p-4 flex flex-col gap-4">
-                     <div className="text-xs sm:text-sm font-bold truncate text-center text-slate-200 cursor-pointer hover:scale-105 transition-transform" onClick={() => setCurrentView('discjam')}>
-                       {(!djState.deckA?.id && !djState.deckB?.id && lateNight && djState.forceClosed) ? '🌙 สถานีปิดยามวิกาล (AutoPlay)' : (activeDeckSong?.title || 'ไม่มีเพลงกำลังเล่น')}
-                     </div>
-                     
-                     <div className="flex justify-between items-center">
-                       <div className="flex items-center gap-2 w-7/12">
-                          {isDjMuted ? (
-                            <button onClick={() => setIsDjMuted(false)} className="btn-w text-[10px] shadow-[0_0_15px_rgba(56,189,248,0.4)] animate-pulse px-3 py-1.5 w-full">
-                              🔊 กดเปิดรับเสียงเพลง
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2 bg-[#0B1325] border border-[#1E3A5F] rounded-full px-3 py-1.5 w-full">
-                              <button onClick={() => setIsDjMuted(true)} className="text-slate-300 hover:text-red-400 text-xs" title="ปิดเสียง">🔊</button>
-                              <input type="range" min="0" max="100" value={djVolume} onChange={(e) => setDjVolume(parseInt(e.target.value))} className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500" title={`ระดับเสียง: ${djVolume}%`} />
-                            </div>
-                          )}
-                       </div>
-                       
-                       <div className="flex justify-end w-4/12">
-                         <button 
-                           onClick={() => setIsLocalPaused(!isLocalPaused)} 
-                           className={`w-10 h-10 rounded-full flex items-center justify-center text-sm sm:text-lg shadow-lg transition-transform bg-[#0F2547] border border-[#1E3A5F] text-white hover:scale-110`}
-                           disabled={!activeDeckSong?.id && !lateNight}
-                           title="หยุด/เล่น เสียงชั่วคราวในเครื่องคุณ"
-                         >
-                           {!isLocalPaused && isDeckPlaying ? '⏸' : '▶'}
-                         </button>
-                       </div>
-                     </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
 	  {/* 🎃 Halloween Overlays */}
           {IS_HALLOWEEN && ghosts.map(g => (
@@ -5563,10 +5476,46 @@ function Game24({ dateSeed, onEnd }) {
                 <div id="yt-player-a"></div>
                 <div id="yt-player-b"></div>
               </div>
-            </div>
-          );
-        }
 
+	{/* 🌟 Floating Local Play/Pause Control (วางไว้จุดนี้จุดเดียว เพื่อป้องกันการซ้อนทับ) 🌟 */}
+          {(djState.playA?.isPlaying || djState.playB?.isPlaying) && currentView === 'discjam' && (
+            <div className={`fixed bottom-6 right-6 z-50 transition-transform duration-300 ${isPlayerFloatingOpen ? 'translate-x-0' : 'translate-x-[calc(100%-2.5rem)]'}`}>
+               <div className="bg-[#0B1325]/90 backdrop-blur-md border-2 border-[#1E3A5F] shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-full p-2 flex items-center gap-3 pr-4 group hover:border-sky-500/50 transition-colors relative">
+                  
+                  {/* ปุ่มลูกศร ซ่อน/แสดง หน้าต่างลอย */}
+                  <button onClick={() => setIsPlayerFloatingOpen(!isPlayerFloatingOpen)} className="w-8 h-8 rounded-full bg-[#050811] border border-[#1E3A5F] flex items-center justify-center text-xs text-slate-400 hover:text-white shrink-0">
+                     {isPlayerFloatingOpen ? '▶' : '◀'}
+                  </button>
+                  
+                  <div className="relative shrink-0">
+                      {/* ปุ่มตัวโน้ต / พักเสียง */}
+                      <button 
+                         onClick={handleToggleLocalAudio} 
+                         className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isLocalPaused ? 'bg-[#050811] text-white border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]' : 'bg-sky-500 text-sky-950 shadow-[0_0_15px_rgba(14,165,233,0.5)]'}`}
+                         title="รับเสียงวิทยุ / ปิดเสียง (มีผลเฉพาะเครื่องคุณ)"
+                      >
+                         {isLocalPaused ? '🎵' : '⏸'}
+                      </button>
+                      
+                      {/* แอนิเมชันตัวโน้ตดนตรี จะลอยขึ้นมาตอนกดรับเสียง */}
+                      {flyingNotes.map(n => (
+                         <div key={n.id} className="animate-music-note text-xl drop-shadow-md" style={{ left: n.left }}>{n.char}</div>
+                      ))}
+                  </div>
+                  
+                  <div className="flex flex-col min-w-[110px]">
+                     <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-0.5">Local Audio</span>
+                     <span className="text-[9px] text-slate-400 w-full truncate leading-tight">
+                        {isLocalPaused ? 'คุณปิดเสียงวิทยุไว้' : (activeDeckSong?.title || 'กำลังเล่นเพลง...')}
+                     </span>
+                  </div>
+               </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
       </script>
     </body>
