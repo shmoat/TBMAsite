@@ -2599,10 +2599,6 @@ function Game24({ dateSeed, onEnd }) {
           }
       };
 
-      const [activeRoom, setActiveRoom] = useState(() => { try { return JSON.parse(sessionStorage.getItem('tbma_last_room') || localStorage.getItem('tbma_last_room')) || { type: 'channel', id: 'global-lobby' }; } catch { return { type: 'channel', id: 'global-lobby' }; } });
-      useEffect(() => { sessionStorage.setItem('tbma_last_view', currentView); localStorage.setItem('tbma_last_view', currentView); }, [currentView]);
-      useEffect(() => { const s = JSON.stringify(activeRoom); sessionStorage.setItem('tbma_last_room', s); localStorage.setItem('tbma_last_room', s); }, [activeRoom]);
-
       const [tagFilter, setTagFilter] = useState('ALL');
       const [dirTag, setDirTag] = useState('ALL');
       const [searchQ, setSearchQ] = useState('');
