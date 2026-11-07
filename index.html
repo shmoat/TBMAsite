@@ -2584,34 +2584,6 @@ function Game24({ dateSeed, onEnd }) {
       useEffect(() => { sessionStorage.setItem('tbma_last_view', currentView); localStorage.setItem('tbma_last_view', currentView); }, [currentView]);
       useEffect(() => { const s = JSON.stringify(activeRoom); sessionStorage.setItem('tbma_last_room', s); localStorage.setItem('tbma_last_room', s); }, [activeRoom]);
 
-      // State ควบคุมแอนิเมชันตัวโน้ต
-      const [flyingNotes, setFlyingNotes] = useState([]);
-      
-      const handleToggleLocalAudio = () => {
-          setIsLocalPaused(!isLocalPaused);
-      };
-
-      // แอนิเมชันให้อีโมจิลอยขึ้นมาเรื่อย ๆ ตลอดเวลาที่ฟังเพลง
-      useEffect(() => {
-          if (isDeckPlaying && !isLocalPaused && !isFullyClosedSync) {
-              const interval = setInterval(() => {
-                  const chars = ['🎵', '🎶', '✨', '🎧'];
-                  const newNote = {
-                      id: Date.now() + Math.random(),
-                      left: Math.random() * 70 + 15 + '%', // กระจายตำแหน่ง ซ้าย-ขวา
-                      char: chars[Math.floor(Math.random() * chars.length)]
-                  };
-                  setFlyingNotes(prev => [...prev, newNote]);
-                  
-                  // ลบออกจาก state เมื่อแอนิเมชันจบ (2.5 วิ ตาม CSS)
-                  setTimeout(() => {
-                      setFlyingNotes(current => current.filter(n => n.id !== newNote.id));
-                  }, 2500); 
-              }, 800); // ความถี่ที่ตัวโน้ตจะโผล่ขึ้นมา (ทุก ๆ 0.8 วิ)
-              return () => clearInterval(interval);
-          }
-      }, [isDeckPlaying, isLocalPaused, isFullyClosedSync]);
-
       const [tagFilter, setTagFilter] = useState('ALL');
       const [dirTag, setDirTag] = useState('ALL');
       const [searchQ, setSearchQ] = useState('');
@@ -2838,8 +2810,25 @@ function Game24({ dateSeed, onEnd }) {
       const [localCrossfade, setLocalCrossfade] = useState(0);
       const [isDjMuted, _setIsDjMuted] = useState(true); 
       const [djVolume, setDjVolume] = useState(50);
-      const [isLocalPaused, setIsLocalPaused] = useState(false);
+      const [isLocalPaused, setIsLocalPaused] = useState(true); // ปิดเสียงเป็น Default
       const [isPlayerFloatingOpen, setIsPlayerFloatingOpen] = useState(true);
+      const [flyingNotes, setFlyingNotes] = useState([]);
+      
+      const handleToggleLocalAudio = () => {
+          const willPlay = isLocalPaused; // ถ้าสถานะเดิมคือ Pause แปลว่าเรากำลังจะกดเพื่อ "รับเสียง"
+          setIsLocalPaused(!isLocalPaused);
+          
+          // ถ้ากดรับเสียง และมีเพลงจาก Deck A หรือ B เล่นอยู่ ให้แสดงตัวโน้ต
+          if (willPlay && (djState.playA?.isPlaying || djState.playB?.isPlaying)) { 
+              const newNotes = [
+                  { id: Date.now(), left: '15%', char: '🎵' },
+                  { id: Date.now() + 1, left: '50%', char: '🎶' },
+                  { id: Date.now() + 2, left: '85%', char: '✨' }
+              ];
+              setFlyingNotes(newNotes);
+              setTimeout(() => setFlyingNotes([]), 2500); // ระยะเวลาต้องตรงกับ CSS
+          }
+      };
       
       const ytA = useRef(null);
       const ytB = useRef(null);
@@ -3078,8 +3067,8 @@ function Game24({ dateSeed, onEnd }) {
 
              const activeDJ = users.find(u => u.id === djState.jammerId);
              const isDJOffline = !activeDJ || !activeDJ.isOnline || (Date.now() - (activeDJ.lastActive || 0) > 120000);
-             const canAutoRun = isDJ || (isDJOffline && djState.djMode === 'auto');
-
+             // ลบบรรทัดที่เกี่ยวกับ activeDJ ออกให้หมด แล้วแก้ canAutoRun
+             const canAutoRun = canManageAudio || djState.djMode === 'auto';
              const isDeckA = (djState.crossfade || 0) < 50;
 
              if (canAutoRun && !isFadingRef.current) {
@@ -5535,43 +5524,6 @@ function Game24({ dateSeed, onEnd }) {
                 <div id="yt-player-a"></div>
                 <div id="yt-player-b"></div>
               </div>
-
-	{/* 🌟 Floating Local Play/Pause Control (วางไว้จุดนี้จุดเดียว เพื่อป้องกันการซ้อนทับ) 🌟 */}
-          {(djState.playA?.isPlaying || djState.playB?.isPlaying) && currentView === 'discjam' && (
-            <div className={`fixed bottom-6 right-6 z-50 transition-transform duration-300 ${isPlayerFloatingOpen ? 'translate-x-0' : 'translate-x-[calc(100%-2.5rem)]'}`}>
-               <div className="bg-[#0B1325]/90 backdrop-blur-md border-2 border-[#1E3A5F] shadow-[0_0_20px_rgba(0,0,0,0.8)] rounded-full p-2 flex items-center gap-3 pr-4 group hover:border-sky-500/50 transition-colors relative">
-                  
-                  {/* ปุ่มลูกศร ซ่อน/แสดง หน้าต่างลอย */}
-                  <button onClick={() => setIsPlayerFloatingOpen(!isPlayerFloatingOpen)} className="w-8 h-8 rounded-full bg-[#050811] border border-[#1E3A5F] flex items-center justify-center text-xs text-slate-400 hover:text-white shrink-0">
-                     {isPlayerFloatingOpen ? '▶' : '◀'}
-                  </button>
-                  
-                  <div className="relative shrink-0">
-                      {/* ปุ่มตัวโน้ต / พักเสียง */}
-                      <button 
-                         onClick={handleToggleLocalAudio} 
-                         className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold shadow-lg transition-transform hover:scale-105 active:scale-95 ${isLocalPaused ? 'bg-[#050811] text-white border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.5)]' : 'bg-sky-500 text-sky-950 shadow-[0_0_15px_rgba(14,165,233,0.5)]'}`}
-                         title="รับเสียงวิทยุ / ปิดเสียง (มีผลเฉพาะเครื่องคุณ)"
-                      >
-                         {isLocalPaused ? '🎵' : '⏸'}
-                      </button>
-                      
-                      {/* แอนิเมชันตัวโน้ตดนตรี จะลอยขึ้นมาตอนกดรับเสียง */}
-                      {flyingNotes.map(n => (
-                         <div key={n.id} className="animate-music-note text-xl drop-shadow-md" style={{ left: n.left }}>{n.char}</div>
-                      ))}
-                  </div>
-                  
-                  <div className="flex flex-col min-w-[110px]">
-                     <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-0.5">Local Audio</span>
-                     <span className="text-[9px] text-slate-400 w-full truncate leading-tight">
-                        {isLocalPaused ? 'คุณปิดเสียงวิทยุไว้' : (activeDeckSong?.title || 'กำลังเล่นเพลง...')}
-                     </span>
-                  </div>
-               </div>
-            </div>
-          )}
-
         </div>
       );
     }
