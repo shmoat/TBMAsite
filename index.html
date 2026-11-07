@@ -5422,6 +5422,9 @@ function Game24({ dateSeed, onEnd }) {
 
               const AdvancedUnitConverter = () => {
                   const CATEGORIES = {
+                    'Length (ความยาว)': { 'm': 1, 'cm': 100, 'mm': 1000, 'km': 0.001, 'in': 39.3701, 'ft': 3.28084, 'yd': 1.09361, 'mile': 0.000621371 },
+                    'Mass (น้ำหนัก)': { 'kg': 1, 'g': 1000, 'mg': 1e6, 'lb': 2.20462, 'oz': 35.274, 'ton': 0.001 },
+                    'Volume (ปริมาตร)': { 'L': 1, 'mL': 1000, 'm³': 0.001, 'cm³': 1000, 'gal (US)': 0.264172, 'qt (US)': 1.05669, 'fl oz (US)': 33.814 },
                     'Force (แรง)': { 'N': 1, 'kN': 1e-3, 'kgf': 0.10197, 'lbf': 0.224809 },
                     'Pressure (ความดัน)': { 'Pa': 1, 'kPa': 1e-3, 'MPa': 1e-6, 'bar': 1e-5, 'psi': 0.000145038, 'atm': 0.0000098692 },
                     'Energy (พลังงาน)': { 'J': 1, 'kJ': 1e-3, 'cal': 0.239006, 'kcal': 0.000239006, 'Wh': 0.000277778, 'kWh': 2.77778e-7, 'eV': 6.242e18 },
@@ -5439,11 +5442,12 @@ function Game24({ dateSeed, onEnd }) {
                       'kg': { type: 'mass', val: 1 }, 'g': { type: 'mass', val: 1000 }, 'lb': { type: 'mass', val: 2.20462 },
                       'm': { type: 'length', val: 1 }, 'cm': { type: 'length', val: 100 }, 'mm': { type: 'length', val: 1000 }, 'km': { type: 'length', val: 0.001 }, 'in': { type: 'length', val: 39.3701 }, 'ft': { type: 'length', val: 3.28084 },
                       's': { type: 'time', val: 1 }, 'min': { type: 'time', val: 1/60 }, 'h': { type: 'time', val: 1/3600 },
+                      'L': { type: 'volume', val: 1 }, 'mL': { type: 'volume', val: 1000 }
                   };
 
-                  const [category, setCategory] = useState('Force (แรง)');
-                  const [fromUnit, setFromUnit] = useState('N'); 
-                  const [toUnit, setToUnit] = useState('kN');
+                  const [category, setCategory] = useState('Length (ความยาว)');
+                  const [fromUnit, setFromUnit] = useState('m'); 
+                  const [toUnit, setToUnit] = useState('cm');
                   
                   const [customFrom, setCustomFrom] = useState('kg * m / s^2');
                   const [customTo, setCustomTo] = useState('g * cm / s^2');
@@ -5467,19 +5471,12 @@ function Game24({ dateSeed, onEnd }) {
                       if(!unitStr) return null;
                       try {
                           let str = unitStr.replace(/\s+/g, '');
-                          // แทนที่หน่วยด้วยค่าคอนเวอร์ชันของมันเทียบกับ Base (เช่น kg=1, g=1000)
                           Object.keys(BASE_UNITS).sort((a,b) => b.length - a.length).forEach(u => {
-                              // ใช้ Regex ใส่ขอบเขตตัวอักษร ป้องกันการแทนที่ผิดพลาด (เช่น mm ไปโดน m)
                               const regex = new RegExp(`(?<![a-zA-Z])${u}(?![a-zA-Z])`, 'g');
                               str = str.replace(regex, BASE_UNITS[u].val);
                           });
-                          
-                          // แปลงเครื่องหมาย ^ เป็น ** สำหรับ JavaScript Math
                           str = str.replace(/\^/g, '**');
-                          
-                          // ถ้ายังมีตัวอักษรเหลืออยู่ แสดงว่าพิมพ์หน่วยที่ไม่มีในระบบ
                           if (/[a-zA-Z]/.test(str)) return null;
-                          
                           const factor = new Function('return ' + str)();
                           return factor;
                       } catch (e) {
@@ -5504,7 +5501,6 @@ function Game24({ dateSeed, onEnd }) {
                       const factorFrom = parseCompoundUnit(customFrom);
                       const factorTo = parseCompoundUnit(customTo);
                       if (!factorFrom || !factorTo) return 'Unit Error';
-                      // สูตรคือ: value / factorFrom * factorTo
                       resultNum = (val / factorFrom) * factorTo;
                     } else {
                       resultNum = (val / CATEGORIES[category][fromUnit]) * CATEGORIES[category][toUnit];
@@ -5616,7 +5612,7 @@ function Game24({ dateSeed, onEnd }) {
                       )}
                       {category === 'Custom (พิมพ์หน่วยเอง)' && (
                           <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner">
-                             💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br/>(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h) <br/>ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
+                             💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br/>(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h, L, mL) <br/>ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
                           </div>
                       )}
                     </div>
