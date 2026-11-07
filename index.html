@@ -4244,7 +4244,7 @@ function Game24({ dateSeed, onEnd }) {
                      }}
                 ></div>
 
-                {[['home', '🪐 หน้าแรก'], ['feed', '📝 กระดานโพสต์'], ['chat', '💬 ห้องแชตสมาคม'], ['members', '👥 สมาชิก'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam'], ['tools', '🛠️ เครื่องมือสมาคม']].map(([v, l]) => 
+                {[['home', '🪐 Home'], ['feed', '📝 Board'], ['chat', '💬 Chat'], ['members', '👥 Members'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam'], ['tools', '🛠️ Tools']].map(([v, l]) => 
                   <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>{l}</button>
                 )}
                 {currentUser?.role === 'admin' && <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>👑 Owner</button>}
