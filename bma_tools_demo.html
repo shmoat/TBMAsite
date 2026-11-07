@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BMA Music & Audio Tools</title>
+  <title>BMA Tools Demo</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -36,7 +36,6 @@
     const nextNoteTimeRef = useRef(0);
     const timerIDRef = useRef(null);
 
-    // ฟังก์ชันเคาะจังหวะ
     const handleTap = () => {
       const now = Date.now();
       const newTaps = [...taps, now].slice(-5);
@@ -53,7 +52,6 @@
       }
     };
 
-    // ระบบ Metronome ที่แม่นยำด้วย Web Audio API Scheduler
     const scheduleNote = () => {
         if (!audioCtxRef.current) return;
         const osc = audioCtxRef.current.createOscillator();
@@ -61,7 +59,7 @@
         osc.connect(gain);
         gain.connect(audioCtxRef.current.destination);
         
-        osc.frequency.value = 800; // เสียงบี๊บ
+        osc.frequency.value = 800;
         gain.gain.setValueAtTime(1, nextNoteTimeRef.current);
         gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTimeRef.current + 0.05);
         
@@ -135,14 +133,12 @@
         oscRef.current = audioCtxRef.current.createOscillator();
         const gain = audioCtxRef.current.createGain();
         
-        // ผสมเสียงให้ออกมาคล้ายกีตาร์ (Triangle + Sine)
         oscRef.current.type = 'triangle';
         oscRef.current.connect(gain);
         gain.connect(audioCtxRef.current.destination);
         
         oscRef.current.frequency.setValueAtTime(freq, audioCtxRef.current.currentTime);
         
-        // Attack & Decay
         gain.gain.setValueAtTime(0, audioCtxRef.current.currentTime);
         gain.gain.linearRampToValueAtTime(0.8, audioCtxRef.current.currentTime + 0.05);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 3);
@@ -201,7 +197,6 @@
     const [step, setStep] = useState(0);
 
     const transpose = (chord, stp) => {
-        // รองรับคอร์ดที่มี bass note เช่น C/G หรือคอร์ดที่มีตัวเลข
         const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const FLAT_TO_SHARP = { 'Db':'C#', 'Eb':'D#', 'Gb':'F#', 'Ab':'G#', 'Bb':'A#' };
 
@@ -214,14 +209,12 @@
             return NOTES[newIdx];
         };
 
-        // แยก Root note ออกจาก Modifier
         const match = chord.match(/^([CDEFGAB][#b]?)(.*)$/);
         if(!match) return chord;
         
         let root = match[1];
         let modifier = match[2] || '';
         
-        // ถ้ามีการ slash bass note (เช่น /G) ให้ transpose ด้วย
         if (modifier.includes('/')) {
             const parts = modifier.split('/');
             const mod = parts[0];
@@ -235,19 +228,16 @@
     const getTransposedText = () => {
         if(step === 0) return inputText;
         
-        // Regex หาคอร์ด (ต้องเป็นตัวพิมพ์ใหญ่ C-B ตามด้วย # หรือ b และ modifier)
         const chordRegex = /\b([CDEFGAB][#b]?(?:m|M|maj|min|aug|dim|sus|add)?\d*(?:\/[CDEFGAB][#b]?)?)\b/g;
         
         const lines = inputText.split('\n');
         const processedLines = lines.map(line => {
-            // เช็กว่าบรรทัดนี้เป็นเนื้อร้องหรือบรรทัดคอร์ด (ถ้ามีคอร์ดเยอะกว่าคำปกติ)
             const words = line.trim().split(/\s+/);
             const isChordLine = words.length > 0 && words.every(w => chordRegex.test(w) || w === '');
             
             if (isChordLine) {
                 return line.replace(chordRegex, (match) => transpose(match, step));
             } else {
-                // ถ้าเป็นเนื้อร้องที่มีคอร์ดแทรก [C] หรือ (C)
                 return line.replace(/(\[|\()([CDEFGAB][#b]?(?:m|M|maj|min|aug|dim|sus|add)?\d*(?:\/[CDEFGAB][#b]?)?)(\]|\))/g, (fullMatch, p1, p2, p3) => {
                     return p1 + transpose(p2, step) + p3;
                 });
@@ -293,15 +283,292 @@
   };
 
   // ==========================================
+  // Tool 4: Advanced Unit Converter
+  // ==========================================
+  const AdvancedUnitConverter = () => {
+    const CATEGORIES = {
+      'Force (แรง)': { 'N': 1, 'kN': 1e-3, 'kgf': 0.10197, 'lbf': 0.224809 },
+      'Pressure (ความดัน)': { 'Pa': 1, 'kPa': 1e-3, 'MPa': 1e-6, 'bar': 1e-5, 'psi': 0.000145038, 'atm': 0.0000098692 },
+      'Energy (พลังงาน)': { 'J': 1, 'kJ': 1e-3, 'cal': 0.239006, 'kcal': 0.000239006, 'Wh': 0.000277778, 'kWh': 2.77778e-7, 'eV': 6.242e18 },
+      'Temperature (อุณหภูมิ)': 'special' // อุณหภูมิต้องใช้สูตรพิเศษ
+    };
+
+    const [category, setCategory] = useState('Force (แรง)');
+    const [fromUnit, setFromUnit] = useState('N');
+    const [toUnit, setToUnit] = useState('kN');
+    const [inputValue, setInputValue] = useState('');
+
+    useEffect(() => {
+      if (category !== 'Temperature (อุณหภูมิ)') {
+        const units = Object.keys(CATEGORIES[category]);
+        setFromUnit(units[0]);
+        setToUnit(units[1]);
+      } else {
+        setFromUnit('C');
+        setToUnit('F');
+      }
+    }, [category]);
+
+    const calculateResult = () => {
+      if (inputValue === '') return '';
+      const val = parseFloat(inputValue);
+      if (isNaN(val)) return 'Invalid Input';
+
+      if (category === 'Temperature (อุณหภูมิ)') {
+        if (fromUnit === toUnit) return val.toFixed(4);
+        if (fromUnit === 'C' && toUnit === 'F') return ((val * 9/5) + 32).toFixed(4);
+        if (fromUnit === 'C' && toUnit === 'K') return (val + 273.15).toFixed(4);
+        if (fromUnit === 'F' && toUnit === 'C') return ((val - 32) * 5/9).toFixed(4);
+        if (fromUnit === 'F' && toUnit === 'K') return ((val - 32) * 5/9 + 273.15).toFixed(4);
+        if (fromUnit === 'K' && toUnit === 'C') return (val - 273.15).toFixed(4);
+        if (fromUnit === 'K' && toUnit === 'F') return ((val - 273.15) * 9/5 + 32).toFixed(4);
+      } else {
+        const baseVal = val / CATEGORIES[category][fromUnit];
+        const result = baseVal * CATEGORIES[category][toUnit];
+        return result.toPrecision(6);
+      }
+    };
+
+    const tempUnits = ['C', 'F', 'K'];
+
+    return (
+      <div className="flex flex-col gap-4 py-4 w-full max-w-md mx-auto">
+        <div>
+          <label className="text-xs text-slate-400 font-bold mb-1 block">ประเภทหน่วยวัด</label>
+          <select value={category} onChange={e => setCategory(e.target.value)} className="inp py-2 text-sm text-sky-300 font-bold">
+            {Object.keys(CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <input type="number" value={inputValue} onChange={e => setInputValue(e.target.value)} className="inp py-3 text-lg font-mono" placeholder="จำนวน..." />
+            <select value={fromUnit} onChange={e => setFromUnit(e.target.value)} className="inp py-2 text-sm mt-2 bg-[#0B1325]">
+              {(category === 'Temperature (อุณหภูมิ)' ? tempUnits : Object.keys(CATEGORIES[category])).map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className="text-slate-400 font-bold text-xl px-2">=</div>
+          <div className="flex-1">
+            <div className="inp py-3 text-lg font-mono bg-[#0A162C] border-emerald-900 text-emerald-400 min-h-[52px] flex items-center">{calculateResult()}</div>
+            <select value={toUnit} onChange={e => setToUnit(e.target.value)} className="inp py-2 text-sm mt-2 bg-[#0B1325]">
+              {(category === 'Temperature (อุณหภูมิ)' ? tempUnits : Object.keys(CATEGORIES[category])).map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Tool 5: Matrix / Equation Solver
+  // ==========================================
+  const MatrixSolver = () => {
+    // แก้ระบบสมการ 2 ตัวแปรแบบง่าย 
+    // ax + by = c
+    // dx + ey = f
+    const [a, setA] = useState(''); const [b, setB] = useState(''); const [c, setC] = useState('');
+    const [d, setD] = useState(''); const [e, setE] = useState(''); const [f, setF] = useState('');
+
+    const solve = () => {
+      const a1=parseFloat(a), b1=parseFloat(b), c1=parseFloat(c);
+      const a2=parseFloat(d), b2=parseFloat(e), c2=parseFloat(f);
+      if([a1,b1,c1,a2,b2,c2].some(isNaN)) return "กรุณากรอกตัวเลขให้ครบ";
+      
+      const det = a1*b2 - a2*b1;
+      if (det === 0) return "หาค่าไม่ได้ (Det = 0)";
+      
+      const x = (c1*b2 - c2*b1) / det;
+      const y = (a1*c2 - a2*c1) / det;
+      
+      return `x = ${x.toFixed(4)}\ny = ${y.toFixed(4)}`;
+    };
+
+    const clear = () => { setA(''); setB(''); setC(''); setD(''); setE(''); setF(''); };
+
+    return (
+      <div className="flex flex-col gap-4 py-4 w-full max-w-sm mx-auto items-center">
+        <div className="bg-[#050811] p-4 rounded-xl border border-[#1E3A5F] w-full">
+            <h3 className="text-amber-400 font-bold mb-2 text-center text-sm">ระบบสมการ 2 ตัวแปร</h3>
+            
+            <div className="flex items-center justify-center gap-2 mb-2">
+                <input type="number" value={a} onChange={e=>setA(e.target.value)} className="inp w-16 text-center text-sm p-1" placeholder="a" /> <span>x +</span>
+                <input type="number" value={b} onChange={e=>setB(e.target.value)} className="inp w-16 text-center text-sm p-1" placeholder="b" /> <span>y =</span>
+                <input type="number" value={c} onChange={e=>setC(e.target.value)} className="inp w-20 text-center text-sm p-1" placeholder="c" />
+            </div>
+            <div className="flex items-center justify-center gap-2">
+                <input type="number" value={d} onChange={e=>setD(e.target.value)} className="inp w-16 text-center text-sm p-1" placeholder="d" /> <span>x +</span>
+                <input type="number" value={e} onChange={e=>setE(e.target.value)} className="inp w-16 text-center text-sm p-1" placeholder="e" /> <span>y =</span>
+                <input type="number" value={f} onChange={e=>setF(e.target.value)} className="inp w-20 text-center text-sm p-1" placeholder="f" />
+            </div>
+        </div>
+
+        <div className="flex gap-2 w-full">
+            <button onClick={clear} className="btn-d text-xs w-1/3">ล้างข้อมูล</button>
+            <div className="flex-1 bg-[#166534] border border-[#22c55e] text-[#22c55e] p-2 rounded-xl text-sm font-mono whitespace-pre flex items-center justify-center shadow-inner">
+                {solve()}
+            </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Tool 6: Resistor Color Code Calculator (Advanced)
+  // ==========================================
+  const ResistorCalc = () => {
+    const colors = [
+      { n: 'Black', v: 0, m: 1, c: '#000', t: '#fff' }, { n: 'Brown', v: 1, m: 10, c: '#8B4513', t: '#fff' },
+      { n: 'Red', v: 2, m: 100, c: '#FF0000', t: '#fff' }, { n: 'Orange', v: 3, m: 1000, c: '#FFA500', t: '#000' },
+      { n: 'Yellow', v: 4, m: 10000, c: '#FFFF00', t: '#000' }, { n: 'Green', v: 5, m: 100000, c: '#008000', t: '#fff' },
+      { n: 'Blue', v: 6, m: 1000000, c: '#0000FF', t: '#fff' }, { n: 'Violet', v: 7, m: 10000000, c: '#EE82EE', t: '#000' },
+      { n: 'Gray', v: 8, m: 100000000, c: '#808080', t: '#fff' }, { n: 'White', v: 9, m: 1000000000, c: '#FFFFFF', t: '#000' }
+    ];
+    const tolColors = [
+      { n: 'Gold', tol: '5%', c: '#FFD700', t: '#000' }, { n: 'Silver', tol: '10%', c: '#C0C0C0', t: '#000' }
+    ];
+
+    const [b1, setB1] = useState(colors[1]);
+    const [b2, setB2] = useState(colors[0]);
+    const [mult, setMult] = useState(colors[2]);
+    const [tol, setTol] = useState(tolColors[0]);
+
+    const formatVal = (v) => {
+      if(v >= 1000000) return (v/1000000) + ' MΩ';
+      if(v >= 1000) return (v/1000) + ' kΩ';
+      return v + ' Ω';
+    };
+
+    const val = ((b1.v * 10) + b2.v) * mult.m;
+
+    return (
+      <div className="flex flex-col items-center gap-6 py-4 w-full max-w-xl mx-auto">
+        <div className="text-3xl font-bold text-amber-400 bg-[#0F2547] p-6 rounded-xl border border-[#1E3A5F] w-full text-center font-mono shadow-inner">
+            {formatVal(val)} ± {tol.tol}
+        </div>
+        
+        {/* Resistor Visualization */}
+        <div className="relative w-64 h-16 sm:w-80 sm:h-20 flex items-center justify-center my-2">
+            <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
+            <div className="relative w-40 sm:w-48 h-full bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-4 shadow-inner">
+                <div className="w-3 h-full" style={{ backgroundColor: b1.c }}></div>
+                <div className="w-3 h-full" style={{ backgroundColor: b2.c }}></div>
+                <div className="w-3 h-full" style={{ backgroundColor: mult.c }}></div>
+                <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
+                <div className="w-3 h-full" style={{ backgroundColor: tol.c }}></div>
+            </div>
+        </div>
+
+        <div className="flex gap-2 sm:gap-4 w-full overflow-x-auto pb-2">
+          <div className="flex flex-col gap-1 flex-1 min-w-[70px]">
+            <span className="text-[10px] text-center text-slate-400 font-bold">หลักที่ 1</span>
+            {colors.map(c => <button key={'b1'+c.n} onClick={()=>setB1(c)} style={{background: c.c, color: c.t}} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${b1.n===c.n?'border-white scale-110 z-10 ring-2 ring-sky-400':'border-transparent'}`}>{c.n}</button>)}
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[70px]">
+            <span className="text-[10px] text-center text-slate-400 font-bold">หลักที่ 2</span>
+            {colors.map(c => <button key={'b2'+c.n} onClick={()=>setB2(c)} style={{background: c.c, color: c.t}} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${b2.n===c.n?'border-white scale-110 z-10 ring-2 ring-sky-400':'border-transparent'}`}>{c.n}</button>)}
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[70px]">
+            <span className="text-[10px] text-center text-slate-400 font-bold">ตัวคูณ</span>
+            {colors.map(c => <button key={'m'+c.n} onClick={()=>setMult(c)} style={{background: c.c, color: c.t}} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${mult.n===c.n?'border-white scale-110 z-10 ring-2 ring-sky-400':'border-transparent'}`}>{c.n}</button>)}
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-[70px]">
+            <span className="text-[10px] text-center text-slate-400 font-bold">คลาดเคลื่อน</span>
+            {tolColors.map(c => <button key={'t'+c.n} onClick={()=>setTol(c)} style={{background: c.c, color: c.t}} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${tol.n===c.n?'border-white scale-110 z-10 ring-2 ring-sky-400':'border-transparent'}`}>{c.n}</button>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Tool 7: Lunar Splitter (เดิม)
+  // ==========================================
+  const LunarSplitter = () => {
+    const [subtotal, setSubtotal] = useState('');
+    const [vat, setVat] = useState(7);
+    const [sc, setSc] = useState(10);
+    const [people, setPeople] = useState(1);
+
+    const st = parseFloat(subtotal) || 0;
+    const serv = st * (sc/100);
+    const v = (st + serv) * (vat/100);
+    const total = st + serv + v;
+    const perPerson = total / Math.max(1, people);
+
+    return (
+      <div className="max-w-md mx-auto space-y-4">
+        <div><label className="text-xs text-slate-400">ค่าอาหารรวม (ก่อน VAT/Service)</label><input type="number" value={subtotal} onChange={e=>setSubtotal(e.target.value)} className="inp text-xl" placeholder="0.00" /></div>
+        <div className="flex gap-4">
+          <div className="flex-1"><label className="text-xs text-slate-400">Service Charge (%)</label><input type="number" value={sc} onChange={e=>setSc(e.target.value)} className="inp" /></div>
+          <div className="flex-1"><label className="text-xs text-slate-400">VAT (%)</label><input type="number" value={vat} onChange={e=>setVat(e.target.value)} className="inp" /></div>
+        </div>
+        <div><label className="text-xs text-slate-400">จำนวนคนหาร</label><input type="number" value={people} onChange={e=>setPeople(e.target.value)} className="inp" min="1" /></div>
+        <div className="bg-[#0F2547] p-4 rounded-xl border border-[#1E3A5F] space-y-2 mt-4">
+          <div className="flex justify-between text-sm"><span>ยอดรวมทั้งหมด:</span> <span className="font-bold">{total.toFixed(2)} บาท</span></div>
+          <div className="flex justify-between text-lg text-emerald-400"><span>หารคนละ:</span> <span className="font-bold">{perPerson.toFixed(2)} บาท</span></div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Tool 8: Randomizer (เดิม)
+  // ==========================================
+  const Randomizer = () => {
+    const [names, setNames] = useState("สมาชิก A\nสมาชิก B\nสมาชิก C\nสมาชิก D");
+    const [result, setResult] = useState(null);
+    const [spinning, setSpinning] = useState(false);
+
+    const handleSpin = () => {
+      const list = names.split('\n').map(n=>n.trim()).filter(Boolean);
+      if(list.length === 0) return;
+      setSpinning(true); setResult(null);
+      let count = 0;
+      const interval = setInterval(() => {
+        setResult(list[Math.floor(Math.random() * list.length)]);
+        count++;
+        if(count > 15) {
+          clearInterval(interval);
+          setSpinning(false);
+          setResult(list[Math.floor(Math.random() * list.length)]);
+        }
+      }, 100);
+    };
+
+    return (
+      <div className="max-w-md mx-auto space-y-4">
+        <div><label className="text-xs text-slate-400">ใส่รายชื่อ (1 ชื่อต่อ 1 บรรทัด)</label><textarea rows="5" value={names} onChange={e=>setNames(e.target.value)} className="inp resize-none"></textarea></div>
+        <button onClick={handleSpin} disabled={spinning} className="w-full btn-b py-3 text-lg bg-sky-600 hover:bg-sky-500 border-sky-400">🎲 สุ่มผู้โชคดี</button>
+        {result && (
+           <div className={`mt-6 p-6 text-center rounded-xl border border-amber-500 ${spinning ? 'bg-[#0F2547]' : 'bg-amber-500/20 animate-bounce'}`}>
+             <div className="text-xs text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ:</div>
+             <div className="text-3xl font-bold text-amber-400">{result}</div>
+           </div>
+        )}
+      </div>
+    );
+  };
+
+  // ==========================================
   // Main App Component
   // ==========================================
   const App = () => {
     const [activeTool, setActiveTool] = useState(null);
 
     const TOOLS = [
-      { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper & Metronome', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
-      { id: 'tuner', category: 'Music & Audio', name: 'Guitar / Bass Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
+      // Category 1: Music & Audio
+      { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
+      { id: 'tuner', category: 'Music & Audio', name: 'Guitar Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
       { id: 'transposer', category: 'Music & Audio', name: 'Chord Transposer', icon: '🎼', desc: 'เครื่องมือทดคีย์เพลง แปลงคอร์ดยกแผง' },
+      
+      // Category 2: Calculate & Academic
+      { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
+      { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
+      { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
+
+      // Category 3: Community
+      { id: 'splitter', category: 'Community Utilities', name: 'Lunar Splitter', icon: '💸', desc: 'หารบิลคำนวณ VAT/Service Charge อย่างยุติธรรม' },
+      { id: 'randomizer', category: 'Community Utilities', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนา' },
     ];
 
     const renderTool = () => {
@@ -309,6 +576,11 @@
         case 'bpm': return <BPMTapper />;
         case 'tuner': return <GuitarTuner />;
         case 'transposer': return <ChordTransposer />;
+        case 'converter': return <AdvancedUnitConverter />;
+        case 'solver': return <MatrixSolver />;
+        case 'resistor': return <ResistorCalc />;
+        case 'splitter': return <LunarSplitter />;
+        case 'randomizer': return <Randomizer />;
         default: return null;
       }
     };
@@ -316,20 +588,18 @@
     return (
       <div className="min-h-screen flex flex-col items-center py-10 px-4">
         <div className="w-full max-w-4xl text-center mb-10">
-          <h1 className="text-3xl font-bold text-sky-400 mb-2 tracking-wide uppercase">BMA Music Tools</h1>
-          <p className="text-slate-400 text-sm">รวมเครื่องมือสำหรับนักดนตรี สาย Instrumix และ KPN ประจำสมาคม</p>
+          <h1 className="text-3xl font-bold text-sky-400 mb-2 tracking-wide uppercase">BMA Community Tools</h1>
+          <p className="text-slate-400 text-sm">รวมเครื่องมือสำหรับนักดนตรี สายวิชาการ และชุมชน ประจำสมาคม</p>
         </div>
 
         {activeTool === null ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-6xl">
             {TOOLS.map(t => (
-              <div key={t.id} onClick={() => setActiveTool(t.id)} className="card p-6 cursor-pointer hover:border-sky-400 transition-all hover:-translate-y-1 shadow-lg group">
-                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform origin-left">{t.icon}</div>
-                <div>
-                  <div className="text-[10px] font-bold text-sky-500 mb-1 uppercase tracking-widest">{t.category}</div>
-                  <h3 className="font-bold text-lg text-white mb-2">{t.name}</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">{t.desc}</p>
-                </div>
+              <div key={t.id} onClick={() => setActiveTool(t.id)} className="card p-5 cursor-pointer hover:border-sky-400 transition-all hover:-translate-y-1 shadow-lg group flex flex-col h-full">
+                <div className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#1E3A5F] text-sky-300 w-max mb-3 uppercase tracking-widest">{t.category}</div>
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform origin-left">{t.icon}</div>
+                <h3 className="font-bold text-base text-white mb-1.5">{t.name}</h3>
+                <p className="text-[11px] text-slate-400 leading-relaxed mt-auto">{t.desc}</p>
               </div>
             ))}
           </div>
