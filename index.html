@@ -2810,9 +2810,10 @@ function Game24({ dateSeed, onEnd }) {
       const [localCrossfade, setLocalCrossfade] = useState(0);
       const [isDjMuted, _setIsDjMuted] = useState(true); 
       const [djVolume, setDjVolume] = useState(50);
-      const [isLocalPaused, setIsLocalPaused] = useState(true); // ปิดเสียงเป็น Default
+      const [isLocalPaused, setIsLocalPaused] = useState(true);
       const [isPlayerFloatingOpen, setIsPlayerFloatingOpen] = useState(true);
       const [flyingNotes, setFlyingNotes] = useState([]);
+      const [localVolume, setLocalVolume] = useState(50);
       
       const ytA = useRef(null);
       const ytB = useRef(null);
@@ -2843,8 +2844,9 @@ function Game24({ dateSeed, onEnd }) {
               const volA = localCrossfade < 50 ? 100 : 100 - ((localCrossfade - 50) * 2);
               const volB = localCrossfade > 50 ? 100 : localCrossfade * 2;
               
-              if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
-              if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
+              // เปลี่ยน djVolume ตรงนี้ให้เป็น localVolume
+              if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * localVolume) / 100)); }
+              if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * localVolume) / 100)); }
           }
       };
 
@@ -2942,13 +2944,13 @@ function Game24({ dateSeed, onEnd }) {
               if (typeof navigator !== 'undefined' && navigator.audioSession) {
                 try { navigator.audioSession.type = 'playback'; } catch (err) {}
               }
-              // สำคัญ: ปลดบล็อกเสียงตามสถานะ Ref ปัจจุบัน
               if (paused) e.target.mute();
               else {
                   e.target.unMute(); 
                   const cVal = localCrossfade;
                   const vTarget = deckKey === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
-                  e.target.setVolume(Math.max(0, (vTarget * djVolumeRef.current) / 100));
+                  // เปลี่ยน djVolumeRef.current เป็น localVolume
+                  e.target.setVolume(Math.max(0, (vTarget * localVolume) / 100)); 
               }
             }
           };
@@ -3045,8 +3047,8 @@ function Game24({ dateSeed, onEnd }) {
          if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
 
          if (isFullyClosedSync) {
-            if (isLocalPaused) ytA.current.mute(); // ยึดค่าจากปุ่มแทน isDjMuted
-            else { ytA.current.unMute(); ytA.current.setVolume(djVolume); }
+            if (isLocalPaused) ytA.current.mute();
+            else { ytA.current.unMute(); ytA.current.setVolume(localVolume); } // แก้เป็น localVolume
             return;
          }
 
@@ -3056,18 +3058,18 @@ function Game24({ dateSeed, onEnd }) {
 
          if (djState.playA?.isPlaying && !isLocalPaused) {
             if (volA === 0) ytA.current.mute();
-            else { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
+            else { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * localVolume) / 100)); } // แก้เป็น localVolume
          } else if (isLocalPaused) {
             ytA.current.mute();
          }
          
          if (djState.playB?.isPlaying && !isLocalPaused) {
             if (volB === 0) ytB.current.mute();
-            else { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
+            else { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * localVolume) / 100)); } // แก้เป็น localVolume
          } else if (isLocalPaused) {
             ytB.current.mute();
          }
-      }, [localCrossfade, djVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
+      }, [localCrossfade, localVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]); // เพิ่ม localVolume ใน Dependency Array
 
       useEffect(() => {
          const syncTimer = setInterval(() => {
@@ -3901,41 +3903,56 @@ function Game24({ dateSeed, onEnd }) {
           {/* ================= GLOBAL MUSIC PLAYER FLOATING WINDOW ================= */}
           {isPlayerFloatingOpen && (
             <div className="fixed bottom-6 right-6 z-50 flex items-end justify-end pointer-events-none">
-                <div className="pointer-events-auto bg-[#0B1325]/90 backdrop-blur-md border border-[#1E3A5F] p-3 rounded-2xl shadow-2xl flex items-center gap-3 max-w-[280px]">
-                    <div className="relative w-12 h-12 rounded-full border-2 border-slate-700 shrink-0 shadow-[0_0_10px_rgba(14,165,233,0.3)]">
-		        <div className="w-full h-full rounded-full overflow-hidden">
-		     	           {/* เลื่อนรูปหน้าปกเข้าไปอยู่ในกล่องนี้แทน */}
-		            {isFullyClosedSync ? (
-		                <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover" alt="" />
-		            ) : activeDeckSong?.id ? (
-		                <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className={`w-full h-full object-cover ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`} alt="" />
-		            ) : (
-		                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs">💿</div>
-		            )}
-		        </div>
-    
-		        {/* Floating Notes Animation Overlay */}
-		        <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2" style={{ overflow: 'visible' }}>
-		            {flyingNotes.map(n => (
-		                <div key={n.id} className="animate-music-note text-[10px]" style={{ left: n.left }}>{n.char}</div>
-		            ))}
-		        </div>
-		    </div>
-                    
-                    <div className="flex flex-col min-w-0 flex-1">
-                        <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider mb-0.5">Disc Jam Radio</div>
-                        <div className="text-xs font-bold text-white truncate w-32">
-                            {isFullyClosedSync ? 'สถานีปิดรับคิวชั่วคราว' : (activeDeckSong?.title || 'ไม่มีเพลงเล่น')}
+                <div className="pointer-events-auto bg-[#0B1325]/90 backdrop-blur-md border border-[#1E3A5F] p-3 rounded-2xl shadow-2xl flex flex-col gap-2 max-w-[280px]">
+                    <div className="flex items-center gap-3">
+                        <div className="relative w-12 h-12 rounded-full border-2 border-slate-700 shrink-0 shadow-[0_0_10px_rgba(14,165,233,0.3)]">
+                            <div className="w-full h-full rounded-full overflow-hidden">
+                                       {/* เลื่อนรูปหน้าปกเข้าไปอยู่ในกล่องนี้แทน */}
+                                {isFullyClosedSync ? (
+                                    <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover" alt="" />
+                                ) : activeDeckSong?.id ? (
+                                    <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className={`w-full h-full object-cover ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`} alt="" />
+                                ) : (
+                                    <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs">💿</div>
+                                )}
+                            </div>
+                
+                            {/* Floating Notes Animation Overlay */}
+                            <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2" style={{ overflow: 'visible' }}>
+                                {flyingNotes.map(n => (
+                                    <div key={n.id} className="animate-music-note text-[10px]" style={{ left: n.left }}>{n.char}</div>
+                                ))}
+                            </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 mt-1.5">
-                            <button onClick={handleToggleLocalAudio} className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${!isLocalPaused ? 'bg-sky-900/50 text-sky-300 border-sky-500/50 shadow-[0_0_8px_rgba(14,165,233,0.4)]' : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700'}`}>
-                                {!isLocalPaused ? '🔊 กำลังฟัง' : '🔇 กดรับเสียง'}
-                            </button>
+                        <div className="flex flex-col min-w-0 flex-1">
+                            <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider mb-0.5">Disc Jam Radio</div>
+                            <div className="text-xs font-bold text-white truncate w-32">
+                                {isFullyClosedSync ? 'สถานีปิดรับคิวชั่วคราว' : (activeDeckSong?.title || 'ไม่มีเพลงเล่น')}
+                            </div>
+                            
+                            <div className="flex items-center gap-2 mt-1.5">
+                                <button onClick={handleToggleLocalAudio} className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${!isLocalPaused ? 'bg-sky-900/50 text-sky-300 border-sky-500/50 shadow-[0_0_8px_rgba(14,165,233,0.4)]' : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700'}`}>
+                                    {!isLocalPaused ? '🔊 กำลังฟัง' : '🔇 กดรับเสียง'}
+                                </button>
+                            </div>
                         </div>
+                        <button onClick={() => setIsPlayerFloatingOpen(false)} className="text-slate-500 hover:text-white p-1 self-start -mt-1 -mr-1">✕</button>
                     </div>
-                    
-                    <button onClick={() => setIsPlayerFloatingOpen(false)} className="text-slate-500 hover:text-white p-1 self-start -mt-1 -mr-1">✕</button>
+
+                    {/* แถบปรับ Volume Local (แสดงเมื่อเปิดเสียงเท่านั้น) */}
+                    {!isLocalPaused && (
+                        <div className="flex items-center gap-2 px-1 pt-1.5 border-t border-[#1E3A5F]">
+                            <span className="text-xs text-slate-400">🔈</span>
+                            <input 
+                                type="range" min="0" max="100" 
+                                value={localVolume} 
+                                onChange={(e) => setLocalVolume(parseInt(e.target.value))}
+                                className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                            />
+                            <span className="text-[9px] font-mono w-6 text-right text-sky-400">{localVolume}%</span>
+                        </div>
+                    )}
                 </div>
             </div>
           )}
@@ -4079,24 +4096,23 @@ function Game24({ dateSeed, onEnd }) {
                 )}
               </div>
 
-          {/* 🎧 มุมมองสำหรับ DJ หรือผู้มีสิทธิ์จัดการ 🎧 */}
+         {/* 🎧 มุมมองสำหรับ DJ หรือผู้มีสิทธิ์จัดการ 🎧 */}
           {canManageAudio ? (
             <div className="space-y-6">
-              <div className="card p-4 sm:p-6 bg-[#0a0210] border-fuchsia-900/50 shadow-2xl">
-                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4 flex-wrap gap-3">
+              <div className="card p-4 sm:p-6 shadow-2xl">
+                 <div className="flex justify-between items-center mb-6 border-b border-[#1E3A5F] pb-4 flex-wrap gap-3">
                     <div className="flex gap-2">
                        <button onClick={() => updateDjState({ djMode: 'auto' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'auto' ? 'bg-emerald-500 text-[#050811] shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🤖 Auto DJ</button>
-                       <button onClick={() => updateDjState({ djMode: 'manual' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'manual' ? 'bg-fuchsia-500 text-[#050811] shadow-[0_0_15px_rgba(217,70,239,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🎧 Manual Pro</button>
+                       <button onClick={() => updateDjState({ djMode: 'manual' })} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${djState.djMode === 'manual' ? 'bg-sky-500 text-[#050811] shadow-[0_0_15px_rgba(14,165,233,0.5)]' : 'bg-slate-800 text-slate-400'}`}>🎧 Manual Pro</button>
                     </div>
                     
                     <div className="flex gap-3 items-center flex-wrap">
                         {/* ระบบเร่ง-หน่วงความเร็ว */}
-                        <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                        <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-[#050811] px-3 py-1.5 rounded-lg border border-[#1E3A5F] shadow-inner">
                             ความเร็ว:
                             <select value={djState.speed || 1} onChange={(e) => {
                                 const newSpeed = parseFloat(e.target.value);
                                 const updates = { speed: newSpeed };
-                                // เมื่อเปลี่ยนความเร็ว ต้องคำนวณเวลาเริ่มเล่น (startedAt) ใหม่เพื่อไม่ให้เพลงกระตุกย้อนกลับ
                                 if (djState.playA?.isPlaying && ytA.current) {
                                     const cPos = ytA.current.getCurrentTime() || 0;
                                     updates.playA = { ...djState.playA, startedAt: Date.now() - (cPos / newSpeed) * 1000 };
@@ -4106,7 +4122,7 @@ function Game24({ dateSeed, onEnd }) {
                                     updates.playB = { ...djState.playB, startedAt: Date.now() - (cPos / newSpeed) * 1000 };
                                 }
                                 updateDjState(updates);
-                            }} className="bg-black border border-slate-600 rounded text-center text-white outline-none ml-1 py-0.5 cursor-pointer">
+                            }} className="bg-black border border-[#1E3A5F] rounded text-center text-white outline-none ml-1 py-0.5 cursor-pointer">
                                 <option value="0.25">0.25x</option>
                                 <option value="0.5">0.5x</option>
                                 <option value="0.75">0.75x</option>
@@ -4118,9 +4134,9 @@ function Game24({ dateSeed, onEnd }) {
                         </div>
 
                         {djState.djMode === 'auto' && (
-                           <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                           <div className="text-[10px] text-slate-400 flex items-center gap-2 bg-[#050811] px-3 py-1.5 rounded-lg border border-[#1E3A5F] shadow-inner">
                              เฟด:
-                             <input type="number" min="1" max="15" value={djState.fadeDuration || 5} onChange={e => updateDjState({ fadeDuration: parseInt(e.target.value) })} className="bg-black border border-slate-600 rounded w-10 text-center text-white outline-none ml-1" />
+                             <input type="number" min="1" max="15" value={djState.fadeDuration || 5} onChange={e => updateDjState({ fadeDuration: parseInt(e.target.value) })} className="bg-black border border-[#1E3A5F] rounded w-10 text-center text-white outline-none ml-1" />
                              วิ
                            </div>
                         )}
@@ -4156,7 +4172,7 @@ function Game24({ dateSeed, onEnd }) {
 
                  <div className="grid grid-cols-2 gap-4 sm:gap-8">
                     {/* DECK A */}
-                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade < 50 ? 'border-sky-500 bg-sky-900/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]' : 'border-slate-800 bg-black/50'}`}>
+                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade < 50 ? 'border-sky-500 bg-sky-900/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]' : 'border-[#1E3A5F] bg-[#050811]/50'}`}>
                        <div className="text-sky-400 font-bold text-xs mb-3 bg-sky-900/30 px-3 py-1 rounded-full uppercase tracking-widest">Deck A</div>
                        <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-8 border-slate-800 shadow-xl bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${djState.playA?.isPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
                           <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
@@ -4187,7 +4203,6 @@ function Game24({ dateSeed, onEnd }) {
                                  <>
                                      <button onClick={() => {
                                          if (djState.fadeCommand) {
-                                             // ถ้ากำลังครอสเฟดอยู่ ให้บังคับจบเฟดไปที่อีกแผ่นทันที (ป้องกันการดึงเพลงใหม่มาแทรก)
                                              updateDjState({ crossfade: 100, fadeCommand: null, playA: { ...djState.playA, isPlaying: false }, deckA: null });
                                          } else if(djState.queue?.length > 0) {
                                              const nextSong = djState.queue[0];
@@ -4196,7 +4211,7 @@ function Game24({ dateSeed, onEnd }) {
                                          } else {
                                              updateDjState({ playA: { ...djState.playA, isPlaying: false }, deckA: null });
                                          }
-                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
+                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[#0F2547] text-white border border-[#1E3A5F] hover:bg-white hover:text-[#050811]">
                                        ⏭ ข้าม
                                      </button>
                                  </>
@@ -4204,7 +4219,7 @@ function Game24({ dateSeed, onEnd }) {
                               
                               <button onClick={() => {
                                   updateDjState({ playA: { ...djState.playA, isLooping: !djState.playA?.isLooping } });
-                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playA?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playA?.isLooping ? 'bg-sky-600 text-white shadow-[0_0_10px_rgba(14,165,233,0.5)]' : 'bg-[#0F2547] text-slate-300 border border-[#1E3A5F]'}`}>
                                   {djState.playA?.isLooping ? '🔂 วนซ้ำ' : '🔁 ไม่วน'}
                               </button>
                           </div>
@@ -4212,7 +4227,7 @@ function Game24({ dateSeed, onEnd }) {
                     </div>
 
                     {/* DECK B */}
-                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade >= 50 ? 'border-amber-500 bg-amber-900/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-slate-800 bg-black/50'}`}>
+                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center transition-colors ${localCrossfade >= 50 ? 'border-amber-500 bg-amber-900/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-[#1E3A5F] bg-[#050811]/50'}`}>
                        <div className="text-amber-400 font-bold text-xs mb-3 bg-amber-900/30 px-3 py-1 rounded-full uppercase tracking-widest">Deck B</div>
                        <div className={`w-24 h-24 sm:w-36 sm:h-36 rounded-full border-8 border-slate-800 shadow-xl bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-zinc-900 flex items-center justify-center ${djState.playB?.isPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
                           <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-200 border-4 border-slate-700 overflow-hidden">
@@ -4246,7 +4261,7 @@ function Game24({ dateSeed, onEnd }) {
                                          } else {
                                              updateDjState({ playB: { ...djState.playB, isPlaying: false }, deckB: null });
                                          }
-                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-700 text-white hover:bg-slate-600">
+                                     }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[#0F2547] text-white border border-[#1E3A5F] hover:bg-white hover:text-[#050811]">
                                        ⏭ ข้าม
                                      </button>
                                  </>
@@ -4254,7 +4269,7 @@ function Game24({ dateSeed, onEnd }) {
                               
                               <button onClick={() => {
                                   updateDjState({ playB: { ...djState.playB, isLooping: !djState.playB?.isLooping } });
-                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playB?.isLooping ? 'bg-fuchsia-600 text-white shadow-[0_0_10px_rgba(192,38,211,0.5)]' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                              }} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${djState.playB?.isLooping ? 'bg-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-[#0F2547] text-slate-300 border border-[#1E3A5F]'}`}>
                                   {djState.playB?.isLooping ? '🔂 วนซ้ำ' : '🔁 ไม่วน'}
                               </button>
                           </div>
@@ -4263,10 +4278,10 @@ function Game24({ dateSeed, onEnd }) {
                  </div>
 
                  {/* CROSSFADER */}
-                 <div className="mt-8 bg-[#110419] p-4 rounded-xl border border-slate-700">
+                 <div className="mt-8 bg-[#050811] p-4 rounded-xl border border-[#1E3A5F]">
                     <div className="flex justify-between text-[10px] text-slate-400 font-bold mb-3 uppercase tracking-widest">
                        <span className="text-sky-400">← Deck A</span>
-                       {djState.djMode === 'auto' ? <span className="text-emerald-400 animate-pulse">🤖 Auto Crossfade Control</span> : <span className="text-fuchsia-400">🎧 Manual Crossfader</span>}
+                       {djState.djMode === 'auto' ? <span className="text-emerald-400 animate-pulse">🤖 Auto Crossfade Control</span> : <span className="text-sky-400">🎧 Manual Crossfader</span>}
                        <span className="text-amber-400">Deck B →</span>
                     </div>
                     <input 
@@ -4275,7 +4290,7 @@ function Game24({ dateSeed, onEnd }) {
                        onChange={(e) => { if(djState.djMode === 'manual') setLocalCrossfade(parseInt(e.target.value)); }} 
                        onMouseUp={(e) => { if(djState.djMode === 'manual') updateDjState({ crossfade: parseInt(e.target.value) }); }}
                        onTouchEnd={(e) => { if(djState.djMode === 'manual') updateDjState({ crossfade: parseInt(e.target.value) }); }}
-                       className={`w-full h-2 bg-slate-800 rounded-lg appearance-none outline-none shadow-inner ${djState.djMode === 'auto' ? 'opacity-50 cursor-not-allowed' : 'cursor-ew-resize accent-fuchsia-500'}`}
+                       className={`w-full h-2 bg-[#0B1325] rounded-lg appearance-none outline-none shadow-inner border border-[#1E3A5F] ${djState.djMode === 'auto' ? 'opacity-50 cursor-not-allowed' : 'cursor-ew-resize accent-sky-500'}`}
                        disabled={djState.djMode === 'auto'}
                     />
                  </div>
@@ -4312,9 +4327,9 @@ function Game24({ dateSeed, onEnd }) {
                   </div>
               </div>
 
-              <div className="flex flex-col items-center justify-center p-8 bg-[#0a0210] rounded-2xl border border-slate-700/50 shadow-2xl relative overflow-hidden">
+              <div className="flex flex-col items-center justify-center p-8 bg-[#0B1325] rounded-2xl border border-[#1E3A5F] shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-sky-500 to-transparent opacity-50"></div>
-                  <div className="text-sky-400 font-bold text-xs sm:text-sm mb-6 uppercase tracking-widest px-6 py-1.5 bg-sky-900/30 rounded-full border border-sky-500/30 shadow-lg flex items-center gap-2">
+                  <div className="text-sky-400 font-bold text-xs sm:text-sm mb-6 uppercase tracking-widest px-6 py-1.5 bg-[#0F2547] rounded-full border border-sky-500/30 shadow-lg flex items-center gap-2">
                       <span className="animate-pulse">🔴</span> Now Playing
                   </div>
                   
@@ -4371,8 +4386,8 @@ function Game24({ dateSeed, onEnd }) {
                </div>
                
                {/* Quick Playlists */}
-               <div className="card p-4 border-fuchsia-900/40">
-                    <div className="text-sm font-bold text-fuchsia-400 mb-3 border-b border-[#1E3A5F] pb-2">📁 Quick Playlists</div>
+               <div className="card p-4">
+                    <div className="text-sm font-bold text-sky-400 mb-3 border-b border-[#1E3A5F] pb-2">📁 Quick Playlists</div>
                     <div className="flex flex-wrap gap-2 mb-3">
                         {(djState.quickPlaylists || []).length === 0 && <span className="text-[10px] text-slate-500 italic">ยังไม่มีเพลย์ลิสต์</span>}
                         {(djState.quickPlaylists || []).map((qp, i) => (
@@ -4397,7 +4412,7 @@ function Game24({ dateSeed, onEnd }) {
                                              } else alert("ไม่พบเพลงในเพลย์ลิสต์นี้ หรือเพลย์ลิสต์ถูกตั้งเป็นส่วนตัว");
                                         }, 3500);
                                     }
-                                }} className="px-3 py-1.5 text-xs text-slate-300 hover:bg-fuchsia-900/40 hover:text-fuchsia-300 transition-colors">▶ {qp.name}</button>
+                                }} className="px-3 py-1.5 text-xs text-slate-300 hover:bg-[#0F2547] hover:text-white transition-colors">▶ {qp.name}</button>
                                 {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
                                     <button onClick={() => {
                                         if(confirm(`ลบเพลย์ลิสต์ ${qp.name} ?`)) {
@@ -4420,7 +4435,7 @@ function Game24({ dateSeed, onEnd }) {
                         }} className="flex gap-1.5">
                             <input name="qpName" type="text" placeholder="ชื่อ" className="w-20 inp py-1.5 px-2 text-xs" required />
                             <input name="qpUrl" type="url" placeholder="ลิงก์ YouTube Playlist" className="flex-1 inp py-1.5 px-2 text-xs" required />
-                            <button type="submit" className="btn-b py-1.5 px-3 text-xs bg-fuchsia-900/50 border-fuchsia-700">+</button>
+                            <button type="submit" className="btn-b py-1.5 px-3 text-xs">+</button>
                         </form>
                     )}
                </div>
