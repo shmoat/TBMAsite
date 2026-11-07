@@ -2814,22 +2814,6 @@ function Game24({ dateSeed, onEnd }) {
       const [isPlayerFloatingOpen, setIsPlayerFloatingOpen] = useState(true);
       const [flyingNotes, setFlyingNotes] = useState([]);
       
-      const handleToggleLocalAudio = () => {
-          const willPlay = isLocalPaused; // ถ้าสถานะเดิมคือ Pause แปลว่าเรากำลังจะกดเพื่อ "รับเสียง"
-          setIsLocalPaused(!isLocalPaused);
-          
-          // ถ้ากดรับเสียง และมีเพลงจาก Deck A หรือ B เล่นอยู่ ให้แสดงตัวโน้ต
-          if (willPlay && (djState.playA?.isPlaying || djState.playB?.isPlaying)) { 
-              const newNotes = [
-                  { id: Date.now(), left: '15%', char: '🎵' },
-                  { id: Date.now() + 1, left: '50%', char: '🎶' },
-                  { id: Date.now() + 2, left: '85%', char: '✨' }
-              ];
-              setFlyingNotes(newNotes);
-              setTimeout(() => setFlyingNotes([]), 2500); // ระยะเวลาต้องตรงกับ CSS
-          }
-      };
-      
       const ytA = useRef(null);
       const ytB = useRef(null);
       const loadedIdA = useRef(null);
@@ -2848,7 +2832,33 @@ function Game24({ dateSeed, onEnd }) {
       useEffect(() => { djVolumeRef.current = djVolume; }, [djVolume]);
       useEffect(() => { isLocalPausedRef.current = isLocalPaused; }, [isLocalPaused]);
 
-      // ฟังก์ชันปลดล็อกเสียงทั้ง 2 Deck พร้อมกันและบังคับ Audio Session ออกหูฟังสำหรับ Safari
+      const handleToggleLocalAudio = () => {
+          const nextPausedState = !isLocalPaused;
+          setIsLocalPaused(nextPausedState);
+          
+          // สั่ง Unmute และ Volume ให้กับทั้ง 2 Player ทันทีที่กดปุ่ม เพื่อล้างบั๊กโดนบล็อก
+          if (!nextPausedState) {
+              if (typeof navigator !== 'undefined' && navigator.audioSession) {
+                  try { navigator.audioSession.type = 'playback'; } catch (e) {}
+              }
+              const volA = localCrossfade < 50 ? 100 : 100 - ((localCrossfade - 50) * 2);
+              const volB = localCrossfade > 50 ? 100 : localCrossfade * 2;
+              
+              if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
+              if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
+          }
+          
+          if (!nextPausedState && (djState.playA?.isPlaying || djState.playB?.isPlaying)) { 
+              const newNotes = [
+                  { id: Date.now(), left: '15%', char: '🎵' },
+                  { id: Date.now() + 1, left: '50%', char: '🎶' },
+                  { id: Date.now() + 2, left: '85%', char: '✨' }
+              ];
+              setFlyingNotes(newNotes);
+              setTimeout(() => setFlyingNotes([]), 2500); 
+          }
+      };
+
       const setIsDjMuted = useCallback((valOrFn) => {
         _setIsDjMuted(prev => {
           const nextMuted = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
@@ -2904,7 +2914,6 @@ function Game24({ dateSeed, onEnd }) {
             const muted = typeof isDjMutedRef !== 'undefined' ? isDjMutedRef.current : isDjMuted;
             const playData = deckKey === 'A' ? st.playA : st.playB;
 
-            // ถ้ายามวิกาลเพลงปิดสถานีเล่นจบ (e.data === 0) ให้ดึงเวลา Global Loop แล้วสั่งเล่นต่อทันที
             if (deckKey === 'A' && e.data === 0 && !st.deckA?.id && !st.deckB?.id && !paused) {
               const targetTime = (Date.now() % 163000) / 1000;
               try {
@@ -2921,28 +2930,33 @@ function Game24({ dateSeed, onEnd }) {
               if (typeof navigator !== 'undefined' && navigator.audioSession) {
                 try { navigator.audioSession.type = 'playback'; } catch (err) {}
               }
-              if (muted) e.target.mute();
-              else e.target.unMute();
+              // สำคัญ: ปลดบล็อกเสียงตามสถานะ Ref ปัจจุบัน
+              if (paused) e.target.mute();
+              else {
+                  e.target.unMute(); 
+                  const cVal = localCrossfade;
+                  const vTarget = deckKey === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
+                  e.target.setVolume(Math.max(0, (vTarget * djVolumeRef.current) / 100));
+              }
             }
           };
           ytA.current = new window.YT.Player('yt-player-a', {
             ...conf,
             events: {
-              onReady: e => { if (isDjMuted) e.target.mute(); },
+              onReady: e => { e.target.mute(); },
               onStateChange: handleStateChange('A')
             }
           });
           ytB.current = new window.YT.Player('yt-player-b', {
             ...conf,
             events: {
-              onReady: e => { if (isDjMuted) e.target.mute(); },
+              onReady: e => { e.target.mute(); },
               onStateChange: handleStateChange('B')
             }
           });
         }
       }, []);
 
-      // ระบบจับอนิเมชัน Crossfade แบบลื่นไหล
       useEffect(() => {
         if(!djState.fadeCommand) { setLocalCrossfade(djState.crossfade || 0); return; }
         const { target, startTime, duration } = djState.fadeCommand;
@@ -2963,7 +2977,6 @@ function Game24({ dateSeed, onEnd }) {
         return () => cancelAnimationFrame(frameId);
       }, [djState.fadeCommand, djState.crossfade]);
 
-      // 1) แยกระบบโหลดเพลงและสั่ง Play/Pause ออกจาก localCrossfade เพื่อไม่ให้สั่ง loadVideoById ซ้ำรัวๆ บน Safari
       useEffect(() => {
          if (!ytA.current?.loadVideoById || !ytB.current?.loadVideoById) return;
 
@@ -3016,12 +3029,11 @@ function Game24({ dateSeed, onEnd }) {
          syncDeckTrack(ytB.current, loadedIdB, djState.deckB, djState.playB);
       }, [djState.deckA?.id, djState.deckB?.id, djState.playA?.isPlaying, djState.playB?.isPlaying, djState.speed, isLocalPaused, lateNight, isFullyClosedSync]);
 
-            // 2) แยกการปรับระดับเสียงและ Mute/Unmute ให้ทำงานเบาที่สุด
       useEffect(() => {
          if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
 
          if (isFullyClosedSync) {
-            if (isDjMuted) ytA.current.mute();
+            if (isLocalPaused) ytA.current.mute(); // ยึดค่าจากปุ่มแทน isDjMuted
             else { ytA.current.unMute(); ytA.current.setVolume(djVolume); }
             return;
          }
@@ -3031,24 +3043,28 @@ function Game24({ dateSeed, onEnd }) {
          const volB = cVal > 50 ? 100 : cVal * 2;
 
          if (djState.playA?.isPlaying && !isLocalPaused) {
-            // Mute ไว้ก่อนเมื่อ Volume เป็น 0 เพื่อหลอกให้ Safari อนุญาต Autoplay เพลงถัดไป
-            if (isDjMuted || volA === 0) ytA.current.mute();
+            if (volA === 0) ytA.current.mute();
             else { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
+         } else if (isLocalPaused) {
+            ytA.current.mute();
          }
+         
          if (djState.playB?.isPlaying && !isLocalPaused) {
-            if (isDjMuted || volB === 0) ytB.current.mute();
+            if (volB === 0) ytB.current.mute();
             else { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
+         } else if (isLocalPaused) {
+            ytB.current.mute();
          }
-      }, [localCrossfade, isDjMuted, djVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
+      }, [localCrossfade, djVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
 
-      // เรดาร์ Auto-Sync + Auto-DJ Trigger
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             const isDJ = canManageAudio;
+             const canAutoRun = canManageAudio || djState.djMode === 'auto';
+             
              const isInputBlockedSync = lateNight && djState.forceClosed && !djState.jammerId;
              if (isInputBlockedSync && (!djState.queue || djState.queue.length === 0) && !djState.deckA?.id && !djState.deckB?.id) {
                  if (!isLocalPaused && ytA.current?.getPlayerState) {
-                     const songDurationMs = 163000; // ความยาวเพลง Ladyfingers (2 นาที 43 วินาที)
+                     const songDurationMs = 163000;
                      const targetTime = (Date.now() % songDurationMs) / 1000;
                      const curId = ytA.current.getVideoData ? ytA.current.getVideoData()?.video_id : null;
                      const state = ytA.current.getPlayerState();
@@ -3065,10 +3081,6 @@ function Game24({ dateSeed, onEnd }) {
                  return;
              }
 
-             const activeDJ = users.find(u => u.id === djState.jammerId);
-             const isDJOffline = !activeDJ || !activeDJ.isOnline || (Date.now() - (activeDJ.lastActive || 0) > 120000);
-             // ลบบรรทัดที่เกี่ยวกับ activeDJ ออกให้หมด แล้วแก้ canAutoRun
-             const canAutoRun = canManageAudio || djState.djMode === 'auto';
              const isDeckA = (djState.crossfade || 0) < 50;
 
              if (canAutoRun && !isFadingRef.current) {
@@ -3152,7 +3164,7 @@ function Game24({ dateSeed, onEnd }) {
                  if (state === -1 || state === 2 || state === 5) {
                      player.playVideo();
                      if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
-                     if (player.unMute && !isDjMuted) player.unMute();
+                     if (player.unMute && !isLocalPaused) player.unMute();
                  }
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
@@ -3209,7 +3221,7 @@ function Game24({ dateSeed, onEnd }) {
              syncPlayer(ytB.current, djState.playB, !isDeckA, 'B');
          }, 2500); 
          return () => clearInterval(syncTimer);
-      }, [djState, isDjMuted, isLocalPaused, canManageAudio, lateNight]);
+      }, [djState, isLocalPaused, canManageAudio, lateNight]);
 
       // ฟังก์ชันช่วยเหลือสำหรับดีเจเพิ่มเพลง
       const handleAddTrack = (songObj) => {
