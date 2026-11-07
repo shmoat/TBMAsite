@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BMA Tools Demo</title>
+  <title>BMA Music & Audio Tools</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -13,6 +13,9 @@
     .card { background: #0B1325; border: 1px solid #1E3A5F; border-radius: 1rem; }
     .btn-b { background: #0F2547; color: #fff; border: 1px solid rgba(255,255,255,0.2); font-weight: 600; border-radius: 0.75rem; padding: 0.5rem 1rem; cursor: pointer; transition: all 0.2s; }
     .btn-b:hover { background: #1E3A5F; }
+    .btn-w { background: #fff; color: #050811; font-weight: 700; border-radius: 0.75rem; padding: 0.5rem 1rem; cursor: pointer; }
+    .btn-w:hover { background: #cbd5e1; }
+    .btn-d { background: #050811; color: #cbd5e1; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.4rem 0.75rem; cursor: pointer; }
     .inp { background: #050811; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.5rem; color: #fff; outline: none; width: 100%; }
   </style>
 </head>
@@ -21,14 +24,22 @@
 <script type="text/babel">
   const { useState, useEffect, useRef } = React;
 
-  // Tool 1: BPM Tapper
+  // ==========================================
+  // Tool 1: BPM Tapper & Metronome
+  // ==========================================
   const BPMTapper = () => {
-    const [bpm, setBpm] = useState(0);
+    const [bpm, setBpm] = useState(120);
     const [taps, setTaps] = useState([]);
+    const [isPlaying, setIsPlaying] = useState(false);
     
+    const audioCtxRef = useRef(null);
+    const nextNoteTimeRef = useRef(0);
+    const timerIDRef = useRef(null);
+
+    // ฟังก์ชันเคาะจังหวะ
     const handleTap = () => {
       const now = Date.now();
-      const newTaps = [...taps, now].slice(-5); // Keep last 5 taps
+      const newTaps = [...taps, now].slice(-5);
       setTaps(newTaps);
       
       if (newTaps.length > 1) {
@@ -37,177 +48,306 @@
           diffs.push(newTaps[i] - newTaps[i-1]);
         }
         const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length;
-        setBpm(Math.round(60000 / avg));
+        const calcBpm = Math.round(60000 / avg);
+        if (calcBpm > 30 && calcBpm < 300) setBpm(calcBpm);
       }
     };
 
-    const reset = () => { setTaps([]); setBpm(0); };
-
-    return (
-      <div className="flex flex-col items-center gap-6 py-10">
-        <div className="text-6xl font-bold text-sky-400">{bpm} <span className="text-xl text-slate-400">BPM</span></div>
-        <button onClick={handleTap} className="w-48 h-48 rounded-full bg-[#1E3A5F] border-4 border-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.5)] active:scale-95 transition-transform text-xl font-bold">TAP HERE</button>
-        <button onClick={reset} className="text-sm text-red-400 mt-4">Reset</button>
-      </div>
-    );
-  };
-
-  // Tool 2: Resistor
-  const ResistorCalc = () => {
-    const colors = [
-      { n: 'Black', v: 0, m: 1, c: '#000', t: '#fff' }, { n: 'Brown', v: 1, m: 10, c: '#8B4513', t: '#fff' },
-      { n: 'Red', v: 2, m: 100, c: '#FF0000', t: '#fff' }, { n: 'Orange', v: 3, m: 1000, c: '#FFA500', t: '#000' },
-      { n: 'Yellow', v: 4, m: 10000, c: '#FFFF00', t: '#000' }, { n: 'Green', v: 5, m: 100000, c: '#008000', t: '#fff' },
-      { n: 'Blue', v: 6, m: 1000000, c: '#0000FF', t: '#fff' }, { n: 'Violet', v: 7, m: 10000000, c: '#EE82EE', t: '#000' },
-      { n: 'Gray', v: 8, m: 100000000, c: '#808080', t: '#fff' }, { n: 'White', v: 9, m: 1000000000, c: '#FFFFFF', t: '#000' }
-    ];
-    const [b1, setB1] = useState(colors[1]);
-    const [b2, setB2] = useState(colors[0]);
-    const [mult, setMult] = useState(colors[2]);
-
-    const formatVal = (v) => {
-      if(v >= 1000000) return (v/1000000) + ' MΩ';
-      if(v >= 1000) return (v/1000) + ' kΩ';
-      return v + ' Ω';
+    // ระบบ Metronome ที่แม่นยำด้วย Web Audio API Scheduler
+    const scheduleNote = () => {
+        if (!audioCtxRef.current) return;
+        const osc = audioCtxRef.current.createOscillator();
+        const gain = audioCtxRef.current.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtxRef.current.destination);
+        
+        osc.frequency.value = 800; // เสียงบี๊บ
+        gain.gain.setValueAtTime(1, nextNoteTimeRef.current);
+        gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTimeRef.current + 0.05);
+        
+        osc.start(nextNoteTimeRef.current);
+        osc.stop(nextNoteTimeRef.current + 0.05);
     };
 
-    const val = ((b1.v * 10) + b2.v) * mult.m;
-
-    return (
-      <div className="flex flex-col items-center gap-6 p-4">
-        <div className="text-3xl font-bold text-amber-400 bg-[#0F2547] p-6 rounded-xl border border-[#1E3A5F]">{formatVal(val)}</div>
-        <div className="flex gap-4">
-          <div className="flex flex-col gap-1 w-24">
-            <span className="text-xs text-center text-slate-400">Band 1</span>
-            {colors.map(c => <button key={'b1'+c.n} onClick={()=>setB1(c)} style={{background: c.c, color: c.t}} className={`py-1 text-xs border ${b1.n===c.n?'border-white scale-110 z-10':'border-transparent'}`}>{c.n}</button>)}
-          </div>
-          <div className="flex flex-col gap-1 w-24">
-            <span className="text-xs text-center text-slate-400">Band 2</span>
-            {colors.map(c => <button key={'b2'+c.n} onClick={()=>setB2(c)} style={{background: c.c, color: c.t}} className={`py-1 text-xs border ${b2.n===c.n?'border-white scale-110 z-10':'border-transparent'}`}>{c.n}</button>)}
-          </div>
-          <div className="flex flex-col gap-1 w-24">
-            <span className="text-xs text-center text-slate-400">Multiplier</span>
-            {colors.map(c => <button key={'m'+c.n} onClick={()=>setMult(c)} style={{background: c.c, color: c.t}} className={`py-1 text-xs border ${mult.n===c.n?'border-white scale-110 z-10':'border-transparent'}`}>{c.n}</button>)}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Tool 3: Lunar Splitter
-  const LunarSplitter = () => {
-    const [subtotal, setSubtotal] = useState('');
-    const [vat, setVat] = useState(7);
-    const [sc, setSc] = useState(10);
-    const [people, setPeople] = useState(1);
-
-    const st = parseFloat(subtotal) || 0;
-    const serv = st * (sc/100);
-    const v = (st + serv) * (vat/100);
-    const total = st + serv + v;
-    const perPerson = total / Math.max(1, people);
-
-    return (
-      <div className="max-w-md mx-auto space-y-4">
-        <div><label className="text-xs text-slate-400">ค่าอาหารรวม (ก่อน VAT/Service)</label><input type="number" value={subtotal} onChange={e=>setSubtotal(e.target.value)} className="inp text-xl" placeholder="0.00" /></div>
-        <div className="flex gap-4">
-          <div className="flex-1"><label className="text-xs text-slate-400">Service Charge (%)</label><input type="number" value={sc} onChange={e=>setSc(e.target.value)} className="inp" /></div>
-          <div className="flex-1"><label className="text-xs text-slate-400">VAT (%)</label><input type="number" value={vat} onChange={e=>setVat(e.target.value)} className="inp" /></div>
-        </div>
-        <div><label className="text-xs text-slate-400">จำนวนคนหาร</label><input type="number" value={people} onChange={e=>setPeople(e.target.value)} className="inp" min="1" /></div>
-        <div className="bg-[#0F2547] p-4 rounded-xl border border-[#1E3A5F] space-y-2 mt-4">
-          <div className="flex justify-between text-sm"><span>ยอดรวมทั้งหมด:</span> <span className="font-bold">{total.toFixed(2)} บาท</span></div>
-          <div className="flex justify-between text-lg text-emerald-400"><span>หารคนละ:</span> <span className="font-bold">{perPerson.toFixed(2)} บาท</span></div>
-        </div>
-      </div>
-    );
-  };
-
-  // Tool 4: Randomizer
-  const Randomizer = () => {
-    const [names, setNames] = useState("สมาชิก A\nสมาชิก B\nสมาชิก C\nสมาชิก D");
-    const [result, setResult] = useState(null);
-    const [spinning, setSpinning] = useState(false);
-
-    const handleSpin = () => {
-      const list = names.split('\n').map(n=>n.trim()).filter(Boolean);
-      if(list.length === 0) return;
-      setSpinning(true); setResult(null);
-      let count = 0;
-      const interval = setInterval(() => {
-        setResult(list[Math.floor(Math.random() * list.length)]);
-        count++;
-        if(count > 15) {
-          clearInterval(interval);
-          setSpinning(false);
-          setResult(list[Math.floor(Math.random() * list.length)]);
+    const scheduler = () => {
+        while (nextNoteTimeRef.current < audioCtxRef.current.currentTime + 0.1) {
+            scheduleNote();
+            nextNoteTimeRef.current += 60.0 / bpm;
         }
-      }, 100);
+        timerIDRef.current = requestAnimationFrame(scheduler);
     };
 
+    useEffect(() => {
+        if (isPlaying) {
+            if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+            
+            nextNoteTimeRef.current = audioCtxRef.current.currentTime + 0.05;
+            scheduler();
+        } else {
+            cancelAnimationFrame(timerIDRef.current);
+        }
+        return () => cancelAnimationFrame(timerIDRef.current);
+    }, [isPlaying, bpm]);
+
     return (
-      <div className="max-w-md mx-auto space-y-4">
-        <div><label className="text-xs text-slate-400">ใส่รายชื่อ (1 ชื่อต่อ 1 บรรทัด)</label><textarea rows="5" value={names} onChange={e=>setNames(e.target.value)} className="inp resize-none"></textarea></div>
-        <button onClick={handleSpin} disabled={spinning} className="w-full btn-b py-3 text-lg bg-sky-600 hover:bg-sky-500 border-sky-400">🎲 สุ่มผู้โชคดี</button>
-        {result && (
-           <div className={`mt-6 p-6 text-center rounded-xl border border-amber-500 ${spinning ? 'bg-[#0F2547]' : 'bg-amber-500/20 animate-bounce'}`}>
-             <div className="text-xs text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ:</div>
-             <div className="text-3xl font-bold text-amber-400">{result}</div>
-           </div>
-        )}
+      <div className="flex flex-col items-center gap-6 py-6">
+        <div className="text-center">
+            <div className="text-6xl font-bold text-sky-400">{bpm} <span className="text-xl text-slate-400">BPM</span></div>
+            <p className="text-xs text-slate-500 mt-2">แตะที่ปุ่ม Tapper ตามจังหวะ หรือเลื่อนปรับเอง</p>
+        </div>
+        
+        <input 
+            type="range" min="40" max="240" value={bpm} 
+            onChange={(e) => { setBpm(parseInt(e.target.value)); setTaps([]); }} 
+            className="w-full max-w-xs accent-sky-500"
+        />
+
+        <div className="flex gap-4 w-full max-w-xs">
+            <button onClick={handleTap} className="flex-1 py-8 rounded-2xl bg-[#0F2547] border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.3)] active:scale-95 transition-transform text-xl font-bold text-sky-100">👆 TAP</button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className={`flex-1 py-8 rounded-2xl border-2 font-bold text-xl transition-all ${isPlaying ? 'bg-red-500 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-emerald-600 border-emerald-400 text-white'}`}>
+                {isPlaying ? '⏹ STOP' : '▶ PLAY'}
+            </button>
+        </div>
       </div>
     );
   };
 
+  // ==========================================
+  // Tool 2: Online Guitar & Bass Tuner
+  // ==========================================
+  const GuitarTuner = () => {
+    const STANDARD_TUNING = [
+        { note: 'E4', freq: 329.63, str: 'สาย 1 (บางสุด)' },
+        { note: 'B3', freq: 246.94, str: 'สาย 2' },
+        { note: 'G3', freq: 196.00, str: 'สาย 3' },
+        { note: 'D3', freq: 146.83, str: 'สาย 4' },
+        { note: 'A2', freq: 110.00, str: 'สาย 5' },
+        { note: 'E2', freq: 82.41,  str: 'สาย 6 (หนาสุด)' }
+    ];
+    const [activeNote, setActiveNote] = useState(null);
+    const audioCtxRef = useRef(null);
+    const oscRef = useRef(null);
+
+    const playTone = (freq, note) => {
+        stopTone();
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        oscRef.current = audioCtxRef.current.createOscillator();
+        const gain = audioCtxRef.current.createGain();
+        
+        // ผสมเสียงให้ออกมาคล้ายกีตาร์ (Triangle + Sine)
+        oscRef.current.type = 'triangle';
+        oscRef.current.connect(gain);
+        gain.connect(audioCtxRef.current.destination);
+        
+        oscRef.current.frequency.setValueAtTime(freq, audioCtxRef.current.currentTime);
+        
+        // Attack & Decay
+        gain.gain.setValueAtTime(0, audioCtxRef.current.currentTime);
+        gain.gain.linearRampToValueAtTime(0.8, audioCtxRef.current.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 3);
+        
+        oscRef.current.start();
+        setActiveNote(note);
+        
+        setTimeout(() => {
+            if(activeNote === note) setActiveNote(null);
+        }, 3000);
+    };
+
+    const stopTone = () => {
+        if(oscRef.current) {
+            try { oscRef.current.stop(); } catch(e){}
+            oscRef.current = null;
+        }
+        setActiveNote(null);
+    };
+
+    useEffect(() => {
+        return () => stopTone();
+    }, []);
+
+    return (
+      <div className="flex flex-col items-center gap-4 py-4">
+        <div className="bg-[#050811] p-4 rounded-xl border border-[#1E3A5F] w-full text-center">
+            <h3 className="text-amber-400 font-bold mb-1">Standard Tuning (E Standard)</h3>
+            <p className="text-xs text-slate-400">คลิกที่ตัวโน้ตเพื่อฟังเสียงเทียบสาย</p>
+        </div>
+        
+        <div className="w-full max-w-sm grid grid-cols-2 gap-3 mt-2">
+            {STANDARD_TUNING.map((t) => (
+                <button 
+                    key={t.note} 
+                    onClick={() => playTone(t.freq, t.note)}
+                    className={`p-3 rounded-xl border-2 flex flex-col items-center transition-all ${activeNote === t.note ? 'bg-amber-500 border-amber-300 text-[#050811] shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-105' : 'bg-[#0F2547] border-[#1E3A5F] text-slate-200 hover:border-amber-500/50'}`}
+                >
+                    <span className="text-2xl font-bold">{t.note}</span>
+                    <span className="text-[10px] mt-1 opacity-80">{t.str}</span>
+                    <span className="text-[9px] font-mono opacity-60">{t.freq} Hz</span>
+                </button>
+            ))}
+        </div>
+        
+        <button onClick={stopTone} className="btn-d mt-4 text-xs">🔇 หยุดเสียง</button>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Tool 3: Chord Transposer
+  // ==========================================
+  const ChordTransposer = () => {
+    const [inputText, setInputText] = useState("C                  G\nWhen I find myself in times of trouble\nAm                 F\nMother Mary comes to me");
+    const [step, setStep] = useState(0);
+
+    const transpose = (chord, stp) => {
+        // รองรับคอร์ดที่มี bass note เช่น C/G หรือคอร์ดที่มีตัวเลข
+        const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const FLAT_TO_SHARP = { 'Db':'C#', 'Eb':'D#', 'Gb':'F#', 'Ab':'G#', 'Bb':'A#' };
+
+        const transposeNote = (note, s) => {
+            let n = FLAT_TO_SHARP[note] || note;
+            let idx = NOTES.indexOf(n);
+            if(idx === -1) return note;
+            let newIdx = (idx + s) % 12;
+            if (newIdx < 0) newIdx += 12;
+            return NOTES[newIdx];
+        };
+
+        // แยก Root note ออกจาก Modifier
+        const match = chord.match(/^([CDEFGAB][#b]?)(.*)$/);
+        if(!match) return chord;
+        
+        let root = match[1];
+        let modifier = match[2] || '';
+        
+        // ถ้ามีการ slash bass note (เช่น /G) ให้ transpose ด้วย
+        if (modifier.includes('/')) {
+            const parts = modifier.split('/');
+            const mod = parts[0];
+            const bass = parts[1];
+            return transposeNote(root, stp) + mod + '/' + transposeNote(bass, stp);
+        }
+
+        return transposeNote(root, stp) + modifier;
+    };
+
+    const getTransposedText = () => {
+        if(step === 0) return inputText;
+        
+        // Regex หาคอร์ด (ต้องเป็นตัวพิมพ์ใหญ่ C-B ตามด้วย # หรือ b และ modifier)
+        const chordRegex = /\b([CDEFGAB][#b]?(?:m|M|maj|min|aug|dim|sus|add)?\d*(?:\/[CDEFGAB][#b]?)?)\b/g;
+        
+        const lines = inputText.split('\n');
+        const processedLines = lines.map(line => {
+            // เช็กว่าบรรทัดนี้เป็นเนื้อร้องหรือบรรทัดคอร์ด (ถ้ามีคอร์ดเยอะกว่าคำปกติ)
+            const words = line.trim().split(/\s+/);
+            const isChordLine = words.length > 0 && words.every(w => chordRegex.test(w) || w === '');
+            
+            if (isChordLine) {
+                return line.replace(chordRegex, (match) => transpose(match, step));
+            } else {
+                // ถ้าเป็นเนื้อร้องที่มีคอร์ดแทรก [C] หรือ (C)
+                return line.replace(/(\[|\()([CDEFGAB][#b]?(?:m|M|maj|min|aug|dim|sus|add)?\d*(?:\/[CDEFGAB][#b]?)?)(\]|\))/g, (fullMatch, p1, p2, p3) => {
+                    return p1 + transpose(p2, step) + p3;
+                });
+            }
+        });
+        
+        return processedLines.join('\n');
+    };
+
+    return (
+      <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+        <div className="flex justify-between items-center bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+            <span className="text-sm font-bold text-sky-300">คีย์ (Key Step): {step > 0 ? '+'+step : step}</span>
+            <div className="flex gap-2">
+                <button onClick={() => setStep(s => s - 1)} className="btn-d px-4 py-1.5 font-bold">-</button>
+                <button onClick={() => setStep(0)} className="btn-d px-4 py-1.5 text-xs">Reset</button>
+                <button onClick={() => setStep(s => s + 1)} className="btn-b px-4 py-1.5 font-bold">+</button>
+            </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-400 font-bold">เนื้อเพลงและคอร์ดต้นฉบับ</label>
+                <textarea 
+                    rows="10" 
+                    value={inputText} 
+                    onChange={e => setInputText(e.target.value)} 
+                    className="inp font-mono text-sm leading-relaxed whitespace-pre"
+                    placeholder="วางเนื้อเพลงพร้อมคอร์ดที่นี่..."
+                ></textarea>
+                <div className="text-[10px] text-slate-500 mt-1">💡 วางคอร์ดไว้บรรทัดบนเนื้อร้อง หรือใส่คอร์ดในวงเล็บ [C]</div>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-emerald-400 font-bold">ผลลัพธ์ (คอร์ดที่เปลี่ยนคีย์แล้ว)</label>
+                <div className="inp font-mono text-sm leading-relaxed whitespace-pre overflow-x-auto h-[220px] bg-[#0A162C] border-emerald-900">
+                    {getTransposedText() || <span className="text-slate-600 italic">ผลลัพธ์จะแสดงที่นี่</span>}
+                </div>
+            </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // Main App Component
+  // ==========================================
   const App = () => {
     const [activeTool, setActiveTool] = useState(null);
 
     const TOOLS = [
-      { id: 'bpm', name: 'BPM Tapper', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง (BPM)' },
-      { id: 'resistor', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าตัวต้านทานจากแถบสี' },
-      { id: 'splitter', name: 'Lunar Splitter', icon: '💸', desc: 'หารบิลคำนวณ VAT/Service Charge' },
-      { id: 'randomizer', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อ' },
+      { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper & Metronome', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
+      { id: 'tuner', category: 'Music & Audio', name: 'Guitar / Bass Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
+      { id: 'transposer', category: 'Music & Audio', name: 'Chord Transposer', icon: '🎼', desc: 'เครื่องมือทดคีย์เพลง แปลงคอร์ดยกแผง' },
     ];
 
     const renderTool = () => {
       switch(activeTool) {
         case 'bpm': return <BPMTapper />;
-        case 'resistor': return <ResistorCalc />;
-        case 'splitter': return <LunarSplitter />;
-        case 'randomizer': return <Randomizer />;
+        case 'tuner': return <GuitarTuner />;
+        case 'transposer': return <ChordTransposer />;
         default: return null;
       }
     };
 
     return (
       <div className="min-h-screen flex flex-col items-center py-10 px-4">
-        <div className="w-full max-w-4xl text-center mb-8">
-          <h1 className="text-3xl font-bold text-sky-400 mb-2">BMA Community Tools</h1>
-          <p className="text-slate-400 text-sm">เครื่องมืออำนวยความสะดวกสำหรับสมาชิก The Blue Moon Association</p>
+        <div className="w-full max-w-4xl text-center mb-10">
+          <h1 className="text-3xl font-bold text-sky-400 mb-2 tracking-wide uppercase">BMA Music Tools</h1>
+          <p className="text-slate-400 text-sm">รวมเครื่องมือสำหรับนักดนตรี สาย Instrumix และ KPN ประจำสมาคม</p>
         </div>
 
         {activeTool === null ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-3xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 w-full max-w-5xl">
             {TOOLS.map(t => (
-              <div key={t.id} onClick={() => setActiveTool(t.id)} className="card p-6 cursor-pointer hover:border-sky-400 transition-colors flex items-start gap-4">
-                <div className="text-4xl">{t.icon}</div>
+              <div key={t.id} onClick={() => setActiveTool(t.id)} className="card p-6 cursor-pointer hover:border-sky-400 transition-all hover:-translate-y-1 shadow-lg group">
+                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform origin-left">{t.icon}</div>
                 <div>
-                  <h3 className="font-bold text-lg text-white">{t.name}</h3>
-                  <p className="text-sm text-slate-400 mt-1">{t.desc}</p>
+                  <div className="text-[10px] font-bold text-sky-500 mb-1 uppercase tracking-widest">{t.category}</div>
+                  <h3 className="font-bold text-lg text-white mb-2">{t.name}</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">{t.desc}</p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="w-full max-w-2xl card p-6">
+          <div className="w-full max-w-3xl card p-4 sm:p-8 shadow-2xl animate-fade-in relative">
             <div className="flex justify-between items-center mb-6 border-b border-[#1E3A5F] pb-4">
-               <h2 className="text-xl font-bold flex items-center gap-2">
-                 <span>{TOOLS.find(t=>t.id===activeTool)?.icon}</span>
+               <h2 className="text-xl font-bold flex items-center gap-3 text-sky-300">
+                 <span className="text-3xl">{TOOLS.find(t=>t.id===activeTool)?.icon}</span>
                  {TOOLS.find(t=>t.id===activeTool)?.name}
                </h2>
-               <button onClick={() => setActiveTool(null)} className="btn-b text-xs py-1.5">← กลับหน้ารวมเครื่องมือ</button>
+               <button onClick={() => setActiveTool(null)} className="btn-d text-xs py-2 px-4 flex items-center gap-2 hover:bg-white hover:text-black">
+                  <span>←</span> กลับหน้าหลัก
+               </button>
             </div>
-            {renderTool()}
+            
+            <div className="min-h-[300px]">
+                {renderTool()}
+            </div>
           </div>
         )}
       </div>
