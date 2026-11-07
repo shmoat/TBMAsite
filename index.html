@@ -2836,7 +2836,6 @@ function Game24({ dateSeed, onEnd }) {
           const nextPausedState = !isLocalPaused;
           setIsLocalPaused(nextPausedState);
           
-          // สั่ง Unmute และ Volume ให้กับทั้ง 2 Player ทันทีที่กดปุ่ม เพื่อล้างบั๊กโดนบล็อก
           if (!nextPausedState) {
               if (typeof navigator !== 'undefined' && navigator.audioSession) {
                   try { navigator.audioSession.type = 'playback'; } catch (e) {}
@@ -2847,17 +2846,30 @@ function Game24({ dateSeed, onEnd }) {
               if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * djVolume) / 100)); }
               if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * djVolume) / 100)); }
           }
-          
-          if (!nextPausedState && (djState.playA?.isPlaying || djState.playB?.isPlaying)) { 
-              const newNotes = [
-                  { id: Date.now(), left: '15%', char: '🎵' },
-                  { id: Date.now() + 1, left: '50%', char: '🎶' },
-                  { id: Date.now() + 2, left: '85%', char: '✨' }
-              ];
-              setFlyingNotes(newNotes);
-              setTimeout(() => setFlyingNotes([]), 2500); 
-          }
       };
+
+// แอนิเมชันให้อีโมจิลอยขึ้นมาเรื่อย ๆ ตลอดเวลาที่ฟังเพลง
+      useEffect(() => {
+          if (!isLocalPaused && (djState.playA?.isPlaying || djState.playB?.isPlaying) && !isFullyClosedSync) {
+              const interval = setInterval(() => {
+                  const chars = ['🎵', '🎶', '✨', '🎧'];
+                  const newNote = {
+                      id: Date.now() + Math.random(),
+                      left: Math.random() * 70 + 15 + '%', // กระจายตำแหน่ง ซ้าย-ขวา
+                      char: chars[Math.floor(Math.random() * chars.length)]
+                  };
+                  setFlyingNotes(prev => [...prev, newNote]);
+                  
+                  // ลบออกจาก state เมื่อแอนิเมชันจบ (2.5 วิ ตาม CSS)
+                  setTimeout(() => {
+                      setFlyingNotes(current => current.filter(n => n.id !== newNote.id));
+                  }, 2500); 
+              }, 800); // ความถี่ที่ตัวโน้ตจะโผล่ขึ้นมา (ทุก ๆ 0.8 วิ)
+              return () => clearInterval(interval);
+          } else {
+              setFlyingNotes([]);
+          }
+      }, [djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
 
       const setIsDjMuted = useCallback((valOrFn) => {
         _setIsDjMuted(prev => {
@@ -3153,7 +3165,7 @@ function Game24({ dateSeed, onEnd }) {
              }
 
              const syncPlayer = (player, playData, isActive, deckId) => {
-                 if (!player?.getCurrentTime || !playData?.isPlaying || isLocalPaused) return;
+                 if (!player?.getCurrentTime || !playData?.isPlaying) return; // ลบการเช็ก !isLocalPaused ออกจากบรรทัดนี้
                  
                  const currentSpeed = djState.speed || 1;
                  const expRaw = ((Date.now() - (playData.startedAt||Date.now())) / 1000) * currentSpeed;
@@ -3164,7 +3176,13 @@ function Game24({ dateSeed, onEnd }) {
                  if (state === -1 || state === 2 || state === 5) {
                      player.playVideo();
                      if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
-                     if (player.unMute && !isLocalPaused) player.unMute();
+                 }
+                 
+                 // ย้ายการเช็ก Mute มาไว้ตรงนี้แทน เพื่อให้การดึงไฟล์เพลงยังทำงานตามปกติแต่แค่ปิด/เปิดเสียง
+                 if (isLocalPaused) {
+                     if (player.mute) player.mute();
+                 } else {
+                     if (player.unMute) player.unMute();
                  }
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
@@ -3884,22 +3902,25 @@ function Game24({ dateSeed, onEnd }) {
           {isPlayerFloatingOpen && (
             <div className="fixed bottom-6 right-6 z-50 flex items-end justify-end pointer-events-none">
                 <div className="pointer-events-auto bg-[#0B1325]/90 backdrop-blur-md border border-[#1E3A5F] p-3 rounded-2xl shadow-2xl flex items-center gap-3 max-w-[280px]">
-                    <div className="relative w-12 h-12 rounded-full border-2 border-slate-700 overflow-hidden shrink-0 shadow-[0_0_10px_rgba(14,165,233,0.3)]">
-                        {isFullyClosedSync ? (
-                            <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover" alt="" />
-                        ) : activeDeckSong?.id ? (
-                            <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className={`w-full h-full object-cover ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`} alt="" />
-                        ) : (
-                            <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs">💿</div>
-                        )}
-                        
-                        {/* Floating Notes Animation Overlay */}
-                        <div className="absolute inset-0 pointer-events-none overflow-visible flex items-end justify-center pb-2">
-                            {flyingNotes.map(n => (
-                                <div key={n.id} className="animate-music-note text-[10px]" style={{ left: n.left }}>{n.char}</div>
-                            ))}
-                        </div>
-                    </div>
+                    <div className="relative w-12 h-12 rounded-full border-2 border-slate-700 shrink-0 shadow-[0_0_10px_rgba(14,165,233,0.3)]">
+		        <div className="w-full h-full rounded-full overflow-hidden">
+		     	           {/* เลื่อนรูปหน้าปกเข้าไปอยู่ในกล่องนี้แทน */}
+		            {isFullyClosedSync ? (
+		                <img src="jazzskull-trumpet.gif" className="w-full h-full object-cover" alt="" />
+		            ) : activeDeckSong?.id ? (
+		                <img src={`https://img.youtube.com/vi/${activeDeckSong.id}/default.jpg`} className={`w-full h-full object-cover ${isDeckPlaying && !isLocalPaused ? 'animate-[spin_4s_linear_infinite]' : ''}`} alt="" />
+		            ) : (
+		                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs">💿</div>
+		            )}
+		        </div>
+    
+		        {/* Floating Notes Animation Overlay */}
+		        <div className="absolute inset-0 pointer-events-none flex items-end justify-center pb-2" style={{ overflow: 'visible' }}>
+		            {flyingNotes.map(n => (
+		                <div key={n.id} className="animate-music-note text-[10px]" style={{ left: n.left }}>{n.char}</div>
+		            ))}
+		        </div>
+		    </div>
                     
                     <div className="flex flex-col min-w-0 flex-1">
                         <div className="text-[9px] text-sky-400 font-bold uppercase tracking-wider mb-0.5">Disc Jam Radio</div>
