@@ -5422,9 +5422,10 @@ function Game24({ dateSeed, onEnd }) {
 
               const AdvancedUnitConverter = () => {
                   const CATEGORIES = {
-                    'Length (ความยาว)': { 'm': 1, 'cm': 100, 'mm': 1000, 'km': 0.001, 'in': 39.3701, 'ft': 3.28084, 'yd': 1.09361, 'mile': 0.000621371 },
-                    'Mass (น้ำหนัก)': { 'kg': 1, 'g': 1000, 'mg': 1e6, 'lb': 2.20462, 'oz': 35.274, 'ton': 0.001 },
-                    'Volume (ปริมาตร)': { 'L': 1, 'mL': 1000, 'm³': 0.001, 'cm³': 1000, 'gal (US)': 0.264172, 'qt (US)': 1.05669, 'fl oz (US)': 33.814 },
+                    'Length (ความยาว)': { 'm': 1, 'cm': 100, 'mm': 1000, 'km': 0.001, 'in': 39.3701, 'ft': 3.28084, 'yd': 1.09361, 'mile': 0.000621371, 'วา (wa)': 0.5, 'ศอก (sok)': 2, 'คืบ (khuep)': 4, 'เส้น (sen)': 0.025, 'โยชน์ (yot)': 0.0000625 },
+                    'Area (พื้นที่)': { 'm²': 1, 'cm²': 10000, 'km²': 1e-6, 'hectare': 1e-4, 'acre': 0.000247105, 'sq ft': 10.7639, 'ตารางวา (sq wa)': 0.25, 'งาน (ngan)': 0.0025, 'ไร่ (rai)': 0.000625 },
+                    'Mass (น้ำหนัก)': { 'kg': 1, 'g': 1000, 'mg': 1e6, 'lb': 2.20462, 'oz': 35.274, 'ton': 0.001, 'ขีด (khit)': 10, 'บาท (ทอง)': 65.59958, 'สลึง (ทอง)': 262.3983, 'ตำลึง': 16.39989 },
+                    'Volume (ปริมาตร)': { 'L': 1, 'mL': 1000, 'm³': 0.001, 'cm³': 1000, 'gal (US)': 0.264172, 'qt (US)': 1.05669, 'fl oz (US)': 33.814, 'ถัง (thang)': 0.05, 'เกวียน (kwian)': 0.0005, 'ทะนาน (thanan)': 1 },
                     'Force (แรง)': { 'N': 1, 'kN': 1e-3, 'kgf': 0.10197, 'lbf': 0.224809 },
                     'Pressure (ความดัน)': { 'Pa': 1, 'kPa': 1e-3, 'MPa': 1e-6, 'bar': 1e-5, 'psi': 0.000145038, 'atm': 0.0000098692 },
                     'Energy (พลังงาน)': { 'J': 1, 'kJ': 1e-3, 'cal': 0.239006, 'kcal': 0.000239006, 'Wh': 0.000277778, 'kWh': 2.77778e-7, 'eV': 6.242e18 },
@@ -5535,10 +5536,10 @@ function Game24({ dateSeed, onEnd }) {
                   const tempUnits = ['C', 'F', 'K'];
 
                   return (
-                    <div className="flex flex-col gap-5 py-4 w-full max-w-lg mx-auto bg-[#0a101f] p-6 rounded-2xl border border-[#1E3A5F] shadow-2xl relative overflow-hidden">
+                    <div className="flex flex-col gap-5 py-4 w-full max-w-lg mx-auto bg-[#0a101f] p-4 sm:p-6 rounded-2xl border border-[#1E3A5F] shadow-2xl relative overflow-hidden">
                       <div className="absolute -top-10 -right-10 w-32 h-32 bg-sky-500 rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
 
-                      <div className="flex justify-between items-center z-10">
+                      <div className="flex justify-between items-center z-10 flex-wrap gap-2">
                         <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">ประเภทหน่วยวัด</label>
                         <div className="flex items-center gap-2">
                             <select value={precision} onChange={e => setPrecision(parseInt(e.target.value))} className="bg-[#050811] text-sky-300 text-[10px] px-2 py-1.5 rounded-lg border border-[#1E3A5F] outline-none cursor-pointer font-bold">
@@ -5563,11 +5564,11 @@ function Game24({ dateSeed, onEnd }) {
                           <span className="text-[10px] text-slate-500 font-bold mb-1">จาก (From)</span>
                           <div className="flex items-center gap-2">
                               <input type="number" value={inputValue} onChange={e => setInputValue(e.target.value)} className="w-full bg-transparent text-2xl font-mono text-white outline-none" placeholder="0" />
-                              <div className="w-[1px] h-8 bg-[#1E3A5F] mx-1"></div>
+                              <div className="w-[1px] h-8 bg-[#1E3A5F] mx-1 shrink-0"></div>
                               {category === 'Custom (พิมพ์หน่วยเอง)' ? (
-                                  <input type="text" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-28 bg-[#0B1325] border border-[#1E3A5F] rounded p-1 text-xs text-sky-200 font-mono text-center outline-none focus:border-sky-500" placeholder="kg*m/s^2" />
+                                  <input type="text" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-32 bg-[#0B1325] border border-[#1E3A5F] rounded p-1 text-xs text-sky-200 font-mono text-center outline-none focus:border-sky-500 shrink-0" placeholder="kg*m/s^2" />
                               ) : (
-                                  <select value={fromUnit} onChange={e => setFromUnit(e.target.value)} className="bg-transparent text-sm font-bold text-sky-200 outline-none cursor-pointer w-24 text-right">
+                                  <select value={fromUnit} onChange={e => setFromUnit(e.target.value)} className="bg-transparent text-sm font-bold text-sky-200 outline-none cursor-pointer w-28 sm:w-32 text-right shrink-0 truncate">
                                     {(category === 'Temperature (อุณหภูมิ)' ? tempUnits : Object.keys(CATEGORIES[category])).map(u => <option key={u} value={u} className="bg-[#0B1325]">{u}</option>)}
                                   </select>
                               )}
@@ -5585,14 +5586,14 @@ function Game24({ dateSeed, onEnd }) {
                         <div className="flex flex-col bg-[#11241a] rounded-xl border border-emerald-900/50 p-3 relative">
                           <span className="text-[10px] text-emerald-600 font-bold mb-1">ผลลัพธ์ (To)</span>
                           <div className="flex items-center gap-2">
-                              <div className="w-full bg-transparent text-2xl font-mono text-emerald-400 min-h-[32px] overflow-hidden text-ellipsis whitespace-nowrap pt-1">
+                              <div className="w-full bg-transparent text-xl sm:text-2xl font-mono text-emerald-400 min-h-[32px] overflow-hidden text-ellipsis whitespace-nowrap pt-1">
                                  {calculateResult() || '0'}
                               </div>
-                              <div className="w-[1px] h-8 bg-emerald-900 mx-1"></div>
+                              <div className="w-[1px] h-8 bg-emerald-900 mx-1 shrink-0"></div>
                               {category === 'Custom (พิมพ์หน่วยเอง)' ? (
-                                  <input type="text" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-28 bg-[#0B1325] border border-emerald-900/50 rounded p-1 text-xs text-emerald-200 font-mono text-center outline-none focus:border-emerald-500" placeholder="g*cm/s^2" />
+                                  <input type="text" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-32 bg-[#0B1325] border border-emerald-900/50 rounded p-1 text-xs text-emerald-200 font-mono text-center outline-none focus:border-emerald-500 shrink-0" placeholder="g*cm/s^2" />
                               ) : (
-                                  <select value={toUnit} onChange={e => setToUnit(e.target.value)} className="bg-transparent text-sm font-bold text-emerald-200 outline-none cursor-pointer w-24 text-right">
+                                  <select value={toUnit} onChange={e => setToUnit(e.target.value)} className="bg-transparent text-sm font-bold text-emerald-200 outline-none cursor-pointer w-28 sm:w-32 text-right shrink-0 truncate">
                                     {(category === 'Temperature (อุณหภูมิ)' ? tempUnits : Object.keys(CATEGORIES[category])).map(u => <option key={u} value={u} className="bg-[#0B1325]">{u}</option>)}
                                   </select>
                               )}
@@ -5611,7 +5612,7 @@ function Game24({ dateSeed, onEnd }) {
                           </div>
                       )}
                       {category === 'Custom (พิมพ์หน่วยเอง)' && (
-                          <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner">
+                          <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed">
                              💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br/>(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h, L, mL) <br/>ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
                           </div>
                       )}
