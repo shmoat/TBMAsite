@@ -4769,7 +4769,19 @@ function Game24({ dateSeed, onEnd }) {
                        if (rightTag !== 'ALL' && !getTags(m).includes(rightTag)) return false;
                        if (rightOnlineOnly && (Date.now() - (m.lastActive || 0) > 86400000)) return false;
                        return true;
-                    }).map((m) => <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2"><Avatar user={m} size="xs" showStatus={true} /><div className="min-w-0 flex-1"><div className="font-bold truncate">{m.displayName} ({m.id})</div><TagBadges user={m} /></div></div>)}
+                    }).map((m) => {
+                       const stat = getStatusInfo(m);
+                       return (
+                           <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2">
+                               <Avatar user={m} size="xs" showStatus={true} />
+                               <div className="min-w-0 flex-1">
+                                   <div className="font-bold truncate text-[11px]">{m.displayName} ({m.id})</div>
+                                   <div className={`text-[9px] mb-1 ${stat.t === 'Online' ? 'text-emerald-400' : stat.t === 'AFK' ? 'text-amber-400' : 'text-slate-400'}`}>{stat.t}</div>
+                                   <TagBadges user={m} />
+                               </div>
+                           </div>
+                       );
+                    })}
                   </div>
                 </aside>
               )}
