@@ -2388,26 +2388,9 @@ function Game24({ dateSeed, onEnd }) {
             </Modal>
         );
     }
-    // ==========================================
-    // MAIN APP
-    // ==========================================
 
-
-    function App() {
-      const [users, setUsers] = useState([OWNER_SEED]);
-      const [isUsersLoaded, setIsUsersLoaded] = useState(false); // เพิ่มบรรทัดนี้
-      const [posts, setPosts] = useState([]);
-      const [channels, setChannels] = useState(DEF_CH);
-      const [groups, setGroups] = useState([]);
-      const [chatMessages, setChatMessages] = useState([]);
-      const [typingStatuses, setTypingStatuses] = useState([]);
-      const [notifications, setNotifications] = useState([]);
-      const [currentUser, setCurrentUser] = useState(null);
-      const [zoomImg, setZoomImg] = useState(null);
-      openZoom = setZoomImg;
-     
     // ==========================================
-    // BMA COMMUNITY TOOLS COMPONENTS
+    // BMA COMMUNITY TOOLS COMPONENTS (อยู่นอก App)
     // ==========================================
     const BPMTapper = () => {
         const [bpm, setBpm] = useState(120);
@@ -2763,6 +2746,26 @@ function Game24({ dateSeed, onEnd }) {
           </div>
         );
     };
+
+    // ==========================================
+    // MAIN APP
+    // ==========================================
+
+
+    function App() {
+      const [users, setUsers] = useState([OWNER_SEED]);
+      const [isUsersLoaded, setIsUsersLoaded] = useState(false);
+      const [posts, setPosts] = useState([]);
+      const [channels, setChannels] = useState(DEF_CH);
+      const [groups, setGroups] = useState([]);
+      const [chatMessages, setChatMessages] = useState([]);
+      const [typingStatuses, setTypingStatuses] = useState([]);
+      const [notifications, setNotifications] = useState([]);
+      const [currentUser, setCurrentUser] = useState(null);
+      const [zoomImg, setZoomImg] = useState(null);
+      openZoom = setZoomImg;
+      const [activeTool, setActiveTool] = useState(null);
+      const [toolSearchQ, setToolSearchQ] = useState('');
  
 	// 🎃 ตรวจสอบช่วงเวลา Halloween อัตโนมัติ (19-31 ตุลาคม ของทุกปี)
       const checkIsHalloween = () => {
@@ -5461,10 +5464,6 @@ function Game24({ dateSeed, onEnd }) {
                   { id: 'splitter', category: 'Community Utilities', name: 'Lunar Splitter', icon: '💸', desc: 'หารบิลคำนวณ VAT/Service Charge อย่างยุติธรรม' },
                   { id: 'randomizer', category: 'Community Utilities', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนา' },
               ];
-              
-              // ใช้ State เล็กซ่อนใน View (ถ้า React บ่น ให้ย้ายไปประกาศด้านบน App)
-              const [activeTool, setActiveTool] = useState(null);
-              const [toolSearchQ, setToolSearchQ] = useState('');
               
               const filteredTools = TOOLS.filter(t => 
                   t.name.toLowerCase().includes(toolSearchQ.toLowerCase()) || 
