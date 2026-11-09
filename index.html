@@ -3040,6 +3040,7 @@ function Game24({ dateSeed, onEnd }) {
       openZoom = setZoomImg;
       const [activeTool, setActiveTool] = useState(null);
       const [toolSearchQ, setToolSearchQ] = useState('');
+      const [trackTime, setTrackTime] = useState({ curA: 0, durA: 0, curB: 0, durB: 0 });
  
 	// 🎃 ตรวจสอบช่วงเวลา Halloween อัตโนมัติ (19-31 ตุลาคม ของทุกปี)
       const checkIsHalloween = () => {
@@ -3536,6 +3537,18 @@ function Game24({ dateSeed, onEnd }) {
         });
       }, []);
 
+      const handleSeek = (deck, value) => {
+          if (!canManageAudio) return;
+          const targetTime = parseFloat(value);
+          if (deck === 'A' && ytA.current?.seekTo) {
+              ytA.current.seekTo(targetTime, true);
+              updateDjState({ playA: { ...djState.playA, startedAt: Date.now() - (targetTime * 1000) } });
+          } else if (deck === 'B' && ytB.current?.seekTo) {
+              ytB.current.seekTo(targetTime, true);
+              updateDjState({ playB: { ...djState.playB, startedAt: Date.now() - (targetTime * 1000) } });
+          }
+      };
+
       const updateDjState = (updates) => { db.collection('bma_system').doc('discjam').update(updates).catch(()=>{}); };
       const canManageAudio = currentUser && (djState.jammerId ? (djState.jammerId === currentUser.id) : (currentUser.role === 'admin' || currentUser.role === 'mod'));
       const activeDeckSong = localCrossfade < 50 ? djState.deckA : djState.deckB;
@@ -3724,7 +3737,12 @@ function Game24({ dateSeed, onEnd }) {
                          ytA.current.loadVideoById(CLOSED_SONG_ID, targetTime);
                      } else if (state === 0 || state === 2 || state === -1 || state === 5 || Math.abs(targetTime - cur) > 4) {
                          if (ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
-                         if (ytA.current.playVideo) ytA.current.playVideo();
+                         if (ytA.current.playVideo) {
+                             ytA.current.unMute();
+                             // บังคับเซ็ต localVolume ให้เพลงสถานีปิด
+                             if (ytA.current.setVolume) ytA.current.setVolume(localVolume);
+                             ytA.current.playVideo();
+                         }
                      }
                  }
                  return;
@@ -3740,6 +3758,7 @@ function Game24({ dateSeed, onEnd }) {
                  const curA = ytA.current?.getCurrentTime ? ytA.current.getCurrentTime() : 0;
                  const durB = ytB.current?.getDuration ? ytB.current.getDuration() : 0;
                  const curB = ytB.current?.getCurrentTime ? ytB.current.getCurrentTime() : 0;
+		 setTrackTime({ curA, durA, curB, durB });
                  const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
                  const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
@@ -3802,7 +3821,7 @@ function Game24({ dateSeed, onEnd }) {
              }
 
              const syncPlayer = (player, playData, isActive, deckId) => {
-                 if (!player?.getCurrentTime || !playData?.isPlaying) return; // ลบการเช็ก !isLocalPaused ออกจากบรรทัดนี้
+                 if (!player?.getCurrentTime || !playData?.isPlaying) return; 
                  
                  const currentSpeed = djState.speed || 1;
                  const expRaw = ((Date.now() - (playData.startedAt||Date.now())) / 1000) * currentSpeed;
@@ -3815,11 +3834,15 @@ function Game24({ dateSeed, onEnd }) {
                      if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
                  }
                  
-                 // ย้ายการเช็ก Mute มาไว้ตรงนี้แทน เพื่อให้การดึงไฟล์เพลงยังทำงานตามปกติแต่แค่ปิด/เปิดเสียง
+                 // ย้ายการเช็ก Mute และปรับ Volume มาไว้ตรงนี้
                  if (isLocalPaused) {
                      if (player.mute) player.mute();
                  } else {
                      if (player.unMute) player.unMute();
+                     // เพิ่มการตั้งค่า Volume ทุกครั้งที่ Sync เพื่อป้องกันระดับเสียงเด้ง
+                     const cVal = localCrossfade;
+                     const targetVol = deckId === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
+                     if (player.setVolume) player.setVolume(Math.max(0, (targetVol * localVolume) / 100));
                  }
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
@@ -4571,10 +4594,15 @@ function Game24({ dateSeed, onEnd }) {
                                 {isFullyClosedSync ? 'สถานีปิดรับคิวชั่วคราว' : (activeDeckSong?.title || 'ไม่มีเพลงเล่น')}
                             </div>
                             
-                            <div className="flex items-center gap-2 mt-1.5">
+                            <div className="flex items-center gap-2 mt-1.5 justify-between w-full">
                                 <button onClick={handleToggleLocalAudio} className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${!isLocalPaused ? 'bg-sky-900/50 text-sky-300 border-sky-500/50 shadow-[0_0_8px_rgba(14,165,233,0.4)]' : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700'}`}>
                                     {!isLocalPaused ? '🔊 กำลังฟัง' : '🔇 กดรับเสียง'}
                                 </button>
+                                {!isFullyClosedSync && activeDeckSong?.id && (
+                                    <span className="text-[9px] font-mono text-slate-400 mr-2">
+                                        {fmtTime(localCrossfade < 50 ? trackTime.curA : trackTime.curB)} / {fmtTime(localCrossfade < 50 ? trackTime.durA : trackTime.durB)}
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <button onClick={() => setIsPlayerFloatingOpen(false)} className="text-slate-500 hover:text-white p-1 self-start -mt-1 -mr-1">✕</button>
@@ -4827,6 +4855,12 @@ function Game24({ dateSeed, onEnd }) {
                        </div>
                      	 {/* ปุ่มควบคุม Deck A */}
                        {djState.deckA?.id && (
+                           <div className="w-full mt-3 px-2 flex items-center gap-2">
+                               <span className="text-[9px] font-mono w-8 text-right text-slate-400">{fmtTime(trackTime.curA)}</span>
+                               <input type="range" min="0" max={trackTime.durA || 100} value={trackTime.curA} onChange={(e) => handleSeek('A', e.target.value)} disabled={djState.djMode === 'auto'} className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" />
+                               <span className="text-[9px] font-mono w-8 text-left text-slate-400">{fmtTime(trackTime.durA)}</span>
+                           </div>
+                       )}
                           <div className="mt-3 flex flex-wrap gap-2 justify-center">
                               {djState.djMode === 'manual' && (
                                  <button onClick={() => {
@@ -4877,6 +4911,12 @@ function Game24({ dateSeed, onEnd }) {
                        <div className="text-xs text-slate-200 font-bold mt-4 h-8 line-clamp-2">{djState.deckB?.title || 'Empty Deck'}</div>
                        	{/* ปุ่มควบคุม Deck B */}
                        {djState.deckB?.id && (
+                           <div className="w-full mt-3 px-2 flex items-center gap-2">
+                               <span className="text-[9px] font-mono w-8 text-right text-slate-400">{fmtTime(trackTime.curB)}</span>
+                               <input type="range" min="0" max={trackTime.durB || 100} value={trackTime.curB} onChange={(e) => handleSeek('B', e.target.value)} disabled={djState.djMode === 'auto'} className="flex-1 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" />
+                               <span className="text-[9px] font-mono w-8 text-left text-slate-400">{fmtTime(trackTime.durB)}</span>
+                           </div>
+                       )}
                           <div className="mt-3 flex flex-wrap gap-2 justify-center">
                               {djState.djMode === 'manual' && (
                                  <button onClick={() => {
@@ -4991,6 +5031,11 @@ function Game24({ dateSeed, onEnd }) {
                   
                   <div className="mt-8 w-full max-w-md px-4">
                       <div className="text-lg sm:text-xl font-bold text-white truncate text-center">{isFullyClosedSync ? 'สถานีปิดรับคิวเพลงชั่วคราว' : (activeDeckSong?.id ? activeDeckSong.title : 'ไม่มีเพลงกำลังเล่น')}</div>
+                      {!isFullyClosedSync && activeDeckSong?.id && (
+                          <div className="text-xs font-mono text-sky-400 font-bold mt-2 text-center">
+                              {fmtTime(localCrossfade < 50 ? trackTime.curA : trackTime.curB)} / {fmtTime(localCrossfade < 50 ? trackTime.durA : trackTime.durB)}
+                          </div>
+                      )}
                       {activeDeckSong?.addedBy && !isFullyClosedSync && <div className="text-[10px] text-slate-400 text-center mt-2 font-mono">Added by: {getAuthor(activeDeckSong.addedBy).displayName}</div>}
                   </div>
               </div>
