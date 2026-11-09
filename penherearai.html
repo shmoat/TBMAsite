@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แบบทดสอบบุคลิกภาพ: คุณคือเหี้ยอะไร?</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* ธีมสีกรมท่า-ดำ-ขาว ตามความเหมาะสมของเนื้อหา */
+            --primary-bg: #030712; /* ดำ */
+            --card-bg: #0f172a;    /* กรมท่าเข้ม */
+            --accent: #3b82f6;     /* น้ำเงินสว่าง สำหรับปุ่ม */
+            --text-main: #f8fafc;  /* ขาว */
+            --text-muted: #94a3b8; /* เทาอ่อน */
+            --border-color: #1e293b;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            line-height: 1.6;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            max-width: 700px;
+            width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            padding: 30px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin: 0 0 10px 0;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .question-card {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+        }
+
+        .question-card:hover {
+            border-color: var(--accent);
+        }
+
+        .question-text {
+            font-weight: 400;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .options-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+
+        .options-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            right: 5%;
+            height: 2px;
+            background-color: var(--border-color);
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        .option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            z-index: 2;
+            background-color: var(--card-bg);
+            padding: 0 5px;
+        }
+
+        .option input[type="radio"] {
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--text-muted);
+            border-radius: 50%;
+            margin-bottom: 8px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+            background-color: var(--card-bg);
+        }
+
+        .option input[type="radio"]:checked {
+            border-color: var(--accent);
+            background-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+        }
+
+        .option span {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .option input[type="radio"]:checked + span {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .btn-submit {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            background-color: var(--text-main);
+            color: var(--primary-bg);
+            font-size: 18px;
+            font-weight: 600;
+            font-family: 'Prompt', sans-serif;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+            margin-top: 30px;
+        }
+
+        .btn-submit:hover {
+            background-color: #e2e8f0;
+        }
+
+        .btn-submit:active {
+            transform: scale(0.98);
+        }
+
+        #result-section {
+            display: none;
+            margin-top: 40px;
+            padding: 30px;
+            background-color: #000000;
+            border: 2px solid var(--text-main);
+            border-radius: 16px;
+            text-align: center;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #result-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 15px;
+        }
+
+        #result-desc {
+            font-size: 16px;
+            color: #cbd5e1;
+            line-height: 1.8;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            h1 { font-size: 20px; }
+            .question-text { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>แบบทดสอบบุคลิกภาพ: คุณคล้ายตัวเงินตัวทองสายพันธุ์ไหน?</h1>
+            <p class="subtitle">ให้คะแนนความตรงกับตัวเองในแต่ละข้อ (1 = ไม่ตรงเลย, 5 = ตรงมากที่สุด)</p>
+        </div>
+
+        <form id="quiz-form">
+            <!-- 12 Questions generated via JS for cleaner code -->
+            <div id="questions-container"></div>
+            
+            <button type="submit" class="btn-submit">ประมวลผลลัพธ์</button>
+        </form>
+
+        <div id="result-section">
+            <div id="result-title"></div>
+            <div id="result-desc"></div>
+        </div>
+    </div>
+
+    <script>
+        const questions = [
+            "ไม่ว่าจะตกอยู่ในสถานการณ์ที่ยากลำบากแค่ไหน คุณก็มักจะหาทางเอาตัวรอดและลุยไปข้างหน้าได้เสมอ",
+            "คุณชอบคุมโทนสไตล์การแต่งตัวหรือสิ่งของเครื่องใช้ให้เป็นสีเข้มๆ เช่น สีดำ หรือสีกรมท่า มากกว่าสีสันฉูดฉาด",
+            "คุณไม่ชอบวิ่งตามกระแสสังคม แต่เน้นใช้ชีวิตบนพื้นฐานความเป็นจริงและชอบสร้างความมั่นคงให้ตัวเองมากกว่า",
+            "หลายครั้งที่คุณเผลอพูดจาแข็งกร้าว ปากแจ๋ว หรือทำหน้าตาดุดัน เพื่อปกปิดความอ่อนไหวหรือความกังวลที่ซ่อนอยู่ข้างใน",
+            "เมื่อต้องอยู่ในที่ที่มีคนพลุกพล่านหรือมีความวุ่นวาย คุณจะรู้สึกหมดพลังและต้องรีบปลีกตัวออกมาหา 'เซฟโซน' ของตัวเองทันที",
+            "วันหยุดที่สมบูรณ์แบบของคุณ คือการได้ขลุกตัวอยู่เงียบๆ ในห้อง ค่อยๆ ทำอะไรตามจังหวะของตัวเองแบบสโลว์ไลฟ์",
+            "คุณเป็นคนอยู่ง่ายกินง่าย ปรับตัวเข้ากับสภาพแวดล้อมได้ทุกรูปแบบ และไม่ค่อยแคร์ว่าคนอื่นจะมองหรือตัดสินคุณยังไง",
+            "ถึงแม้ภายนอกคุณจะดูพร้อมบวกหรือชอบโวยวายไว้ก่อน แต่ลึกๆ แล้วคุณรักสงบ และมักจะเลือกวิธี 'หนีดีกว่า' เมื่อต้องปะทะจริงๆ",
+            "คุณชอบทำงานหรือใช้ชีวิตในพื้นที่ที่คุณคุ้นเคยและรู้สึกปลอดภัย มากกว่าการออกไปเสี่ยงในสภาพแวดล้อมใหม่ๆ ที่เอาแน่เอานอนไม่ได้",
+            "คนรอบข้างมักจะมองว่าคุณเป็นคนเรียบร้อย เป็นมิตร ดูไม่มีพิษมีภัย และน่าทะนุถนอม",
+            "ถึงภายนอกคุณจะดูขรึมๆ ลึกลับ หรือเข้าถึงยาก แต่ถ้าได้สนิทกันจริงๆ คุณเป็นคนง่ายๆ สบายๆ และยืดหยุ่นได้ดีมาก",
+            "คุณเป็นคนตื่นตระหนกตกใจง่าย ไม่ชอบทำตัวโดดเด่น และมักจะหลีกเลี่ยงการเป็นจุดสนใจของคนหมู่มาก"
+        ];
+
+        const container = document.getElementById('questions-container');
+
+        questions.forEach((q, index) => {
+            const num = index + 1;
+            const html = `
+                <div class="question-card">
+                    <div class="question-text">${num}. ${q}</div>
+                    <div class="options-container">
+                        <label class="option"><input type="radio" name="q${num}" value="1" required><span>1</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="2"><span>2</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="3"><span>3</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="4"><span>4</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="5"><span>5</span></label>
+                    </div>
+                    <div class="labels">
+                        <span>ไม่ตรงเลย</span>
+                        <span>ตรงมากที่สุด</span>
+                    </div>
+                </div>
+            `;
+            container.innerHTML += html;
+        });
+
+        document.getElementById('quiz-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const getVal = (name) => parseInt(document.querySelector(`input[name="${name}"]:checked`).value);
+            
+            const scores = [
+                { 
+                    name: 'เหี้ยลายดอก (The Survivor)', 
+                    score: getVal('q1') + getVal('q7'), 
+                    desc: 'คุณคือสุดยอดนักสู้ชีวิต หน้ามึน อยู่ง่ายกินง่าย ยืดหยุ่นได้กับทุกสถานการณ์ เอาตัวรอดเก่งเป็นที่หนึ่ง และไม่ปล่อยให้คำวิจารณ์ของใครมาทำลายความสุขในแต่ละวันของคุณ' 
+                },
+                { 
+                    name: 'มังกรดำ (The Dark Mode)', 
+                    score: getVal('q2') + getVal('q11'), 
+                    desc: 'คุณมีสไตล์ที่โดดเด่นชัดเจน รักความเรียบเท่และสุขุม ภายนอกดูดาร์กๆ ลึกลับ และอาจจะดูเข้าถึงยากในตอนแรก แต่เนื้อแท้แล้วคุณเป็นคนปรับตัวเก่งและชิลล์กว่าที่หลายคนคิด' 
+                },
+                { 
+                    name: 'แลนดอน (The Grounded)', 
+                    score: getVal('q3') + getVal('q9'), 
+                    desc: 'คุณคือสายซัพพอร์ตความมั่นคง ติดดิน ไม่ชอบความหวือหวาหรือการไหลไปตามกระแสนิยม คุณชอบสร้างรากฐานชีวิตให้แข็งแรง และมีความสุขกับการอยู่ในพื้นที่แห้งๆ ปลอดภัยของตัวเอง' 
+                },
+                { 
+                    name: 'เห่าช้าง (The Tsundere)', 
+                    score: getVal('q4') + getVal('q8'), 
+                    desc: 'คุณคือคนหน้าดุสไตล์ซึนเดเระ ชอบสร้างเกราะป้องกันตัวเองด้วยความเสียงดังหรือท่าทีแข็งกร้าว แต่จริงๆ แล้วข้างในใจบางมาก รักสงบ และเกลียดความขัดแย้งที่สุด' 
+                },
+                { 
+                    name: 'ตะกวด (The Introvert)', 
+                    score: getVal('q5') + getVal('q12'), 
+                    desc: 'คุณคือสายโลกส่วนตัวสูง ขี้อาย และตกใจง่าย คุณมีเรดาร์ตรวจจับความวุ่นวายที่ไวมาก ถ้าบรรยากาศเริ่มไม่ดีหรือคนเริ่มเยอะ คุณพร้อมจะสับเกียร์หมาหนีกลับไปชาร์จแบตในเซฟโซนทันที' 
+                },
+                { 
+                    name: 'ตุ๊ดตู่ (The Slow-Life)', 
+                    score: getVal('q6') + getVal('q10'), 
+                    desc: 'คุณคือสายติดบ้านที่น่าทะนุถนอมที่สุดในกลุ่ม คุณมีจังหวะชีวิตที่ค่อยเป็นค่อยไป ไม่ชอบการแข่งขันหรือความเร่งรีบ เป็นคนซอฟต์ๆ ที่ใครอยู่ใกล้ก็รู้สึกสบายใจและปลอดภัย' 
+                }
+            ];
+
+            // เรียงลำดับจากคะแนนมากไปน้อย ถ้าเท่ากันจะสุ่มดึงอันแรก
+            scores.sort((a, b) => b.score - a.score);
+            const result = scores[0];
+
+            document.getElementById('result-title').innerText = "คุณคือ " + result.name + "!";
+            document.getElementById('result-desc').innerText = result.desc;
+            
+            const resultSection = document.getElementById('result-section');
+            resultSection.style.display = 'block';
+            
+            // Scroll เลื่อนลงมาให้เห็นผลลัพธ์
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        });
+    </script>
+</body>
+</html>
