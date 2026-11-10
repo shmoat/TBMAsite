@@ -3024,6 +3024,203 @@ function Game24({ dateSeed, onEnd }) {
     };
 
     // ==========================================
+    // 📅 ASSOCIATION CALENDAR COMPONENT 📅
+    // ==========================================
+    const AssociationCalendar = ({ isOpen, onClose, events, currentUser, db, users }) => {
+        const [currentDate, setCurrentDate] = useState(new Date());
+        const [selectedDate, setSelectedDate] = useState(null);
+        const [showCreateForm, setShowCreateForm] = useState(false);
+    
+        // ข้อมูลวันสำคัญทางดาราศาสตร์
+        const ASTRONOMICAL_EVENTS = {
+            '2026-03-03': { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง (Blood Moon)' },
+            '2026-05-31': { type: 'Blue Moon', label: '🔵 Blue Moon (จันทร์เต็มดวงครั้งที่ 2 ของเดือน)' },
+            '2026-11-24': { type: 'Full Moon', label: '🌕 วันลอยกระทง (Full Moon)' },
+            '2026-12-24': { type: 'Supermoon', label: '🌕 ซูเปอร์มูน (ดวงจันทร์ใกล้โลกที่สุด)' },
+            '2027-02-20': { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง' }
+        };
+
+        const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+        const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+        const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+        const getDayEvents = (dateStr) => events.filter(e => e.date === dateStr);
+        const getAuthor = (id) => users.find(u => u.id === id) || { displayName: id };
+
+        const EVENT_TYPES = {
+            official: { color: 'bg-red-500', icon: '🔴', label: 'Official' },
+            gathering: { color: 'bg-emerald-500', icon: '🟢', label: 'Gathering' },
+            music: { color: 'bg-sky-500', icon: '🔵', label: 'Music Jam' }
+        };
+
+        const exportToICS = (event) => {
+            const d = event.date.replace(/-/g, '');
+            const t = event.time.replace(/:/g, '') + '00';
+            const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${event.title}\nDTSTART:${d}T${t}\nDESCRIPTION:สร้างโดย: ${getAuthor(event.createdBy).displayName}\\nจำนวนคนที่รับ: ${event.max}\\n\\nเข้าร่วมผ่าน The Blue Moon Association\nEND:VEVENT\nEND:VCALENDAR`;
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${event.title}.ics`; a.click();
+            window.URL.revokeObjectURL(url);
+        };
+
+        const handleCreateEvent = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const title = fd.get('title'), date = fd.get('date'), time = fd.get('time');
+            const type = fd.get('type'), max = parseInt(fd.get('max')), isPromo = fd.get('promo') === 'on';
+        
+            const id = 'evt-' + Date.now();
+            await db.collection('bma_events').doc(id).set({
+                id, title, date, time, type, max, createdBy: currentUser.id,
+                going: [currentUser.id], maybe: [], timestamp: Date.now()
+            });
+
+        // สร้างโพสต์ลง Board อัตโนมัติ หากติ๊กเลือกไว้
+            if (isPromo) {
+                const postId = 'post-' + Date.now();
+                await db.collection('bma_posts').doc(postId).set({
+                    id: postId, authorId: currentUser.id, title: `🗓️ เชิญร่วมกิจกรรม: ${title}`,
+                    content: `ขอเชิญสมาชิกเข้าร่วมกิจกรรม\n\n**วันที่:** ${date}\n**เวลา:** ${time} น.\n**รายละเอียด:** สามารถดูจำนวนคนและกดเข้าร่วมได้ที่ 📅 ปฏิทินสมาคมครับ!`,
+                    isGuestAllowed: false, attachments: [], tags: ['Event'], mutedBy: [],
+                    createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+                    timestamp: Date.now(), serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp(), likes: [], bookmarks: [], comments: []
+                });
+            }
+            setShowCreateForm(false);
+        };
+
+        const handleRSVP = async (event, status) => {
+            const isGoing = status === 'going';
+            let newGoing = event.going || []; let newMaybe = event.maybe || [];
+            newGoing = newGoing.filter(id => id !== currentUser.id);
+            newMaybe = newMaybe.filter(id => id !== currentUser.id);
+            if (isGoing) newGoing.push(currentUser.id);
+            else newMaybe.push(currentUser.id);
+        
+            await db.collection('bma_events').doc(event.id).update({ going: newGoing, maybe: newMaybe });
+        };
+
+        if (!isOpen) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 text-white">
+                <div className="bg-[#0B1325] border border-[#1E3A5F] w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in relative">
+                
+                    <div className="flex justify-between items-center p-4 border-b border-[#1E3A5F] bg-[#070C18]">
+                        <h2 className="text-xl font-bold text-sky-400">📅 Association Calendar</h2>
+                        <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+                    {/* ปฏิทิน */}
+                        <div className="w-full md:w-2/3 flex flex-col p-4 border-r border-[#1E3A5F] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-4">
+                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="text-xl hover:text-sky-400">◀</button>
+                                <h3 className="text-lg font-bold">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="text-xl hover:text-sky-400">▶</button>
+                            </div>
+                        
+                            <div className="grid grid-cols-7 gap-1 flex-1">
+                                                                                      {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => <div key={d} className="text-center text-xs font-bold text-slate-400 mb-2">{d}</div>)}
+                                {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="p-2 border border-transparent"></div>)}
+
+                                {Array(daysInMonth).fill(null).map((_, i) => {
+                                    const dateNum = i + 1;
+                                    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
+                                    const isSelected = selectedDate === dateStr;
+                                    const astro = ASTRONOMICAL_EVENTS[dateStr];
+                                    const dayEvents = getDayEvents(dateStr);
+
+                                    return (
+                                        <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`min-h-[80px] border rounded-lg p-1.5 cursor-pointer transition-colors relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/20' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                                            <span className={`text-sm font-bold ${astro?.type === 'Blue Moon' ? 'text-sky-300 drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : astro?.type === 'Eclipse' ? 'text-red-400' : ''}`}>{dateNum}</span>
+                                            {astro && <span className="absolute top-1 right-1 text-xs" title={astro.label}>{astro.type === 'Blue Moon' ? '🔵' : astro.type === 'Eclipse' ? '🔴' : '🌕'}</span>}
+                                            <div className="mt-auto flex flex-wrap gap-1 w-full justify-start">
+                                                {dayEvents.map(e => <div key={e.id} className={`w-2 h-2 rounded-full ${EVENT_TYPES[e.type].color}`} title={e.title}></div>)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                    {/* รายละเอียด / ฟอร์ม */}
+                        <div className="w-full md:w-1/3 bg-[#070C18] p-4 flex flex-col min-h-0 overflow-y-auto">
+                            {!showCreateForm ? (
+                                <>
+                                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E3A5F]">
+                                        <h3 className="font-bold text-amber-300">{selectedDate ? `กิจกรรม: ${selectedDate}` : 'เลือกวันที่'}</h3>
+                                        {selectedDate && currentUser && <button onClick={() => setShowCreateForm(true)} className="bg-sky-600 text-white text-[10px] font-bold px-2 py-1 rounded">สร้างกิจกรรม</button>}
+                                    </div>
+                                    {selectedDate && ASTRONOMICAL_EVENTS[selectedDate] && (
+                                        <div className="bg-[#050811] border border-amber-500/50 p-3 rounded-xl mb-4 text-xs shadow-lg">
+                                            <div className="font-bold text-amber-300 mb-1">✨ ปรากฏการณ์ดาราศาสตร์</div>
+                                            <div className="text-slate-200">{ASTRONOMICAL_EVENTS[selectedDate].label}</div>
+                                        </div>
+                                    )}
+                                    {selectedDate ? (
+                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                                            {getDayEvents(selectedDate).length === 0 ? <div className="text-slate-500 text-xs text-center py-10">ไม่มีกิจกรรม</div> : (
+                                                getDayEvents(selectedDate).map(e => (
+                                                    <div key={e.id} className="bg-[#0B1325] border border-[#1E3A5F] p-3 rounded-xl hover:border-slate-500 transition-colors">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs">{EVENT_TYPES[e.type].icon}</span>
+                                                                <span className="font-bold text-sm text-white">{e.title}</span>
+                                                            </div>
+                                                            <button onClick={() => exportToICS(e)} className="text-[10px] bg-[#050811] px-1.5 py-1 rounded border border-[#1E3A5F] hover:text-sky-300" title="เพิ่มลงปฏิทิน">🗓️ ICS</button>
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400 mb-2">🕒 {e.time} • 👥 เข้าร่วม {(e.going || []).length}/{e.max}</div>
+                                                        <div className="text-[9px] text-slate-500 mb-2 truncate">โฮสต์: {getAuthor(e.createdBy).displayName}</div>
+                                                    
+                                                        {currentUser ? (
+                                                            <div className="flex gap-2 mt-3">
+                                                                <button onClick={() => handleRSVP(e, 'going')} className={`flex-1 text-[10px] py-1.5 rounded-lg font-bold transition-colors ${(e.going||[]).includes(currentUser.id) ? 'bg-emerald-600 text-white' : 'bg-emerald-950 border border-emerald-900 text-emerald-400'}`}>✓ ไป</button>
+                                                                <button onClick={() => handleRSVP(e, 'maybe')} className={`flex-1 text-[10px] py-1.5 rounded-lg transition-colors ${(e.maybe||[]).includes(currentUser.id) ? 'bg-amber-600 text-white' : 'bg-[#050811] border border-[#1E3A5F] text-slate-400'}`}>อาจจะ</button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[10px] text-slate-500 text-center mt-2">ล็อกอินเพื่อตอบรับเข้าร่วม</div>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    ) : <div className="text-slate-500 text-xs text-center py-10">คลิกปฏิทินเพื่อเรียกดู</div>}
+                                </>
+                            ) : (
+                                <div className="flex flex-col h-full">
+                                    <div className="flex justify-between items-center mb-4 border-b border-[#1E3A5F] pb-2">
+                                        <h3 className="font-bold text-sky-300">สร้างกิจกรรมใหม่</h3>
+                                        <button onClick={() => setShowCreateForm(false)} className="text-slate-400 text-xs hover:text-white">ยกเลิก</button>
+                                    </div>
+                                    <form onSubmit={handleCreateEvent} className="space-y-4 flex-1 overflow-y-auto pr-1">
+                                        <input name="title" type="text" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" placeholder="ชื่อกิจกรรม..." />
+                                        <div className="flex gap-2">
+                                            <input name="date" type="date" defaultValue={selectedDate} required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
+                                            <input name="time" type="time" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
+                                        </div>
+                                        <select name="type" className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none">
+                                            <option value="official">🔴 Official Event</option>
+                                            <option value="gathering">🟢 Member Gathering</option>
+                                            <option value="music">🔵 Music Jam</option>
+                                        </select>
+                                        <input name="max" type="number" min="2" defaultValue="10" placeholder="จำนวนคนสูงสุด" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
+                                        <label className="flex items-center gap-2 cursor-pointer text-xs mt-2 p-2 bg-sky-950/30 rounded border border-sky-900/50">
+                                            <input type="checkbox" name="promo" defaultChecked className="accent-sky-500" />
+                                            <span className="text-sky-300 font-bold">สร้างโพสต์โปรโมตลง Board อัตโนมัติ</span>
+                                        </label>
+                                        <button type="submit" className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg text-sm mt-4">สร้างกิจกรรม</button>
+                                    </form>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+    // ==========================================
     // MAIN APP
     // ==========================================
     function App() {
@@ -3041,6 +3238,8 @@ function Game24({ dateSeed, onEnd }) {
       const [activeTool, setActiveTool] = useState(null);
       const [toolSearchQ, setToolSearchQ] = useState('');
       const [trackTime, setTrackTime] = useState({ curA: 0, durA: 0, curB: 0, durB: 0 });
+      const [showCalendar, setShowCalendar] = useState(false);
+      const [bmaEvents, setBmaEvents] = useState([]);
  
 	// 🎃 ตรวจสอบช่วงเวลา Halloween อัตโนมัติ (19-31 ตุลาคม ของทุกปี)
       const checkIsHalloween = () => {
@@ -3421,7 +3620,9 @@ function Game24({ dateSeed, onEnd }) {
            if (s.exists) setDjState(s.data());
         });
         
-        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
+        const u9 = db.collection('bma_events').onSnapshot((s) => setBmaEvents(s.docs.map(d => d.data())), () => {});
+        
+        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); };
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -3839,15 +4040,18 @@ function Game24({ dateSeed, onEnd }) {
                      if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
                  }
                  
-                 // ย้ายการเช็ก Mute และปรับ Volume มาไว้ตรงนี้
+                                              // ย้ายการเช็ก Mute และปรับ Volume มาไว้ตรงนี้ และป้องกันการสั่งซ้ำ
                  if (isLocalPaused) {
-                     if (player.mute) player.mute();
+                     if (player.isMuted && !player.isMuted()) player.mute();
                  } else {
-                     if (player.unMute) player.unMute();
-                     // เพิ่มการตั้งค่า Volume ทุกครั้งที่ Sync เพื่อป้องกันระดับเสียงเด้ง
+                     if (player.isMuted && player.isMuted()) player.unMute();
                      const cVal = localCrossfade;
                      const targetVol = deckId === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
-                     if (player.setVolume) player.setVolume(Math.max(0, (targetVol * localVolume) / 100));
+                     const finalVol = Math.max(0, (targetVol * localVolume) / 100);
+                                                        // เช็กว่าระดับเสียงเปลี่ยนจริงไหม ถึงจะสั่ง setVolume
+                     if (player.getVolume && player.getVolume() !== finalVol) {
+                         if (player.setVolume) player.setVolume(finalVol);
+                     }
                  }
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
@@ -5225,7 +5429,22 @@ function Game24({ dateSeed, onEnd }) {
       </div>
       )}
 
+          {/* เอาวางต่อท้าย Modal เกม */}
           {activeChatGameId && <ChatGameModal gameId={activeChatGameId} currentUser={currentUser} onClose={() => setActiveChatGameId(null)} getAuthor={getAuthor} db={db} activeRoom={activeRoom} roomKey={roomKey} />}
+
+          {/* ปฏิทินสมาคม */}
+          <AssociationCalendar 
+              isOpen={showCalendar} 
+              onClose={() => setShowCalendar(false)} 
+              events={bmaEvents} 
+              currentUser={currentUser} 
+              db={db} 
+              users={users} 
+          />
+          
+        </div>
+      );
+    }
           {currentView === 'chat' && (
             <div className="flex-1 flex overflow-hidden min-h-0">
               {leftOpen && (
@@ -5920,6 +6139,7 @@ function Game24({ dateSeed, onEnd }) {
                           <span>★ โพสต์ที่บันทึกไว้</span>
                           <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono text-slate-300">{posts.filter((p) => (p.bookmarks || []).includes(currentUser.id)).length}</span>
                         </button>
+			<button onClick={() => setShowCalendar(true)} className="px-4 py-1.5 rounded-full text-xs font-bold shrink-0 border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm">📅 ปฏิทินสมาคม</button>
                       )}
                     </>
                   )}
