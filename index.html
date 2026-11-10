@@ -5429,22 +5429,6 @@ function Game24({ dateSeed, onEnd }) {
       </div>
       )}
 
-          {/* เอาวางต่อท้าย Modal เกม */}
-          {activeChatGameId && <ChatGameModal gameId={activeChatGameId} currentUser={currentUser} onClose={() => setActiveChatGameId(null)} getAuthor={getAuthor} db={db} activeRoom={activeRoom} roomKey={roomKey} />}
-
-          {/* ปฏิทินสมาคม */}
-          <AssociationCalendar 
-              isOpen={showCalendar} 
-              onClose={() => setShowCalendar(false)} 
-              events={bmaEvents} 
-              currentUser={currentUser} 
-              db={db} 
-              users={users} 
-          />
-          
-        </div>
-      );
-    }
           {currentView === 'chat' && (
             <div className="flex-1 flex overflow-hidden min-h-0">
               {leftOpen && (
@@ -6595,7 +6579,35 @@ function Game24({ dateSeed, onEnd }) {
         </div>
       );
     }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-      </script>
-    </body>
-    </html>
+          {activeChatGameId && (
+              <ChatGameModal 
+                  gameId={activeChatGameId} 
+                  currentUser={currentUser} 
+                  onClose={() => setActiveChatGameId(null)} 
+                  getAuthor={getAuthor} 
+                  db={db} 
+                  activeRoom={activeRoom} 
+                  roomKey={roomKey} 
+              />
+          )}
+
+          {/* ปฏิทินสมาคม */}
+          <AssociationCalendar 
+              isOpen={showCalendar} 
+              onClose={() => setShowCalendar(false)} 
+              events={bmaEvents} 
+              currentUser={currentUser} 
+              db={db} 
+              users={users} 
+          />
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+
+  </script>
+</body>
+</html>
