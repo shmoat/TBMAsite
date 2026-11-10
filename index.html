@@ -3758,7 +3758,12 @@ function Game24({ dateSeed, onEnd }) {
                  const curA = ytA.current?.getCurrentTime ? ytA.current.getCurrentTime() : 0;
                  const durB = ytB.current?.getDuration ? ytB.current.getDuration() : 0;
                  const curB = ytB.current?.getCurrentTime ? ytB.current.getCurrentTime() : 0;
-		 setTrackTime({ curA, durA, curB, durB });
+		 setTrackTime({ 
+                     curA: Math.floor(curA), 
+                     durA: Math.floor(durA), 
+                     curB: Math.floor(curB), 
+                     durB: Math.floor(durB) 
+                 });
                  const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
                  const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
@@ -3897,7 +3902,7 @@ function Game24({ dateSeed, onEnd }) {
 
              syncPlayer(ytA.current, djState.playA, isDeckA, 'A');
              syncPlayer(ytB.current, djState.playB, !isDeckA, 'B');
-         }, 2500); 
+         }, 1000); 
          return () => clearInterval(syncTimer);
       }, [djState, isLocalPaused, canManageAudio, lateNight]);
 
