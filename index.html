@@ -6135,11 +6135,16 @@ function Game24({ dateSeed, onEnd }) {
                       )}
                       
                       {currentUser && (
-                        <button onClick={() => setCurrentView('bookmarks')} className={currentView === 'bookmarks' ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-amber-400 text-amber-950 shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                          <span>★ โพสต์ที่บันทึกไว้</span>
-                          <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono text-slate-300">{posts.filter((p) => (p.bookmarks || []).includes(currentUser.id)).length}</span>
-                        </button>
-			<button onClick={() => setShowCalendar(true)} className="px-4 py-1.5 rounded-full text-xs font-bold shrink-0 border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm">📅 ปฏิทินสมาคม</button>
+                        <>
+                          <button onClick={() => setCurrentView('bookmarks')} className="...">
+                             ⭐ โพสต์ที่บันทึก
+                             <span className="...">...</span>
+                          </button>
+    
+                          <button onClick={() => setShowCalendar(true)} className="px-4 py-1.5 rounded-full text-xs font-bold shrink-0 border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm">
+                             📅 ปฏิทินสมาคม
+                          </button>
+                        </>
                       )}
                     </>
                   )}
