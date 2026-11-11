@@ -446,17 +446,35 @@ function App() {
                       
                       {/* Orbit System */}
                       <div className="relative w-full max-w-[760px] h-[700px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
-                        <div onClick={() => setCurrentView('feed')} className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition" style={{ background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)', boxShadow: '0 0 60px rgba(37,99,235,0.65)' }}><Logo s={32} /><span className="text-[11px] font-bold uppercase mt-1">Blue Moon</span><span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span></div>
+                        {/* จุดศูนย์กลาง (Blue Moon) */}
+                        <div onClick={() => setCurrentView('feed')} className="absolute z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition" style={{ background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)', boxShadow: '0 0 60px rgba(37,99,235,0.65)' }}>
+                            <Logo s={32} />
+                            <span className="text-[11px] font-bold uppercase mt-1">Blue Moon</span>
+                            <span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span>
+                        </div>
+                        
+                        {/* วงแหวนและดาวบริวาร */}
                         {orbitRings().map((ring, ri) => (
-                          <div key={ri} className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
+                          <div key={ri} className={'absolute rounded-full border border-[#1E3A5F]/70 pointer-events-none flex items-center justify-center ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
                             {ring.items.map((m, mi) => {
                               const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
-                              return <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}><button onClick={() => {
-                                  if (IS_HALLOWEEN && m.id === cursedUserId) {
-                                      setScareTriggered(true); setTimeout(() => setScareTriggered(false), 1200); 
-                                      const mems = activeMembers.filter(x => x.id !== m.id); setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null); 
-                                  } else setMemberModal(m);
-                              }} className="flex flex-col items-center"><Avatar user={m} size="md" showStatus={true} /><div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div></button></div>;
+                              // คำนวณจุดกึ่งกลางของวงแหวน แล้วลบด้วยครึ่งหนึ่งของขนาดดาว (สมมติว่าดาวกว้าง/สูง 64px เลยลบไป 32px) เพื่อให้อยู่ตรงเส้นเป๊ะๆ
+                              const x = ring.r + ring.r * Math.cos(rad) - 32; 
+                              const y = ring.r + ring.r * Math.sin(rad) - 32;
+
+                              return (
+                                <div key={m.id} style={{ left: x + 'px', top: y + 'px' }} className={'absolute pointer-events-auto w-16 h-16 flex items-center justify-center ' + ring.cc}>
+                                    <button onClick={() => {
+                                        if (IS_HALLOWEEN && m.id === cursedUserId) {
+                                            setScareTriggered(true); setTimeout(() => setScareTriggered(false), 1200); 
+                                            const mems = activeMembers.filter(x => x.id !== m.id); setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null); 
+                                        } else setMemberModal(m);
+                                    }} className="flex flex-col items-center">
+                                        <Avatar user={m} size="md" showStatus={true} />
+                                        <div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div>
+                                    </button>
+                                </div>
+                              );
                             })}
                           </div>
                         ))}

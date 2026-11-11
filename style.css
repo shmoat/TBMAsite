@@ -23,14 +23,21 @@ body {
 .btn-d { background: #050811; color: #cbd5e1; border: 1px solid #1E3A5F; border-radius: 0.75rem; padding: 0.4rem 0.75rem; cursor: pointer; }
 
 /* ================= Animations ================= */
-@keyframes ocw { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
-@keyframes occw { from { transform: translate(-50%,-50%) rotate(360deg); } to { transform: translate(-50%,-50%) rotate(0deg); } }
-.or1 { animation: ocw 38s linear infinite; } .or2 { animation: occw 55s linear infinite; } .or3 { animation: ocw 75s linear infinite; }
-.cr1 { animation: occw 38s linear infinite; } .cr2 { animation: ocw 55s linear infinite; } .cr3 { animation: occw 75s linear infinite; }
+@keyframes ocw { 
+  from { transform: rotate(0deg); } 
+  to { transform: rotate(360deg); } 
+}
+@keyframes occw { 
+  from { transform: rotate(360deg); } 
+  to { transform: rotate(0deg); } 
+}
+.or1 { animation: ocw 38s linear infinite; } 
+.or2 { animation: occw 55s linear infinite; } 
+.or3 { animation: ocw 75s linear infinite; }
+.cr1 { animation: occw 38s linear infinite; } 
+.cr2 { animation: ocw 55s linear infinite; } 
+.cr3 { animation: occw 75s linear infinite; }
 .orbit-sys:hover div { animation-play-state: paused; }
-
-@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-.animate-shake { animation: shake 0.2s ease-in-out 3; }
 
 /* ================= Daily Game Custom CSS ================= */
 .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; padding: 1px; box-sizing: border-box; }
