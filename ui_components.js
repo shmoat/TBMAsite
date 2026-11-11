@@ -129,7 +129,8 @@ const TagBadges = ({ user }) => (
 // 4. Modal Container
 const Modal = ({ title, onClose, maxW = 'max-w-md', children }) => (
   <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-    <div className={'w-full ' + maxW + ' card p-6 shadow-2xl my-8 animate-fade-in relative'}>
+    {/* เพิ่ม border border-[#1E3A5F] และพื้นหลัง bg-[#0B1325] กลับเข้าไป */}
+    <div className={`w-full ${maxW} card p-6 shadow-2xl my-8 animate-fade-in relative bg-[#0B1325] border border-[#1E3A5F]`}>
       <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#1E3A5F]">
         <h3 className="text-base font-bold">{title}</h3>
         {onClose && <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>}

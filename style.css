@@ -31,12 +31,17 @@ body {
   from { transform: rotate(360deg); } 
   to { transform: rotate(0deg); } 
 }
+
+/* วงแหวนหมุนตามปกติ */
 .or1 { animation: ocw 38s linear infinite; } 
 .or2 { animation: occw 55s linear infinite; } 
 .or3 { animation: ocw 75s linear infinite; }
+
+/* ดาวบริวารหมุนทวนเข็มเพื่อให้ตั้งตรงตลอดเวลา */
 .cr1 { animation: occw 38s linear infinite; } 
 .cr2 { animation: ocw 55s linear infinite; } 
 .cr3 { animation: occw 75s linear infinite; }
+
 .orbit-sys:hover div { animation-play-state: paused; }
 
 /* ================= Daily Game Custom CSS ================= */
