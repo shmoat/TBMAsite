@@ -4748,12 +4748,6 @@
         setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab]||{}), showModal: false, status: 'viewing_board' } }));
         setCurrentView('feed');
       };
-      // ==========================================
-      // คำนวณสถานะวิทยุปิดยามวิกาล (จะปิดได้ก็ต่อเมื่อ Owner กดปุ่มปิดตอนหลังสี่ทุ่ม)
-      const radioClosed = lateNight && djState.forceClosed === true;
-      const isInputBlocked = radioClosed && !djState.jammerId; 
-      const isFullyClosed = isInputBlocked && (!djState.queue || djState.queue.length === 0);
-      // ==========================================
 
       return (
         <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
