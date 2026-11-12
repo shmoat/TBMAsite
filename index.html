@@ -3090,9 +3090,10 @@
                 const x = -b / (2*a);
                 setResult({ type: 'quad', roots: 1, x, D, a, b, c });
             } else {
-                const real = (-b / (2*a)).toFixed(4);
-                const img = (Math.sqrt(-D) / (2*a)).toFixed(4);
-                setResult({ type: 'quad', roots: 0, real, img, D, a, b, c, err: 'ไม่มีคำตอบเป็นจำนวนจริง (Complex Roots)' });
+                // แก้ไขกรณี D < 0 ให้รองรับจำนวนจินตภาพ
+                const real = (-b / (2*a));
+                const img = (Math.sqrt(-D) / (2*Math.abs(a))); 
+                setResult({ type: 'quad', roots: 0, real, img, D, a, b, c, isComplex: true });
             }
         };
 
@@ -3232,7 +3233,7 @@
                 <div className="bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
                     <div className="absolute top-0 right-0 px-3 py-1 bg-sky-900/50 text-sky-200 text-[10px] rounded-bl-lg rounded-tr-xl border-l border-b border-sky-500/30 font-bold">SOLUTION</div>
                     
-                    {result.err ? (
+                    {result.err && !result.isComplex ? (
                         <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{result.err}</div>
                     ) : (
                         <div className="space-y-4">
@@ -3260,7 +3261,18 @@
                                 {result.type === 'quad' && result.roots === 1 && (
                                     <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{result.x.toFixed(4)}</span></div>
                                 )}
+                                {/* ส่วนแสดงผลแบบ Complex Roots (i) */}
+                                {result.type === 'quad' && result.isComplex && (
+                                    <>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{result.real.toFixed(4)} + {result.img.toFixed(4)}i</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{result.real.toFixed(4)} - {result.img.toFixed(4)}i</span></div>
+                                    </>
+                                )}
                             </div>
+
+                            {result.isComplex && (
+                                <div className="text-[10px] text-red-300 text-center font-bold">⚠️ ไม่มีคำตอบเป็นจำนวนจริง (Complex Roots)</div>
+                            )}
 
                             <div className="mt-6 pt-4 border-t border-[#1E3A5F] text-xs text-slate-400">
                                 <div className="font-bold text-slate-300 mb-2">📝 วิธีทำ (Step-by-Step Cramer's Rule)</div>
