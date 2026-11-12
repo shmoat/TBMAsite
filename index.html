@@ -4761,9 +4761,12 @@
       const [filterMenuOpen, setFilterMenuOpen] = useState(false);
       const [rightFilterMenuOpen, setRightFilterMenuOpen] = useState(false);
       const [rightOnlineOnly, setRightOnlineOnly] = useState(false);
-      const [visiblePosts, setVisiblePosts] = useState(10); 
 
+      const [visiblePosts, setVisiblePosts] = useState(10); 
       useEffect(() => { setVisiblePosts(10); }, [tagFilter, searchQ, currentView, filterType, filterLatestOnly]);
+
+      const [visibleChatLimit, setVisibleChatLimit] = useState(50);
+      useEffect(() => { setVisibleChatLimit(50); }, [roomKey]);
 
       // Auth States
       const [authMode, setAuthMode] = useState('signin');
@@ -4866,7 +4869,9 @@
       const [postMenu, setPostMenu] = useState(null);
       const [editPostData, setEditPostData] = useState(null);
       const [pushPerm, setPushPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'default');
-      const prevNLen = useRef(0); const chatBoxRef = useRef(null);
+      const prevNLen = useRef(0); 
+      const isInitNotif = useRef(true);
+      const chatBoxRef = useRef(null);
 
       // DAILY GAME STATE
       const todayStr = getGameDateStr();
@@ -5666,12 +5671,24 @@
 
       useEffect(() => {
         if (!currentUser) return;
-        if (unreadNotifs.length > prevNLen.current && prevNLen.current !== 0) {
+        
+        // ป้องกันการแจ้งเตือนรัวๆ ตอนเข้าเว็บครั้งแรก
+        if (isInitNotif.current) {
+          isInitNotif.current = false;
+          prevNLen.current = unreadNotifs.length;
+          return;
+        }
+
+        if (unreadNotifs.length > prevNLen.current) {
           const latest = unreadNotifs[0];
           if (latest) {
             setToasts((p) => [latest, ...p.slice(0, 2)]);
             setTimeout(() => setToasts((p) => p.filter((t) => t.id !== latest.id)), 4000);
-            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') { try { new Notification(latest.title, { body: latest.body }); } catch {} }
+            
+            // ส่งแจ้งเตือน Desktop Notification
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') { 
+                try { new Notification(latest.title, { body: latest.body, icon: '/favicon.ico' }); } catch {} 
+            }
           }
         }
         prevNLen.current = unreadNotifs.length;
@@ -6119,7 +6136,7 @@
               </button>
               
               {/* เมนูแบบยืดหดเมื่อ Hover (บนมือถือจะแสดงเฉพาะไอคอนและเลื่อนซ้ายขวาได้) */}
-              <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 flex-1 overflow-x-auto no-scrollbar mx-1 sm:mx-2">
+              <nav className="relative flex items-center justify-start md:justify-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 flex-1 md:flex-none md:mx-auto overflow-x-auto no-scrollbar mx-1 sm:mx-2">
                 <div className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none hidden md:block" 
                      style={{
                         left: document.getElementById('nav-' + currentView)?.offsetLeft || 4,
@@ -6142,7 +6159,17 @@
               </nav>
 
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1 px-2 sm:px-3"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
+                {currentUser && (
+                    <button onClick={() => { 
+                        setNotifOpen(true);
+                        // สั่งขอสิทธิ์การแจ้งเตือนจาก Browser ทันทีที่กดกระดิ่ง (ถ้ายังไม่เคยขอ)
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                            Notification.requestPermission().then(perm => setPushPerm(perm));
+                        }
+                    }} className="btn-d text-xs font-semibold flex items-center gap-1 px-2 sm:px-3">
+                        <span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}
+                    </button>
+                )}
                 
                 {/* Profile Dropdown */}
                 {currentUser ? (
@@ -6872,8 +6899,17 @@
                     </div>
                 )}
 
-                <div ref={chatBoxRef} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3.5 custom-scrollbar">
-                  {roomMsgs.map((msg) => {
+                <div ref={chatBoxRef} onScroll={(e) => { 
+    		    if (e.target.scrollTop < 100 && visibleChatLimit < roomMsgs.length) { 
+		        setVisibleChatLimit(v => v + 50); 
+		    } 
+		}} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3.5 custom-scrollbar">
+		  {visibleChatLimit < roomMsgs.length && (
+		      <div className="text-center py-2 text-[10px] text-sky-400 font-bold animate-pulse">
+		          ⏳ กำลังโหลดข้อความเก่า...
+		      </div>
+		  )}
+                  {roomMsgs.slice(Math.max(0, roomMsgs.length - visibleChatLimit)).map((msg) => {
                     const tStr = getTimeStr(msg);
                     if (msg.isSystemPostAlert) {
                       const pa = getAuthor(msg.senderId);
