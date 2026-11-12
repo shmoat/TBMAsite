@@ -3764,6 +3764,8 @@
       const [eName, setEName] = useState(''); const [eBio, setEBio] = useState(''); const [eAv, setEAv] = useState(''); const [eBd, setEBd] = useState('');
       const [eUser, setEUser] = useState(''); const [ePass, setEPass] = useState(''); const [profErr, setProfErr] = useState('');
       const [eSocs, setESocs] = useState([]); const [sPlat, setSPlat] = useState('Instagram'); const [sLbl, setSLbl] = useState(''); const [sUrl, setSUrl] = useState('');
+      const [profMenuOpen, setProfMenuOpen] = useState(false);
+      const [cropState, setCropState] = useState(null);
       const avRef = useRef(null);
 
       // Post States
@@ -3910,7 +3912,7 @@
       }, [chatMessages, currentUser, db]);
 
       useEffect(() => { 
-          const fn = () => { setCtxMenu(null); setCommMenu(null); }; 
+          const fn = () => { setCtxMenu(null); setCommMenu(null); setProfMenuOpen(false); }; 
           window.addEventListener('click', fn); 
           return () => window.removeEventListener('click', fn); 
       }, []);
@@ -5098,38 +5100,50 @@
 
           {/* HEADER NAV */}
           <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F] shrink-0">
-            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
-              <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
+            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-visible">
+              <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon</h1><p className="text-[10px] text-slate-400 uppercase">Association</p></div></button>
               
-              <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-x-auto no-scrollbar max-w-[60%] lg:max-w-[70%]">
-                <div className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none" 
-                     style={{
-                        left: document.getElementById('nav-' + currentView)?.offsetLeft || 4,
-                        width: document.getElementById('nav-' + currentView)?.offsetWidth || 0
-                     }}
-                ></div>
-
+              {/* เมนูแบบยืดหดเมื่อ Hover */}
+              <nav className="relative flex items-center gap-1.5 bg-[#050811] border border-[#1E3A5F] rounded-full p-1.5 shrink-0 overflow-hidden">
                 {[['home', '🪐', 'Home'], ['feed', '📝', 'Board'], ['chat', '💬', 'Chat'], ['members', '👥', 'Members'], ['daily_game', '🎮', 'Daily Game'], ['discjam', '💿', 'Disc Jam'], ['tools', '🛠️', 'Tools']].map(([v, icon, l]) => 
-                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 flex items-center gap-1.5 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>
-                      <span className="text-sm">{icon}</span>
-                      <span className="hidden xl:inline">{l}</span>
+                  <button key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center ${currentView === v ? 'text-[#050811] bg-white shadow-md' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+                      <span className="text-sm shrink-0">{icon}</span>
+                      <span className={`overflow-hidden transition-all duration-300 flex items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>{l}</span>
                   </button>
                 )}
                 {currentUser?.role === 'admin' && (
-                    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 flex items-center gap-1.5 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>
-                        <span className="text-sm">👑</span>
-                        <span className="hidden xl:inline">Owner</span>
+                    <button onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+                        <span className="text-sm shrink-0">👑</span>
+                        <span className={`overflow-hidden transition-all duration-300 flex items-center ${currentView === 'admin' ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>Owner</span>
                     </button>
                 )}
               </nav>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
+                
+                {/* Profile Dropdown */}
                 {currentUser ? (
-                   <div className="flex items-center gap-1.5 shrink-0">
-                     <button onClick={() => { setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full card border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0"><Avatar user={currentUser} size="xs" showStatus={true} /><span className="text-xs font-semibold hidden sm:inline whitespace-nowrap">{currentUser.displayName}</span><RoleBadge role={currentUser.role} /></button>
+                   <div className="relative flex items-center shrink-0">
+                     <button onClick={(e) => { e.stopPropagation(); setProfMenuOpen(!profMenuOpen); }} className="rounded-full border-2 border-sky-400 bg-[#0F2547] shadow-[0_0_10px_rgba(56,189,248,0.5)] shrink-0 hover:scale-110 transition-transform focus:outline-none flex items-center justify-center p-0.5">
+                       <Avatar user={currentUser} size="sm" showStatus={true} />
+                     </button>
+                     
+                     {profMenuOpen && (
+                       <div onClick={e => e.stopPropagation()} className="absolute top-full right-0 mt-3 w-64 bg-[#070C18] border border-[#1E3A5F] rounded-2xl p-5 z-50 shadow-2xl flex flex-col items-center animate-fade-in ring-1 ring-sky-500/30">
+                          <Avatar user={currentUser} size="xl" showStatus={true} />
+                          <h3 className="font-bold mt-3 text-white flex items-center justify-center gap-1.5 text-base w-full flex-wrap leading-tight">{currentUser.displayName} <RoleBadge role={currentUser.role} /></h3>
+                          <p className="text-[11px] text-slate-400 font-mono mb-3">@{currentUser.username}</p>
+                          <TagBadges user={currentUser} />
+                          
+                          <div className="w-full border-t border-[#1E3A5F] mt-4 pt-4 space-y-2">
+                              <button onClick={() => { setProfMenuOpen(false); setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="w-full btn-b py-2 text-xs flex justify-center items-center gap-2 hover:bg-sky-600 transition-colors shadow"><span>⚙️</span> ตั้งค่าโปรไฟล์</button>
+                              <button onClick={async () => { setProfMenuOpen(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors text-xs flex justify-center items-center gap-2 shadow"><span>🚪</span> ออกจากระบบ</button>
+                          </div>
+                       </div>
+                     )}
                    </div>
-                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="btn-w text-xs">เข้าสู่ระบบ / เปิดใช้งาน ID</button>}
+                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="btn-w text-xs">เข้าสู่ระบบ</button>}
               </div>
             </div>
           </header>
@@ -6842,27 +6856,114 @@
           {editProf && currentUser && (
             <Modal title="ตั้งค่าโปรไฟล์ & โซเชียล" onClose={() => setEditProf(false)} maxW="max-w-lg">
               <form onSubmit={handleSaveProfile} className="space-y-3 text-xs">
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F]"><Avatar user={{ ...currentUser, displayName: eName, avatarUrl: eAv }} size="md" /><input type="file" accept="image/*" ref={avRef} onChange={async (e) => { const f = e.target.files?.[0]; if (f) setEAv(await compressImg(f)); }} className="hidden" /><button type="button" onClick={() => avRef.current?.click()} className="btn-w py-1.5"><UpIcon />อัปโหลดรูปโปรไฟล์</button></div>
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <Avatar user={{ ...currentUser, displayName: eName, avatarUrl: eAv }} size="md" />
+                    <input type="file" accept="image/*" ref={avRef} onChange={(e) => { 
+                        const f = e.target.files?.[0]; 
+                        if (f) {
+                            const r = new FileReader();
+                            r.onload = (ev) => {
+                                const img = new Image();
+                                img.onload = () => setCropState({ img, zoom: 1, rot: 0, x: 50, y: 50 });
+                                img.src = ev.target.result;
+                            };
+                            r.readAsDataURL(f);
+                        }
+                        e.target.value = '';
+                    }} className="hidden" />
+                    <button type="button" onClick={() => avRef.current?.click()} className="btn-w py-1.5"><UpIcon />เปลี่ยนรูปโปรไฟล์</button>
+                </div>
+                
                 <div className="grid grid-cols-2 gap-2">
-                  <div><label className="block mb-1">ชื่อที่แสดง *</label><input type="text" value={eName} onChange={(e) => setEName(e.target.value)} className="w-full inp" required /></div>
-                  <div><label className="block mb-1">Username ({Math.max(0, 2 - recentChg(currentUser).length)}/2 ใน 14 วัน)</label><input type="text" value={eUser} onChange={(e) => setEUser(e.target.value)} className="w-full inp font-mono" required /></div>
+                  <div><label className="block mb-1 text-slate-400 font-bold">ชื่อที่แสดง *</label><input type="text" value={eName} onChange={(e) => setEName(e.target.value)} className="w-full inp" required /></div>
+                  <div><label className="block mb-1 text-slate-400 font-bold">Username ({Math.max(0, 2 - recentChg(currentUser).length)}/2 ใน 14 วัน)</label><input type="text" value={eUser} onChange={(e) => setEUser(e.target.value)} className="w-full inp font-mono" required /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="relative flex items-center"><input type={showPass ? 'text' : 'password'} value={ePass} onChange={(e) => setEPass(e.target.value)} className="w-full inp pr-16 font-mono" placeholder="Password *" required /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325] text-[10px]">{showPass ? '🙈 ซ่อน' : '👁️ ดู'}</button></div>
-                  <div><input type="date" value={eBd} onChange={(e) => setEBd(e.target.value)} className="w-full inp font-mono text-slate-300" title="วันเกิด" /></div>
+                  <div>
+                      <label className="block mb-1 text-slate-400 font-bold">รหัสผ่าน *</label>
+                      <div className="relative flex items-center"><input type={showPass ? 'text' : 'password'} value={ePass} onChange={(e) => setEPass(e.target.value)} className="w-full inp pr-16 font-mono" required /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325] text-[10px]">{showPass ? '🙈 ซ่อน' : '👁️ ดู'}</button></div>
+                  </div>
+                  <div><label className="block mb-1 text-slate-400 font-bold">วันเกิด</label><input type="date" value={eBd} onChange={(e) => setEBd(e.target.value)} className="w-full inp font-mono text-slate-300" /></div>
                 </div>
-                <textarea rows={2} value={eBio} onChange={(e) => setEBio(e.target.value)} placeholder="Bio..." className="w-full inp" />
-                <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
-                  <div className="flex gap-1"><select value={sPlat} onChange={(e) => setSPlat(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] rounded px-1.5 py-1 shrink-0">{SOCIALS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.id}</option>)}</select><input type="text" value={sLbl} onChange={(e) => setSLbl(e.target.value)} placeholder="ชื่อปุ่ม..." className="w-20 sm:w-24 min-w-0 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1 shrink-0" /><input type="text" value={sUrl} onChange={(e) => setSUrl(e.target.value)} placeholder="URL..." className="flex-1 min-w-0 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1" /><button type="button" onClick={() => { if (sUrl.trim()) { setESocs([...eSocs, { id: 's-' + Date.now(), platform: sPlat, label: sLbl.trim() || sPlat, url: safeUrl(sUrl) }]); setSUrl(''); setSLbl(''); } }} className="btn-w py-1 shrink-0">เพิ่ม</button></div>
-                  {eSocs.map((s) => <div key={s.id} className="flex justify-between px-2 py-1 rounded bg-[#0B1325]"><span>{s.label}: {s.url}</span><button type="button" onClick={() => setESocs(eSocs.filter((x) => x.id !== s.id))} className="text-red-400">ลบ</button></div>)}
+                <div><label className="block mb-1 text-slate-400 font-bold">คำแนะนำตัว (Bio)</label><textarea rows={2} value={eBio} onChange={(e) => setEBio(e.target.value)} placeholder="เขียนคำอธิบายตัวเองสั้นๆ..." className="w-full inp" /></div>
+                
+                <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2 mt-2">
+                  <label className="block text-slate-400 font-bold mb-1">🔗 ช่องทางการติดตาม (Social Links)</label>
+                  <div className="flex gap-1"><select value={sPlat} onChange={(e) => setSPlat(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] rounded px-1.5 py-1 shrink-0">{SOCIALS.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.id}</option>)}</select><input type="text" value={sLbl} onChange={(e) => setSLbl(e.target.value)} placeholder="ชื่อปุ่ม..." className="w-20 sm:w-24 min-w-0 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1 shrink-0 outline-none focus:border-sky-500" /><input type="text" value={sUrl} onChange={(e) => setSUrl(e.target.value)} placeholder="URL..." className="flex-1 min-w-0 bg-[#0B1325] border border-[#1E3A5F] rounded px-2 py-1 outline-none focus:border-sky-500" /><button type="button" onClick={() => { if (sUrl.trim()) { setESocs([...eSocs, { id: 's-' + Date.now(), platform: sPlat, label: sLbl.trim() || sPlat, url: safeUrl(sUrl) }]); setSUrl(''); setSLbl(''); } }} className="btn-w py-1 shrink-0">เพิ่ม</button></div>
+                  {eSocs.map((s) => <div key={s.id} className="flex justify-between px-2 py-1.5 rounded-lg bg-[#0B1325] border border-white/5"><span>{s.label}: <a href={s.url} target="_blank" className="text-sky-400 hover:underline">{s.url}</a></span><button type="button" onClick={() => setESocs(eSocs.filter((x) => x.id !== s.id))} className="text-red-400 font-bold px-2 hover:bg-red-950/50 rounded">ลบ</button></div>)}
                 </div>
-                {profErr && <div className="p-2 rounded bg-red-950 text-red-200">{profErr}</div>}
-        	<div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[#1E3A5F]">
-         	  <button type="submit" className="w-full btn-w py-2">บันทึกโปรไฟล์</button>
-	          <button type="button" onClick={async () => { setEditProf(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors">🚪 ออกจากระบบ</button>
-	        </div>
-	      </form>
-	    </Modal>
+                {profErr && <div className="p-2 rounded bg-red-950 text-red-200 font-bold">{profErr}</div>}
+        	    <div className="pt-3 border-t border-[#1E3A5F] mt-4">
+         	      <button type="submit" className="w-full btn-w py-2.5 shadow-lg">💾 บันทึกโปรไฟล์</button>
+	            </div>
+	          </form>
+	        </Modal>
+          )}
+
+          {/* CROPPER MODAL */}
+          {cropState && (
+              <Modal title="✂️ ปรับแต่งรูปโปรไฟล์" onClose={() => setCropState(null)} maxW="max-w-md">
+                  <div className="flex flex-col items-center space-y-5">
+                      <div className="relative w-48 h-48 sm:w-64 sm:h-64 border-4 border-sky-500/50 rounded-full overflow-hidden bg-black shadow-[0_0_20px_rgba(0,0,0,0.8)] cursor-crosshair">
+                          <img src={cropState.img.src} alt="crop-preview" className="absolute pointer-events-none" style={{
+                              width: `${cropState.zoom * 100}%`,
+                              height: 'auto',
+                              minHeight: `${cropState.zoom * 100}%`,
+                              objectFit: 'cover',
+                              transform: `translate(-50%, -50%) rotate(${cropState.rot}deg)`,
+                              left: `${cropState.x}%`,
+                              top: `${cropState.y}%`
+                          }} />
+                          <div className="absolute inset-0 bg-black/20 pointer-events-none rounded-full shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
+                      </div>
+                      
+                      <div className="w-full space-y-3.5 text-xs bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F] shadow-inner">
+                          <div className="flex items-center gap-3">
+                              <span className="w-12 text-slate-400 font-bold">🔍 ซูม:</span>
+                              <input type="range" min="0.5" max="3" step="0.1" value={cropState.zoom} onChange={e=>setCropState({...cropState, zoom: parseFloat(e.target.value)})} className="flex-1 accent-sky-500" />
+                          </div>
+                          <div className="flex items-center gap-3">
+                              <span className="w-12 text-slate-400 font-bold">↔️ แกน X:</span>
+                              <input type="range" min="0" max="100" value={cropState.x} onChange={e=>setCropState({...cropState, x: parseInt(e.target.value)})} className="flex-1 accent-sky-500" />
+                          </div>
+                          <div className="flex items-center gap-3">
+                              <span className="w-12 text-slate-400 font-bold">↕️ แกน Y:</span>
+                              <input type="range" min="0" max="100" value={cropState.y} onChange={e=>setCropState({...cropState, y: parseInt(e.target.value)})} className="flex-1 accent-sky-500" />
+                          </div>
+                          <div className="flex justify-center gap-2 pt-3 border-t border-[#1E3A5F]">
+                              <button onClick={() => setCropState({...cropState, rot: (cropState.rot - 90) % 360})} className="btn-d py-1.5 px-4 flex-1 font-bold text-sky-200">↺ หมุนซ้าย</button>
+                              <button onClick={() => setCropState({...cropState, rot: (cropState.rot + 90) % 360})} className="btn-d py-1.5 px-4 flex-1 font-bold text-sky-200">หมุนขวา ↻</button>
+                          </div>
+                      </div>
+                      <button onClick={() => {
+                          // ประมวลผลและสร้างรูปภาพใหม่จากค่าที่ตั้งไว้
+                          const canvas = document.createElement('canvas');
+                          const size = 500; // ขนาดรูป Avatar คุณภาพสูง
+                          canvas.width = size; canvas.height = size;
+                          const ctx = canvas.getContext('2d');
+                          
+                          // พื้นหลัง
+                          ctx.fillStyle = '#0F2547';
+                          ctx.fillRect(0, 0, size, size);
+                          
+                          ctx.translate(size/2, size/2);
+                          ctx.rotate((cropState.rot * Math.PI) / 180);
+                          
+                          const scale = cropState.zoom;
+                          const minDim = Math.min(cropState.img.width, cropState.img.height);
+                          const drawW = (cropState.img.width / minDim) * size * scale;
+                          const drawH = (cropState.img.height / minDim) * size * scale;
+                          
+                          const offsetX = ((cropState.x - 50) / 100) * drawW;
+                          const offsetY = ((cropState.y - 50) / 100) * drawH;
+
+                          ctx.drawImage(cropState.img, -drawW/2 + offsetX, -drawH/2 + offsetY, drawW, drawH);
+                          
+                          setEAv(canvas.toDataURL('image/jpeg', 0.9));
+                          setCropState(null);
+                      }} className="w-full btn-w py-3 font-bold shadow-lg hover:bg-sky-500 hover:text-white transition-colors text-sm">✅ ยืนยันรูปโปรไฟล์</button>
+                  </div>
+              </Modal>
           )}
 
           {createPost && (
