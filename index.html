@@ -4161,21 +4161,11 @@
         const [currentDate, setCurrentDate] = useState(new Date());
         const [selectedDate, setSelectedDate] = useState(null);
         const [showCreateForm, setShowCreateForm] = useState(false);
-        const [viewMode, setViewMode] = useState('month'); // 'month' หรือ 'list'
+        const [viewMode, setViewMode] = useState('month'); 
         
-        // สำหรับระบบค้นหาและเชิญเพื่อน
         const [invitees, setInvitees] = useState([]);
         const [inviteSearch, setInviteSearch] = useState('');
     
-        // วันสำคัญเฉพาะที่ล็อคไว้
-        const ASTRONOMICAL_EVENTS = {
-            '2026-03-03': { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง (Blood Moon)' },
-            '2026-05-31': { type: 'Blue Moon', label: '🔵 Blue Moon (จันทร์เต็มดวงครั้งที่ 2 ของเดือน)' },
-            '2026-11-24': { type: 'Full Moon', label: '🌕 วันลอยกระทง (Full Moon)' },
-            '2026-12-24': { type: 'Supermoon', label: '🌕 ซูเปอร์มูน (ดวงจันทร์ใกล้โลกที่สุด)' },
-            '2027-02-20': { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง' }
-        };
-
         const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
         const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
         const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
@@ -4189,24 +4179,83 @@
             music: { color: 'bg-sky-500', icon: '🔵', label: 'Music Jam' }
         };
 
-        // ฟังก์ชันคำนวณเฟสพระจันทร์อัตโนมัติ
-        const getMoonPhase = (year, month, day) => {
-            let c = 0, e = 0, jd = 0, b = 0;
-            if (month < 2) { year--; month += 12; }
-            ++month;
-            c = 365.25 * year; e = 30.6 * month;
-            jd = c + e + day - 694039.09; 
-            jd /= 29.5305882; 
-            b = parseInt(jd); jd -= b; 
-            b = Math.round(jd * 8); 
-            if (b >= 8) b = 0; 
+        // 🌟 อัลกอริทึมคำนวณดาราศาสตร์อัตโนมัติ (Moon Phases, Eclipses, Supermoons, Blue Moons)
+        const getAstroInfo = (year, month, day) => {
+            let y = year, m = month + 1;
+            if (m <= 2) { y -= 1; m += 12; }
+            const A = Math.floor(y / 100);
+            const B = 2 - A + Math.floor(A / 4);
+            const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + B - 1524.5;
+            
+            const synodic = 29.530588; // รอบดิถีดวงจันทร์
+            const getPhaseAge = (d) => {
+                const diff = (d - 2451550.1) % synodic;
+                return diff < 0 ? diff + synodic : diff;
+            };
+            
+            const phaseAge = getPhaseAge(jd);
+            const phaseAgePrev = getPhaseAge(jd - 1);
+            const phaseAgeNext = getPhaseAge(jd + 1);
+            
+            // หาจุดที่ตรงกับ Peak พอดีในวันนั้น (ป้องกันการแสดงซ้ำ 2 วันติดกัน)
+            const isPeak = (target) => {
+                const d0 = Math.abs(phaseAgePrev - target);
+                const d1 = Math.abs(phaseAge - target);
+                const d2 = Math.abs(phaseAgeNext - target);
+                return d1 < d0 && d1 <= d2;
+            };
+            
+            const isFullMoon = isPeak(synodic / 2);
+            const isNewMoon = isPeak(0) || isPeak(synodic);
+            const isFirstQ = isPeak(synodic / 4);
+            const isLastQ = isPeak(synodic * 0.75);
+            
+            // Anomalistic month (เช็กระยะใกล้-ไกลโลก สำหรับ Supermoon)
+            const anomalistic = 27.55455;
+            const periDiff = (jd - 2451541.16) % anomalistic;
+            const periAge = periDiff < 0 ? periDiff + anomalistic : periDiff;
+            
+            // Draconic month (เช็กจุดตัดระนาบวงโคจร สำหรับจันทรุปราคา)
+            const draconic = 27.21222;
+            const nodeDiff = (jd - 2451563.8) % draconic;
+            const nodeAge = nodeDiff < 0 ? nodeDiff + draconic : nodeDiff;
+            
+            let phaseIdx = Math.round((phaseAge / synodic) * 8) % 8;
+            if (isFullMoon) phaseIdx = 4;
+            else if (isNewMoon) phaseIdx = 0;
+            
+            let event = null;
+            if (isFullMoon) {
+                const distToPeri = Math.min(periAge, anomalistic - periAge);
+                const isSupermoon = distToPeri < 1.5; // อยู่ใกล้จุด Perigee
+                
+                const distToNode = Math.min(nodeAge, draconic - nodeAge, Math.abs(nodeAge - draconic/2));
+                const isEclipse = distToNode < 1.2; // อยู่ใกล้จุด Node
+                
+                if (isEclipse) {
+                    event = { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง (Lunar Eclipse)', style: 'drop-shadow-[0_0_8px_rgba(239,68,68,0.9)] scale-110', emoji: '🔴' };
+                } else if (isSupermoon) {
+                    event = { type: 'Supermoon', label: '🌕 ซูเปอร์มูน (Supermoon)', style: 'drop-shadow-[0_0_12px_rgba(253,230,138,1)] scale-125', emoji: '🌕' };
+                } else if (day >= 30) {
+                    // หากเกิดพระจันทร์เต็มดวงในช่วงปลายเดือน (วันที่ 30,31) จะเป็นครั้งที่ 2 ของเดือนแน่นอน
+                    event = { type: 'Blue Moon', label: '🔵 บลูมูน (Blue Moon)', style: 'drop-shadow-[0_0_8px_rgba(56,189,248,0.9)] scale-110', emoji: '🔵' };
+                } else {
+                    event = { type: 'Full Moon', label: '🌕 จันทร์เต็มดวง (Full Moon)', style: 'drop-shadow-[0_0_5px_rgba(254,240,138,0.4)]', emoji: '🌕' };
+                }
+            }
+            
             const phases = [
                 { idx: 0, emoji: '🌑', label: 'จันทร์ดับ (New Moon)' }, { idx: 1, emoji: '🌒', label: 'จันทร์เสี้ยว (Waxing Crescent)' },
                 { idx: 2, emoji: '🌓', label: 'จันทร์ครึ่งดวง (First Qtr)' }, { idx: 3, emoji: '🌔', label: 'จันทร์ค่อนดวง (Waxing Gibbous)' },
                 { idx: 4, emoji: '🌕', label: 'จันทร์เต็มดวง (Full Moon)' }, { idx: 5, emoji: '🌖', label: 'จันทร์แรม (Waning Gibbous)' },
                 { idx: 6, emoji: '🌗', label: 'จันทร์ครึ่งดวง (Last Qtr)' }, { idx: 7, emoji: '🌘', label: 'จันทร์เสี้ยว (Waning Crescent)' }
             ];
-            return phases[b];
+            
+            return { 
+                phase: phases[phaseIdx], 
+                event, 
+                isMainPhase: isFullMoon || isNewMoon || isFirstQ || isLastQ 
+            };
         };
 
         const goToToday = () => {
@@ -4235,13 +4284,11 @@
         
             const id = 'evt-' + Date.now();
             
-            // สร้าง Event ลงฐานข้อมูล
             await db.collection('bma_events').doc(id).set({
                 id, title, date, time, type, max, createdBy: currentUser.id,
                 going: [currentUser.id], maybe: [], timestamp: Date.now()
             });
 
-            // ส่งคำเชิญทาง DM ให้กับคนที่เลือก
             for (const invId of invitees) {
                 const dmRm = 'dm_' + [currentUser.id, invId].sort().join('_');
                 const mId = 'msg-' + Date.now() + Math.random().toString(36).substr(2,5);
@@ -4293,18 +4340,16 @@
                             <button onClick={goToToday} className="btn-d text-[10px] py-1 px-2 border-sky-500/50 hover:bg-sky-900/30 text-sky-300 shrink-0 ml-auto sm:ml-0">กลับไปวันนี้</button>
                         </div>
                         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                           	 {/* ปุ่มสลับมุมมอง */}
                             <div className="bg-[#050811] p-1 rounded-lg border border-[#1E3A5F] flex gap-1 w-full sm:w-auto">
                                 <button onClick={() => setViewMode('month')} className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded text-xs font-bold transition-colors ${viewMode === 'month' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ตารางเดือน</button>
                                 <button onClick={() => setViewMode('list')} className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded text-xs font-bold transition-colors ${viewMode === 'list' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>แบบรายการ</button>
                             </div>
                         </div>
-                       	 {/* จัดปุ่ม Close ไว้มุมขวาบนสุดเสมอ */}
                         <button onClick={onClose} className="absolute top-3 right-4 text-slate-400 hover:text-white font-bold text-2xl leading-none p-1">✕</button>
                     </div>
 
                     <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-                       	 {/* ปฏิทิน */}
+                        {/* ปฏิทิน */}
                         <div className="w-full md:w-2/3 flex flex-col p-4 border-r border-[#1E3A5F] overflow-y-auto bg-gradient-to-b from-[#070C18] to-[#050811] custom-scrollbar">
                             <div className="flex justify-between items-center mb-4 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
                                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="text-xl hover:text-sky-400 px-4">◀</button>
@@ -4321,35 +4366,31 @@
                                         const dateNum = i + 1;
                                         const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
                                         const isSelected = selectedDate === dateStr;
-                                        const astro = ASTRONOMICAL_EVENTS[dateStr];
-                                        const dayEvents = getDayEvents(dateStr);
                                         
-                                        // ตรวจสอบคราสพระจันทร์อัตโนมัติ
-                                        const moonPhase = getMoonPhase(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
-                                        const isMainPhase = [0, 2, 4, 6].includes(moonPhase.idx);
+                                        const { phase, event, isMainPhase } = getAstroInfo(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
+                                        const dayEvents = getDayEvents(dateStr);
 
                                         return (
                                             <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`min-h-[85px] border rounded-xl p-1.5 cursor-pointer transition-all relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/30 shadow-[0_0_15px_rgba(56,189,248,0.2)]' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                                                <span className={`text-sm font-bold ${astro?.type === 'Blue Moon' ? 'text-sky-300 drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : astro?.type === 'Eclipse' ? 'text-red-400' : 'text-slate-300'}`}>{dateNum}</span>
+                                                <span className={`text-sm font-bold ${event ? 'text-sky-200' : 'text-slate-300'}`}>{dateNum}</span>
                                                 
-                                                {astro ? (
-                                                    <span className="absolute top-1 right-1 text-xs" title={astro.label}>{astro.type === 'Blue Moon' ? '🔵' : astro.type === 'Eclipse' ? '🔴' : '🌕'}</span>
+                                                {/* เรนเดอร์พระจันทร์ หรือ ปรากฏการณ์พิเศษ */}
+                                                {event ? (
+                                                    <span className={`absolute top-1 right-1 text-xs transition-all ${event.style}`} title={event.label}>{event.emoji}</span>
                                                 ) : isMainPhase && (
-                                                    <span className="absolute top-1 right-1 text-xs opacity-70" title={moonPhase.label}>{moonPhase.emoji}</span>
+                                                    <span className="absolute top-1 right-1 text-xs opacity-70" title={phase.label}>{phase.emoji}</span>
                                                 )}
 
                                                 <div className="mt-auto flex flex-wrap gap-1.5 w-full justify-start relative">
                                                     {dayEvents.map(e => (
                                                         <div key={e.id} className="relative group flex items-center justify-center">
                                                             <div className={`w-2.5 h-2.5 rounded-full ${EVENT_TYPES[e.type].color} shadow-sm`}></div>
-                                                            {/* Mini-Card Hover Tooltip */}
                                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-[100] w-max max-w-[160px] bg-[#0B1325] border border-[#1E3A5F] p-2 rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.8)] pointer-events-none">
                                                                 <div className="flex items-center gap-1.5 mb-1 w-full">
                                                                     <Avatar user={getAuthor(e.createdBy)} size="xs" />
                                                                     <span className="text-[10px] font-bold text-sky-300 truncate w-full">{e.title}</span>
                                                                 </div>
                                                                 <div className="text-[9px] text-slate-300 font-mono bg-[#050811] px-1.5 py-0.5 rounded w-full text-center">🕒 {e.time} น.</div>
-                                                                {/* สามเหลี่ยมชี้ลง */}
                                                                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1E3A5F]"></div>
                                                             </div>
                                                         </div>
@@ -4360,17 +4401,14 @@
                                     })}
                                 </div>
                             ) : (
-                                /* List / Agenda View */
                                 <div className="flex-1 overflow-y-auto space-y-3 pr-2">
                                     {Array(daysInMonth).fill(null).map((_, i) => {
                                         const dateNum = i + 1;
                                         const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
                                         const dayEvents = getDayEvents(dateStr);
-                                        const moonPhase = getMoonPhase(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
-                                        const isMainPhase = [0, 2, 4, 6].includes(moonPhase.idx);
-                                        const astro = ASTRONOMICAL_EVENTS[dateStr];
+                                        const { phase, event, isMainPhase } = getAstroInfo(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
                                         
-                                        if (dayEvents.length === 0 && !isMainPhase && !astro) return null;
+                                        if (dayEvents.length === 0 && !isMainPhase && !event) return null;
 
                                         return (
                                             <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`p-3 rounded-xl border flex gap-3 cursor-pointer transition-colors ${selectedDate === dateStr ? 'border-sky-400 bg-sky-900/20' : 'border-[#1E3A5F] bg-[#0B1325] hover:border-slate-500'}`}>
@@ -4379,9 +4417,9 @@
                                                     <span className="text-[9px] text-slate-400">{monthNames[currentDate.getMonth()].slice(0,3)}</span>
                                                 </div>
                                                 <div className="flex-1 space-y-2">
-                                                    {(astro || isMainPhase) && (
-                                                        <div className="text-[10px] text-amber-300 font-bold border-b border-[#1E3A5F] pb-1 inline-block">
-                                                            {astro ? astro.label : `${moonPhase.emoji} ${moonPhase.label}`}
+                                                    {(event || isMainPhase) && (
+                                                        <div className={`text-[10px] font-bold border-b border-[#1E3A5F] pb-1 inline-block ${event ? 'text-amber-300' : 'text-slate-400'}`}>
+                                                            {event ? `${event.label}` : `${phase.emoji} ${phase.label}`}
                                                         </div>
                                                     )}
                                                     {dayEvents.map(e => (
@@ -4416,13 +4454,12 @@
                                         const dNum = parseInt(selectedDate.split('-')[2]);
                                         const dMonth = parseInt(selectedDate.split('-')[1]) - 1;
                                         const dYear = parseInt(selectedDate.split('-')[0]);
-                                        const mPhase = getMoonPhase(dYear, dMonth, dNum);
-                                        const ast = ASTRONOMICAL_EVENTS[selectedDate];
+                                        const { phase, event } = getAstroInfo(dYear, dMonth, dNum);
 
                                         return (
                                             <div className="bg-gradient-to-br from-[#050811] to-[#0F2547] border border-amber-500/50 p-3 rounded-xl mb-4 text-xs shadow-lg">
                                                 <div className="font-bold text-amber-300 mb-1.5 flex items-center gap-1.5">✨ ข้อมูลดาราศาสตร์</div>
-                                                <div className="text-slate-200">{ast ? ast.label : `${mPhase.emoji} ${mPhase.label}`}</div>
+                                                <div className="text-slate-200">{event ? `${event.emoji} ${event.label}` : `${phase.emoji} ${phase.label}`}</div>
                                             </div>
                                         );
                                     })()}
@@ -4506,7 +4543,6 @@
                                             </div>
                                         </div>
                                         
-                                        {/* ระบบเชิญเพื่อนผ่าน DM */}
                                         <div className="p-3 bg-[#050811] border border-[#1E3A5F] rounded-xl space-y-2 mt-2">
                                             <div className="flex justify-between items-center">
                                                 <label className="text-xs font-bold text-amber-300">✉️ ส่งคำเชิญ (Direct Message)</label>
@@ -4547,6 +4583,7 @@
             </div>
         );
     };
+
     // ==========================================
     // 8. MAIN APP COMPONENT (State & Logic)
     // ==========================================
