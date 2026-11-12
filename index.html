@@ -3103,6 +3103,282 @@
           </div>
         );
     };
+    
+    const BeamCalculator = () => {
+        const [beamType, setBeamType] = useState('simple'); // simple, cantilever
+        const [loadType, setLoadType] = useState('uniform'); // uniform, point
+        const [L, setL] = useState(5); // Span (m)
+        const [w, setW] = useState(1000); // Load (kg/m หรือ kg)
+
+        // คำนวณค่าต่างๆ
+        let Mmax = 0, Vmax = 0;
+        if (beamType === 'simple' && loadType === 'uniform') { Mmax = (w * L * L) / 8; Vmax = (w * L) / 2; }
+        else if (beamType === 'simple' && loadType === 'point') { Mmax = (w * L) / 4; Vmax = w / 2; }
+        else if (beamType === 'cantilever' && loadType === 'uniform') { Mmax = (w * L * L) / 2; Vmax = w * L; }
+        else if (beamType === 'cantilever' && loadType === 'point') { Mmax = w * L; Vmax = Number(w); }
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-4">
+                    <div className="flex flex-wrap gap-4">
+                        <div className="flex-1">
+                            <label className="text-xs text-sky-400 font-bold">ประเภทคาน (Beam Type)</label>
+                            <select value={beamType} onChange={e=>setBeamType(e.target.value)} className="w-full inp mt-1 text-sm">
+                                <option value="simple">Simple Beam (คานช่วงเดียว)</option>
+                                <option value="cantilever">Cantilever Beam (คานยื่น)</option>
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-xs text-sky-400 font-bold">ประเภทน้ำหนัก (Load Type)</label>
+                            <select value={loadType} onChange={e=>setLoadType(e.target.value)} className="w-full inp mt-1 text-sm">
+                                <option value="uniform">Uniform Load (น้ำหนักแผ่)</option>
+                                <option value="point">Point Load (น้ำหนักจุดกึ่งกลาง/ปลาย)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="text-xs text-slate-400 font-bold">ความยาวคาน L (เมตร)</label>
+                            <input type="number" min="0.1" step="0.1" value={L} onChange={e=>setL(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-xs text-slate-400 font-bold">น้ำหนัก {loadType==='uniform'?'w (kg/m)':'P (kg)'}</label>
+                            <input type="number" min="0" step="10" value={w} onChange={e=>setW(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* แสดงผลกราฟิกและผลลัพธ์แบบไดนามิก */}
+                <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-6 relative overflow-hidden flex flex-col items-center shadow-lg">
+                    <div className="w-full max-w-sm h-32 relative mb-6 border-b-2 border-dashed border-[#1E3A5F]">
+                        {/* รูปวาดคาน */}
+                        <div className={`absolute bottom-0 w-full h-4 ${beamType==='simple'?'bg-sky-600':'bg-emerald-600'} rounded-sm`}></div>
+                        {/* ซัพพอร์ต */}
+                        {beamType === 'simple' && (
+                            <>
+                                <div className="absolute -bottom-3 left-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[12px] border-transparent border-b-slate-400"></div>
+                                <div className="absolute -bottom-3 right-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[12px] border-transparent border-b-slate-400"></div>
+                            </>
+                        )}
+                        {beamType === 'cantilever' && (
+                            <div className="absolute -bottom-6 left-0 w-4 h-16 bg-slate-400 border-r-4 border-slate-600"></div>
+                        )}
+                        
+                        {/* น้ำหนักกระทำ */}
+                        {loadType === 'uniform' ? (
+                            <div className="absolute top-4 w-full flex justify-between px-2">
+                                {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="text-amber-400 font-bold text-xl animate-bounce" style={{animationDelay: `${i*0.1}s`}}>↓</div>)}
+                            </div>
+                        ) : (
+                            <div className={`absolute top-2 ${beamType==='simple'?'left-1/2 -translate-x-1/2':'right-0'} text-amber-400 font-bold text-3xl animate-bounce`}>↓</div>
+                        )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 w-full gap-4 text-center">
+                        <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                            <div className="text-[10px] text-sky-300 font-bold uppercase mb-1">Max Moment (M_max)</div>
+                            <div className="text-xl sm:text-2xl font-bold font-mono text-white">{Mmax.toLocaleString(undefined, {maximumFractionDigits:2})} <span className="text-xs text-slate-400">kg-m</span></div>
+                        </div>
+                        <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                            <div className="text-[10px] text-red-300 font-bold uppercase mb-1">Max Shear (V_max)</div>
+                            <div className="text-xl sm:text-2xl font-bold font-mono text-white">{Vmax.toLocaleString(undefined, {maximumFractionDigits:2})} <span className="text-xs text-slate-400">kg</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const RCBeamDesign = () => {
+        const [fc, setFc] = useState(240); // ksc
+        const [fy, setFy] = useState(4000); // ksc (SD40)
+        const [b, setB] = useState(20); // cm
+        const [d, setD] = useState(40); // cm
+        const [Mu, setMu] = useState(3000); // kg-m
+        
+        // คำนวณ (วิธี USD)
+        const Mu_kgcm = Mu * 100;
+        const Rn = Mu_kgcm / (0.9 * b * d * d);
+        let rho = 0, As = 0, warning = '';
+        
+        const rootTerm = 1 - (2 * Rn) / (0.85 * fc);
+        if (rootTerm < 0) {
+            warning = '⚠️ หน้าตัดคานเล็กเกินไป (ต้องเสริมเหล็กรับแรงอัด หรือเพิ่มขนาดคาน)';
+            rho = 0;
+        } else {
+            rho = (0.85 * fc / fy) * (1 - Math.sqrt(rootTerm));
+            As = rho * b * d;
+        }
+        
+        const As_min = (14 / fy) * b * d;
+        const finalAs = Math.max(As, As_min);
+        
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <div className="col-span-2 sm:col-span-1"><label className="text-[10px] text-slate-400 font-bold">fc' (ksc)</label><input type="number" value={fc} onChange={e=>setFc(e.target.value)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-2 sm:col-span-1"><label className="text-[10px] text-slate-400 font-bold">fy (ksc)</label><input type="number" value={fy} onChange={e=>setFy(e.target.value)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">b (cm)</label><input type="number" value={b} onChange={e=>setB(e.target.value)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">d (cm)</label><input type="number" value={d} onChange={e=>setD(e.target.value)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-2 sm:col-span-1"><label className="text-[10px] text-sky-400 font-bold">Mu (kg-m)</label><input type="number" value={Mu} onChange={e=>setMu(e.target.value)} className="w-full inp text-sm font-mono border-sky-500/50 bg-sky-950/20" /></div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 items-center bg-[#0B1325] p-5 rounded-xl border border-[#1E3A5F] shadow-lg">
+                    {/* SVG Cross-section */}
+                    <div className="w-32 h-40 bg-[#050811] border-2 border-slate-600 rounded flex flex-col items-center justify-end p-2 relative shrink-0">
+                        <div className="absolute top-1/2 left-[-25px] -translate-y-1/2 text-[10px] text-slate-400 rotate-270 font-mono">d={d}</div>
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono">b={b}</div>
+                        
+                        {/* ปลอกคาน */}
+                        <div className="w-[85%] h-[90%] border border-amber-500/50 rounded-sm absolute top-[5%] flex items-end justify-center pb-1">
+                            {/* เหล็กแกน */}
+                            <div className="flex gap-1.5 justify-center w-full">
+                                <div className={`w-3 h-3 rounded-full ${warning ? 'bg-red-500' : 'bg-amber-400'}`}></div>
+                                <div className={`w-3 h-3 rounded-full ${warning ? 'bg-red-500' : 'bg-amber-400'}`}></div>
+                                <div className={`w-3 h-3 rounded-full ${warning ? 'bg-red-500' : 'bg-amber-400'}`}></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 w-full space-y-3 pl-0 sm:pl-4 border-l-0 sm:border-l border-[#1E3A5F]">
+                        {warning ? (
+                            <div className="text-red-400 font-bold text-sm bg-red-950/50 p-3 rounded border border-red-900/50 animate-pulse">{warning}</div>
+                        ) : (
+                            <>
+                                <div>
+                                    <div className="text-xs text-slate-400">เนื้อที่เหล็กเสริมที่ต้องการ (As req)</div>
+                                    <div className="text-2xl font-mono font-bold text-emerald-400">{As.toFixed(2)} <span className="text-sm text-slate-500">cm²</span></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-[#1E3A5F]">
+                                    <div><span className="text-slate-400">As min:</span> <span className="font-mono text-amber-200">{As_min.toFixed(2)} cm²</span></div>
+                                    <div><span className="text-slate-400">อัตราส่วน (ρ):</span> <span className="font-mono text-amber-200">{rho.toFixed(5)}</span></div>
+                                </div>
+                                <div className="text-[10px] text-sky-300 font-bold bg-sky-950/30 p-2 rounded border border-sky-900/50">
+                                    ✅ ควรใช้เหล็ก: As = {finalAs.toFixed(2)} cm²
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const SteelSectionViewer = () => {
+        // ตัวอย่างฐานข้อมูลเหล็ก H-Beam (มอก.)
+        const sections = [
+            { name: 'H-Beam 100x100x6x8', d: 100, bf: 100, tw: 6, tf: 8, r: 10, w: 17.2, a: 21.9, ix: 383, iy: 134, sx: 76.5, sy: 26.7 },
+            { name: 'H-Beam 125x125x6.5x9', d: 125, bf: 125, tw: 6.5, tf: 9, r: 10, w: 23.8, a: 30.3, ix: 847, iy: 293, sx: 136, sy: 46.9 },
+            { name: 'H-Beam 150x150x7x10', d: 150, bf: 150, tw: 7, tf: 10, r: 11, w: 31.5, a: 40.1, ix: 1640, iy: 563, sx: 219, sy: 75.1 },
+            { name: 'H-Beam 200x200x8x12', d: 200, bf: 200, tw: 8, tf: 12, r: 13, w: 49.9, a: 63.5, ix: 4720, iy: 1600, sx: 472, sy: 160 },
+            { name: 'H-Beam 250x250x9x14', d: 250, bf: 250, tw: 9, tf: 14, r: 14, w: 72.4, a: 92.2, ix: 10800, iy: 3650, sx: 867, sy: 292 }
+        ];
+        const [selIdx, setSelIdx] = useState(0);
+        const sel = sections[selIdx];
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
+                    <label className="text-xs text-sky-400 font-bold mb-1 block">เลือกขนาด H-Beam</label>
+                    <select value={selIdx} onChange={e=>setSelIdx(e.target.value)} className="w-full inp text-sm font-bold bg-[#050811]">
+                        {sections.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 bg-[#050811] p-5 rounded-xl border border-[#1E3A5F] shadow-lg items-center sm:items-start">
+                    {/* SVG Graphic แบบมี Dimensions */}
+                    <div className="relative w-40 h-40 shrink-0 border-2 border-dashed border-slate-700 rounded-lg flex items-center justify-center p-4">
+                        <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono">bf={sel.bf}</div>
+                        <div className="absolute top-1/2 -left-2 -translate-y-1/2 -rotate-90 text-[10px] text-slate-400 font-mono">d={sel.d}</div>
+                        <div className="absolute top-1/2 -right-3 -translate-y-1/2 text-[9px] text-sky-400 font-mono">tw={sel.tw}</div>
+                        <div className="absolute bottom-1 right-2 text-[9px] text-sky-400 font-mono">tf={sel.tf}</div>
+                        
+                        <div className="w-[60%] h-[80%] flex flex-col items-center justify-between">
+                            <div className="w-full bg-sky-500 rounded-sm shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{height: `${Math.max(10, (sel.tf/sel.d)*100)}%`}}></div>
+                            <div className="h-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{width: `${Math.max(10, (sel.tw/sel.bf)*100)}%`}}></div>
+                            <div className="w-full bg-sky-500 rounded-sm shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{height: `${Math.max(10, (sel.tf/sel.d)*100)}%`}}></div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 w-full grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">น้ำหนัก (W)</span><span className="font-bold font-mono text-emerald-300 text-sm">{sel.w} kg/m</span></div>
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">พื้นที่ (A)</span><span className="font-bold font-mono text-white text-sm">{sel.a} cm²</span></div>
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Inertia (Ix)</span><span className="font-bold font-mono text-white text-sm">{sel.ix} cm⁴</span></div>
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Inertia (Iy)</span><span className="font-bold font-mono text-white text-sm">{sel.iy} cm⁴</span></div>
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Section Mod (Sx)</span><span className="font-bold font-mono text-white text-sm">{sel.sx} cm³</span></div>
+                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Section Mod (Sy)</span><span className="font-bold font-mono text-white text-sm">{sel.sy} cm³</span></div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const ConcreteCalculator = () => {
+        const [w, setW] = useState(5); // กว้าง
+        const [l, setL] = useState(5); // ยาว
+        const [t, setT] = useState(0.1); // หนา
+        const [sf, setSf] = useState(10); // Safety Factor %
+
+        // คำนวณปริมาตร
+        const baseVol = w * l * t;
+        const totalVol = baseVol * (1 + (sf / 100));
+
+        // ประเมินสัดส่วนวัสดุ (สำหรับคอนกรีตผสมเสร็จหน้างาน สัดส่วน 1:2:4 โครงสร้างทั่วไป)
+        // 1 คิว ใช้ปูน ~320kg (6.4 ถุง), ทราย ~0.52 คิว, หิน ~1.04 คิว, น้ำ ~180 ลิตร
+        const cementBags = Math.ceil(totalVol * 6.4);
+        const sand = (totalVol * 0.52).toFixed(2);
+        const stone = (totalVol * 1.04).toFixed(2);
+        const water = (totalVol * 180).toFixed(0);
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner">
+                    <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">กว้าง (m)</label><input type="number" min="0" step="0.1" value={w} onChange={e=>setW(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">ยาว (m)</label><input type="number" min="0" step="0.1" value={l} onChange={e=>setL(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">หนา (m)</label><input type="number" min="0" step="0.05" value={t} onChange={e=>setT(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono" /></div>
+                    <div className="col-span-3 sm:col-span-1"><label className="text-[10px] text-amber-400 font-bold">เผื่อเหลือ (SF %)</label><input type="number" min="0" max="50" value={sf} onChange={e=>setSf(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono border-amber-500/50 bg-amber-950/20 text-amber-300" /></div>
+                </div>
+
+                <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] overflow-hidden shadow-lg">
+                    <div className="p-4 border-b border-[#1E3A5F] bg-gradient-to-r from-emerald-900/40 to-transparent flex justify-between items-center">
+                        <div>
+                            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">ปริมาตรคอนกรีตที่ต้องใช้</div>
+                            <div className="text-2xl font-bold font-mono mt-1 text-white">{totalVol.toFixed(2)} <span className="text-sm text-slate-400">คิว (m³)</span></div>
+                        </div>
+                        <div className="text-right text-[10px] text-slate-400">
+                            ปริมาตรสุทธิ: <span className="font-mono text-slate-200">{baseVol.toFixed(2)}</span> คิว<br/>
+                            เผื่อสูญเสีย ({sf}%): <span className="font-mono text-amber-300">+{(totalVol - baseVol).toFixed(2)}</span> คิว
+                        </div>
+                    </div>
+                    
+                    <div className="p-4">
+                        <div className="text-xs text-slate-300 mb-3 font-bold flex items-center gap-2">
+                            <span>🛒 ประเมินวัสดุผสมหน้างาน (สัดส่วน 1:2:4)</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
+                            <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-2xl mb-1">🧱</div><div className="text-[10px] text-slate-400">ปูนซีเมนต์ (50kg)</div>
+                                <div className="font-bold font-mono text-sm text-white mt-1">{cementBags} <span className="text-[10px]">ถุง</span></div>
+                            </div>
+                            <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-2xl mb-1">🏖️</div><div className="text-[10px] text-slate-400">ทรายหยาบ</div>
+                                <div className="font-bold font-mono text-sm text-white mt-1">{sand} <span className="text-[10px]">คิว</span></div>
+                            </div>
+                            <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-2xl mb-1">🪨</div><div className="text-[10px] text-slate-400">หิน (เบอร์ 1,2)</div>
+                                <div className="font-bold font-mono text-sm text-white mt-1">{stone} <span className="text-[10px]">คิว</span></div>
+                            </div>
+                            <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-2xl mb-1">💧</div><div className="text-[10px] text-slate-400">น้ำสะอาด</div>
+                                <div className="font-bold font-mono text-sm text-white mt-1">{water} <span className="text-[10px]">ลิตร</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const LunarSplitter = () => {
         const [subtotal, setSubtotal] = useState(''); const [vat, setVat] = useState(7); const [sc, setSc] = useState(10); const [people, setPeople] = useState(1);
@@ -6368,9 +6644,18 @@
           {/* ASSOCIATION TOOLS VIEW */}
           {currentView === 'tools' && (() => {
               const TOOLS = [
+                  // ของเดิมที่มีอยู่
                   { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
                   { id: 'tuner', category: 'Music & Audio', name: 'Guitar Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
                   { id: 'transposer', category: 'Music & Audio', name: 'Chord Transposer', icon: '🎼', desc: 'เครื่องมือทดคีย์เพลง แปลงคอร์ดยกแผง' },
+                  
+                  // เพิ่มเครื่องมือ Civil ใหม่เข้าไปตรงนี้
+                  { id: 'beam', category: 'Civil Engineering', name: 'Beam Calculator', icon: '🏗️', desc: 'คำนวณโมเมนต์และแรงเฉือนสูงสุดของคานแบบง่าย' },
+                  { id: 'rc_design', category: 'Civil Engineering', name: 'RC Beam Design', icon: '📏', desc: 'ออกแบบและคำนวณปริมาณเหล็กเสริมคาน (USD)' },
+                  { id: 'steel_table', category: 'Civil Engineering', name: 'Steel Table', icon: '🏭', desc: 'ตารางคุณสมบัติเหล็กรูปพรรณ (H-Beam)' },
+                  { id: 'concrete', category: 'Civil Engineering', name: 'Concrete Mix', icon: '🧱', desc: 'คำนวณปริมาตรคอนกรีตเผื่อ SF และประเมินวัสดุ' },
+
+                  // ของเดิมที่เหลือ
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
@@ -6449,6 +6734,10 @@
                                   {activeTool === 'bpm' && <BPMTapper />}
                                   {activeTool === 'tuner' && <GuitarTuner />}
                                   {activeTool === 'transposer' && <ChordTransposer />}
+                                  {activeTool === 'beam' && <BeamCalculator />}
+                                  {activeTool === 'rc_design' && <RCBeamDesign />}
+                                  {activeTool === 'steel_table' && <SteelSectionViewer />}
+                                  {activeTool === 'concrete' && <ConcreteCalculator />}
                                   {activeTool === 'converter' && <AdvancedUnitConverter />}
                                   {activeTool === 'solver' && <MatrixSolver />}
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
