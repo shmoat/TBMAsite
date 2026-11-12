@@ -4088,8 +4088,14 @@
               const volA = localCrossfade < 50 ? 100 : 100 - ((localCrossfade - 50) * 2);
               const volB = localCrossfade > 50 ? 100 : localCrossfade * 2;
               
-              if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * localVolume) / 100)); }
-              if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * localVolume) / 100)); }
+              const vA = Math.max(0, (volA * localVolume) / 100);
+              const vB = Math.max(0, (volB * localVolume) / 100);
+
+              // หน่วงเวลาเล็กน้อยให้ React อัปเดต State ก่อนสั่ง Player
+              setTimeout(() => {
+                  if(ytA.current && ytA.current.unMute) { ytA.current.unMute(); ytA.current.setVolume(vA); }
+                  if(ytB.current && ytB.current.unMute) { ytB.current.unMute(); ytB.current.setVolume(vB); }
+              }, 50);
           }
       };
 
@@ -4195,12 +4201,32 @@
               if (typeof navigator !== 'undefined' && navigator.audioSession) {
                 try { navigator.audioSession.type = 'playback'; } catch (err) {}
               }
-              if (paused) e.target.mute();
-              else {
-                  e.target.unMute(); 
-                  const cVal = localCrossfade;
-                  const vTarget = deckKey === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
-                  e.target.setVolume(Math.max(0, (vTarget * localVolume) / 100)); 
+              if (paused) {
+                 e.target.mute();
+              } else {
+                 	 // บังคับ Unmute ซ้ำๆ เพื่อป้องกัน Safari หรือ Mobile Browser Mute เอง
+                  if(e.target.isMuted && e.target.isMuted()) e.target.unMute(); 
+                  
+                 	 // คำนวณ Volume เป้าหมาย
+                  const cVal = typeof localCrossfade !== 'undefined' ? localCrossfade : 0;
+                  const currentLocalVol = typeof localVolume !== 'undefined' ? localVolume : 50;
+                  
+                  let vTarget = 0;
+                  if (deckKey === 'A') vTarget = cVal < 50 ? 100 : 100 - ((cVal - 50) * 2);
+                  if (deckKey === 'B') vTarget = cVal > 50 ? 100 : cVal * 2;
+                  
+                  const finalVol = Math.max(0, (vTarget * currentLocalVol) / 100);
+                  
+                 	// ตั้ง Volume และตรวจสอบว่าถูกตั้งสำเร็จ
+                  if (e.target.setVolume) {
+                     e.target.setVolume(finalVol);
+                     	// เช็กซ้ำอีกรอบหลังจากเสี้ยววิ (ป้องกัน YouTube รีเซ็ตค่ากลับตอนโหลดเสร็จใหม่ๆ)
+                     setTimeout(() => {
+                         if (e.target.getVolume && e.target.getVolume() !== finalVol) {
+                             e.target.setVolume(finalVol);
+                         }
+                     }, 200);
+                  }
               }
             }
           };
@@ -4234,24 +4260,41 @@
          if (!ytA.current?.setVolume || !ytB.current?.setVolume) return;
 
          if (isFullyClosedSync) {
-            if (isLocalPaused) ytA.current.mute();
-            else { ytA.current.unMute(); ytA.current.setVolume(localVolume); } 
+            if (isLocalPaused) { 
+                ytA.current.mute(); 
+            } else { 
+                if (ytA.current.isMuted && ytA.current.isMuted()) ytA.current.unMute(); 
+                ytA.current.setVolume(localVolume); 
+            } 
             return;
          }
 
          const cVal = localCrossfade;
          const volA = cVal < 50 ? 100 : 100 - ((cVal - 50) * 2);
          const volB = cVal > 50 ? 100 : cVal * 2;
+         const finalVolA = Math.max(0, (volA * localVolume) / 100);
+         const finalVolB = Math.max(0, (volB * localVolume) / 100);
 
+         // สำหรับ Deck A
          if (djState.playA?.isPlaying && !isLocalPaused) {
-            if (volA === 0) ytA.current.mute();
-            else { ytA.current.unMute(); ytA.current.setVolume(Math.max(0, (volA * localVolume) / 100)); } 
+            if (finalVolA === 0) {
+                ytA.current.mute();
+            } else {
+                if (ytA.current.isMuted && ytA.current.isMuted()) ytA.current.unMute();
+                if (ytA.current.getVolume && ytA.current.getVolume() !== finalVolA) ytA.current.setVolume(finalVolA);
+            }
          } else if (isLocalPaused) { ytA.current.mute(); }
          
+         // สำหรับ Deck B
          if (djState.playB?.isPlaying && !isLocalPaused) {
-            if (volB === 0) ytB.current.mute();
-            else { ytB.current.unMute(); ytB.current.setVolume(Math.max(0, (volB * localVolume) / 100)); } 
+            if (finalVolB === 0) {
+                ytB.current.mute();
+            } else {
+                if (ytB.current.isMuted && ytB.current.isMuted()) ytB.current.unMute();
+                if (ytB.current.getVolume && ytB.current.getVolume() !== finalVolB) ytB.current.setVolume(finalVolB);
+            }
          } else if (isLocalPaused) { ytB.current.mute(); }
+
       }, [localCrossfade, localVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
 
       // Sync Loop (1 sec)
