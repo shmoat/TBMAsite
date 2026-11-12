@@ -3150,7 +3150,13 @@
         const [currentDate, setCurrentDate] = useState(new Date());
         const [selectedDate, setSelectedDate] = useState(null);
         const [showCreateForm, setShowCreateForm] = useState(false);
+        const [viewMode, setViewMode] = useState('month'); // 'month' หรือ 'list'
+        
+        // สำหรับระบบค้นหาและเชิญเพื่อน
+        const [invitees, setInvitees] = useState([]);
+        const [inviteSearch, setInviteSearch] = useState('');
     
+        // วันสำคัญเฉพาะที่ล็อคไว้
         const ASTRONOMICAL_EVENTS = {
             '2026-03-03': { type: 'Eclipse', label: '🔴 จันทรุปราคาเต็มดวง (Blood Moon)' },
             '2026-05-31': { type: 'Blue Moon', label: '🔵 Blue Moon (จันทร์เต็มดวงครั้งที่ 2 ของเดือน)' },
@@ -3172,6 +3178,33 @@
             music: { color: 'bg-sky-500', icon: '🔵', label: 'Music Jam' }
         };
 
+        // ฟังก์ชันคำนวณเฟสพระจันทร์อัตโนมัติ
+        const getMoonPhase = (year, month, day) => {
+            let c = 0, e = 0, jd = 0, b = 0;
+            if (month < 2) { year--; month += 12; }
+            ++month;
+            c = 365.25 * year; e = 30.6 * month;
+            jd = c + e + day - 694039.09; 
+            jd /= 29.5305882; 
+            b = parseInt(jd); jd -= b; 
+            b = Math.round(jd * 8); 
+            if (b >= 8) b = 0; 
+            const phases = [
+                { idx: 0, emoji: '🌑', label: 'จันทร์ดับ (New Moon)' }, { idx: 1, emoji: '🌒', label: 'จันทร์เสี้ยว (Waxing Crescent)' },
+                { idx: 2, emoji: '🌓', label: 'จันทร์ครึ่งดวง (First Qtr)' }, { idx: 3, emoji: '🌔', label: 'จันทร์ค่อนดวง (Waxing Gibbous)' },
+                { idx: 4, emoji: '🌕', label: 'จันทร์เต็มดวง (Full Moon)' }, { idx: 5, emoji: '🌖', label: 'จันทร์แรม (Waning Gibbous)' },
+                { idx: 6, emoji: '🌗', label: 'จันทร์ครึ่งดวง (Last Qtr)' }, { idx: 7, emoji: '🌘', label: 'จันทร์เสี้ยว (Waning Crescent)' }
+            ];
+            return phases[b];
+        };
+
+        const goToToday = () => {
+            const today = new Date();
+            setCurrentDate(today);
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            setSelectedDate(todayStr);
+        };
+
         const exportToICS = (event) => {
             const d = event.date.replace(/-/g, '');
             const t = event.time.replace(/:/g, '') + '00';
@@ -3190,10 +3223,25 @@
             const type = fd.get('type'), max = parseInt(fd.get('max')), isPromo = fd.get('promo') === 'on';
         
             const id = 'evt-' + Date.now();
+            
+            // สร้าง Event ลงฐานข้อมูล
             await db.collection('bma_events').doc(id).set({
                 id, title, date, time, type, max, createdBy: currentUser.id,
                 going: [currentUser.id], maybe: [], timestamp: Date.now()
             });
+
+            // ส่งคำเชิญทาง DM ให้กับคนที่เลือก
+            for (const invId of invitees) {
+                const dmRm = 'dm_' + [currentUser.id, invId].sort().join('_');
+                const mId = 'msg-' + Date.now() + Math.random().toString(36).substr(2,5);
+                await db.collection('bma_messages').doc(mId).set({
+                    id: mId, roomKey: dmRm, senderId: currentUser.id, receiverId: invId,
+                    text: '📅 ขอเชิญเข้าร่วมกิจกรรม: ' + title,
+                    isEventInvite: true, eventId: id, eventName: title, eventDate: date, eventTime: time,
+                    readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), 
+                    timestamp: Date.now(), serverCreatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
 
             if (isPromo) {
                 const postId = 'post-' + Date.now();
@@ -3206,6 +3254,8 @@
                 });
             }
             setShowCreateForm(false);
+            setInvitees([]);
+            setInviteSearch('');
         };
 
         const handleRSVP = async (event, status) => {
@@ -3223,110 +3273,259 @@
 
         return (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 text-white">
-                <div className="bg-[#0B1325] border border-[#1E3A5F] w-full max-w-4xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in relative">
+                <div className="bg-[#0B1325] border border-[#1E3A5F] w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in relative">
                 
+                    {/* Header */}
                     <div className="flex justify-between items-center p-4 border-b border-[#1E3A5F] bg-[#070C18]">
-                        <h2 className="text-xl font-bold text-sky-400">📅 Association Calendar</h2>
-                        <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-xl font-bold text-sky-400 flex items-center gap-2">📅 Association Calendar</h2>
+                            <button onClick={goToToday} className="btn-d text-[10px] py-1 px-3 border-sky-500/50 hover:bg-sky-900/30 text-sky-300">กลับไปวันนี้</button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {/* ปุ่มสลับมุมมอง */}
+                            <div className="bg-[#050811] p-1 rounded-lg border border-[#1E3A5F] flex gap-1">
+                                <button onClick={() => setViewMode('month')} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${viewMode === 'month' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ตารางเดือน</button>
+                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${viewMode === 'list' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>แบบรายการ</button>
+                            </div>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
+                        </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-                        <div className="w-full md:w-2/3 flex flex-col p-4 border-r border-[#1E3A5F] overflow-y-auto">
-                            <div className="flex justify-between items-center mb-4">
-                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="text-xl hover:text-sky-400">◀</button>
-                                <h3 className="text-lg font-bold">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="text-xl hover:text-sky-400">▶</button>
+                        {/* ปฏิทิน */}
+                        <div className="w-full md:w-2/3 flex flex-col p-4 border-r border-[#1E3A5F] overflow-y-auto bg-gradient-to-b from-[#070C18] to-[#050811] custom-scrollbar">
+                            <div className="flex justify-between items-center mb-4 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
+                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="text-xl hover:text-sky-400 px-4">◀</button>
+                                <h3 className="text-lg font-bold text-sky-200">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+                                <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="text-xl hover:text-sky-400 px-4">▶</button>
                             </div>
                         
-                            <div className="grid grid-cols-7 gap-1 flex-1">
-                                {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => <div key={d} className="text-center text-xs font-bold text-slate-400 mb-2">{d}</div>)}
-                                {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="p-2 border border-transparent"></div>)}
+                            {viewMode === 'month' ? (
+                                <div className="grid grid-cols-7 gap-1 flex-1">
+                                    {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => <div key={d} className="text-center text-xs font-bold text-slate-400 mb-2">{d}</div>)}
+                                    {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} className="p-2 border border-transparent"></div>)}
 
-                                {Array(daysInMonth).fill(null).map((_, i) => {
-                                    const dateNum = i + 1;
-                                    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
-                                    const isSelected = selectedDate === dateStr;
-                                    const astro = ASTRONOMICAL_EVENTS[dateStr];
-                                    const dayEvents = getDayEvents(dateStr);
+                                    {Array(daysInMonth).fill(null).map((_, i) => {
+                                        const dateNum = i + 1;
+                                        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
+                                        const isSelected = selectedDate === dateStr;
+                                        const astro = ASTRONOMICAL_EVENTS[dateStr];
+                                        const dayEvents = getDayEvents(dateStr);
+                                        
+                                        // ตรวจสอบคราสพระจันทร์อัตโนมัติ
+                                        const moonPhase = getMoonPhase(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
+                                        const isMainPhase = [0, 2, 4, 6].includes(moonPhase.idx);
 
-                                    return (
-                                        <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`min-h-[80px] border rounded-lg p-1.5 cursor-pointer transition-colors relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/20' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                                            <span className={`text-sm font-bold ${astro?.type === 'Blue Moon' ? 'text-sky-300 drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : astro?.type === 'Eclipse' ? 'text-red-400' : ''}`}>{dateNum}</span>
-                                            {astro && <span className="absolute top-1 right-1 text-xs" title={astro.label}>{astro.type === 'Blue Moon' ? '🔵' : astro.type === 'Eclipse' ? '🔴' : '🌕'}</span>}
-                                            <div className="mt-auto flex flex-wrap gap-1 w-full justify-start">
-                                                {dayEvents.map(e => <div key={e.id} className={`w-2 h-2 rounded-full ${EVENT_TYPES[e.type].color}`} title={e.title}></div>)}
+                                        return (
+                                            <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`min-h-[85px] border rounded-xl p-1.5 cursor-pointer transition-all relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/30 shadow-[0_0_15px_rgba(56,189,248,0.2)]' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                                                <span className={`text-sm font-bold ${astro?.type === 'Blue Moon' ? 'text-sky-300 drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : astro?.type === 'Eclipse' ? 'text-red-400' : 'text-slate-300'}`}>{dateNum}</span>
+                                                
+                                                {astro ? (
+                                                    <span className="absolute top-1 right-1 text-xs" title={astro.label}>{astro.type === 'Blue Moon' ? '🔵' : astro.type === 'Eclipse' ? '🔴' : '🌕'}</span>
+                                                ) : isMainPhase && (
+                                                    <span className="absolute top-1 right-1 text-xs opacity-70" title={moonPhase.label}>{moonPhase.emoji}</span>
+                                                )}
+
+                                                <div className="mt-auto flex flex-wrap gap-1.5 w-full justify-start relative">
+                                                    {dayEvents.map(e => (
+                                                        <div key={e.id} className="relative group flex items-center justify-center">
+                                                            <div className={`w-2.5 h-2.5 rounded-full ${EVENT_TYPES[e.type].color} shadow-sm`}></div>
+                                                            {/* Mini-Card Hover Tooltip */}
+                                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-[100] w-max max-w-[160px] bg-[#0B1325] border border-[#1E3A5F] p-2 rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.8)] pointer-events-none">
+                                                                <div className="flex items-center gap-1.5 mb-1 w-full">
+                                                                    <Avatar user={getAuthor(e.createdBy)} size="xs" />
+                                                                    <span className="text-[10px] font-bold text-sky-300 truncate w-full">{e.title}</span>
+                                                                </div>
+                                                                <div className="text-[9px] text-slate-300 font-mono bg-[#050811] px-1.5 py-0.5 rounded w-full text-center">🕒 {e.time} น.</div>
+                                                                {/* สามเหลี่ยมชี้ลง */}
+                                                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#1E3A5F]"></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                /* List / Agenda View */
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                                    {Array(daysInMonth).fill(null).map((_, i) => {
+                                        const dateNum = i + 1;
+                                        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
+                                        const dayEvents = getDayEvents(dateStr);
+                                        const moonPhase = getMoonPhase(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
+                                        const isMainPhase = [0, 2, 4, 6].includes(moonPhase.idx);
+                                        const astro = ASTRONOMICAL_EVENTS[dateStr];
+                                        
+                                        if (dayEvents.length === 0 && !isMainPhase && !astro) return null;
+
+                                        return (
+                                            <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`p-3 rounded-xl border flex gap-3 cursor-pointer transition-colors ${selectedDate === dateStr ? 'border-sky-400 bg-sky-900/20' : 'border-[#1E3A5F] bg-[#0B1325] hover:border-slate-500'}`}>
+                                                <div className="flex flex-col items-center justify-center w-14 shrink-0 bg-[#050811] rounded-lg border border-[#1E3A5F] py-2">
+                                                    <span className="text-2xl font-bold text-white leading-none mb-1">{dateNum}</span>
+                                                    <span className="text-[9px] text-slate-400">{monthNames[currentDate.getMonth()].slice(0,3)}</span>
+                                                </div>
+                                                <div className="flex-1 space-y-2">
+                                                    {(astro || isMainPhase) && (
+                                                        <div className="text-[10px] text-amber-300 font-bold border-b border-[#1E3A5F] pb-1 inline-block">
+                                                            {astro ? astro.label : `${moonPhase.emoji} ${moonPhase.label}`}
+                                                        </div>
+                                                    )}
+                                                    {dayEvents.map(e => (
+                                                        <div key={e.id} className="flex flex-col bg-[#050811] p-2.5 rounded-lg border border-[#1E3A5F]">
+                                                            <div className="font-bold text-xs text-sky-200 mb-1 flex items-center gap-1.5"><span className="text-[10px]">{EVENT_TYPES[e.type].icon}</span> {e.title}</div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar user={getAuthor(e.createdBy)} size="xs" />
+                                                                <span className="text-[10px] text-slate-400">🕒 {e.time} • โฮสต์: {getAuthor(e.createdBy).displayName}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
-                        <div className="w-full md:w-1/3 bg-[#070C18] p-4 flex flex-col min-h-0 overflow-y-auto">
+                        {/* รายละเอียด / ฟอร์ม (ด้านขวา) */}
+                        <div className="w-full md:w-1/3 bg-[#0B1325] p-4 flex flex-col min-h-0 overflow-y-auto">
                             {!showCreateForm ? (
                                 <>
                                     <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#1E3A5F]">
-                                        <h3 className="font-bold text-amber-300">{selectedDate ? `กิจกรรม: ${selectedDate}` : 'เลือกวันที่'}</h3>
-                                        {selectedDate && currentUser && <button onClick={() => setShowCreateForm(true)} className="bg-sky-600 text-white text-[10px] font-bold px-2 py-1 rounded">สร้างกิจกรรม</button>}
+                                        <h3 className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                                            {selectedDate ? <>📍 {selectedDate}</> : '🔍 เลือกวันที่เพื่อดูรายละเอียด'}
+                                        </h3>
+                                        {selectedDate && currentUser && <button onClick={() => setShowCreateForm(true)} className="bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-md transition-colors">+ สร้างกิจกรรม</button>}
                                     </div>
-                                    {selectedDate && ASTRONOMICAL_EVENTS[selectedDate] && (
-                                        <div className="bg-[#050811] border border-amber-500/50 p-3 rounded-xl mb-4 text-xs shadow-lg">
-                                            <div className="font-bold text-amber-300 mb-1">✨ ปรากฏการณ์ดาราศาสตร์</div>
-                                            <div className="text-slate-200">{ASTRONOMICAL_EVENTS[selectedDate].label}</div>
-                                        </div>
-                                    )}
+                                    
+                                    {selectedDate && (() => {
+                                        const dNum = parseInt(selectedDate.split('-')[2]);
+                                        const dMonth = parseInt(selectedDate.split('-')[1]) - 1;
+                                        const dYear = parseInt(selectedDate.split('-')[0]);
+                                        const mPhase = getMoonPhase(dYear, dMonth, dNum);
+                                        const ast = ASTRONOMICAL_EVENTS[selectedDate];
+
+                                        return (
+                                            <div className="bg-gradient-to-br from-[#050811] to-[#0F2547] border border-amber-500/50 p-3 rounded-xl mb-4 text-xs shadow-lg">
+                                                <div className="font-bold text-amber-300 mb-1.5 flex items-center gap-1.5">✨ ข้อมูลดาราศาสตร์</div>
+                                                <div className="text-slate-200">{ast ? ast.label : `${mPhase.emoji} ${mPhase.label}`}</div>
+                                            </div>
+                                        );
+                                    })()}
+                                    
                                     {selectedDate ? (
-                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                                            {getDayEvents(selectedDate).length === 0 ? <div className="text-slate-500 text-xs text-center py-10">ไม่มีกิจกรรม</div> : (
+                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                                            {getDayEvents(selectedDate).length === 0 ? <div className="text-slate-500 text-xs text-center py-10 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีกิจกรรมในวันนี้</div> : (
                                                 getDayEvents(selectedDate).map(e => (
-                                                    <div key={e.id} className="bg-[#0B1325] border border-[#1E3A5F] p-3 rounded-xl hover:border-slate-500 transition-colors">
-                                                        <div className="flex items-center justify-between mb-2">
+                                                    <div key={e.id} className="bg-[#050811] border border-[#1E3A5F] p-3.5 rounded-xl hover:border-sky-500/50 transition-colors shadow-md">
+                                                        <div className="flex items-start justify-between mb-3 border-b border-[#1E3A5F] pb-2">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-xs">{EVENT_TYPES[e.type].icon}</span>
-                                                                <span className="font-bold text-sm text-white">{e.title}</span>
+                                                                <span className="text-sm bg-[#0B1325] p-1.5 rounded-lg border border-[#1E3A5F]">{EVENT_TYPES[e.type].icon}</span>
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-sm text-sky-100">{e.title}</span>
+                                                                    <span className="text-[9px] text-sky-400 font-mono uppercase tracking-wider">{EVENT_TYPES[e.type].label}</span>
+                                                                </div>
                                                             </div>
-                                                            <button onClick={() => exportToICS(e)} className="text-[10px] bg-[#050811] px-1.5 py-1 rounded border border-[#1E3A5F] hover:text-sky-300" title="เพิ่มลงปฏิทิน">🗓️ ICS</button>
+                                                            <button onClick={() => exportToICS(e)} className="text-[10px] bg-sky-900/50 text-sky-300 px-2 py-1 rounded border border-sky-700/50 hover:bg-sky-600 hover:text-white transition-colors" title="เพิ่มลงปฏิทินในเครื่อง">🗓️ ICS</button>
                                                         </div>
-                                                        <div className="text-[10px] text-slate-400 mb-2">🕒 {e.time} • 👥 เข้าร่วม {(e.going || []).length}/{e.max}</div>
-                                                        <div className="text-[9px] text-slate-500 mb-2 truncate">โฮสต์: {getAuthor(e.createdBy).displayName}</div>
+                                                        
+                                                        <div className="flex items-center gap-2 mb-3 bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
+                                                            <Avatar user={getAuthor(e.createdBy)} size="xs" />
+                                                            <div className="flex flex-col">
+                                                                <div className="text-[10px] text-slate-400">🕒 เวลา: <span className="text-white font-bold">{e.time} น.</span></div>
+                                                                <div className="text-[9px] text-slate-500">สร้างโดย: {getAuthor(e.createdBy).displayName}</div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="text-[10px] text-slate-400 mb-2 font-bold flex justify-between px-1">
+                                                            <span>👥 สถานะผู้เข้าร่วม</span>
+                                                            <span className="text-emerald-400">{(e.going || []).length} / {e.max} คน</span>
+                                                        </div>
                                                     
                                                         {currentUser ? (
-                                                            <div className="flex gap-2 mt-3">
-                                                                <button onClick={() => handleRSVP(e, 'going')} className={`flex-1 text-[10px] py-1.5 rounded-lg font-bold transition-colors ${(e.going||[]).includes(currentUser.id) ? 'bg-emerald-600 text-white' : 'bg-emerald-950 border border-emerald-900 text-emerald-400'}`}>✓ ไป</button>
-                                                                <button onClick={() => handleRSVP(e, 'maybe')} className={`flex-1 text-[10px] py-1.5 rounded-lg transition-colors ${(e.maybe||[]).includes(currentUser.id) ? 'bg-amber-600 text-white' : 'bg-[#050811] border border-[#1E3A5F] text-slate-400'}`}>อาจจะ</button>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <button onClick={() => handleRSVP(e, 'going')} className={`flex-1 text-[10px] py-2 rounded-lg font-bold transition-colors ${(e.going||[]).includes(currentUser.id) ? 'bg-emerald-600 text-white shadow-[0_0_10px_rgba(5,150,105,0.4)]' : 'bg-emerald-950 border border-emerald-900 text-emerald-400 hover:bg-emerald-900'}`}>✓ ยืนยันเข้าร่วม</button>
+                                                                <button onClick={() => handleRSVP(e, 'maybe')} className={`flex-1 text-[10px] py-2 rounded-lg transition-colors font-bold ${(e.maybe||[]).includes(currentUser.id) ? 'bg-amber-600 text-white shadow-[0_0_10px_rgba(217,119,6,0.4)]' : 'bg-[#050811] border border-[#1E3A5F] text-slate-400 hover:text-amber-300'}`}>🤷 อาจจะไป</button>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-[10px] text-slate-500 text-center mt-2">ล็อกอินเพื่อตอบรับเข้าร่วม</div>
+                                                            <div className="text-[10px] text-slate-500 text-center mt-3 bg-red-950/30 p-2 rounded border border-red-900/30">กรุณาล็อกอินเพื่อตอบรับเข้าร่วมกิจกรรม</div>
                                                         )}
                                                     </div>
                                                 ))
                                             )}
                                         </div>
-                                    ) : <div className="text-slate-500 text-xs text-center py-10">คลิกปฏิทินเพื่อเรียกดู</div>}
+                                    ) : <div className="text-slate-500 text-xs text-center py-10 flex flex-col items-center gap-2 opacity-50"><span className="text-4xl">👆</span>คลิกเลือกวันที่บนปฏิทิน</div>}
                                 </>
                             ) : (
                                 <div className="flex flex-col h-full">
                                     <div className="flex justify-between items-center mb-4 border-b border-[#1E3A5F] pb-2">
-                                        <h3 className="font-bold text-sky-300">สร้างกิจกรรมใหม่</h3>
-                                        <button onClick={() => setShowCreateForm(false)} className="text-slate-400 text-xs hover:text-white">ยกเลิก</button>
+                                        <h3 className="font-bold text-sky-300 text-sm flex items-center gap-1.5">📝 สร้างกิจกรรมใหม่</h3>
+                                        <button onClick={() => { setShowCreateForm(false); setInvitees([]); setInviteSearch(''); }} className="text-slate-400 text-xs hover:text-white bg-[#050811] px-2 py-1 rounded border border-[#1E3A5F]">ยกเลิก</button>
                                     </div>
-                                    <form onSubmit={handleCreateEvent} className="space-y-4 flex-1 overflow-y-auto pr-1">
-                                        <input name="title" type="text" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" placeholder="ชื่อกิจกรรม..." />
-                                        <div className="flex gap-2">
-                                            <input name="date" type="date" defaultValue={selectedDate} required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
-                                            <input name="time" type="time" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
+                                    <form onSubmit={handleCreateEvent} className="space-y-3.5 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                                        <div>
+                                            <label className="text-[10px] text-slate-400 font-bold mb-1 block">ชื่อกิจกรรม <span className="text-red-400">*</span></label>
+                                            <input name="title" type="text" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded-lg p-2 text-xs outline-none focus:border-sky-500 transition-colors" placeholder="ระบุชื่อกิจกรรม..." />
                                         </div>
-                                        <select name="type" className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none">
-                                            <option value="official">🔴 Official Event</option>
-                                            <option value="gathering">🟢 Member Gathering</option>
-                                            <option value="music">🔵 Music Jam</option>
-                                        </select>
-                                        <input name="max" type="number" min="2" defaultValue="10" placeholder="จำนวนคนสูงสุด" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded p-2 text-xs outline-none" />
-                                        <label className="flex items-center gap-2 cursor-pointer text-xs mt-2 p-2 bg-sky-950/30 rounded border border-sky-900/50">
-                                            <input type="checkbox" name="promo" defaultChecked className="accent-sky-500" />
-                                            <span className="text-sky-300 font-bold">สร้างโพสต์โปรโมตลง Board อัตโนมัติ</span>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-slate-400 font-bold mb-1 block">วันที่ <span className="text-red-400">*</span></label>
+                                                <input name="date" type="date" defaultValue={selectedDate} required className="w-full bg-[#050811] border border-[#1E3A5F] rounded-lg p-2 text-xs outline-none focus:border-sky-500 transition-colors text-slate-200" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-slate-400 font-bold mb-1 block">เวลา <span className="text-red-400">*</span></label>
+                                                <input name="time" type="time" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded-lg p-2 text-xs outline-none focus:border-sky-500 transition-colors text-slate-200" />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="flex-[2]">
+                                                <label className="text-[10px] text-slate-400 font-bold mb-1 block">ประเภทกิจกรรม <span className="text-red-400">*</span></label>
+                                                <select name="type" className="w-full bg-[#050811] border border-[#1E3A5F] rounded-lg p-2 text-xs outline-none focus:border-sky-500 text-slate-200">
+                                                    <option value="official">🔴 Official Event</option>
+                                                    <option value="gathering">🟢 Member Gathering</option>
+                                                    <option value="music">🔵 Music Jam</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-slate-400 font-bold mb-1 block">รับกี่คน <span className="text-red-400">*</span></label>
+                                                <input name="max" type="number" min="2" defaultValue="10" required className="w-full bg-[#050811] border border-[#1E3A5F] rounded-lg p-2 text-xs outline-none focus:border-sky-500 text-slate-200" />
+                                            </div>
+                                        </div>
+                                        
+                                        {/* ระบบเชิญเพื่อนผ่าน DM */}
+                                        <div className="p-3 bg-[#050811] border border-[#1E3A5F] rounded-xl space-y-2 mt-2">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs font-bold text-amber-300">✉️ ส่งคำเชิญ (Direct Message)</label>
+                                                <span className="text-[9px] text-slate-400 bg-[#0B1325] px-1.5 py-0.5 rounded">เลือกได้หลายคน</span>
+                                            </div>
+                                            <div className="relative">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">🔍</span>
+                                                <input type="text" value={inviteSearch} onChange={e => setInviteSearch(e.target.value)} placeholder="ค้นหาชื่อ, ID, หมวดหมู่ (Tag)..." className="w-full bg-[#0B1325] border border-[#1E3A5F] rounded-lg py-1.5 pl-7 pr-2 text-[10px] text-white outline-none focus:border-amber-500 transition-colors" />
+                                            </div>
+                                            
+                                            <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar pr-1 border border-white/5 rounded-md p-1 bg-[#070C18]">
+                                                {users.filter(u => u.isActivated && u.id !== currentUser.id && (u.displayName.toLowerCase().includes(inviteSearch.toLowerCase()) || u.id.toLowerCase().includes(inviteSearch.toLowerCase()) || getTags(u).some(t => t.toLowerCase().includes(inviteSearch.toLowerCase())))).map(u => (
+                                                    <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-[#0F2547] rounded-lg cursor-pointer transition-colors border border-transparent hover:border-[#1E3A5F]">
+                                                        <input type="checkbox" checked={invitees.includes(u.id)} onChange={(e) => { if (e.target.checked) setInvitees([...invitees, u.id]); else setInvitees(invitees.filter(id => id !== u.id)); }} className="accent-amber-500 w-3 h-3" />
+                                                        <Avatar user={u} size="xs" />
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[10px] font-bold text-slate-200 truncate">{u.displayName}</span>
+                                                            <span className="text-[9px] text-slate-500 font-mono">{u.id}</span>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            {invitees.length > 0 && <div className="text-[10px] font-bold text-amber-400 text-right mt-1">เลือกผู้รับคำเชิญแล้ว {invitees.length} คน</div>}
+                                        </div>
+
+                                        <label className="flex items-center gap-2 cursor-pointer text-[11px] mt-2 p-2.5 bg-sky-950/30 rounded-xl border border-sky-900/50 hover:bg-sky-900/50 transition-colors">
+                                            <input type="checkbox" name="promo" defaultChecked className="accent-sky-500 w-4 h-4" />
+                                            <span className="text-sky-200 font-bold">ประกาศโปรโมตลง Board อัตโนมัติ</span>
                                         </label>
-                                        <button type="submit" className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg text-sm mt-4">สร้างกิจกรรม</button>
+
+                                        <button type="submit" className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl text-sm mt-4 shadow-lg hover:shadow-sky-500/20 transition-all">✅ ยืนยันสร้างกิจกรรม</button>
                                     </form>
                                 </div>
                             )}
@@ -3802,6 +4001,23 @@
       }, []);
 
       const pingRef = useRef(0);
+      // 📅 Event Invite RSVP Handler
+      const updateEventRSVP = async (eventId, status) => {
+        if(!currentUser) return alert('กรุณาเข้าสู่ระบบก่อน');
+        const doc = await db.collection('bma_events').doc(eventId).get();
+        if(!doc.exists) return alert('ไม่พบกิจกรรมนี้ (อาจถูกลบหรือยกเลิกไปแล้ว)');
+        const ev = doc.data();
+        let going = ev.going || [];
+        let maybe = ev.maybe || [];
+        going = going.filter(id => id !== currentUser.id);
+        maybe = maybe.filter(id => id !== currentUser.id);
+        
+        if (status === 'going') going.push(currentUser.id);
+        if (status === 'maybe') maybe.push(currentUser.id);
+        
+        await db.collection('bma_events').doc(eventId).update({ going, maybe });
+        alert(status === 'decline' ? 'ปฏิเสธคำเชิญเรียบร้อย' : 'ตอบรับคำเชิญเรียบร้อยแล้ว!');
+      };
       const updateActivity = useCallback(() => {
          if(!currentUser) return;
          const now = Date.now();
@@ -5583,6 +5799,33 @@
                     if (msg.dailyGameShare) {
                       const pa = getAuthor(msg.senderId);
                       return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">{msg.text}</p></div></div><button onClick={() => { setActiveGameTab(msg.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform">🎮 ท้าดวลเกมนี้เลย</button></div>;
+                    }
+                     if (msg.isEventInvite) {
+                      const pa = getAuthor(msg.senderId);
+                      return (
+                        <div key={msg.id} className="p-3.5 card border-emerald-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50 w-full max-w-[280px]">
+                           <div className="flex items-center gap-3">
+                              <Avatar user={pa} size="sm" showStatus={true} />
+                              <div>
+                                 <div className="flex items-center gap-1.5"><span className="text-xs font-bold text-emerald-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div>
+                                 <p className="text-xs mt-0.5 font-bold text-white">📅 ชวนเข้าร่วมกิจกรรม</p>
+                              </div>
+                           </div>
+                           <div className="bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] text-xs shadow-inner mt-1">
+                              <div className="font-bold text-sky-200 mb-1.5 leading-snug">{msg.eventName}</div>
+                              <div className="text-slate-400 text-[10px] flex items-center gap-1.5">
+                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]">📍 {msg.eventDate}</span>
+                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]">🕒 {msg.eventTime}</span>
+                              </div>
+                           </div>
+                           	{/* ปุ่มตอบรับ (RSVP) */}
+                           <div className="flex gap-1.5 mt-1.5">
+                              <button onClick={() => updateEventRSVP(msg.eventId, 'going')} className="flex-1 btn-w text-[10px] py-1.5 shadow-md hover:bg-emerald-500 hover:text-white hover:border-transparent transition-colors">✓ ไป</button>
+                              <button onClick={() => updateEventRSVP(msg.eventId, 'maybe')} className="flex-1 btn-d text-[10px] py-1.5 border-amber-500/50 text-amber-300 hover:bg-amber-900 transition-colors">🤷 อาจจะ</button>
+                              <button onClick={() => updateEventRSVP(msg.eventId, 'decline')} className="flex-1 btn-d text-[10px] py-1.5 border-red-500/50 text-red-300 hover:bg-red-900 transition-colors">✕ ไม่ไป</button>
+                           </div>
+                        </div>
+                      );
                     }
                     const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
                     return (
