@@ -3380,6 +3380,279 @@
         );
     };
 
+    const SoilPhaseCalculator = () => {
+        const [mode, setMode] = useState('w_Gs_bulk');
+        const [Gs, setGs] = useState(2.65);
+        const [w, setW] = useState(15); // %
+        const [bulk, setBulk] = useState(1.95); // t/m3
+        const [eInput, setEInput] = useState(0.65); 
+
+        let V_s = 1, V_w = 0, V_a = 0, V_v = 0, V_t = 0;
+        let W_s = 0, W_w = 0, W_a = 0, W_t = 0;
+        let S = 0, n = 0, gamma_d = 0, e = 0, error = '';
+
+        try {
+            W_s = Gs * 1; // สมมติให้น้ำหนักจำเพาะของน้ำ = 1 t/m³
+
+            if (mode === 'w_Gs_bulk') {
+                e = (Gs * (1 + w / 100)) / bulk - 1;
+                if (e < 0) error = '⚠️ ข้อมูลไม่สอดคล้องกัน (e < 0)';
+            } else if (mode === 'w_Gs_e') {
+                e = eInput;
+            }
+
+            if (!error) {
+                V_v = e;
+                V_t = 1 + e;
+                n = e / V_t;
+                
+                W_w = (w / 100) * W_s;
+                V_w = W_w / 1; 
+                V_a = V_v - V_w;
+                
+                if (V_a < -0.001) error = '⚠️ ข้อมูลเป็นไปไม่ได้ (น้ำล้นช่องว่าง S > 100%)';
+                if (V_a < 0) V_a = 0; 
+                
+                S = (V_w / V_v) * 100;
+                W_t = W_s + W_w;
+                gamma_d = W_s / V_t;
+            }
+        } catch(err) { error = 'เกิดข้อผิดพลาดในการคำนวณ'; }
+
+        // คำนวณ % ความสูงสำหรับการวาดกราฟิก
+        const h_a = (V_a / V_t) * 100;
+        const h_w = (V_w / V_t) * 100;
+        const h_s = (V_s / V_t) * 100;
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-4">
+                    <div>
+                        <label className="text-xs text-sky-400 font-bold">ข้อมูลที่ทราบค่า (Known Parameters)</label>
+                        <select value={mode} onChange={e=>setMode(e.target.value)} className="w-full inp mt-1 text-sm bg-[#050811]">
+                            <option value="w_Gs_bulk">ทราบ w, Gs, และ γ (Bulk Unit Weight)</option>
+                            <option value="w_Gs_e">ทราบ w, Gs, และ e (Void Ratio)</option>
+                        </select>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="text-[10px] text-slate-400 font-bold">Gs (Specific Gravity)</label>
+                            <input type="number" min="1" step="0.01" value={Gs} onChange={e=>setGs(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-slate-400 font-bold">w (Water Content, %)</label>
+                            <input type="number" min="0" step="0.1" value={w} onChange={e=>setW(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
+                        </div>
+                        {mode === 'w_Gs_bulk' ? (
+                            <div>
+                                <label className="text-[10px] text-slate-400 font-bold">γ (Bulk, t/m³)</label>
+                                <input type="number" min="0.1" step="0.01" value={bulk} onChange={e=>setBulk(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono border-amber-500/50 bg-amber-950/20" />
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="text-[10px] text-slate-400 font-bold">e (Void Ratio)</label>
+                                <input type="number" min="0.1" step="0.01" value={eInput} onChange={e=>setEInput(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono border-amber-500/50 bg-amber-950/20" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-6 relative overflow-hidden flex flex-col items-center shadow-lg">
+                    {error ? (
+                        <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded-xl border border-red-900/50 w-full text-center">{error}</div>
+                    ) : (
+                        <div className="flex flex-col md:flex-row w-full gap-8 items-center justify-center">
+                            {/* Phase Diagram Graphic */}
+                            <div className="relative w-48 h-64 flex shrink-0 font-mono text-[10px] font-bold">
+                                {/* Volumes (Left) */}
+                                <div className="w-16 h-full flex flex-col pr-2 text-right">
+                                    <div className="w-full border-b border-slate-600 border-t" style={{height: `${h_a}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-sky-200">Va={V_a.toFixed(3)}</span></div>
+                                    <div className="w-full border-b border-slate-600" style={{height: `${h_w}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-blue-300">Vw={V_w.toFixed(3)}</span></div>
+                                    <div className="w-full border-b border-slate-600" style={{height: `${h_s}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-amber-600">Vs={V_s.toFixed(3)}</span></div>
+                                </div>
+                                
+                                {/* Diagram Boxes */}
+                                <div className="flex-1 h-full border-2 border-slate-500 rounded-sm overflow-hidden flex flex-col shadow-2xl">
+                                    <div className="w-full bg-transparent flex items-center justify-center text-slate-400 tracking-widest" style={{height: `${h_a}%`}}>AIR</div>
+                                    <div className="w-full bg-blue-900/60 border-t-2 border-slate-500 flex items-center justify-center text-blue-200 tracking-widest" style={{height: `${h_w}%`}}>WATER</div>
+                                    <div className="w-full bg-amber-900/80 border-t-2 border-slate-500 flex items-center justify-center text-amber-400 tracking-widest bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" style={{height: `${h_s}%`}}>SOLID</div>
+                                </div>
+
+                                {/* Weights (Right) */}
+                                <div className="w-16 h-full flex flex-col pl-2 text-left">
+                                    <div className="w-full border-b border-slate-600 border-t" style={{height: `${h_a}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-slate-500">Wa=0</span></div>
+                                    <div className="w-full border-b border-slate-600" style={{height: `${h_w}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-blue-300">Ww={W_w.toFixed(3)}</span></div>
+                                    <div className="w-full border-b border-slate-600" style={{height: `${h_s}%`}}><span className="relative top-1/2 -translate-y-1/2 block text-amber-600">Ws={W_s.toFixed(3)}</span></div>
+                                </div>
+                            </div>
+                            
+                            {/* Results Table */}
+                            <div className="flex-1 w-full grid grid-cols-2 gap-3 text-xs">
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <span className="text-slate-400 block mb-0.5">Void Ratio (e)</span>
+                                    <span className="font-bold font-mono text-emerald-400 text-lg">{e.toFixed(3)}</span>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <span className="text-slate-400 block mb-0.5">Porosity (n)</span>
+                                    <span className="font-bold font-mono text-emerald-400 text-lg">{(n*100).toFixed(1)} <span className="text-[10px]">%</span></span>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <span className="text-slate-400 block mb-0.5">Degree of Saturation (S)</span>
+                                    <span className="font-bold font-mono text-emerald-400 text-lg">{S.toFixed(1)} <span className="text-[10px]">%</span></span>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <span className="text-slate-400 block mb-0.5">Dry Unit Wt. (γ_d)</span>
+                                    <span className="font-bold font-mono text-white text-lg">{gamma_d.toFixed(3)} <span className="text-[10px]">t/m³</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const SoilStrengthCalculator = () => {
+        const [testMode, setTestMode] = useState('direct'); // direct, triaxial, uct
+        const [d1, setD1] = useState({ s: 50, t: 65 });
+        const [d2, setD2] = useState({ s: 100, t: 90 });
+        const [d3, setD3] = useState({ s: 200, t: 140 });
+        const [t1, setT1] = useState({ s3: 50, s1: 150 });
+        const [t2, setT2] = useState({ s3: 100, s1: 300 });
+        const [t3, setT3] = useState({ s3: 200, s1: 600 }); // ใช้ข้อมูลพื้นฐานตามรหัสนักศึกษา/ตัวเลขเชิงวิชาการ
+        const [qu, setQu] = useState(120); // UCT
+        const [useThreePts, setUseThreePts] = useState(true);
+
+        let c = 0, phi = 0, circles = [], maxS = 100, error = '';
+
+        const linReg = (pts) => {
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, n = pts.length;
+            pts.forEach(p => { sumX += p.x; sumY += p.y; sumXY += p.x*p.y; sumXX += p.x*p.x; });
+            const m = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX);
+            const b = (sumY - m*sumX) / n;
+            return {m, b};
+        };
+
+        try {
+            if (testMode === 'direct') {
+                const pts = [d1, d2];
+                if (useThreePts) pts.push(d3);
+                const {m, b} = linReg(pts.map(d => ({x: d.s, y: d.t})));
+                phi = Math.atan(m) * (180 / Math.PI);
+                c = b;
+                maxS = Math.max(...pts.map(d => d.s)) * 1.2;
+            } else if (testMode === 'triaxial') {
+                const pts = [t1, t2];
+                if (useThreePts) pts.push(t3);
+                const reg = linReg(pts.map(d => ({x: d.s3, y: d.s1})));
+                if (reg.m <= 0) { error = 'ข้อมูลไม่สามารถหาจุดตัดความวิบัติได้'; }
+                else {
+                    phi = 2 * (Math.atan(Math.sqrt(reg.m)) * (180 / Math.PI) - 45);
+                    c = reg.b / (2 * Math.sqrt(reg.m));
+                    circles = pts.map(d => ({ cx: (d.s1 + d.s3)/2, r: (d.s1 - d.s3)/2 }));
+                    maxS = Math.max(...pts.map(d => d.s1)) * 1.1;
+                }
+            } else if (testMode === 'uct') {
+                c = qu / 2;
+                phi = 0;
+                circles = [{ cx: qu/2, r: qu/2 }];
+                maxS = qu * 1.2;
+            }
+        } catch(e) { error = 'เกิดข้อผิดพลาดในการคำนวณ'; }
+
+        // สเกลสำหรับการวาด SVG (แปลงค่าหน่วยแรงเป็น Pixel)
+        if (maxS <= 0) maxS = 100;
+        const svgW = 400; const svgH = 220;
+        const scale = (svgW - 50) / maxS;
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-3 text-xs">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-sky-400 font-bold">เลือกวิธีทดสอบ (Test Type)</label>
+                        <select value={testMode} onChange={e=>setTestMode(e.target.value)} className="inp py-1 bg-[#050811]">
+                            <option value="direct">Direct Shear Test</option>
+                            <option value="triaxial">Triaxial Test</option>
+                            <option value="uct">Unconfined Compression Test (UCT)</option>
+                        </select>
+                    </div>
+
+                    {testMode === 'direct' && (
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2 text-center text-slate-400 font-bold"><span className="border-b border-[#1E3A5F] pb-1">Normal Stress (σ)</span><span className="border-b border-[#1E3A5F] pb-1">Shear Stress (τ)</span></div>
+                            <div className="grid grid-cols-2 gap-2"><input type="number" value={d1.s} onChange={e=>setD1({...d1, s:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={d1.t} onChange={e=>setD1({...d1, t:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>
+                            <div className="grid grid-cols-2 gap-2"><input type="number" value={d2.s} onChange={e=>setD2({...d2, s:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={d2.t} onChange={e=>setD2({...d2, t:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>
+                            {useThreePts && <div className="grid grid-cols-2 gap-2"><input type="number" value={d3.s} onChange={e=>setD3({...d3, s:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={d3.t} onChange={e=>setD3({...d3, t:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>}
+                            <label className="flex items-center gap-2 mt-2 text-sky-300 font-bold cursor-pointer"><input type="checkbox" checked={useThreePts} onChange={e=>setUseThreePts(e.target.checked)} className="accent-sky-500" /> ใช้ข้อมูล 3 จุดประเมินค่า</label>
+                        </div>
+                    )}
+
+                    {testMode === 'triaxial' && (
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2 text-center text-slate-400 font-bold"><span className="border-b border-[#1E3A5F] pb-1">Confining Stress (σ3)</span><span className="border-b border-[#1E3A5F] pb-1">Major Principal (σ1)</span></div>
+                            <div className="grid grid-cols-2 gap-2"><input type="number" value={t1.s3} onChange={e=>setT1({...t1, s3:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={t1.s1} onChange={e=>setT1({...t1, s1:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>
+                            <div className="grid grid-cols-2 gap-2"><input type="number" value={t2.s3} onChange={e=>setT2({...t2, s3:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={t2.s1} onChange={e=>setT2({...t2, s1:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>
+                            {useThreePts && <div className="grid grid-cols-2 gap-2"><input type="number" value={t3.s3} onChange={e=>setT3({...t3, s3:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /><input type="number" value={t3.s1} onChange={e=>setT3({...t3, s1:parseFloat(e.target.value)||0})} className="inp text-center font-mono" /></div>}
+                            <label className="flex items-center gap-2 mt-2 text-sky-300 font-bold cursor-pointer"><input type="checkbox" checked={useThreePts} onChange={e=>setUseThreePts(e.target.checked)} className="accent-sky-500" /> ใช้ข้อมูล 3 จุดประเมินค่า</label>
+                        </div>
+                    )}
+
+                    {testMode === 'uct' && (
+                        <div className="flex gap-4 items-center">
+                            <label className="text-slate-400 font-bold">Unconfined Compressive Strength (qu)</label>
+                            <input type="number" value={qu} onChange={e=>setQu(parseFloat(e.target.value)||0)} className="flex-1 inp text-center font-mono" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-4 sm:p-6 overflow-hidden flex flex-col shadow-lg">
+                    {error ? <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded-xl border border-red-900/50 w-full text-center">{error}</div> : (
+                        <>
+                            <div className="grid grid-cols-2 gap-3 text-center mb-6">
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <div className="text-[10px] text-amber-400 font-bold uppercase mb-1">Cohesion (c)</div>
+                                    <div className="text-xl sm:text-2xl font-bold font-mono text-white">{c.toFixed(2)}</div>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <div className="text-[10px] text-sky-400 font-bold uppercase mb-1">Friction Angle (φ)</div>
+                                    <div className="text-xl sm:text-2xl font-bold font-mono text-white">{phi.toFixed(2)}°</div>
+                                </div>
+                            </div>
+
+                            {/* วาดกราฟ Mohr's Circle และ Failure Envelope ด้วย SVG */}
+                            <div className="w-full bg-[#0a101f] border border-slate-700 rounded-xl p-2 relative shadow-inner overflow-x-auto no-scrollbar">
+                                <div className="text-[9px] text-slate-500 absolute top-2 right-4 font-mono font-bold">Mohr-Coulomb Failure Envelope</div>
+                                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full min-w-[300px] h-auto drop-shadow-md">
+                                    {/* กริดและแกน */}
+                                    <g transform={`translate(20, ${svgH - 20}) scale(1, -1)`}>
+                                        <line x1="0" y1="0" x2={svgW-30} y2="0" stroke="#475569" strokeWidth="2" />
+                                        <line x1="0" y1="0" x2="0" y2={svgH-40} stroke="#475569" strokeWidth="2" />
+                                        
+                                        {/* Failure Envelope (τ = c + σ tan φ) */}
+                                        <line x1="0" y1={c * scale} x2={maxS * scale} y2={(c + maxS * Math.tan(phi * Math.PI / 180)) * scale} stroke="#F59E0B" strokeWidth="2.5" />
+                                        
+                                        {/* วาด Mohr's Circles สำหรับ Triaxial / UCT */}
+                                        {(testMode === 'triaxial' || testMode === 'uct') && circles.map((cir, idx) => (
+                                            <circle key={idx} cx={cir.cx * scale} cy="0" r={cir.r * scale} fill="none" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="4 2" />
+                                        ))}
+
+                                        {/* จุดข้อมูล สำหรับ Direct Shear */}
+                                        {testMode === 'direct' && [d1, d2, useThreePts ? d3 : null].filter(Boolean).map((pt, idx) => (
+                                            <circle key={idx} cx={pt.s * scale} cy={pt.t * scale} r="4" fill="#38BDF8" />
+                                        ))}
+                                    </g>
+                                    <text x="25" y="15" fill="#94A3B8" fontSize="10" fontWeight="bold">τ</text>
+                                    <text x={svgW-15} y={svgH-5} fill="#94A3B8" fontSize="10" fontWeight="bold">σ</text>
+                                </svg>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     const LunarSplitter = () => {
         const [subtotal, setSubtotal] = useState(''); const [vat, setVat] = useState(7); const [sc, setSc] = useState(10); const [people, setPeople] = useState(1);
         const st = parseFloat(subtotal) || 0; const serv = st * (sc/100); const v = (st + serv) * (vat/100); const total = st + serv + v; const perPerson = total / Math.max(1, people);
@@ -6644,18 +6917,15 @@
           {/* ASSOCIATION TOOLS VIEW */}
           {currentView === 'tools' && (() => {
               const TOOLS = [
-                  // ของเดิมที่มีอยู่
                   { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
                   { id: 'tuner', category: 'Music & Audio', name: 'Guitar Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
                   { id: 'transposer', category: 'Music & Audio', name: 'Chord Transposer', icon: '🎼', desc: 'เครื่องมือทดคีย์เพลง แปลงคอร์ดยกแผง' },
-                  
-                  // เพิ่มเครื่องมือ Civil ใหม่เข้าไปตรงนี้
                   { id: 'beam', category: 'Civil Engineering', name: 'Beam Calculator', icon: '🏗️', desc: 'คำนวณโมเมนต์และแรงเฉือนสูงสุดของคานแบบง่าย' },
                   { id: 'rc_design', category: 'Civil Engineering', name: 'RC Beam Design', icon: '📏', desc: 'ออกแบบและคำนวณปริมาณเหล็กเสริมคาน (USD)' },
                   { id: 'steel_table', category: 'Civil Engineering', name: 'Steel Table', icon: '🏭', desc: 'ตารางคุณสมบัติเหล็กรูปพรรณ (H-Beam)' },
                   { id: 'concrete', category: 'Civil Engineering', name: 'Concrete Mix', icon: '🧱', desc: 'คำนวณปริมาตรคอนกรีตเผื่อ SF และประเมินวัสดุ' },
-
-                  // ของเดิมที่เหลือ
+		  { id: 'soil_phase', category: 'Geotechnical', name: '3-Phase Diagram', icon: '🌍', desc: 'คำนวณความสัมพันธ์มวลดิน (Void ratio, Saturation)' },
+                  { id: 'mohr_circle', category: 'Geotechnical', name: 'Soil Strength', icon: '📉', desc: 'วิเคราะห์หากำลังรับแรงเฉือนดิน (c, φ) และ Mohr Circle' },
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
@@ -6738,6 +7008,8 @@
                                   {activeTool === 'rc_design' && <RCBeamDesign />}
                                   {activeTool === 'steel_table' && <SteelSectionViewer />}
                                   {activeTool === 'concrete' && <ConcreteCalculator />}
+				  {activeTool === 'soil_phase' && <SoilPhaseCalculator />}
+                                  {activeTool === 'mohr_circle' && <SoilStrengthCalculator />}
                                   {activeTool === 'converter' && <AdvancedUnitConverter />}
                                   {activeTool === 'solver' && <MatrixSolver />}
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
