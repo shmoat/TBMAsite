@@ -5053,7 +5053,7 @@
             <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
               <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon Association</h1><p className="text-[10px] text-slate-400 uppercase">Private Orbit & Community</p></div></button>
               
-              <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-hidden">
+              <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 shrink-0 overflow-x-auto no-scrollbar max-w-[60%] lg:max-w-[70%]">
                 <div className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none" 
                      style={{
                         left: document.getElementById('nav-' + currentView)?.offsetLeft || 4,
@@ -5061,10 +5061,18 @@
                      }}
                 ></div>
 
-                {[['home', '🪐 Home'], ['feed', '📝 Board'], ['chat', '💬 Chat'], ['members', '👥 Members'], ['daily_game', '🎮 Daily Game'], ['discjam', '💿 Disc Jam'], ['tools', '🛠️ Tools']].map(([v, l]) => 
-                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>{l}</button>
+                {[['home', '🪐', 'Home'], ['feed', '📝', 'Board'], ['chat', '💬', 'Chat'], ['members', '👥', 'Members'], ['daily_game', '🎮', 'Daily Game'], ['discjam', '💿', 'Disc Jam'], ['tools', '🛠️', 'Tools']].map(([v, icon, l]) => 
+                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 flex items-center gap-1.5 ${currentView === v ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>
+                      <span className="text-sm">{icon}</span>
+                      <span className="hidden xl:inline">{l}</span>
+                  </button>
                 )}
-                {currentUser?.role === 'admin' && <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>👑 Owner</button>}
+                {currentUser?.role === 'admin' && (
+                    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-300 flex items-center gap-1.5 ${currentView === 'admin' ? 'text-[#050811]' : 'text-slate-300 hover:text-white'}`}>
+                        <span className="text-sm">👑</span>
+                        <span className="hidden xl:inline">Owner</span>
+                    </button>
+                )}
               </nav>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -6396,14 +6404,14 @@
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
               <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
                 {!currentUser ? (
-                  <div className="card p-4 text-xs text-slate-300">
+                  <div className="card p-4 text-xs text-slate-300 bg-[#0B1325] border-[#1E3A5F]">
                     <div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>
                     แสดงเฉพาะโพสต์ที่อนุญาตให้อ่านได้
                   </div>
                 ) : (
-                  <div className="card p-5 flex flex-col items-center text-center space-y-3 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-r from-[#1E3A5F] to-[#0F2547] opacity-50"></div>
-                    <div className="relative z-10"><Avatar user={currentUser} size="lg" showStatus={true} /></div>
+                  <div className="card p-5 flex flex-col items-center text-center space-y-3 relative overflow-hidden bg-[#0B1325] border-[#1E3A5F]">
+                    <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-[#1E3A5F]/80 via-[#0F2547]/50 to-transparent opacity-80"></div>
+                    <div className="relative z-10 mt-2"><Avatar user={currentUser} size="lg" showStatus={true} /></div>
                     <div className="relative z-10">
                       <h3 className="font-bold text-base flex items-center justify-center gap-1.5">{currentUser.displayName} <RoleBadge role={currentUser.role} /></h3>
                       <p className="text-[11px] font-mono text-slate-400 mt-0.5">@{currentUser.username} • {currentUser.id}</p>
