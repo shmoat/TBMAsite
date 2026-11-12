@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>The Blue Moon Association</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z' fill='%230F2547' stroke='%23FFFFFF' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E" />
-  
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#050811" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
   <!-- External Libraries -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -4283,23 +4287,24 @@
                 <div className="bg-[#0B1325] border border-[#1E3A5F] w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-fade-in relative">
                 
                     {/* Header */}
-                    <div className="flex justify-between items-center p-4 border-b border-[#1E3A5F] bg-[#070C18]">
-                        <div className="flex items-center gap-4">
-                            <h2 className="text-xl font-bold text-sky-400 flex items-center gap-2">📅 Association Calendar</h2>
-                            <button onClick={goToToday} className="btn-d text-[10px] py-1 px-3 border-sky-500/50 hover:bg-sky-900/30 text-sky-300">กลับไปวันนี้</button>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border-b border-[#1E3A5F] bg-[#070C18] gap-3 relative">
+                        <div className="flex items-center gap-3 pr-8 w-full sm:w-auto">
+                            <h2 className="text-lg sm:text-xl font-bold text-sky-400 flex items-center gap-1.5 sm:gap-2">📅 <span className="hidden sm:inline">Association Calendar</span><span className="sm:hidden">Calendar</span></h2>
+                            <button onClick={goToToday} className="btn-d text-[10px] py-1 px-2 border-sky-500/50 hover:bg-sky-900/30 text-sky-300 shrink-0 ml-auto sm:ml-0">กลับไปวันนี้</button>
                         </div>
-                        <div className="flex items-center gap-4">
-                            {/* ปุ่มสลับมุมมอง */}
-                            <div className="bg-[#050811] p-1 rounded-lg border border-[#1E3A5F] flex gap-1">
-                                <button onClick={() => setViewMode('month')} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${viewMode === 'month' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ตารางเดือน</button>
-                                <button onClick={() => setViewMode('list')} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${viewMode === 'list' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>แบบรายการ</button>
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                           	 {/* ปุ่มสลับมุมมอง */}
+                            <div className="bg-[#050811] p-1 rounded-lg border border-[#1E3A5F] flex gap-1 w-full sm:w-auto">
+                                <button onClick={() => setViewMode('month')} className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded text-xs font-bold transition-colors ${viewMode === 'month' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ตารางเดือน</button>
+                                <button onClick={() => setViewMode('list')} className={`flex-1 sm:flex-none px-3 py-1.5 sm:py-1 rounded text-xs font-bold transition-colors ${viewMode === 'list' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>แบบรายการ</button>
                             </div>
-                            <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-xl">✕</button>
                         </div>
+                       	 {/* จัดปุ่ม Close ไว้มุมขวาบนสุดเสมอ */}
+                        <button onClick={onClose} className="absolute top-3 right-4 text-slate-400 hover:text-white font-bold text-2xl leading-none p-1">✕</button>
                     </div>
 
                     <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-                        {/* ปฏิทิน */}
+                       	 {/* ปฏิทิน */}
                         <div className="w-full md:w-2/3 flex flex-col p-4 border-r border-[#1E3A5F] overflow-y-auto bg-gradient-to-b from-[#070C18] to-[#050811] custom-scrollbar">
                             <div className="flex justify-between items-center mb-4 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
                                 <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="text-xl hover:text-sky-400 px-4">◀</button>
@@ -6107,27 +6112,37 @@
 
           {/* HEADER NAV */}
           <header className="sticky top-0 z-40 bg-[#070C18]/95 backdrop-blur-md border-b border-[#1E3A5F] shrink-0">
-            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-visible">
-              <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2.5 text-left shrink-0"><Logo s={36} /><div className="hidden sm:block"><h1 className="text-sm md:text-base font-bold uppercase">The Blue Moon</h1><p className="text-[10px] text-slate-400 uppercase">Association</p></div></button>
+            <div className="max-w-7xl mx-auto px-2 sm:px-4 h-16 flex items-center justify-between gap-1 sm:gap-2 overflow-visible">
+              <button onClick={() => changeViewWithTransition('home')} className="flex items-center gap-2 text-left shrink-0">
+                <Logo s={32} />
+                <div className="hidden lg:block"><h1 className="text-sm font-bold uppercase">The Blue Moon</h1><p className="text-[10px] text-slate-400 uppercase">Association</p></div>
+              </button>
               
-              {/* เมนูแบบยืดหดเมื่อ Hover */}
-              <nav className="relative flex items-center gap-1.5 bg-[#050811] border border-[#1E3A5F] rounded-full p-1.5 shrink-0 overflow-hidden">
+              {/* เมนูแบบยืดหดเมื่อ Hover (บนมือถือจะแสดงเฉพาะไอคอนและเลื่อนซ้ายขวาได้) */}
+              <nav className="relative flex items-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 flex-1 overflow-x-auto no-scrollbar mx-1 sm:mx-2">
+                <div className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none hidden md:block" 
+                     style={{
+                        left: document.getElementById('nav-' + currentView)?.offsetLeft || 4,
+                        width: document.getElementById('nav-' + currentView)?.offsetWidth || 0
+                     }}
+                ></div>
+
                 {[['home', '🪐', 'Home'], ['feed', '📝', 'Board'], ['chat', '💬', 'Chat'], ['members', '👥', 'Members'], ['daily_game', '🎮', 'Daily Game'], ['discjam', '💿', 'Disc Jam'], ['tools', '🛠️', 'Tools']].map(([v, icon, l]) => 
-                  <button key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center ${currentView === v ? 'text-[#050811] bg-white shadow-md' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
-                      <span className="text-sm shrink-0">{icon}</span>
-                      <span className={`overflow-hidden transition-all duration-300 flex items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>{l}</span>
+                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === v ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+                      <span className="text-sm sm:text-base shrink-0">{icon}</span>
+                      <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>{l}</span>
                   </button>
                 )}
                 {currentUser?.role === 'admin' && (
-                    <button onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
-                        <span className="text-sm shrink-0">👑</span>
-                        <span className={`overflow-hidden transition-all duration-300 flex items-center ${currentView === 'admin' ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>Owner</span>
+                    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+                        <span className="text-sm sm:text-base shrink-0">👑</span>
+                        <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === 'admin' ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>Owner</span>
                     </button>
                 )}
               </nav>
 
-              <div className="flex items-center gap-3 shrink-0">
-                {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                {currentUser && <button onClick={() => setNotifOpen(true)} className="btn-d text-xs font-semibold flex items-center gap-1 px-2 sm:px-3"><span>🔔</span>{unreadNotifs.length > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{unreadNotifs.length}</span>}</button>}
                 
                 {/* Profile Dropdown */}
                 {currentUser ? (
@@ -6150,7 +6165,7 @@
                        </div>
                      )}
                    </div>
-                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="btn-w text-xs">เข้าสู่ระบบ</button>}
+                ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="btn-w text-xs px-3 py-1.5 sm:px-4 sm:py-2">เข้าสู่ระบบ</button>}
               </div>
             </div>
           </header>

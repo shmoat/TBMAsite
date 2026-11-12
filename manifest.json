@@ -1,0 +1,17 @@
+{
+  "name": "The Blue Moon Association",
+  "short_name": "Blue Moon",
+  "description": "Private Orbit & Community",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#050811",
+  "theme_color": "#050811",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z' fill='%230F2547' stroke='%23FFFFFF' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
