@@ -3105,86 +3105,236 @@
     };
     
     const BeamCalculator = () => {
-        const [beamType, setBeamType] = useState('simple'); // simple, cantilever
-        const [loadType, setLoadType] = useState('uniform'); // uniform, point
-        const [L, setL] = useState(5); // Span (m)
-        const [w, setW] = useState(1000); // Load (kg/m หรือ kg)
+        const [L, setL] = useState(10);
+        const [supports, setSupports] = useState([{ id: 's1', x: 0 }, { id: 's2', x: 10 }]);
+        const [pointLoads, setPointLoads] = useState([{ id: 'p1', x: 5, p: 1000 }]);
+        const [uniLoads, setUniLoads] = useState([]);
+        const [result, setResult] = useState(null);
 
-        // คำนวณค่าต่างๆ
-        let Mmax = 0, Vmax = 0;
-        if (beamType === 'simple' && loadType === 'uniform') { Mmax = (w * L * L) / 8; Vmax = (w * L) / 2; }
-        else if (beamType === 'simple' && loadType === 'point') { Mmax = (w * L) / 4; Vmax = w / 2; }
-        else if (beamType === 'cantilever' && loadType === 'uniform') { Mmax = (w * L * L) / 2; Vmax = w * L; }
-        else if (beamType === 'cantilever' && loadType === 'point') { Mmax = w * L; Vmax = Number(w); }
+        // ระบบแก้สมการเชิงเส้น (Gaussian Elimination)
+        const solveLinearSystem = (A, B) => {
+            let n = A.length;
+            for (let i = 0; i < n; i++) {
+                let maxEl = Math.abs(A[i][i]), maxRow = i;
+                for (let k = i + 1; k < n; k++) { if (Math.abs(A[k][i]) > maxEl) { maxEl = Math.abs(A[k][i]); maxRow = k; } }
+                if (maxEl < 1e-10) return null; // Singular Matrix (โครงสร้างไม่สมดุล)
+                for (let k = i; k < n; k++) { let tmp = A[maxRow][k]; A[maxRow][k] = A[i][k]; A[i][k] = tmp; }
+                let tmp = B[maxRow]; B[maxRow] = B[i]; B[i] = tmp;
+                for (let k = i + 1; k < n; k++) {
+                    let c = -A[k][i] / A[i][i];
+                    for (let j = i; j < n; j++) { if (i === j) A[k][j] = 0; else A[k][j] += c * A[i][j]; }
+                    B[k] += c * B[i];
+                }
+            }
+            let x = new Array(n).fill(0);
+            for (let i = n - 1; i > -1; i--) {
+                x[i] = B[i] / A[i][i];
+                for (let k = i - 1; k > -1; k--) B[k] -= A[k][i] * x[i];
+            }
+            return x;
+        };
+
+        // คำนวณปฏิกิริยา (Reactions) ด้วย Macaulay's Method
+        const calculateBeam = () => {
+            let n = supports.length;
+            if (n < 2) return setResult({ error: "⚠️ ต้องการ Support อย่างน้อย 2 จุด เพื่อให้คานมีเสถียรภาพ" });
+            
+            let A = Array(n + 2).fill(0).map(() => Array(n + 2).fill(0));
+            let B = Array(n + 2).fill(0);
+
+            // Eq 1: Sum Fy = 0
+            let totalP = pointLoads.reduce((s, p) => s + p.p, 0);
+            let totalW = uniLoads.reduce((s, w) => s + w.w * (w.x2 - w.x1), 0);
+            for (let i = 0; i < n; i++) A[0][i] = 1;
+            B[0] = totalP + totalW;
+
+            // Eq 2: Sum M = 0
+            let totalMP = pointLoads.reduce((s, p) => s + p.p * p.x, 0);
+            let totalMW = uniLoads.reduce((s, w) => s + w.w * (Math.pow(w.x2, 2) - Math.pow(w.x1, 2)) / 2, 0);
+            for (let i = 0; i < n; i++) A[1][i] = supports[i].x;
+            B[1] = totalMP + totalMW;
+
+            // Eq 3 to n+2: Deflection at supports = 0
+            const mac = (x, a, pow) => x > a ? Math.pow(x - a, pow) : 0;
+            for (let k = 0; k < n; k++) {
+                let xk = supports[k].x;
+                for (let i = 0; i < n; i++) A[k + 2][i] = mac(xk, supports[i].x, 3) / 6;
+                A[k + 2][n] = xk; A[k + 2][n + 1] = 1;
+
+                let pTerm = pointLoads.reduce((s, p) => s + p.p * mac(xk, p.x, 3) / 6, 0);
+                let wTerm = uniLoads.reduce((s, w) => s + w.w * mac(xk, w.x1, 4) / 24 - w.w * mac(xk, w.x2, 4) / 24, 0);
+                B[k + 2] = pTerm + wTerm;
+            }
+
+            let X = solveLinearSystem(A, B);
+            if (!X) return setResult({ error: "⚠️ โครงสร้างไม่สมดุล (Unstable) หรือตำแหน่ง Support ทับซ้อนกัน" });
+
+            let reacs = supports.map((s, i) => ({ ...s, r: X[i] }));
+            
+            // สร้างจุดวาดกราฟ SFD, BMD
+            const getV = (x) => reacs.reduce((s, r) => s + (x >= r.x ? r.r : 0), 0) - pointLoads.reduce((s, p) => s + (x >= p.x ? p.p : 0), 0) - uniLoads.reduce((s, w) => s + w.w * (x > w.x1 ? (Math.min(x, w.x2) - w.x1) : 0), 0);
+            const getM = (x) => reacs.reduce((s, r) => s + (x > r.x ? r.r * (x - r.x) : 0), 0) - pointLoads.reduce((s, p) => s + (x > p.x ? p.p * (x - p.x) : 0), 0) - uniLoads.reduce((s, w) => { if (x <= w.x1) return s; let loadLen = Math.min(x, w.x2) - w.x1; let cgDist = x - (w.x1 + loadLen / 2); return s + (w.w * loadLen) * cgDist; }, 0);
+
+            let critXs = [0, L, ...supports.map(s => s.x), ...pointLoads.map(p => p.x), ...uniLoads.flatMap(w => [w.x1, w.x2])];
+            critXs = Array.from(new Set(critXs)).filter(x => x >= 0 && x <= L).sort((a, b) => a - b);
+            
+            let plotPts = [];
+            let maxV = 0, maxM = 0;
+            
+            critXs.forEach(x => {
+                let dx = 0.0001;
+                if (x > 0) {
+                    let vL = getV(x - dx), mL = getM(x - dx);
+                    plotPts.push({ x, v: vL, m: mL });
+                    if(Math.abs(vL) > maxV) maxV = Math.abs(vL); if(Math.abs(mL) > maxM) maxM = Math.abs(mL);
+                }
+                if (x < L || x === L) {
+                    let vR = getV(x + dx), mR = getM(x + dx);
+                    plotPts.push({ x, v: vR, m: mR });
+                    if(Math.abs(vR) > maxV) maxV = Math.abs(vR); if(Math.abs(mR) > maxM) maxM = Math.abs(mR);
+                }
+            });
+
+            setResult({ reacs, plotPts, maxV, maxM });
+        };
+
+        useEffect(() => { calculateBeam(); }, [L, supports, pointLoads, uniLoads]);
+
+        const downloadReport = () => {
+            if(!result || result.error) return alert('ไม่สามารถสร้าง Report ได้ กรุณาตรวจสอบข้อมูล');
+            let content = `=== THE BLUE MOON ASSOCIATION : STRUCTURAL ANALYSIS REPORT ===\n`;
+            content += `Date: ${new Date().toLocaleString('th-TH')}\n`;
+            content += `Beam Length: ${L} m\n\n`;
+            content += `[ SUPPORTS & REACTIONS ]\n`;
+            result.reacs.forEach((r, i) => content += `Support ${i+1} at x = ${r.x} m : Reaction = ${r.r.toFixed(2)} kg\n`);
+            content += `\n[ MAX INTERNAL FORCES ]\n`;
+            content += `Max Shear Force (V_max): ${result.maxV.toFixed(2)} kg\n`;
+            content += `Max Bending Moment (M_max): ${result.maxM.toFixed(2)} kg-m\n\n`;
+            content += `=== END OF REPORT ===\n`;
+
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `BMA_Beam_Report_${Date.now()}.txt`;
+            a.click(); URL.revokeObjectURL(url);
+        };
+
+        // Helpers สำหรับวาดกราฟิก
+        const svgW = 600, svgH = 150;
+        const scaleX = (x) => (x / L) * (svgW - 40) + 20;
 
         return (
-            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
-                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-4">
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex-1">
-                            <label className="text-xs text-sky-400 font-bold">ประเภทคาน (Beam Type)</label>
-                            <select value={beamType} onChange={e=>setBeamType(e.target.value)} className="w-full inp mt-1 text-sm">
-                                <option value="simple">Simple Beam (คานช่วงเดียว)</option>
-                                <option value="cantilever">Cantilever Beam (คานยื่น)</option>
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <label className="text-xs text-sky-400 font-bold">ประเภทน้ำหนัก (Load Type)</label>
-                            <select value={loadType} onChange={e=>setLoadType(e.target.value)} className="w-full inp mt-1 text-sm">
-                                <option value="uniform">Uniform Load (น้ำหนักแผ่)</option>
-                                <option value="point">Point Load (น้ำหนักจุดกึ่งกลาง/ปลาย)</option>
-                            </select>
-                        </div>
+            <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto">
+                {/* 1. INPUT SECTION */}
+                <div className="bg-[#0B1325] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] shadow-inner space-y-5 text-xs">
+                    <div className="flex justify-between items-center border-b border-[#1E3A5F] pb-3">
+                        <label className="text-sky-400 font-bold text-sm">📏 ความยาวคานรวม (L)</label>
+                        <div className="flex items-center gap-2"><input type="number" min="1" step="0.1" value={L} onChange={e=>setL(parseFloat(e.target.value)||1)} className="w-24 inp font-mono text-center" /> <span className="text-slate-400">เมตร</span></div>
                     </div>
-                    
-                    <div className="flex gap-4">
-                        <div className="flex-1">
-                            <label className="text-xs text-slate-400 font-bold">ความยาวคาน L (เมตร)</label>
-                            <input type="number" min="0.1" step="0.1" value={L} onChange={e=>setL(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
-                        </div>
-                        <div className="flex-1">
-                            <label className="text-xs text-slate-400 font-bold">น้ำหนัก {loadType==='uniform'?'w (kg/m)':'P (kg)'}</label>
-                            <input type="number" min="0" step="10" value={w} onChange={e=>setW(parseFloat(e.target.value)||0)} className="w-full inp mt-1 text-sm font-mono" />
-                        </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center"><label className="text-emerald-400 font-bold">🔼 จุดรองรับ (Supports)</label><button onClick={()=>setSupports([...supports, {id:'s'+Date.now(), x: L/2}])} className="btn-b py-1 px-3 text-[10px]">+ เพิ่ม Support</button></div>
+                        {supports.map((s, i) => (
+                            <div key={s.id} className="flex items-center gap-2 bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
+                                <span className="text-slate-400 w-16">จุดที่ {i+1} : x =</span><input type="number" min="0" max={L} step="0.1" value={s.x} onChange={e=>{let n=[...supports]; n[i].x=parseFloat(e.target.value)||0; setSupports(n);}} className="flex-1 inp font-mono py-1" />
+                                <button onClick={()=>setSupports(supports.filter(x=>x.id!==s.id))} className="text-red-400 font-bold px-2">✕</button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center"><label className="text-amber-400 font-bold">⬇️ แรงกระทำแบบจุด (Point Loads)</label><button onClick={()=>setPointLoads([...pointLoads, {id:'p'+Date.now(), x: L/2, p: 1000}])} className="btn-b py-1 px-3 text-[10px]">+ เพิ่ม Point Load</button></div>
+                        {pointLoads.map((p, i) => (
+                            <div key={p.id} className="flex items-center gap-2 bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
+                                <span className="text-slate-400">x =</span><input type="number" min="0" max={L} step="0.1" value={p.x} onChange={e=>{let n=[...pointLoads]; n[i].x=parseFloat(e.target.value)||0; setPointLoads(n);}} className="w-16 inp font-mono py-1 px-1" />
+                                <span className="text-slate-400 pl-2">P =</span><input type="number" step="10" value={p.p} onChange={e=>{let n=[...pointLoads]; n[i].p=parseFloat(e.target.value)||0; setPointLoads(n);}} className="flex-1 inp font-mono py-1" />
+                                <button onClick={()=>setPointLoads(pointLoads.filter(x=>x.id!==p.id))} className="text-red-400 font-bold px-2">✕</button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center"><label className="text-fuchsia-400 font-bold">⏬ แรงกระทำแบบแผ่ (Uniform Loads)</label><button onClick={()=>setUniLoads([...uniLoads, {id:'u'+Date.now(), x1: 0, x2: L, w: 500}])} className="btn-b py-1 px-3 text-[10px]">+ เพิ่ม Uniform Load</button></div>
+                        {uniLoads.map((u, i) => (
+                            <div key={u.id} className="flex items-center gap-2 bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
+                                <span className="text-slate-400">เริ่ม x =</span><input type="number" min="0" max={L} step="0.1" value={u.x1} onChange={e=>{let n=[...uniLoads]; n[i].x1=parseFloat(e.target.value)||0; setUniLoads(n);}} className="w-14 inp font-mono py-1 px-1" />
+                                <span className="text-slate-400">จบ x =</span><input type="number" min="0" max={L} step="0.1" value={u.x2} onChange={e=>{let n=[...uniLoads]; n[i].x2=parseFloat(e.target.value)||0; setUniLoads(n);}} className="w-14 inp font-mono py-1 px-1" />
+                                <span className="text-slate-400 pl-2">w =</span><input type="number" step="10" value={u.w} onChange={e=>{let n=[...uniLoads]; n[i].w=parseFloat(e.target.value)||0; setUniLoads(n);}} className="flex-1 inp font-mono py-1" />
+                                <button onClick={()=>setUniLoads(uniLoads.filter(x=>x.id!==u.id))} className="text-red-400 font-bold px-2">✕</button>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* แสดงผลกราฟิกและผลลัพธ์แบบไดนามิก */}
-                <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-6 relative overflow-hidden flex flex-col items-center shadow-lg">
-                    <div className="w-full max-w-sm h-32 relative mb-6 border-b-2 border-dashed border-[#1E3A5F]">
-                        {/* รูปวาดคาน */}
-                        <div className={`absolute bottom-0 w-full h-4 ${beamType==='simple'?'bg-sky-600':'bg-emerald-600'} rounded-sm`}></div>
-                        {/* ซัพพอร์ต */}
-                        {beamType === 'simple' && (
-                            <>
-                                <div className="absolute -bottom-3 left-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[12px] border-transparent border-b-slate-400"></div>
-                                <div className="absolute -bottom-3 right-0 w-0 h-0 border-l-[10px] border-r-[10px] border-b-[12px] border-transparent border-b-slate-400"></div>
-                            </>
-                        )}
-                        {beamType === 'cantilever' && (
-                            <div className="absolute -bottom-6 left-0 w-4 h-16 bg-slate-400 border-r-4 border-slate-600"></div>
-                        )}
-                        
-                        {/* น้ำหนักกระทำ */}
-                        {loadType === 'uniform' ? (
-                            <div className="absolute top-4 w-full flex justify-between px-2">
-                                {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="text-amber-400 font-bold text-xl animate-bounce" style={{animationDelay: `${i*0.1}s`}}>↓</div>)}
+                {/* 2. RESULTS & DIAGRAMS */}
+                <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-4 sm:p-6 shadow-2xl space-y-6">
+                    {result?.error ? (
+                        <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded-xl border border-red-900/50 w-full text-center">{result.error}</div>
+                    ) : result && (
+                        <>
+                            <div className="flex justify-between items-center">
+                                <div className="text-sky-300 font-bold text-sm">📊 แผนภาพและผลลัพธ์ (Diagrams)</div>
+                                <button onClick={downloadReport} className="btn-w py-1.5 text-[10px] flex items-center gap-1.5 shadow-lg hover:scale-105">📥 โหลด Report (.txt)</button>
                             </div>
-                        ) : (
-                            <div className={`absolute top-2 ${beamType==='simple'?'left-1/2 -translate-x-1/2':'right-0'} text-amber-400 font-bold text-3xl animate-bounce`}>↓</div>
-                        )}
-                    </div>
-                    
-                    <div className="grid grid-cols-2 w-full gap-4 text-center">
-                        <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
-                            <div className="text-[10px] text-sky-300 font-bold uppercase mb-1">Max Moment (M_max)</div>
-                            <div className="text-xl sm:text-2xl font-bold font-mono text-white">{Mmax.toLocaleString(undefined, {maximumFractionDigits:2})} <span className="text-xs text-slate-400">kg-m</span></div>
-                        </div>
-                        <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
-                            <div className="text-[10px] text-red-300 font-bold uppercase mb-1">Max Shear (V_max)</div>
-                            <div className="text-xl sm:text-2xl font-bold font-mono text-white">{Vmax.toLocaleString(undefined, {maximumFractionDigits:2})} <span className="text-xs text-slate-400">kg</span></div>
-                        </div>
-                    </div>
+
+                            {/* FBD (Free Body Diagram) */}
+                            <div className="w-full bg-[#0a101f] border border-slate-700 rounded-xl p-2 relative overflow-x-auto no-scrollbar">
+                                <div className="text-[10px] text-slate-500 absolute top-2 left-4 font-bold">Free Body Diagram (FBD)</div>
+                                <svg viewBox={`0 0 ${svgW} 120`} className="w-full min-w-[500px] h-auto">
+                                    <line x1={scaleX(0)} y1="60" x2={scaleX(L)} y2="60" stroke="#60A5FA" strokeWidth="8" strokeLinecap="round" />
+                                    {/* Uniform Loads */}
+                                    {uniLoads.map(u => (
+                                        <g key={u.id}>
+                                            <rect x={scaleX(u.x1)} y="30" width={scaleX(u.x2) - scaleX(u.x1)} height="26" fill="#d946ef" opacity="0.3" />
+                                            <text x={scaleX(u.x1 + (u.x2-u.x1)/2)} y="25" fill="#d946ef" fontSize="10" textAnchor="middle" fontWeight="bold">{u.w} kg/m</text>
+                                        </g>
+                                    ))}
+                                    {/* Supports & Reactions */}
+                                    {result.reacs.map((r, i) => (
+                                        <g key={i}>
+                                            <polygon points={`${scaleX(r.x)},64 ${scaleX(r.x)-8},80 ${scaleX(r.x)+8},80`} fill="#34D399" />
+                                            <line x1={scaleX(r.x)} y1="80" x2={scaleX(r.x)} y2="105" stroke="#34D399" strokeWidth="2" markerEnd="url(#arrowUp)" />
+                                            <text x={scaleX(r.x)} y="115" fill="#34D399" fontSize="10" textAnchor="middle" fontWeight="bold">R{i+1}={r.r.toFixed(1)}</text>
+                                        </g>
+                                    ))}
+                                    {/* Point Loads */}
+                                    {pointLoads.map((p, i) => (
+                                        <g key={i}>
+                                            <line x1={scaleX(p.x)} y1="15" x2={scaleX(p.x)} y2="55" stroke="#FBBF24" strokeWidth="2" markerEnd="url(#arrowDown)" />
+                                            <text x={scaleX(p.x)} y="10" fill="#FBBF24" fontSize="10" textAnchor="middle" fontWeight="bold">{p.p} kg</text>
+                                        </g>
+                                    ))}
+                                    <defs>
+                                        <marker id="arrowDown" markerWidth="6" markerHeight="6" refX="3" refY="6" orient="auto"><path d="M0,0 L6,0 L3,6 Z" fill="#FBBF24" /></marker>
+                                        <marker id="arrowUp" markerWidth="6" markerHeight="6" refX="3" refY="0" orient="auto"><path d="M0,6 L6,6 L3,0 Z" fill="#34D399" /></marker>
+                                    </defs>
+                                </svg>
+                            </div>
+
+                            {/* SFD */}
+                            <div className="w-full bg-[#0a101f] border border-slate-700 rounded-xl p-2 relative overflow-x-auto no-scrollbar">
+                                <div className="text-[10px] text-red-400 absolute top-2 left-4 font-bold">Shear Force Diagram (SFD)</div>
+                                <div className="text-[10px] text-slate-400 absolute top-2 right-4 font-mono">V_max = {result.maxV.toFixed(2)} kg</div>
+                                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full min-w-[500px] h-auto">
+                                    <line x1={scaleX(0)} y1={svgH/2} x2={scaleX(L)} y2={svgH/2} stroke="#475569" strokeWidth="1" />
+                                    <polyline points={result.plotPts.map(p => `${scaleX(p.x)},${svgH/2 - (p.v / (result.maxV||1)) * 50}`).join(' ')} fill="none" stroke="#F87171" strokeWidth="2" />
+                                    <polygon points={`${scaleX(0)},${svgH/2} ${result.plotPts.map(p => `${scaleX(p.x)},${svgH/2 - (p.v / (result.maxV||1)) * 50}`).join(' ')} ${scaleX(L)},${svgH/2}`} fill="#F87171" opacity="0.2" />
+                                </svg>
+                            </div>
+
+                            {/* BMD */}
+                            <div className="w-full bg-[#0a101f] border border-slate-700 rounded-xl p-2 relative overflow-x-auto no-scrollbar">
+                                <div className="text-[10px] text-sky-400 absolute top-2 left-4 font-bold">Bending Moment Diagram (BMD)</div>
+                                <div className="text-[10px] text-slate-400 absolute top-2 right-4 font-mono">M_max = {result.maxM.toFixed(2)} kg-m</div>
+                                <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full min-w-[500px] h-auto">
+                                    <line x1={scaleX(0)} y1={svgH/2} x2={scaleX(L)} y2={svgH/2} stroke="#475569" strokeWidth="1" />
+                                    {/* BMD วาดลงล่าง (Positive Moment = Tension at bottom) ตามมาตรฐานโยธา */}
+                                    <polyline points={result.plotPts.map(p => `${scaleX(p.x)},${svgH/2 + (p.m / (result.maxM||1)) * 50}`).join(' ')} fill="none" stroke="#38BDF8" strokeWidth="2" />
+                                    <polygon points={`${scaleX(0)},${svgH/2} ${result.plotPts.map(p => `${scaleX(p.x)},${svgH/2 + (p.m / (result.maxM||1)) * 50}`).join(' ')} ${scaleX(L)},${svgH/2}`} fill="#38BDF8" opacity="0.2" />
+                                </svg>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         );
@@ -3320,19 +3470,37 @@
         const [t, setT] = useState(0.1); // หนา
         const [sf, setSf] = useState(10); // Safety Factor %
 
+        // สภาพแวดล้อมและเงื่อนไขมวลรวม (Mix Design Conditions)
+        const [env, setEnv] = useState('normal'); // normal, marine
+        const [sandMoist, setSandMoist] = useState(2.0); // % ความชื้นทราย
+        const [sandAbsorp, setSandAbsorp] = useState(1.0); // % ดูดซึมน้ำทราย
+        const [stoneMoist, setStoneMoist] = useState(1.0); // % ความชื้นหิน
+        const [stoneAbsorp, setStoneAbsorp] = useState(0.5); // % ดูดซึมน้ำหิน
+
         // คำนวณปริมาตร
         const baseVol = w * l * t;
         const totalVol = baseVol * (1 + (sf / 100));
 
         // ประเมินสัดส่วนวัสดุ (สำหรับคอนกรีตผสมเสร็จหน้างาน สัดส่วน 1:2:4 โครงสร้างทั่วไป)
-        // 1 คิว ใช้ปูน ~320kg (6.4 ถุง), ทราย ~0.52 คิว, หิน ~1.04 คิว, น้ำ ~180 ลิตร
+        // อ้างอิงน้ำหนักแห้งต่อ 1 คิว: ปูน 320kg (6.4 ถุง), ทราย ~830kg (0.52 คิว), หิน ~1600kg (1.04 คิว), น้ำ 180 ลิตร
+        const cementType = env === 'marine' 
+            ? 'ปูนซีเมนต์ประเภท 2 หรือ 5 (ทนซัลเฟต/สัมผัสน้ำทะเล)' 
+            : 'ปูนซีเมนต์ประเภท 1 (งานโครงสร้างทั่วไป)';
+
+        // การปรับแก้ปริมาณน้ำ (Water Adjustment) จากความชื้นมวลรวม
+        const sandFreeWater = ((sandMoist - sandAbsorp) / 100) * 830; // ลิตร(หรือ kg)
+        const stoneFreeWater = ((stoneMoist - stoneAbsorp) / 100) * 1600; 
+        
+        const adjWaterPerCube = 180 - sandFreeWater - stoneFreeWater; // น้ำสุทธิที่ต้องเติมเพิ่ม
+
         const cementBags = Math.ceil(totalVol * 6.4);
         const sand = (totalVol * 0.52).toFixed(2);
         const stone = (totalVol * 1.04).toFixed(2);
-        const water = (totalVol * 180).toFixed(0);
+        const water = (totalVol * adjWaterPerCube).toFixed(0);
 
         return (
             <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                {/* Section 1: Dimensions */}
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner">
                     <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">กว้าง (m)</label><input type="number" min="0" step="0.1" value={w} onChange={e=>setW(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono" /></div>
                     <div className="col-span-1"><label className="text-[10px] text-slate-400 font-bold">ยาว (m)</label><input type="number" min="0" step="0.1" value={l} onChange={e=>setL(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono" /></div>
@@ -3340,6 +3508,44 @@
                     <div className="col-span-3 sm:col-span-1"><label className="text-[10px] text-amber-400 font-bold">เผื่อเหลือ (SF %)</label><input type="number" min="0" max="50" value={sf} onChange={e=>setSf(parseFloat(e.target.value)||0)} className="w-full inp text-sm font-mono border-amber-500/50 bg-amber-950/20 text-amber-300" /></div>
                 </div>
 
+                {/* Section 2: Concrete Mix Conditions */}
+                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-3">
+                    <div>
+                        <label className="text-[10px] text-sky-400 font-bold mb-1 block">สภาพแวดล้อมไซต์งาน (Environment)</label>
+                        <select value={env} onChange={e=>setEnv(e.target.value)} className="w-full inp text-sm bg-[#050811]">
+                            <option value="normal">สภาวะปกติ (Normal Environment)</option>
+                            <option value="marine">สภาวะรุนแรง / ใกล้ทะเล / แช่น้ำ (Marine / High Sulfate)</option>
+                        </select>
+                        <div className="text-[10px] text-emerald-400 mt-1.5 font-bold">💡 แนะนำ: {cementType}</div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 border-t border-[#1E3A5F] pt-3">
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-amber-300 font-bold">สภาพทราย (Fine Agg.)</label>
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="w-16 text-slate-400">ชื้น (MC%)</span>
+                                <input type="number" step="0.1" value={sandMoist} onChange={e=>setSandMoist(parseFloat(e.target.value)||0)} className="flex-1 inp font-mono py-1 px-2" />
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="w-16 text-slate-400">ดูดซึม (Abs%)</span>
+                                <input type="number" step="0.1" value={sandAbsorp} onChange={e=>setSandAbsorp(parseFloat(e.target.value)||0)} className="flex-1 inp font-mono py-1 px-2" />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-slate-300 font-bold">สภาพหิน (Coarse Agg.)</label>
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="w-16 text-slate-400">ชื้น (MC%)</span>
+                                <input type="number" step="0.1" value={stoneMoist} onChange={e=>setStoneMoist(parseFloat(e.target.value)||0)} className="flex-1 inp font-mono py-1 px-2" />
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="w-16 text-slate-400">ดูดซึม (Abs%)</span>
+                                <input type="number" step="0.1" value={stoneAbsorp} onChange={e=>setStoneAbsorp(parseFloat(e.target.value)||0)} className="flex-1 inp font-mono py-1 px-2" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 3: Results */}
                 <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] overflow-hidden shadow-lg">
                     <div className="p-4 border-b border-[#1E3A5F] bg-gradient-to-r from-emerald-900/40 to-transparent flex justify-between items-center">
                         <div>
@@ -3353,8 +3559,9 @@
                     </div>
                     
                     <div className="p-4">
-                        <div className="text-xs text-slate-300 mb-3 font-bold flex items-center gap-2">
+                        <div className="text-xs text-slate-300 mb-3 font-bold flex justify-between items-center">
                             <span>🛒 ประเมินวัสดุผสมหน้างาน (สัดส่วน 1:2:4)</span>
+                            {(sandFreeWater + stoneFreeWater) > 0 && <span className="text-[10px] text-sky-400 bg-sky-950/40 px-2 py-0.5 rounded border border-sky-900/50">💧 ลดน้ำลงจากการปรับแก้ความชื้นแล้ว</span>}
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
                             <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
@@ -3370,8 +3577,8 @@
                                 <div className="font-bold font-mono text-sm text-white mt-1">{stone} <span className="text-[10px]">คิว</span></div>
                             </div>
                             <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]">
-                                <div className="text-2xl mb-1">💧</div><div className="text-[10px] text-slate-400">น้ำสะอาด</div>
-                                <div className="font-bold font-mono text-sm text-white mt-1">{water} <span className="text-[10px]">ลิตร</span></div>
+                                <div className="text-2xl mb-1">💧</div><div className="text-[10px] text-slate-400">น้ำสะอาด (ปรับแก้แล้ว)</div>
+                                <div className="font-bold font-mono text-sm text-sky-300 mt-1">{water} <span className="text-[10px]">ลิตร</span></div>
                             </div>
                         </div>
                     </div>
