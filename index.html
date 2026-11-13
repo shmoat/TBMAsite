@@ -2528,8 +2528,13 @@
         const [bpm, setBpm] = useState(120);
         const [taps, setTaps] = useState([]);
         const [isPlaying, setIsPlaying] = useState(false);
+        const [beats, setBeats] = useState(4); // Time Signature (3/4, 4/4, 6/8)
+        const [subdiv, setSubdiv] = useState(1); // 1=Quarter, 2=Eighth, 3=Triplet, 4=16th
+        const [activeBeat, setActiveBeat] = useState(-1);
+
         const audioCtxRef = useRef(null);
         const nextNoteTimeRef = useRef(0);
+        const currentNoteRef = useRef(0);
         const timerIDRef = useRef(null);
 
         const handleTap = () => {
@@ -2545,46 +2550,97 @@
             }
         };
 
-        const scheduleNote = () => {
+        const scheduleNote = (beatNumber, time) => {
             if (!audioCtxRef.current) return;
             const osc = audioCtxRef.current.createOscillator();
             const gain = audioCtxRef.current.createGain();
             osc.connect(gain); gain.connect(audioCtxRef.current.destination);
-            osc.frequency.value = 800;
-            gain.gain.setValueAtTime(1, nextNoteTimeRef.current);
-            gain.gain.exponentialRampToValueAtTime(0.001, nextNoteTimeRef.current + 0.05);
-            osc.start(nextNoteTimeRef.current);
-            osc.stop(nextNoteTimeRef.current + 0.05);
+            
+            const isAccent = beatNumber === 0;
+            const isMainBeat = beatNumber % subdiv === 0;
+
+            if (isAccent) { osc.frequency.value = 1200; gain.gain.setValueAtTime(1, time); }
+            else if (isMainBeat) { osc.frequency.value = 800; gain.gain.setValueAtTime(0.7, time); }
+            else { osc.frequency.value = 400; gain.gain.setValueAtTime(0.2, time); }
+
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+            osc.start(time);
+            osc.stop(time + 0.05);
+
+            if (isMainBeat) {
+                requestAnimationFrame(() => setActiveBeat(Math.floor(beatNumber / subdiv)));
+            }
         };
 
         const scheduler = () => {
             while (nextNoteTimeRef.current < audioCtxRef.current.currentTime + 0.1) {
-                scheduleNote();
-                nextNoteTimeRef.current += 60.0 / bpm;
+                scheduleNote(currentNoteRef.current, nextNoteTimeRef.current);
+                nextNoteTimeRef.current += (60.0 / bpm) / subdiv;
+                currentNoteRef.current = (currentNoteRef.current + 1) % (beats * subdiv);
             }
             timerIDRef.current = requestAnimationFrame(scheduler);
         };
 
         useEffect(() => {
             if (isPlaying) {
-                if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+                    audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+                }
                 if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+                currentNoteRef.current = 0;
                 nextNoteTimeRef.current = audioCtxRef.current.currentTime + 0.05;
                 scheduler();
-            } else cancelAnimationFrame(timerIDRef.current);
+            } else {
+                cancelAnimationFrame(timerIDRef.current);
+                setActiveBeat(-1);
+            }
             return () => cancelAnimationFrame(timerIDRef.current);
-        }, [isPlaying, bpm]);
+        }, [isPlaying, bpm, beats, subdiv]);
 
         return (
-          <div className="flex flex-col items-center gap-6 py-6">
-            <div className="text-center">
-                <div className="text-6xl font-bold text-sky-400">{bpm} <span className="text-xl text-slate-400">BPM</span></div>
-                <p className="text-xs text-slate-500 mt-2">แตะที่ปุ่ม Tapper ตามจังหวะ หรือเลื่อนปรับเอง</p>
+          <div className="flex flex-col items-center gap-6 py-2 w-full max-w-md mx-auto">
+            {/* Visualizer */}
+            <div className="flex justify-center gap-2 mb-2 w-full h-12">
+                {Array(beats).fill(0).map((_, i) => (
+                    <div key={i} className={`flex-1 rounded-xl transition-all duration-75 border-2 ${activeBeat === i ? (i === 0 ? 'bg-red-500 border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.8)]' : 'bg-emerald-400 border-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.8)]') : 'bg-[#0B1325] border-[#1E3A5F]'}`} />
+                ))}
             </div>
-            <input type="range" min="40" max="240" value={bpm} onChange={(e) => { setBpm(parseInt(e.target.value)); setTaps([]); }} className="w-full max-w-xs accent-sky-500" />
-            <div className="flex gap-4 w-full max-w-xs">
-                <button onClick={handleTap} className="flex-1 py-8 rounded-2xl bg-[#0F2547] border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.3)] active:scale-95 transition-transform text-xl font-bold text-sky-100">👆 TAP</button>
-                <button onClick={() => setIsPlaying(!isPlaying)} className={`flex-1 py-8 rounded-2xl border-2 font-bold text-xl transition-all ${isPlaying ? 'bg-red-500 border-red-400 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-emerald-600 border-emerald-400 text-white'}`}>{isPlaying ? '⏹ STOP' : '▶ PLAY'}</button>
+
+            <div className="text-center bg-[#0B1325] w-full p-6 rounded-2xl border border-[#1E3A5F] shadow-inner relative">
+                <div className="text-6xl font-bold font-mono text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.5)]">{bpm} <span className="text-xl text-slate-400 font-sans">BPM</span></div>
+                <input type="range" min="30" max="250" value={bpm} onChange={(e) => { setBpm(parseInt(e.target.value)); setTaps([]); }} className="w-full mt-4 accent-sky-500" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 w-full">
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase mb-1 block">จังหวะ (Time Signature)</label>
+                    <select value={beats} onChange={e=>setBeats(parseInt(e.target.value))} className="w-full inp text-sm font-bold text-sky-200 text-center">
+                        <option value="2">2/4 (March)</option>
+                        <option value="3">3/4 (Waltz)</option>
+                        <option value="4">4/4 (Standard)</option>
+                        <option value="6">6/8 (Slow Rock)</option>
+                        <option value="7">7/8 (Odd Time)</option>
+                    </select>
+                </div>
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase mb-1 block">การตีย่อย (Subdivision)</label>
+                    <select value={subdiv} onChange={e=>setSubdiv(parseInt(e.target.value))} className="w-full inp text-sm font-bold text-amber-200 text-center">
+                        <option value="1">♩ (Quarter)</option>
+                        <option value="2">♫ (Eighth)</option>
+                        <option value="3">3 (Triplet)</option>
+                        <option value="4">♬ (16th)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="flex gap-4 w-full mt-2">
+                <button onClick={handleTap} className="flex-1 py-4 rounded-xl bg-[#0F2547] border-2 border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.3)] active:scale-95 transition-transform text-lg font-bold text-sky-100 flex flex-col items-center justify-center leading-none">
+                    <span>👆 TAP</span>
+                    <span className="text-[10px] text-sky-300 font-normal mt-1">เคาะหาความเร็ว</span>
+                </button>
+                <button onClick={() => setIsPlaying(!isPlaying)} className={`flex-1 py-4 rounded-xl border-2 font-bold text-lg transition-all shadow-lg ${isPlaying ? 'bg-red-500 border-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'bg-emerald-600 border-emerald-400 text-white'}`}>
+                    {isPlaying ? '⏹ STOP' : '▶ PLAY'}
+                </button>
             </div>
           </div>
         );
@@ -2826,6 +2882,304 @@
                 </div>
             </div>
           </div>
+        );
+    };
+
+    const AdvancedChordStudio = () => {
+        const CIRCLE = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+        const MINORS = ['Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm', 'Cm', 'Gm', 'Dm'];
+        const DIMS = ['Bdim','F#dim','C#dim','G#dim','D#dim','A#dim','E#dim','Cdim','Gdim','Ddim','Adim','Edim'];
+        
+        const [selIdx, setSelIdx] = useState(0); // 0 = C Major
+        const [mood, setMood] = useState('pop');
+
+        // คำนวณหา Diatonic Chords ของคีย์ที่เลือก
+        const getDiatonic = (idx) => {
+            const IV = (idx + 11) % 12; // ย้อนกลับ 1 ขั้นใน Circle of 5ths
+            const V = (idx + 1) % 12;   // เดินหน้า 1 ขั้นใน Circle of 5ths
+            return {
+                I: CIRCLE[idx], ii: MINORS[IV], iii: MINORS[V],
+                IV: CIRCLE[IV], V: CIRCLE[V], vi: MINORS[idx], vii: DIMS[idx]
+            };
+        };
+
+        const d = getDiatonic(selIdx);
+        
+        const MOODS = {
+            pop: { name: 'Pop (สดใส/ติดหู)', prog: [d.I, d.V, d.vi, d.IV], desc: 'สูตรสำเร็จเพลงฮิตพันล้านวิว ฟังง่าย ร้องตามได้สบาย' },
+            rb: { name: 'R&B / Lofi (เท่ๆ/ลอยๆ)', prog: [`${d.ii}7`, `${d.V}7`, `${d.I}maj7`, `${d.vi}7`], desc: 'เพิ่มความ Jazzy และนุ่มนวลด้วยคอร์ดทบเจ็ด (7th chords)' },
+            sad: { name: 'Melancholic (เศร้า/หม่นหมอง)', prog: [d.vi, d.IV, d.I, d.V], desc: 'เริ่มด้วยคอร์ดไมเนอร์ ให้ความรู้สึกหม่นและสิ้นหวัง' },
+            epic: { name: 'Epic (ยิ่งใหญ่/ฮึกเหิม)', prog: [d.vi, d.V, d.IV, d.V], desc: 'สร้างความรู้สึกทรงพลัง เหมาะกับเพลงร็อคหรือเพลงประกอบภาพยนตร์' }
+        };
+
+        const currentMood = MOODS[mood];
+
+        return (
+            <div className="flex flex-col gap-5 py-2 w-full max-w-3xl mx-auto">
+                
+                <div className="flex flex-col md:flex-row gap-6">
+                    {/* Circle of Fifths Graphic */}
+                    <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#0B1325] rounded-xl border border-[#1E3A5F] p-4 shadow-lg">
+                        <div className="text-xs font-bold text-sky-400 uppercase tracking-widest mb-4">Circle of Fifths</div>
+                        <div className="relative w-56 h-56 rounded-full border-4 border-[#1E3A5F] bg-[#050811] shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+                            {/* แกนเชื่อมโยงคีย์ */}
+                            <div className="absolute inset-0 m-auto w-40 h-40 rounded-full border border-slate-700/50"></div>
+                            
+                            {CIRCLE.map((key, i) => {
+                                const angle = (i * 30 - 90) * (Math.PI / 180);
+                                const x = 50 + 40 * Math.cos(angle);
+                                const y = 50 + 40 * Math.sin(angle);
+                                const isSelected = selIdx === i;
+                                const isDiatonic = (i === selIdx || i === (selIdx + 1)%12 || i === (selIdx + 11)%12);
+
+                                return (
+                                    <button 
+                                        key={i} onClick={() => setSelIdx(i)}
+                                        className={`absolute w-10 h-10 -ml-5 -mt-5 rounded-full flex flex-col items-center justify-center font-bold transition-all shadow-md ${isSelected ? 'bg-amber-400 text-amber-950 scale-125 z-20 border-2 border-white' : isDiatonic ? 'bg-sky-700 text-white z-10' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F] hover:bg-sky-900 hover:text-white'}`}
+                                        style={{ left: `${x}%`, top: `${y}%` }}
+                                    >
+                                        <span className="text-[11px] leading-none">{key}</span>
+                                        {isSelected && <span className="text-[7px] leading-none mt-0.5 opacity-70">Major</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-6 text-center">💡 กดเลือกคีย์ที่ต้องการบนวงล้อ เพื่อดูคอร์ดในคีย์</div>
+                    </div>
+
+                    {/* Diatonic Chords */}
+                    <div className="w-full md:w-1/2 flex flex-col gap-3">
+                        <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] p-4 shadow-lg h-full">
+                            <div className="text-xs font-bold text-amber-400 mb-3 border-b border-[#1E3A5F] pb-2">คอร์ดในคีย์ (Diatonic Chords) - {CIRCLE[selIdx]} Major</div>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="bg-sky-900/30 border border-sky-700 p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">I (Tonic)</div>
+                                    <div className="text-lg font-bold text-sky-300">{d.I}</div>
+                                </div>
+                                <div className="bg-[#0B1325] border border-[#1E3A5F] p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">ii</div>
+                                    <div className="text-lg font-bold text-slate-200">{d.ii}</div>
+                                </div>
+                                <div className="bg-[#0B1325] border border-[#1E3A5F] p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">iii</div>
+                                    <div className="text-lg font-bold text-slate-200">{d.iii}</div>
+                                </div>
+                                <div className="bg-emerald-900/30 border border-emerald-700 p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">IV (Subdom)</div>
+                                    <div className="text-lg font-bold text-emerald-300">{d.IV}</div>
+                                </div>
+                                <div className="bg-amber-900/30 border border-amber-700 p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">V (Dominant)</div>
+                                    <div className="text-lg font-bold text-amber-300">{d.V}</div>
+                                </div>
+                                <div className="bg-fuchsia-900/30 border border-fuchsia-700 p-2 rounded text-center">
+                                    <div className="text-[9px] text-slate-400 font-mono">vi (Rel. Minor)</div>
+                                    <div className="text-lg font-bold text-fuchsia-300">{d.vi}</div>
+                                </div>
+                            </div>
+                            <div className="mt-2 bg-red-950/30 border border-red-900/50 p-1.5 rounded text-center flex justify-between px-4 items-center">
+                                <div className="text-[9px] text-slate-400 font-mono">vii° (Diminished)</div>
+                                <div className="text-sm font-bold text-red-300">{d.vii}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Mood-Based Progression Generator */}
+                <div className="bg-gradient-to-br from-[#0B1325] to-[#050811] p-5 rounded-xl border border-[#1E3A5F] shadow-2xl mt-2">
+                    <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
+                        <div className="text-sm font-bold text-white flex items-center gap-2">✨ สร้างทางคอร์ดตามอารมณ์เพลง</div>
+                        <select value={mood} onChange={e=>setMood(e.target.value)} className="inp py-1 bg-[#0F2547] text-xs font-bold text-sky-200">
+                            {Object.entries(MOODS).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
+                        </select>
+                    </div>
+                    
+                    <div className="text-xs text-slate-400 mb-4">{currentMood.desc}</div>
+                    
+                    <div className="flex gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
+                        {currentMood.prog.map((chord, idx) => (
+                            <div key={idx} className="flex-1 min-w-[70px] bg-[#0a101f] border-2 border-slate-600 rounded-xl p-4 flex items-center justify-center shadow-inner relative group hover:border-amber-400 transition-colors">
+                                <span className="text-2xl sm:text-3xl font-bold font-mono text-white group-hover:text-amber-300 transition-colors">{chord}</span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="mt-4 flex gap-2">
+                        <div className="text-[10px] text-slate-500 bg-[#070C18] p-2 rounded border border-[#1E3A5F] w-full text-center">ลองนำคอร์ดชุดนี้ไปเกากีตาร์หรือกดเปียโนดูสิครับ! (ลูปไปเรื่อยๆ)</div>
+                    </div>
+                </div>
+
+            </div>
+        );
+    };
+
+    const RhymeFinder = () => {
+        const [word, setWord] = useState('');
+        const [lang, setLang] = useState('th');
+        const [results, setResults] = useState([]);
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState('');
+
+        // ระบบ Community Dictionary (ดึงข้อมูลจาก Firebase)
+        const [dbRhymes, setDbRhymes] = useState({});
+        const [showAdd, setShowAdd] = useState(false);
+        const [newWord, setNewWord] = useState('');
+        const [newGroup, setNewGroup] = useState('ไอ');
+        const [addMsg, setAddMsg] = useState('');
+
+        // ฐานข้อมูลเริ่มต้น (Hardcoded Base)
+        const THAI_RHYMES_BASE = {
+            'ไอ (แม่ก กา)': ['ใจ', 'ไป', 'ใคร', 'ไกล', 'ให้', 'ไว้', 'ใหม่', 'ใหญ่', 'ไหน', 'ไฟ', 'วัย', 'ชัย', 'ไทย', 'ไร', 'ใกล้'],
+            'อัก (แม่กก)': ['รัก', 'ทัก', 'พัก', 'หนัก', 'มัก', 'หัก', 'ศักดิ์', 'ผลัก', 'สลัก', 'หลัก', 'ภักดิ์', 'ถัก'],
+            'อาว (แม่เกอว)': ['ดาว', 'ขาว', 'ยาว', 'หนาว', 'คราว', 'สาว', 'ก้าว', 'ข้าว', 'พราว', 'ราว', 'กล่าว', 'ร้าว'],
+            'อน (แม่กน)': ['คน', 'จน', 'ทน', 'ชน', 'ฝน', 'หล่น', 'บ่น', 'ตน', 'วน', 'ถนน', 'ผล', 'ดล', 'มนตร์', 'ค้น'],
+            'อาน (แม่กน)': ['งาน', 'นาน', 'ผ่าน', 'บ้าน', 'ร้าน', 'ล้าน', 'หวาน', 'พาน', 'จาน', 'หลาน', 'กาล', 'การ', 'มาร', 'ด้าน'],
+            'เออ (แม่ก กา)': ['เธอ', 'เจอ', 'เผลอ', 'เพ้อ', 'เสมอ', 'เบลอ', 'เก้อ', 'ละเมอ', 'อำเภอ'],
+            'อี (แม่ก กา)': ['ดี', 'มี', 'ปี', 'สี', 'หนี', 'ฟรี', 'ที', 'พี่', 'ชี้', 'หนี้', 'ผี', 'ชี', 'ตี', 'ที่', 'นี่'],
+            'อาย (แม่เกย)': ['ตาย', 'ชาย', 'หมาย', 'สาย', 'ปลาย', 'กาย', 'ขาย', 'คลาย', 'ลาย', 'อาย', 'ทราย', 'ซ้าย', 'ท้าย'],
+            'อง (แม่กง)': ['คง', 'ลง', 'ตรง', 'วง', 'งง', 'ผง', 'ส่ง', 'หลง', 'ทรง', 'ธง', 'ปลง', 'โค้ง', 'โล่ง'],
+            'อาม (แม่กม)': ['งาม', 'ความ', 'ถาม', 'ตาม', 'ยาม', 'ข้าม', 'ห้าม', 'สาม', 'ชาม', 'นาม', 'ขาม'],
+            'อู (แม่ก กา)': ['ดู', 'รู้', 'อยู่', 'คู่', 'สู้', 'หมู', 'หู', 'งู', 'ประตู', 'ครู', 'ปู่', 'หนู', 'กู้'],
+            'เอย (แม่เกย)': ['เลย', 'เคย', 'เผย', 'เฉย', 'เสย', 'เนย', 'เชย', 'เงย', 'เปรย', 'เย้ย', 'เอ่ย'],
+            'ออ (แม่ก กา)': ['รอ', 'ขอ', 'พอ', 'ต่อ', 'ท้อ', 'ล้อ', 'หมอ', 'คอ', 'หอ', 'จอ', 'ข้อ', 'พ้อ', 'ง้อ'],
+            'อาง (แม่กง)': ['บาง', 'ทาง', 'วาง', 'ต่าง', 'ข้าง', 'กว้าง', 'สร้าง', 'ล้าง', 'ร่าง', 'กลาง', 'นาง', 'ยาง', 'จาง'],
+            'อิง (แม่กง)': ['จริง', 'สิ่ง', 'ยิ่ง', 'หญิง', 'ทิ้ง', 'นิ่ง', 'วิ่ง', 'พิง', 'ชิง', 'ปิ้ง', 'ลิง', 'กลิ้ง']
+        };
+
+        // โหลดข้อมูลที่สมาชิกเพิ่มเข้ามาจาก Firebase
+        useEffect(() => {
+            const unsub = db.collection('bma_system').doc('rhyme_dict').onSnapshot(doc => {
+                if (doc.exists) setDbRhymes(doc.data().groups || {});
+            });
+            return () => unsub();
+        }, []);
+
+        // ผสมฐานข้อมูลพื้นฐาน เข้ากับฐานข้อมูลของสมาคม
+        const mergedRhymes = { ...THAI_RHYMES_BASE };
+        Object.keys(dbRhymes).forEach(group => {
+            if (!mergedRhymes[group]) mergedRhymes[group] = [];
+            mergedRhymes[group] = [...new Set([...mergedRhymes[group], ...dbRhymes[group]])];
+        });
+
+        const findRhyme = async () => {
+            if(!word.trim()) return;
+            setLoading(true); setError(''); setResults([]); setShowAdd(false);
+            
+            if(lang === 'en') {
+                try {
+                    const res = await fetch(`https://api.datamuse.com/words?rel_rhy=${word.trim()}`);
+                    const data = await res.json();
+                    if(data.length > 0) setResults(data.slice(0, 40).map(d => d.word));
+                    else setError('❌ ไม่พบคำคล้องจองสำหรับคำนี้');
+                } catch(e) { setError('⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ'); }
+            } else {
+                let foundGroup = null;
+                for(const [group, words] of Object.entries(mergedRhymes)) {
+                    if(words.includes(word.trim())) {
+                        foundGroup = group; break;
+                    }
+                }
+                
+                if(foundGroup) {
+                    setResults(mergedRhymes[foundGroup].filter(w => w !== word.trim()));
+                } else {
+                    setError(`❌ ยังไม่มีคำว่า "${word}" ในฐานข้อมูลของสมาคม`);
+                    setShowAdd(true);
+                    setNewWord(word.trim());
+                }
+            }
+            setLoading(false);
+        };
+
+        const handleAddWordToDict = async () => {
+            if(!newWord.trim()) return;
+            const currentGroupData = dbRhymes[newGroup] || (THAI_RHYMES_BASE[newGroup] || []);
+            
+            if (currentGroupData.includes(newWord.trim())) {
+                setAddMsg('⚠️ คำนี้มีอยู่ในหมวดนี้แล้วครับ'); return;
+            }
+
+            try {
+                await db.collection('bma_system').doc('rhyme_dict').set({
+                    groups: {
+                        ...dbRhymes,
+                        [newGroup]: [...new Set([...(dbRhymes[newGroup] || []), newWord.trim()])]
+                    }
+                }, { merge: true });
+                setAddMsg('✅ เพิ่มคำศัพท์สำเร็จ! (ทุกคนจะสามารถใช้คำนี้ได้ทันที)');
+                setTimeout(() => { setShowAdd(false); setAddMsg(''); setWord(newWord.trim()); findRhyme(); }, 1500);
+            } catch(e) {
+                setAddMsg('❌ เกิดข้อผิดพลาดในการบันทึก');
+            }
+        };
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-lg mx-auto">
+                <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="text-sm text-sky-400 font-bold uppercase tracking-widest">Rhyme Finder ✍️</label>
+                        <div className="flex bg-[#050811] rounded-lg border border-[#1E3A5F] overflow-hidden text-[10px] font-bold">
+                            <button onClick={() => { setLang('th'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'th' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ไทย</button>
+                            <button onClick={() => { setLang('en'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'en' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>EN</button>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            value={word} 
+                            onChange={(e) => setWord(e.target.value)} 
+                            onKeyDown={(e) => { if(e.key === 'Enter') findRhyme(); }}
+                            placeholder={lang === 'th' ? "พิมพ์คำที่ต้องการ (เช่น รัก, ใจ, ดาว)..." : "Type a word (e.g. love, night)..."} 
+                            className="flex-1 inp font-bold text-sm"
+                        />
+                        <button onClick={findRhyme} disabled={loading} className="btn-b text-xs px-4 font-bold shadow-lg">
+                            {loading ? '🔍...' : 'ค้นหา'}
+                        </button>
+                    </div>
+                    {lang === 'th' && (
+                        <div className="text-[9px] text-slate-400 mt-2 flex justify-between items-center">
+                            <span>💡 ฐานข้อมูล Community Dictionary อัปเดตคำศัพท์โดยสมาชิก</span>
+                            <span className="text-emerald-400 font-bold">({Object.values(mergedRhymes).flat().length} คำศัพท์)</span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-gradient-to-b from-[#050811] to-[#0a101f] p-5 rounded-xl border border-[#1E3A5F] shadow-lg min-h-[150px]">
+                    <div className="text-[10px] text-slate-400 font-bold mb-3 border-b border-[#1E3A5F] pb-2 flex justify-between">
+                        <span>ผลลัพธ์คำคล้องจอง (Rhymes)</span>
+                        {results.length > 0 && lang === 'th' && <button onClick={() => setShowAdd(!showAdd)} className="text-sky-300 hover:text-sky-200 underline">+ เพิ่มคำศัพท์เข้าหมวดหมู่นี้</button>}
+                    </div>
+
+                    {showAdd && lang === 'th' && (
+                        <div className="mb-4 bg-[#0F2547] p-3 rounded-lg border border-sky-500/50 shadow-inner text-xs animate-fade-in">
+                            <div className="font-bold text-amber-300 mb-2">ช่วยกันเพิ่มคำศัพท์ใหม่ให้สมาคม! 🧠</div>
+                            <div className="flex gap-2 mb-2">
+                                <input type="text" value={newWord} onChange={e=>setNewWord(e.target.value)} placeholder="คำศัพท์ใหม่..." className="w-1/3 inp py-1 px-2" />
+                                <select value={newGroup} onChange={e=>setNewGroup(e.target.value)} className="flex-1 inp py-1 px-2 bg-[#050811]">
+                                    {Object.keys(mergedRhymes).map(g => <option key={g} value={g}>หมวด: สระ{g}</option>)}
+                                </select>
+                                <button onClick={handleAddWordToDict} className="btn-b py-1 px-3 text-sky-200">บันทึก</button>
+                            </div>
+                            {addMsg && <div className={`font-bold ${addMsg.includes('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{addMsg}</div>}
+                        </div>
+                    )}
+
+                    {error && !showAdd ? (
+                        <div className="text-red-400 text-xs font-bold text-center py-4 bg-red-950/30 rounded border border-red-900/50">{error}</div>
+                    ) : results.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                            {results.map((r, i) => (
+                                <span key={i} className="px-3 py-1.5 bg-[#0F2547] text-sky-200 text-sm font-bold rounded-lg border border-sky-900/50 hover:bg-sky-700 hover:text-white transition-colors cursor-pointer shadow-sm">
+                                    {r}
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        !showAdd && <div className="text-slate-500 text-xs text-center py-8 opacity-50">พิมพ์คำเพื่อค้นหาคำคล้องจองสำหรับเขียนเนื้อเพลง</div>
+                    )}
+                </div>
+            </div>
         );
     };
 
@@ -7463,9 +7817,11 @@
           {/* ASSOCIATION TOOLS VIEW */}
           {currentView === 'tools' && (() => {
               const TOOLS = [
-                  { id: 'bpm', category: 'Music & Audio', name: 'BPM Tapper', icon: '⏱️', desc: 'เคาะเพื่อหาความเร็วเพลง และเปิดให้จังหวะบีท' },
-                  { id: 'tuner', category: 'Music & Audio', name: 'Guitar Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์ตามมาตรฐาน (Standard E)' },
+                  { id: 'bpm', category: 'Music & Audio', name: 'Advanced Metronome', icon: '⏱️', desc: 'เคาะความเร็ว ปรับ Time Signature และ Rhythm Subdivision' },
+                  { id: 'chords', category: 'Music & Audio', name: 'Chord Studio', icon: '🎹', desc: 'วงล้อ Circle of 5ths และสุ่มคอร์ดตามอารมณ์ (Mood Progression)' },
+                  { id: 'tuner', category: 'Music & Audio', name: 'Guitar Tuner', icon: '🎸', desc: 'เทียบเสียงสายกีตาร์และเบส ด้วยการจับคลื่นเสียงไมโครโฟน' },
                   { id: 'transposer', category: 'Music & Audio', name: 'Chord Transposer', icon: '🎼', desc: 'เครื่องมือทดคีย์เพลง แปลงคอร์ดยกแผง' },
+                  { id: 'rhyme', category: 'Music & Audio', name: 'Rhyme Finder', icon: '✍️', desc: 'ตัวช่วยนักแต่งเพลง หาคำคล้องจองสระ-ตัวสะกด ทั้งไทยและอังกฤษ' },
                   { id: 'beam', category: 'Civil Engineering', name: 'Beam Calculator', icon: '🏗️', desc: 'คำนวณโมเมนต์และแรงเฉือนสูงสุดของคานแบบง่าย' },
                   { id: 'rc_design', category: 'Civil Engineering', name: 'RC Beam Design', icon: '📏', desc: 'ออกแบบและคำนวณปริมาณเหล็กเสริมคาน (USD)' },
                   { id: 'steel_table', category: 'Civil Engineering', name: 'Steel Table', icon: '🏭', desc: 'ตารางคุณสมบัติเหล็กรูปพรรณ (H-Beam)' },
@@ -7548,8 +7904,10 @@
 
                               <div className="flex-1 w-full card p-4 sm:p-6 overflow-y-auto bg-[#050811]/50 shadow-inner">
                                   {activeTool === 'bpm' && <BPMTapper />}
+                                  {activeTool === 'chords' && <AdvancedChordStudio />}
                                   {activeTool === 'tuner' && <GuitarTuner />}
                                   {activeTool === 'transposer' && <ChordTransposer />}
+                                  {activeTool === 'rhyme' && <RhymeFinder />}
                                   {activeTool === 'beam' && <BeamCalculator />}
                                   {activeTool === 'rc_design' && <RCBeamDesign />}
                                   {activeTool === 'steel_table' && <SteelSectionViewer />}
