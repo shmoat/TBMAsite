@@ -903,7 +903,7 @@
     // ------------------------------------------
     function SolitaireGame({ dateSeed, onEnd }) {
       const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
-      const [history, setHistory] = useStickyState([], `bma_sol_hist_${dateSeed}`);
+      const [history, setHistory] = useState([]);
       const [initialSt, setInitialSt] = useStickyState(null, `bma_sol_init_${dateSeed}`);
       const [drag, setDrag] = useState(null);
 
