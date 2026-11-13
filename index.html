@@ -5279,7 +5279,6 @@
       const [trackTime, setTrackTime] = useState({ curA: 0, durA: 0, curB: 0, durB: 0 });
       const [showCalendar, setShowCalendar] = useState(false);
       const [bmaEvents, setBmaEvents] = useState([]);
-      const [toolsAnalytics, setToolsAnalytics] = useState({});
  
       // ==========================================
       // 🎃 THEME EFFECTS: HALLOWEEN 🎃
@@ -5689,12 +5688,8 @@
         });
         
         const u9 = db.collection('bma_events').onSnapshot((s) => setBmaEvents(s.docs.map(d => d.data())), () => {});
-
-        const u10 = db.collection('bma_system').doc('tools_analytics').onSnapshot((s) => {
-           if (s.exists) setToolsAnalytics(s.data());
-        });
-
-        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); };
+        
+        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); };
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -8225,32 +8220,7 @@
                                       return (
                                           <button 
                                               key={tool.id} 
-                                              onClick={() => {
-                                                  setActiveTool(tool.id);
-                                                  // ✨ ระบบเก็บสถิติการใช้งานเครื่องมือ ✨
-                                                  if (currentUser) {
-                                                      const statsRef = db.collection('bma_system').doc('tools_analytics');
-                                                      const userTags = getTags(currentUser);
-                                                      const mainTag = userTags.length > 0 ? userTags[0] : 'Others';
-                                                      
-                                                      db.runTransaction(async (transaction) => {
-                                                          const doc = await transaction.get(statsRef);
-                                                          if (!doc.exists) {
-                                                              transaction.set(statsRef, { 
-                                                                  [tool.id]: { total: 1, byUser: { [currentUser.id]: 1 }, byTag: { [mainTag]: 1 } }
-                                                              });
-                                                          } else {
-                                                              const data = doc.data();
-                                                              const toolStat = data[tool.id] || { total: 0, byUser: {}, byTag: {} };
-                                                              transaction.update(statsRef, {
-                                                                  [`${tool.id}.total`]: (toolStat.total || 0) + 1,
-                                                                  [`${tool.id}.byUser.${currentUser.id}`]: (toolStat.byUser?.[currentUser.id] || 0) + 1,
-                                                                  [`${tool.id}.byTag.${mainTag}`]: (toolStat.byTag?.[mainTag] || 0) + 1
-                                                              });
-                                                          }
-                                                      }).catch(err => console.error("Analytics Error: ", err));
-                                                  }
-                                              }}
+                                              onClick={() => setActiveTool(tool.id)}
                                               className={`card p-4 flex flex-col items-start text-left hover:bg-[#0F2547] border border-[#1E3A5F] hover:${catStyle.borderClass} transition-all group`}
                                           >
                                               <div className="flex items-center gap-3 mb-2 w-full">
@@ -8314,609 +8284,9 @@
                   </div>
               );
           })()}
-	  {/* ADMIN VIEW (OWNER COMMAND CENTER) */}
-          {currentView === 'admin' && (
-              <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-6 flex-1 overflow-y-auto">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                          <h2 className="text-2xl font-bold text-amber-400 flex items-center gap-2">👑 ศูนย์บัญชาการสมาคม (Owner Dashboard)</h2>
-                          <p className="text-xs text-slate-400 mt-1">จัดการสมาชิก หมวดหมู่ และภาพรวมของสมาคม The Blue Moon</p>
-                      </div>
-                  </div>
 
-                  {/* สถิติสรุปภาพรวม (Quick Stats) */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg flex items-center gap-4">
-                          <div className="text-3xl bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">👥</div>
-                          <div>
-                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">สมาชิกทั้งหมด</div>
-                              <div className="text-2xl font-bold font-mono text-white">{users.length} <span className="text-xs text-slate-500">คน</span></div>
-                          </div>
-                      </div>
-                      <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg flex items-center gap-4">
-                          <div className="text-3xl bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">🟢</div>
-                          <div>
-                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">ออนไลน์ขณะนี้</div>
-                              <div className="text-2xl font-bold font-mono text-emerald-400">{users.filter(u => u.isOnline).length} <span className="text-xs text-slate-500">คน</span></div>
-                          </div>
-                      </div>
-                      <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg flex items-center gap-4">
-                          <div className="text-3xl bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">📝</div>
-                          <div>
-                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">โพสต์ในระบบ</div>
-                              <div className="text-2xl font-bold font-mono text-sky-400">{posts.length} <span className="text-xs text-slate-500">โพสต์</span></div>
-                          </div>
-                      </div>
-                      <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg flex items-center gap-4">
-                          <div className="text-3xl bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">💬</div>
-                          <div>
-                              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">ข้อความแชตวันนี้</div>
-                              <div className="text-2xl font-bold font-mono text-fuchsia-400">
-                                  {chatMessages.filter(m => new Date(m.timestamp).toDateString() === new Date().toDateString()).length} 
-                                  <span className="text-xs text-slate-500"> ข้อความ</span>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* ฝั่งซ้าย: ตารางรายชื่อสมาชิก */}
-                      <div className="lg:col-span-2 bg-[#0B1325] rounded-xl border border-[#1E3A5F] shadow-lg flex flex-col overflow-hidden">
-                          <div className="p-4 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811]">
-                              <h3 className="font-bold text-sky-300 text-sm">📋 ทะเบียนสมาชิกสมาคม (Member Directory)</h3>
-                              {/* Search Box สำหรับตาราง (ถ้าต้องการกรอง) */}
-                              <div className="relative">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500">🔍</span>
-                                  <input type="text" placeholder="ค้นหา ID, ชื่อ..." onChange={(e) => setToolSearchQ(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] rounded py-1 pl-7 pr-2 text-xs text-white outline-none focus:border-sky-500 w-32 sm:w-48 transition-all" />
-                              </div>
-                          </div>
-                          
-                          <div className="overflow-x-auto">
-                              <table className="w-full text-left text-xs whitespace-nowrap">
-                                  <thead>
-                                      <tr className="bg-[#0F2547] text-slate-400 border-b border-[#1E3A5F]">
-                                          <th className="px-4 py-3 font-bold">Profile</th>
-                                          <th className="px-4 py-3 font-bold">Role</th>
-                                          <th className="px-4 py-3 font-bold">Tag (หมวดหมู่)</th>
-                                          <th className="px-4 py-3 font-bold text-center">สถานะ</th>
-                                          <th className="px-4 py-3 font-bold text-center">จัดการ</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-[#1E3A5F]">
-                                      {users.filter(u => {
-                                          if(!toolSearchQ) return true;
-                                          const q = toolSearchQ.toLowerCase();
-                                          return u.id.toLowerCase().includes(q) || (u.displayName||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q);
-                                      }).map(u => (
-                                          <tr key={u.id} className="hover:bg-[#0a101f] transition-colors group">
-                                              <td className="px-4 py-3 flex items-center gap-3">
-                                                  <Avatar user={u} size="sm" />
-                                                  <div className="flex flex-col">
-                                                      <span className="font-bold text-white flex items-center gap-1.5">{u.displayName} {u.role === 'admin' && '👑'}</span>
-                                                      <span className="text-[10px] text-slate-500 font-mono">{u.id} {u.username ? `(@${u.username})` : ''}</span>
-                                                  </div>
-                                              </td>
-                                              <td className="px-4 py-3">
-                                                  <RoleBadge role={u.role} />
-                                                  {u.role !== 'admin' && u.role !== 'mod' && <span className="text-slate-400 text-[10px]">Member</span>}
-                                              </td>
-                                              <td className="px-4 py-3">
-                                                  <div className="flex flex-wrap gap-1 max-w-[150px]">
-                                                      {getTags(u).map((t, i) => <span key={i} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-sky-200 text-[9px]">{t}</span>)}
-                                                  </div>
-                                              </td>
-                                              <td className="px-4 py-3 text-center">
-                                                  {u.isActivated ? (
-                                                      <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-900/50 text-[10px] font-bold">Activated</span>
-                                                  ) : (
-                                                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold">Pending</span>
-                                                  )}
-                                              </td>
-                                              <td className="px-4 py-3 text-center">
-                                                  {u.id !== 'M000' ? (
-                                                      <button onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} className="bg-[#050811] text-sky-400 border border-sky-900/50 px-2 py-1 rounded text-[10px] hover:bg-sky-600 hover:text-white transition-colors font-bold shadow-sm opacity-50 group-hover:opacity-100">
-                                                          ✏️ จัดการ
-                                                      </button>
-                                                  ) : (
-                                                      <span className="text-[10px] text-amber-500 font-bold bg-amber-950/30 px-2 py-1 rounded">Founder</span>
-                                                  )}
-                                              </td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                          </div>
-                      </div>
-
-                      {/* ฝั่งขวา: ฟอร์มสร้างรหัส และการตั้งค่าอื่นๆ */}
-                      <div className="space-y-6">
-                          {/* สร้างรหัสสมาชิกใหม่ */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-sky-500/30 shadow-lg">
-                              <h3 className="font-bold text-sky-300 text-sm mb-4 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">✨ ออกรหัสประจำตัวสมาชิกใหม่</h3>
-                              <div className="space-y-4">
-                                  <div className="flex gap-2 items-end">
-                                      <div className="flex-1">
-                                          <label className="text-[10px] text-slate-400 font-bold mb-1 block">รหัสที่จะออกถัดไป</label>
-                                          <input type="text" value={newMId} readOnly className="w-full inp bg-[#050811] font-mono text-center text-amber-300 font-bold cursor-not-allowed" />
-                                      </div>
-                                      <button onClick={() => {
-                                          if (users.find(u => u.id === newMId)) return alert('รหัสนี้มีอยู่แล้ว โปรดรีเฟรชหน้าเว็บ');
-                                          const newU = { id: newMId, isActivated: false, memberTag: newMTags[0] || 'Others', memberTags: newMTags, role: 'member' };
-                                          db.collection('bma_users').doc(newMId).set(newU).then(() => {
-                                              const max = users.reduce((m, u) => { const r = String(u.id).match(/^M(\d+)$/i); return r ? Math.max(m, parseInt(r[1], 10)) : m; }, 0);
-                                              setNewMId('M' + String(Math.max(parseInt(newMId.substring(1)), max) + 1).padStart(3, '0'));
-                                              setCopiedId(newMId); setTimeout(() => setCopiedId(null), 3000);
-                                              setActSuccessMsg(`สร้างรหัส ${newMId} เรียบร้อยแล้ว สมาชิกสามารถนำไป Activate ได้เลยครับ`);
-                                              setTimeout(() => setActSuccessMsg(''), 5000);
-                                          });
-                                      }} className="btn-w text-xs px-4 py-2 hover:bg-sky-100 hover:scale-105 transition-all shadow-md">
-                                          ✅ สร้างรหัส
-                                      </button>
-                                  </div>
-                                  
-                                  <div className="space-y-2">
-                                      <label className="text-[10px] text-slate-400 font-bold">กำหนดหมวดหมู่ให้รหัสนี้ (Tag)</label>
-                                      <div className="flex flex-wrap gap-1.5 p-2 bg-[#050811] border border-[#1E3A5F] rounded-lg">
-                                          {newMTags.map(t => (
-                                              <span key={t} className="px-2 py-0.5 rounded-full bg-[#0F2547] border border-sky-900/50 text-sky-200 text-[10px] flex items-center gap-1 shadow-sm">
-                                                  {t}
-                                                  <button onClick={() => setNewMTags(newMTags.filter(x => x !== t))} className="text-red-400 hover:text-red-300 font-bold">✕</button>
-                                              </span>
-                                          ))}
-                                      </div>
-                                      <div className="flex gap-2">
-                                          <input type="text" value={cTag} onChange={e=>setCTag(e.target.value)} placeholder="พิมพ์ Tag ใหม่..." className="flex-1 inp text-xs bg-[#050811]" />
-                                          <button onClick={() => {
-                                              if(!cTag.trim() || newMTags.includes(cTag.trim())) return;
-                                              setNewMTags([...newMTags, cTag.trim()]); setCTag('');
-                                          }} className="btn-b text-xs px-3 shadow-sm border border-[#1E3A5F]">เพิ่ม Tag</button>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1.5 mt-2">
-                                          {PRESET_TAGS.map(t => (
-                                              <button key={t} onClick={() => !newMTags.includes(t) && setNewMTags([...newMTags, t])} className="text-[9px] bg-[#050811] text-slate-400 border border-slate-700 px-2 py-1 rounded hover:bg-slate-800 transition-colors">{t}</button>
-                                          ))}
-                                      </div>
-                                  </div>
-
-                                  {copiedId && <div className="text-emerald-400 text-xs font-bold bg-emerald-950/40 p-2 rounded text-center border border-emerald-900/50 animate-fade-in shadow-inner">สร้างรหัส <b>{copiedId}</b> สำเร็จแล้ว!</div>}
-                                  {actSuccessMsg && <div className="text-sky-300 text-[10px] text-center p-2 border border-sky-900/50 bg-sky-950/20 rounded animate-fade-in">{actSuccessMsg}</div>}
-                              </div>
-                          </div>
-{/* 💬 การจัดการกลุ่มแชต (Group Chat Management) */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-fuchsia-500/30 shadow-lg">
-                              <h3 className="font-bold text-fuchsia-300 text-sm mb-4 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">💬 จัดการกลุ่มแชต (Group Management)</h3>
-                              
-                              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
-                                  {groups.length === 0 ? (
-                                      <div className="text-xs text-slate-500 text-center py-4 border border-dashed border-[#1E3A5F] rounded-lg">ยังไม่มีกลุ่มแชตในระบบ</div>
-                                  ) : groups.map(g => (
-                                      <div key={g.id} className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] flex flex-col gap-2 hover:border-fuchsia-500/30 transition-colors">
-                                          <div className="flex justify-between items-start gap-2">
-                                              <div className="flex-1 min-w-0">
-                                                  <div className="font-bold text-sky-200 text-sm flex items-center gap-1.5 truncate">
-                                                      <span className="text-base">{g.icon || '💬'}</span>
-                                                      {g.name}
-                                                  </div>
-                                                  <div className="text-[9px] text-slate-400 mt-0.5">
-                                                      สร้างโดย: {getAuthor(g.createdBy).displayName} <br/>
-                                                      สมาชิก: {(g.members || []).length} คน
-                                                  </div>
-                                              </div>
-                                              
-                                              {/* ป้ายสถานะ */}
-                                              {g.isArchived && (
-                                                  <span className="shrink-0 bg-slate-800 text-slate-400 border border-slate-700 text-[9px] px-1.5 py-0.5 rounded font-bold">Archived</span>
-                                              )}
-                                          </div>
-                                          
-                                          <div className="flex gap-2 mt-1">
-                                              <button 
-                                                  onClick={() => {
-                                                      const newName = prompt(`แก้ไขชื่อกลุ่ม "${g.name}":`, g.name);
-                                                      if (newName && newName.trim() !== '' && newName !== g.name) {
-                                                          db.collection('bma_groups').doc(g.id).update({ name: newName.trim() })
-                                                              .then(() => alert('เปลี่ยนชื่อกลุ่มสำเร็จ!'))
-                                                              .catch(e => alert('Error: ' + e.message));
-                                                      }
-                                                  }}
-                                                  className="flex-1 bg-[#0F2547] hover:bg-sky-900 text-sky-300 text-[10px] py-1.5 rounded font-bold transition-colors shadow-sm"
-                                              >
-                                                  ✏️ เปลี่ยนชื่อ
-                                              </button>
-                                              
-                                              <button 
-                                                  onClick={() => {
-                                                      if (confirm(`⚠️ ยืนยันการลบกลุ่ม "${g.name}" ถาวรหรือไม่?\n(ข้อความแชตทั้งหมดในกลุ่มนี้จะถูกลบไปด้วย)`)) {
-                                                          // ลบข้อความแชตที่เกี่ยวข้องทั้งหมดก่อน
-                                                          const msgsToDelete = chatMessages.filter(m => m.roomKey === g.id);
-                                                          const batch = db.batch();
-                                                          msgsToDelete.forEach(m => {
-                                                              const ref = db.collection('bma_messages').doc(m.id);
-                                                              batch.delete(ref);
-                                                          });
-                                                          
-                                                          // ลบตัวกลุ่มแชต
-                                                          const grpRef = db.collection('bma_groups').doc(g.id);
-                                                          batch.delete(grpRef);
-                                                          
-                                                          batch.commit()
-                                                              .then(() => alert('ลบกลุ่มและข้อความทั้งหมดเรียบร้อยแล้ว'))
-                                                              .catch(e => alert('Error: ' + e.message));
-                                                      }
-                                                  }}
-                                                  className="flex-1 bg-red-950/40 hover:bg-red-900 text-red-400 hover:text-white text-[10px] py-1.5 rounded font-bold border border-red-900/50 transition-colors shadow-sm"
-                                              >
-                                                  🗑️ ยุบกลุ่ม
-                                              </button>
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                              <div className="text-[9px] text-slate-500 mt-3 text-center bg-[#050811] py-1 rounded border border-[#1E3A5F]">
-                                  💡 กด "ยุบกลุ่ม" เพื่อล้างข้อมูลกลุ่มและข้อความทั้งหมดถาวร
-                              </div>
-                          </div>
-{/* 🌐 การจัดการช่องแชตส่วนกลาง (Official Channels Management) */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-emerald-500/30 shadow-lg">
-                              <div className="flex justify-between items-center mb-4 border-b border-[#1E3A5F] pb-2">
-                                  <h3 className="font-bold text-emerald-300 text-sm flex items-center gap-2">🌐 ช่องแชตส่วนกลาง (Channels)</h3>
-                                  <button onClick={() => setCChOpen(true)} className="bg-emerald-950 text-emerald-400 border border-emerald-900/50 hover:bg-emerald-900 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition-colors">
-                                      + สร้างช่องแชต
-                                  </button>
-                              </div>
-                              
-                              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
-                                  {channels.length === 0 ? (
-                                      <div className="text-xs text-slate-500 text-center py-4 border border-dashed border-[#1E3A5F] rounded-lg">ไม่มีช่องแชตส่วนกลาง</div>
-                                  ) : channels.map(c => (
-                                      <div key={c.id} className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] flex flex-col gap-2 hover:border-emerald-500/30 transition-colors">
-                                          <div className="flex justify-between items-start gap-2">
-                                              <div className="flex-1 min-w-0">
-                                                  <div className="font-bold text-emerald-200 text-sm flex items-center gap-1.5 truncate">
-                                                      <span className="text-base">{c.icon || '💬'}</span>
-                                                      #{c.name}
-                                                  </div>
-                                                  <div className="text-[10px] text-slate-400 mt-1 line-clamp-1">{c.desc || 'ไม่มีคำอธิบาย'}</div>
-                                              </div>
-                                              
-                                              {/* ป้ายสถานะ */}
-                                              <div className="flex flex-col gap-1 items-end shrink-0">
-                                                  {c.isSystemReadOnly ? (
-                                                      <span className="bg-amber-950/50 text-amber-400 border border-amber-900/50 text-[9px] px-1.5 py-0.5 rounded font-bold">📢 Read-only</span>
-                                                  ) : (
-                                                      <span className="bg-sky-950/50 text-sky-400 border border-sky-900/50 text-[9px] px-1.5 py-0.5 rounded font-bold">💬 Chat</span>
-                                                  )}
-                                                  {c.isProtected && <span className="text-[9px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-900/30">🔒 System</span>}
-                                              </div>
-                                          </div>
-                                          
-                                          <div className="flex gap-2 mt-1">
-                                              <button 
-                                                  onClick={() => {
-                                                      const newName = prompt(`แก้ไขชื่อช่อง "#${c.name}":`, c.name);
-                                                      if (newName && newName.trim() !== '' && newName !== c.name) {
-                                                          const newDesc = prompt(`แก้ไขคำอธิบายช่อง:`, c.desc || '');
-                                                          db.collection('bma_channels').doc(c.id).update({ 
-                                                              name: newName.trim().toLowerCase().replace(/\s+/g, '-'),
-                                                              desc: newDesc ? newDesc.trim() : c.desc 
-                                                          })
-                                                          .then(() => alert('อัปเดตช่องแชตสำเร็จ!'))
-                                                          .catch(e => alert('Error: ' + e.message));
-                                                      }
-                                                  }}
-                                                  className="flex-1 bg-[#0F2547] hover:bg-emerald-900 text-emerald-300 text-[10px] py-1.5 rounded font-bold transition-colors shadow-sm"
-                                              >
-                                                  ✏️ แก้ไข
-                                              </button>
-                                              
-                                              <button 
-                                                  onClick={() => {
-                                                      if (c.isProtected) {
-                                                          alert('ไม่อนุญาตให้ลบช่องแชตหลักของระบบ (System Protected) ครับ');
-                                                          return;
-                                                      }
-                                                      if (confirm(`⚠️ ยืนยันการลบช่อง "#${c.name}" ถาวรหรือไม่?\n(ข้อความทั้งหมดจะหายไปและไม่สามารถกู้คืนได้)`)) {
-                                                          const msgsToDelete = chatMessages.filter(m => m.roomKey === c.id);
-                                                          const batch = db.batch();
-                                                          msgsToDelete.forEach(m => {
-                                                              const ref = db.collection('bma_messages').doc(m.id);
-                                                              batch.delete(ref);
-                                                          });
-                                                          
-                                                          const chRef = db.collection('bma_channels').doc(c.id);
-                                                          batch.delete(chRef);
-                                                          
-                                                          batch.commit()
-                                                              .then(() => alert('ลบช่องแชตสำเร็จ'))
-                                                              .catch(e => alert('Error: ' + e.message));
-                                                      }
-                                                  }}
-                                                  className={`flex-1 text-[10px] py-1.5 rounded font-bold border transition-colors shadow-sm ${c.isProtected ? 'bg-[#050811] text-slate-600 border-slate-800 cursor-not-allowed' : 'bg-red-950/40 hover:bg-red-900 text-red-400 hover:text-white border-red-900/50'}`}
-                                              >
-                                                  🗑️ ลบช่อง
-                                              </button>
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-		 	  {/* 📝 ระบบจัดการโพสต์ (Post Moderation) */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-sky-500/30 shadow-lg lg:col-span-1">
-                              <h3 className="font-bold text-sky-300 text-sm mb-4 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">📝 ระบบจัดการเนื้อหา (Post Moderation)</h3>
-                              
-                              <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
-                                  {posts.length === 0 ? (
-                                      <div className="text-xs text-slate-500 text-center py-4 border border-dashed border-[#1E3A5F] rounded-lg">ยังไม่มีโพสต์ในระบบ</div>
-                                  ) : posts.map(p => {
-                                      const author = getAuthor(p.authorId);
-                                      return (
-                                          <div key={p.id} className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] flex flex-col gap-2 hover:border-sky-500/30 transition-colors">
-                                              <div className="flex justify-between items-start gap-2">
-                                                  <div className="flex-1 min-w-0 flex items-start gap-2">
-                                                      <Avatar user={author} size="xs" />
-                                                      <div>
-                                                          <div className="font-bold text-sky-200 text-[10px] truncate">{author.displayName}</div>
-                                                          <div className="text-[10px] text-white mt-0.5 line-clamp-1">{p.title || p.content || (p.attachments?.length > 0 ? '[ไฟล์แนบ]' : 'ไม่มีเนื้อหา')}</div>
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                              
-                                              <div className="flex justify-between items-center mt-1 pt-2 border-t border-[#1E3A5F]">
-                                                  <div className="text-[9px] text-slate-500">{p.createdAt}</div>
-                                                  <div className="flex gap-2">
-                                                      <button 
-                                                          onClick={() => jumpToPost(p.id)}
-                                                          className="bg-[#0F2547] hover:bg-sky-900 text-sky-300 text-[9px] px-2 py-1 rounded font-bold transition-colors shadow-sm"
-                                                      >
-                                                          👀 ดูโพสต์
-                                                      </button>
-                                                      
-                                                      <button 
-                                                          onClick={() => {
-                                                              if (confirm(`⚠️ ยืนยันการลบโพสต์ของ ${author.displayName} ถาวรหรือไม่?`)) {
-                                                                  db.collection('bma_posts').doc(p.id).delete()
-                                                                      .then(() => alert('ลบโพสต์เรียบร้อยแล้ว'))
-                                                                      .catch(e => alert('Error: ' + e.message));
-                                                              }
-                                                          }}
-                                                          className="bg-red-950/40 hover:bg-red-900 text-red-400 hover:text-white text-[9px] px-2 py-1 rounded font-bold border border-red-900/50 transition-colors shadow-sm"
-                                                      >
-                                                          🗑️ ลบ
-                                                      </button>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      );
-                                  })}
-                              </div>
-                              <div className="text-[9px] text-slate-500 mt-3 text-center bg-[#050811] py-1 rounded border border-[#1E3A5F]">
-                                  💡 โพสต์ที่ถูกลบจะไม่สามารถกู้คืนได้ และคอมเมนต์ทั้งหมดจะหายไป
-                              </div>
-                          </div>
-			  {/* 📈 สถิติการใช้งานเครื่องมือ (Tools Analytics) */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-amber-500/30 shadow-lg lg:col-span-1">
-                              <h3 className="font-bold text-amber-300 text-sm mb-4 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">📈 สถิติการใช้งานเครื่องมือ (Tools Analytics)</h3>
-                              
-                              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
-                                  {Object.keys(toolsAnalytics).length === 0 ? (
-                                      <div className="text-xs text-slate-500 text-center py-4 border border-dashed border-[#1E3A5F] rounded-lg">ยังไม่มีข้อมูลการใช้งาน</div>
-                                  ) : Object.entries(toolsAnalytics)
-                                      .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
-                                      .map(([toolId, stat]) => {
-                                         	 // หาชื่อเครื่องมือจาก ID (สมมติว่าเราดึงจากลิสต์ TOOLS หรือใช้ชื่อชั่วคราว)
-                                          const toolName = toolId.replace('_', ' ').toUpperCase(); 
-                                  	        // หา Tag ที่ใช้งานบ่อยสุด
-                                          const topTag = Object.entries(stat.byTag || {}).sort((a,b) => b[1]-a[1])[0] || ['Unknown', 0];
-                                	          // หาสมาชิกที่ใช้งานบ่อยสุด
-                                          const topUser = Object.entries(stat.byUser || {}).sort((a,b) => b[1]-a[1])[0] || ['Unknown', 0];
-                                          
-                                          return (
-                                              <div key={toolId} className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] hover:border-amber-500/30 transition-colors">
-                                                  <div className="flex justify-between items-center mb-2">
-                                                      <span className="font-bold text-amber-200 text-xs">{toolName}</span>
-                                                      <span className="text-xs font-mono font-bold bg-amber-950/50 text-amber-400 px-2 py-0.5 rounded-full border border-amber-900/50">
-                                                          {stat.total} ครั้ง
-                                                      </span>
-                                                  </div>
-                                                  
-                                                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-[#1E3A5F]">
-                                                      <div>
-                                                          <div className="text-[9px] text-slate-500">🏆 ผู้ใช้สูงสุด</div>
-                                                          <div className="text-[10px] text-sky-200 font-bold truncate">
-                                                              {topUser[0] !== 'Unknown' ? getAuthor(topUser[0]).displayName : '-'} ({topUser[1]})
-                                                          </div>
-                                                      </div>
-                                                      <div>
-                                                          <div className="text-[9px] text-slate-500">🏷️ หมวดหมู่สูงสุด</div>
-                                                          <div className="text-[10px] text-fuchsia-300 font-bold truncate">
-                                                              {topTag[0]} ({topTag[1]})
-                                                          </div>
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                          );
-                                      })}
-                              </div>
-                              <div className="text-[9px] text-slate-500 mt-3 text-center bg-[#050811] py-1 rounded border border-[#1E3A5F]">
-                                  💡 ข้อมูลจะถูกอัปเดตแบบเรียลไทม์เมื่อมีสมาชิกเปิดใช้เครื่องมือ
-                              </div>
-                          </div>
-			  {/* 🏆 สถิติกระดานโพสต์ (Board Analytics / Top Posts) */}
-                          <div className="bg-[#0B1325] p-5 rounded-xl border border-rose-500/30 shadow-lg lg:col-span-1 flex flex-col h-full">
-                              <h3 className="font-bold text-rose-300 text-sm mb-4 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">
-                                  🏆 สถิติโพสต์ยอดนิยม (Top Posts)
-                              </h3>
-                              
-                              <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar flex-1">
-                                  {/* Top 3 Likes */}
-                                  <div className="space-y-2">
-                                      <div className="text-[10px] font-bold text-slate-400 bg-[#050811] px-2 py-1 rounded-md border border-[#1E3A5F]">❤️ ยอดกดหัวใจสูงสุด (Top Likes)</div>
-                                      {posts.length === 0 ? (
-                                          <div className="text-[10px] text-slate-500 text-center py-2">ไม่มีข้อมูล</div>
-                                      ) : posts
-                                          .slice()
-                                          .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
-                                          .slice(0, 3)
-                                          .map((p, idx) => {
-                                              if (!p.likes || p.likes.length === 0) return null;
-                                              const author = getAuthor(p.authorId);
-                                              return (
-                                                  <div key={`like-${p.id}`} onClick={() => jumpToPost(p.id)} className="flex items-start justify-between bg-[#050811] p-2.5 rounded-lg border border-[#1E3A5F] hover:border-rose-500/30 cursor-pointer transition-colors group">
-                                                      <div className="flex gap-2 flex-1 min-w-0">
-                                                          <div className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${idx===0 ? 'bg-amber-400 text-amber-950' : idx===1 ? 'bg-slate-300 text-slate-800' : 'bg-amber-700 text-amber-100'}`}>
-                                                              {idx + 1}
-                                                          </div>
-                                                          <div className="flex flex-col min-w-0 flex-1">
-                                                              <div className="text-[10px] font-bold text-slate-200 truncate group-hover:text-rose-300 transition-colors">
-                                                                  {p.title || p.content || (p.attachments?.length > 0 ? '[ไฟล์แนบ]' : 'โพสต์ไม่มีชื่อ')}
-                                                              </div>
-                                                              <div className="text-[9px] text-slate-500 mt-0.5 truncate">โดย {author.displayName}</div>
-                                                          </div>
-                                                      </div>
-                                                      <div className="text-[10px] font-bold text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/50 shrink-0 ml-2">
-                                                          {p.likes.length} ♥
-                                                      </div>
-                                                  </div>
-                                              );
-                                          })
-                                      }
-                                      {posts.every(p => !p.likes || p.likes.length === 0) && <div className="text-[10px] text-slate-500 text-center py-2">ยังไม่มีโพสต์ที่มีคนกดใจ</div>}
-                                  </div>
-
-                                  {/* Top 3 Comments */}
-                                  <div className="space-y-2 pt-2 border-t border-[#1E3A5F]">
-                                      <div className="text-[10px] font-bold text-slate-400 bg-[#050811] px-2 py-1 rounded-md border border-[#1E3A5F]">💬 ยอดคอมเมนต์สูงสุด (Top Discussed)</div>
-                                      {posts.length === 0 ? (
-                                          <div className="text-[10px] text-slate-500 text-center py-2">ไม่มีข้อมูล</div>
-                                      ) : posts
-                                          .slice()
-                                          .sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0))
-                                          .slice(0, 3)
-                                          .map((p, idx) => {
-                                              if (!p.comments || p.comments.length === 0) return null;
-                                              const author = getAuthor(p.authorId);
-                                              return (
-                                                  <div key={`comm-${p.id}`} onClick={() => jumpToPost(p.id)} className="flex items-start justify-between bg-[#050811] p-2.5 rounded-lg border border-[#1E3A5F] hover:border-sky-500/30 cursor-pointer transition-colors group">
-                                                      <div className="flex gap-2 flex-1 min-w-0">
-                                                          <div className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${idx===0 ? 'bg-amber-400 text-amber-950' : idx===1 ? 'bg-slate-300 text-slate-800' : 'bg-amber-700 text-amber-100'}`}>
-                                                              {idx + 1}
-                                                          </div>
-                                                          <div className="flex flex-col min-w-0 flex-1">
-                                                              <div className="text-[10px] font-bold text-slate-200 truncate group-hover:text-sky-300 transition-colors">
-                                                                  {p.title || p.content || (p.attachments?.length > 0 ? '[ไฟล์แนบ]' : 'โพสต์ไม่มีชื่อ')}
-                                                              </div>
-                                                              <div className="text-[9px] text-slate-500 mt-0.5 truncate">โดย {author.displayName}</div>
-                                                          </div>
-                                                      </div>
-                                                      <div className="text-[10px] font-bold text-sky-400 bg-sky-950/40 px-2 py-0.5 rounded border border-sky-900/50 shrink-0 ml-2">
-                                                          {p.comments.length} 💬
-                                                      </div>
-                                                  </div>
-                                              );
-                                          })
-                                      }
-                                      {posts.every(p => !p.comments || p.comments.length === 0) && <div className="text-[10px] text-slate-500 text-center py-2">ยังไม่มีโพสต์ที่มีคนคอมเมนต์</div>}
-                                  </div>
-                              </div>
-                              <div className="text-[9px] text-slate-500 mt-3 text-center bg-[#050811] py-1 rounded border border-[#1E3A5F]">
-                                  💡 กดที่รายการเพื่อกระโดดไปดูโพสต์นั้นบนกระดานทันที
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          )}
-
-	  {/* Modal จัดการสมาชิก (Member Management - สำหรับ Owner) */}
-          {editTagU && (
-              <Modal title={`⚙️ จัดการข้อมูลสมาชิก : ${editTagU.id}`} onClose={() => { setEditTagU(null); setEditTagL([]); }} maxW="max-w-md">
-                  <div className="space-y-5">
-                      {/* Avatar & Basic Info */}
-                      <div className="flex items-center gap-4 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
-                          <Avatar user={editTagU} size="lg" />
-                          <div>
-                              <div className="font-bold text-white text-base">{editTagU.displayName || 'Unactivated Member'}</div>
-                              <div className="text-xs text-slate-400 font-mono">@{editTagU.username || 'pending'}</div>
-                              {editTagU.isActivated ? (
-                                  <div className="text-[9px] text-emerald-400 mt-1">เข้าร่วมเมื่อ: {editTagU.joinedAt}</div>
-                              ) : (
-                                  <div className="text-[9px] text-amber-400 mt-1">ยังไม่ตั้งค่าโปรไฟล์</div>
-                              )}
-                          </div>
-                      </div>
-
-                      {/* เปลี่ยน Role */}
-                      <div className="space-y-2">
-                          <label className="text-xs text-sky-400 font-bold uppercase block border-b border-[#1E3A5F] pb-1">ระดับสิทธิ์ (Role & Permission)</label>
-                          <select 
-                              value={editTagU.role || 'member'} 
-                              onChange={e => setEditTagU({...editTagU, role: e.target.value})} 
-                              className="w-full inp bg-[#0B1325] text-sm text-slate-200"
-                          >
-                              <option value="member">👤 Member (สมาชิกทั่วไป)</option>
-                              <option value="mod">🛡️ Vice (ผู้ดูแล/ผู้ช่วย)</option>
-                              {currentUser?.id === 'M000' && <option value="admin">👑 Owner (ผู้ดูแลระบบสูงสุด)</option>}
-                          </select>
-                          <div className="text-[9px] text-slate-500">💡 Vice จะสามารถปักหมุดโพสต์ ลบข้อความแชต และจัดการกิจกรรมได้</div>
-                      </div>
-
-                      {/* จัดการ Tags */}
-                      <div className="space-y-2">
-                          <label className="text-xs text-sky-400 font-bold uppercase block border-b border-[#1E3A5F] pb-1">หมวดหมู่สมาชิก (Tags)</label>
-                          <div className="flex flex-wrap gap-1.5 p-2 bg-[#0B1325] border border-[#1E3A5F] rounded-lg min-h-[40px]">
-                              {editTagL.map(t => (
-                                  <span key={t} className="px-2 py-1 rounded-full bg-[#0F2547] border border-sky-900/50 text-sky-200 text-xs flex items-center gap-1 shadow-sm">
-                                      {t}
-                                      <button onClick={() => setEditTagL(editTagL.filter(x => x !== t))} className="text-red-400 hover:text-red-300 font-bold pl-1">✕</button>
-                                  </span>
-                              ))}
-                              {editTagL.length === 0 && <span className="text-xs text-slate-500 italic">ยังไม่มีหมวดหมู่</span>}
-                          </div>
-                          <div className="flex gap-2">
-                              <input type="text" value={cTag} onChange={e=>setCTag(e.target.value)} placeholder="พิมพ์ Tag ใหม่..." className="flex-1 inp text-xs bg-[#050811]" />
-                              <button onClick={() => {
-                                  if(!cTag.trim() || editTagL.includes(cTag.trim())) return;
-                                  setEditTagL([...editTagL, cTag.trim()]); setCTag('');
-                              }} className="btn-b text-xs px-3 border-[#1E3A5F]">เพิ่ม Tag</button>
-                          </div>
-                      </div>
-
-                      {/* รีเซ็ตรหัสผ่าน */}
-                      {editTagU.isActivated && (
-                          <div className="space-y-2 pt-2">
-                          <label className="text-xs text-red-400 font-bold uppercase block border-b border-red-900/30 pb-1">อันตราย (Danger Zone)</label>
-                              <button 
-                                  onClick={() => {
-                                      const newPass = prompt(`ตั้งรหัสผ่านใหม่ให้กับ ${editTagU.id} (${editTagU.displayName}):`);
-                                      if (newPass && newPass.trim() !== '') {
-                                          setEditTagU({...editTagU, password: newPass.trim()});
-                                          alert(`รหัสผ่านถูกจำไว้ชั่วคราวแล้ว กรุณากด "บันทึกการเปลี่ยนแปลง" เพื่อยืนยัน`);
-                                      }
-                                  }} 
-                                  className="w-full py-2 bg-red-950/40 text-red-300 border border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-900 hover:text-white transition-colors flex justify-center items-center gap-2"
-                              >
-                                  🔑 บังคับรีเซ็ตรหัสผ่าน (Force Password Reset)
-                              </button>
-                          </div>
-                      )}
-
-                      {/* ปุ่มบันทึก */}
-                      <button onClick={() => {
-                          if (editTagL.length === 0) return alert('ต้องมีอย่างน้อย 1 Tag');
-                          const upd = { ...editTagU, memberTag: editTagL[0], memberTags: editTagL };
-                          db.collection('bma_users').doc(editTagU.id).update(upd).then(() => {
-                              setEditTagU(null); setEditTagL([]);
-                              alert(`บันทึกข้อมูลของ ${editTagU.id} เรียบร้อยแล้ว!`);
-                          }).catch(e => alert('Error: ' + e.message));
-                      }} className="w-full btn-w py-3 text-sm shadow-xl hover:scale-105 transition-transform mt-2">
-                          💾 บันทึกการเปลี่ยนแปลง (Save Changes)
-                      </button>
-                  </div>
-              </Modal>
-          )}
-
-          {/* MAIN POST BOARD / BOOKMARKS */}
-          {(currentView === 'feed' || currentView === 'bookmarks') && (
+          {/* MAIN POST BOARD / BOOKMARKS / ADMIN VIEW */}
+          {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
               <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
                 {!currentUser ? (
@@ -8977,6 +8347,45 @@
               </aside>
 
               <main onScroll={(e) => { const { scrollTop, scrollHeight, clientHeight } = e.target; if (scrollHeight - scrollTop <= clientHeight + 200 && visiblePosts < filteredPosts.length) { setVisiblePosts(v => v + 10); } }} className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2 custom-scrollbar">
+                {currentView === 'admin' && currentUser?.role === 'admin' ? (
+                  <div className="space-y-5 text-xs">
+                    <div className="card p-5 space-y-3">
+                      <h2 className="text-sm font-bold">👑 ออกรหัสประจำตัวสมาชิกใหม่</h2>
+                      {actSuccessMsg && <div className="p-2.5 rounded-xl bg-emerald-950 text-emerald-200 font-bold border border-emerald-800">{actSuccessMsg}</div>}
+                      <form onSubmit={async (e) => { e.preventDefault(); const id = newMId.trim().toUpperCase(); if (!id || users.some((u) => u.id === id)) return alert('รหัสซ้ำ!'); if(id.startsWith('F')) { const suffix = id.substring(1); if(users.some(u => u.id === 'F' + suffix)) return alert('รหัสผู้ติดตามสามารถมี F' + suffix + ' ได้แค่คนเดียวเท่านั้น'); } await db.collection('bma_users').doc(id).set({ id, memberTag: newMTags[0], memberTags: newMTags, role: 'member', isActivated: false, isOnline: false, lastActive: 0, username: '', password: '', displayName: 'รออนุมัติ (' + id + ')', bio: '', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], joinedAt: new Date().toISOString().split('T')[0] }); setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length + 1).padStart(3, '0')); setActSuccessMsg(`ออกรหัส ${id} สำเร็จแล้ว!`); setTimeout(() => setActSuccessMsg(''), 4000); }} className="space-y-3">
+                        <div className="flex gap-2 text-[10px]"><button type="button" onClick={() => setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Member (M)</button><button type="button" onClick={() => setNewMId('F' + String(users.filter(u=>u.id.startsWith('F')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Follower (F)</button></div>
+                        <div className="flex gap-2"><input type="text" value={newMId} onChange={(e) => setNewMId(e.target.value)} className="inp font-mono uppercase w-32" required /><input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มแท็กใหม่..." className="flex-1 inp" /><button type="button" onClick={() => { if (cTag.trim() && !newMTags.includes(cTag.trim())) setNewMTags([...newMTags, cTag.trim()]); setCTag(''); }} className="btn-b">+ แท็ก</button></div>
+                        <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...newMTags])).map((t) => <button type="button" key={t} onClick={() => setNewMTags(newMTags.includes(t) ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} className={newMTags.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{newMTags.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
+                        <button type="submit" className="btn-w">+ สร้างรหัส Member ID</button>
+                      </form>
+                    </div>
+                    <div className="card p-5 space-y-2.5">
+                      {users.map((u) => (
+                        <div key={u.id} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5"><Avatar user={u} size="xs" /><div><div className="flex items-center gap-1.5"><span className="font-mono font-bold">{u.id}</span><TagBadges user={u} /><RoleBadge role={u.role} /></div><div className="font-bold mt-0.5">{u.displayName}</div></div></div>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} className="btn-d text-blue-200 py-1">🏷️ หมวดหมู่</button>
+                            {!u.isActivated && <button onClick={() => { const link = window.location.origin + window.location.pathname; navigator.clipboard.writeText(`ยินดีต้อนรับสู่ The Blue Moon Association 🪐\n\nลิงก์เข้าสู่เว็บไซต์: ${link}\n\nรหัสประจำตัวของคุณคือ: ${u.id}\nกรุณากดที่ "เปิดใช้งาน Member ID" ในหน้าแรกเพื่อตั้งชื่อ Username และรหัสผ่านสำหรับการเข้าใช้งานในครั้งต่อไปครับ`); setCopiedId(u.id); setTimeout(() => setCopiedId(null), 2000); }} className="btn-w py-1 text-[10px]">{copiedId === u.id ? '✓ คัดลอกแล้ว' : 'ส่งให้สมาชิก'}</button>}
+                            {u.role !== 'admin' && u.isActivated && <button onClick={() => db.collection('bma_users').doc(u.id).update({ role: u.role === 'mod' ? 'member' : 'mod' })} className="btn-b py-1">{u.role === 'mod' ? 'ปลด Vice' : '🛡️ ตั้ง Vice'}</button>}
+                            {u.role !== 'admin' && <button onClick={() => confirm('ลบ ' + u.id + '?') && db.collection('bma_users').doc(u.id).delete()} className="px-2 py-1 rounded bg-black text-red-400">ลบ</button>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {editTagU && (
+                      <Modal title={`แก้ไขหมวดหมู่: ${editTagU.id}`} onClose={() => setEditTagU(null)}>
+                        <div className="space-y-3 text-xs">
+                          <div className="flex gap-2 mb-2">
+                             <input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มหมวดหมู่ใหม่..." className="flex-1 inp" />
+                             <button type="button" onClick={() => { if (cTag.trim() && !editTagL.includes(cTag.trim())) setEditTagL([...editTagL, cTag.trim()]); setCTag(''); }} className="btn-b">+ หมวดหมู่ใหม่</button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
+                          <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2 mt-2">บันทึก</button>
+                        </div>
+                      </Modal>
+                    )}
+                  </div>
+                ) : (
                   <>
                     <div className="card p-3.5 space-y-2.5">
                       <div className="flex gap-2">
