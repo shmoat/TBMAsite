@@ -4025,50 +4025,368 @@
     };
 
     const SteelSectionViewer = () => {
-        // ตัวอย่างฐานข้อมูลเหล็ก H-Beam (มอก.)
-        const sections = [
-            { name: 'H-Beam 100x100x6x8', d: 100, bf: 100, tw: 6, tf: 8, r: 10, w: 17.2, a: 21.9, ix: 383, iy: 134, sx: 76.5, sy: 26.7 },
-            { name: 'H-Beam 125x125x6.5x9', d: 125, bf: 125, tw: 6.5, tf: 9, r: 10, w: 23.8, a: 30.3, ix: 847, iy: 293, sx: 136, sy: 46.9 },
-            { name: 'H-Beam 150x150x7x10', d: 150, bf: 150, tw: 7, tf: 10, r: 11, w: 31.5, a: 40.1, ix: 1640, iy: 563, sx: 219, sy: 75.1 },
-            { name: 'H-Beam 200x200x8x12', d: 200, bf: 200, tw: 8, tf: 12, r: 13, w: 49.9, a: 63.5, ix: 4720, iy: 1600, sx: 472, sy: 160 },
-            { name: 'H-Beam 250x250x9x14', d: 250, bf: 250, tw: 9, tf: 14, r: 14, w: 72.4, a: 92.2, ix: 10800, iy: 3650, sx: 867, sy: 292 }
-        ];
-        const [selIdx, setSelIdx] = useState(0);
-        const sel = sections[selIdx];
+        // 1. ฐานข้อมูลเหล็ก (Mockup Database)
+        const DB = {
+            'H-Beam': [
+                { id: 'h1', name: 'H 100x100x6x8', d: 100, bf: 100, tw: 6, tf: 8, w: 17.2, a: 21.9, ix: 383, iy: 134, sx: 76.5, sy: 26.7 },
+                { id: 'h2', name: 'H 125x125x6.5x9', d: 125, bf: 125, tw: 6.5, tf: 9, w: 23.8, a: 30.3, ix: 847, iy: 293, sx: 136, sy: 46.9 },
+                { id: 'h3', name: 'H 150x150x7x10', d: 150, bf: 150, tw: 7, tf: 10, w: 31.5, a: 40.1, ix: 1640, iy: 563, sx: 219, sy: 75.1 },
+                { id: 'h4', name: 'H 200x200x8x12', d: 200, bf: 200, tw: 8, tf: 12, w: 49.9, a: 63.5, ix: 4720, iy: 1600, sx: 472, sy: 160 },
+                { id: 'h5', name: 'H 250x250x9x14', d: 250, bf: 250, tw: 9, tf: 14, w: 72.4, a: 92.2, ix: 10800, iy: 3650, sx: 867, sy: 292 }
+            ],
+            'C-Channel': [
+                { id: 'c1', name: 'C 100x50x5x7.5', d: 100, bf: 50, tw: 5, tf: 7.5, w: 9.36, a: 11.9, ix: 188, iy: 26, sx: 37.6, sy: 7.5 },
+                { id: 'c2', name: 'C 150x75x6.5x10', d: 150, bf: 75, tw: 6.5, tf: 10, w: 18.6, a: 23.7, ix: 861, iy: 117, sx: 115, sy: 22.4 }
+            ],
+            'Angle': [
+                { id: 'a1', name: 'L 50x50x4', d: 50, bf: 50, tw: 4, tf: 4, w: 3.06, a: 3.89, ix: 9.16, iy: 9.16, sx: 2.56, sy: 2.56 },
+                { id: 'a2', name: 'L 100x100x10', d: 100, bf: 100, tw: 10, tf: 10, w: 14.9, a: 19.0, ix: 175, iy: 175, sx: 24.5, sy: 24.5 }
+            ],
+            'Rebar': [
+                { id: 'rb6', name: 'RB6 (Round Bar)', d: 6, bf: 6, tw: 6, tf: 6, w: 0.222, a: 0.283, ix: 0, iy: 0, sx: 0, sy: 0 },
+                { id: 'rb9', name: 'RB9 (Round Bar)', d: 9, bf: 9, tw: 9, tf: 9, w: 0.499, a: 0.636, ix: 0, iy: 0, sx: 0, sy: 0 },
+                { id: 'db12', name: 'DB12 (Deformed Bar)', d: 12, bf: 12, tw: 12, tf: 12, w: 0.888, a: 1.13, ix: 0, iy: 0, sx: 0, sy: 0 },
+                { id: 'db16', name: 'DB16 (Deformed Bar)', d: 16, bf: 16, tw: 16, tf: 16, w: 1.58, a: 2.01, ix: 0, iy: 0, sx: 0, sy: 0 },
+                { id: 'db20', name: 'DB20 (Deformed Bar)', d: 20, bf: 20, tw: 20, tf: 20, w: 2.47, a: 3.14, ix: 0, iy: 0, sx: 0, sy: 0 },
+                { id: 'db25', name: 'DB25 (Deformed Bar)', d: 25, bf: 25, tw: 25, tf: 25, w: 3.85, a: 4.91, ix: 0, iy: 0, sx: 0, sy: 0 }
+            ]
+        };
+
+        const [tab, setTab] = useState('browse'); // browse, reverse, compare, builtup
+
+        // States for Browse & Estimate
+        const [cat, setCat] = useState('H-Beam');
+        const [secId, setSecId] = useState('h1');
+        const [len, setLen] = useState(6);
+        const [qty, setQty] = useState(1);
+        const [price, setPrice] = useState(25); // บาท/กก.
+
+        // States for Reverse Finder
+        const [targetProp, setTargetProp] = useState('sx'); // sx, a, ix
+        const [targetVal, setTargetVal] = useState(200);
+
+        // States for Compare
+        const [cmp1, setCmp1] = useState('h1');
+        const [cmp2, setCmp2] = useState('h3');
+
+        // States for Built-up
+        const [buBase, setBuBase] = useState('h4');
+        const [plW, setPlW] = useState(200); // mm
+        const [plT, setPlT] = useState(10); // mm
+
+        // Helpers
+        const getAllSecs = () => Object.values(DB).flat();
+        const getSec = (id) => getAllSecs().find(s => s.id === id) || DB['H-Beam'][0];
+        const selSec = getSec(secId);
+
+        // Render SVG Diagram based on category
+        const renderSVG = (sec, category) => {
+            if (!sec) return null;
+            const w = 120, h = 120;
+            const maxDim = Math.max(sec.d, sec.bf);
+            const scale = 100 / maxDim;
+            const drawD = sec.d * scale;
+            const drawB = sec.bf * scale;
+            const drawTw = Math.max(4, sec.tw * scale);
+            const drawTf = Math.max(4, sec.tf * scale);
+
+            if (category === 'Rebar') {
+                const isDeformed = sec.name.includes('DB');
+                return (
+                    <svg viewBox={`0 0 ${w} ${h}`} className="w-32 h-32 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]">
+                        <circle cx={w/2} cy={h/2} r={drawD/2} fill="#0F2547" stroke="#38BDF8" strokeWidth="3" />
+                        {isDeformed && (
+                            <>
+                                <line x1={w/2 - drawD/2} y1={h/2 - drawD/2} x2={w/2 + drawD/2} y2={h/2 + drawD/2} stroke="#38BDF8" strokeWidth="2" opacity="0.5" />
+                                <line x1={w/2 - drawD/2} y1={h/2 + drawD/2} x2={w/2 + drawD/2} y2={h/2 - drawD/2} stroke="#38BDF8" strokeWidth="2" opacity="0.5" />
+                            </>
+                        )}
+                        <text x={w/2} y={h/2 + 3} fill="#fff" fontSize="10" textAnchor="middle" fontWeight="bold">⌀{sec.d}</text>
+                    </svg>
+                );
+            }
+
+            return (
+                <svg viewBox={`0 0 ${w} ${h}`} className="w-32 h-32 drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]">
+                    <g transform={`translate(${(w-drawB)/2}, ${(h-drawD)/2})`}>
+                        {category === 'H-Beam' && (
+                            <path d={`M 0 0 H ${drawB} V ${drawTf} H ${(drawB+drawTw)/2} V ${drawD-drawTf} H ${drawB} V ${drawD} H 0 V ${drawD-drawTf} H ${(drawB-drawTw)/2} V ${drawTf} H 0 Z`} fill="#38BDF8" />
+                        )}
+                        {category === 'C-Channel' && (
+                            <path d={`M 0 0 H ${drawB} V ${drawTf} H ${drawTw} V ${drawD-drawTf} H ${drawB} V ${drawD} H 0 Z`} fill="#38BDF8" />
+                        )}
+                        {category === 'Angle' && (
+                            <path d={`M 0 0 H ${drawTw} V ${drawD-drawTf} H ${drawB} V ${drawD} H 0 Z`} fill="#38BDF8" />
+                        )}
+                    </g>
+                    {/* Dimension Lines */}
+                    <line x1="5" y1={(h-drawD)/2} x2="5" y2={(h+drawD)/2} stroke="#94A3B8" strokeWidth="1" markerEnd="url(#arrow)" markerStart="url(#arrow)" />
+                    <text x="8" y={h/2 + 3} fill="#94A3B8" fontSize="8" fontWeight="bold">d={sec.d}</text>
+                    <line x1={(w-drawB)/2} y1="5" x2={(w+drawB)/2} y2="5" stroke="#94A3B8" strokeWidth="1" markerEnd="url(#arrow)" markerStart="url(#arrow)" />
+                    <text x={w/2} y="14" fill="#94A3B8" fontSize="8" textAnchor="middle" fontWeight="bold">bf={sec.bf}</text>
+                    
+                    <defs><marker id="arrow" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><circle cx="2" cy="2" r="2" fill="#94A3B8" /></marker></defs>
+                </svg>
+            );
+        };
 
         return (
-            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
-                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
-                    <label className="text-xs text-sky-400 font-bold mb-1 block">เลือกขนาด H-Beam</label>
-                    <select value={selIdx} onChange={e=>setSelIdx(e.target.value)} className="w-full inp text-sm font-bold bg-[#050811]">
-                        {sections.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
-                    </select>
+            <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+                {/* TABS */}
+                <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
+                    <button onClick={()=>setTab('browse')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${tab==='browse'?'bg-sky-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}>🔍 เปิดตาราง & ประเมินราคา</button>
+                    <button onClick={()=>setTab('reverse')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${tab==='reverse'?'bg-amber-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}>🔄 ค้นหากลับ (Reverse)</button>
+                    <button onClick={()=>setTab('compare')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${tab==='compare'?'bg-emerald-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}>⚖️ เปรียบเทียบหน้าตัด</button>
+                    <button onClick={()=>setTab('builtup')} className={`px-4 py-2 rounded-lg whitespace-nowrap ${tab==='builtup'?'bg-fuchsia-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}>🛠️ Built-up Section</button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 bg-[#050811] p-5 rounded-xl border border-[#1E3A5F] shadow-lg items-center sm:items-start">
-                    {/* SVG Graphic แบบมี Dimensions */}
-                    <div className="relative w-40 h-40 shrink-0 border-2 border-dashed border-slate-700 rounded-lg flex items-center justify-center p-4">
-                        <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono">bf={sel.bf}</div>
-                        <div className="absolute top-1/2 -left-2 -translate-y-1/2 -rotate-90 text-[10px] text-slate-400 font-mono">d={sel.d}</div>
-                        <div className="absolute top-1/2 -right-3 -translate-y-1/2 text-[9px] text-sky-400 font-mono">tw={sel.tw}</div>
-                        <div className="absolute bottom-1 right-2 text-[9px] text-sky-400 font-mono">tf={sel.tf}</div>
-                        
-                        <div className="w-[60%] h-[80%] flex flex-col items-center justify-between">
-                            <div className="w-full bg-sky-500 rounded-sm shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{height: `${Math.max(10, (sel.tf/sel.d)*100)}%`}}></div>
-                            <div className="h-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{width: `${Math.max(10, (sel.tw/sel.bf)*100)}%`}}></div>
-                            <div className="w-full bg-sky-500 rounded-sm shadow-[0_0_8px_rgba(14,165,233,0.5)]" style={{height: `${Math.max(10, (sel.tf/sel.d)*100)}%`}}></div>
+                {/* TAB 1: BROWSE & ESTIMATE */}
+                {tab === 'browse' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg flex flex-col gap-3">
+                            <div>
+                                <label className="text-sky-400 font-bold mb-1 block">ประเภท (Category)</label>
+                                <select value={cat} onChange={e=>{setCat(e.target.value); setSecId(DB[e.target.value][0].id);}} className="w-full inp bg-[#050811] font-bold">
+                                    {Object.keys(DB).map(k => <option key={k} value={k}>{k}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-sky-400 font-bold mb-1 block">ขนาด (Section Size)</label>
+                                <select value={secId} onChange={e=>setSecId(e.target.value)} className="w-full inp bg-[#050811] font-mono">
+                                    {DB[cat].map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-center justify-center py-4 border-y border-[#1E3A5F] bg-[#050811] rounded-lg mt-2">
+                                {renderSVG(selSec, cat)}
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Weight (W)</div><div className="font-bold text-emerald-400 font-mono">{selSec.w} <span className="text-[9px] text-slate-500">kg/m</span></div></div>
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Area (A)</div><div className="font-bold text-white font-mono">{selSec.a} <span className="text-[9px] text-slate-500">cm²</span></div></div>
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Inertia (Ix)</div><div className="font-bold text-white font-mono">{selSec.ix} <span className="text-[9px] text-slate-500">cm⁴</span></div></div>
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Inertia (Iy)</div><div className="font-bold text-white font-mono">{selSec.iy} <span className="text-[9px] text-slate-500">cm⁴</span></div></div>
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Sec Mod (Sx)</div><div className="font-bold text-white font-mono">{selSec.sx} <span className="text-[9px] text-slate-500">cm³</span></div></div>
+                                <div className="bg-[#050811] p-2 rounded border border-[#1E3A5F]"><div className="text-slate-400 text-[10px]">Sec Mod (Sy)</div><div className="font-bold text-white font-mono">{selSec.sy} <span className="text-[9px] text-slate-500">cm³</span></div></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-[#050811] to-[#0B1325] p-5 rounded-xl border border-emerald-900/50 shadow-lg flex flex-col gap-4">
+                            <div className="text-emerald-400 font-bold uppercase tracking-widest border-b border-[#1E3A5F] pb-2">💰 ประเมินน้ำหนักและราคา (Cost Estimator)</div>
+                            <div className="flex items-center gap-3">
+                                <label className="w-24 text-slate-400 font-bold">ความยาว/ท่อน</label>
+                                <div className="flex-1 flex gap-2 items-center"><input type="number" min="0" step="0.5" value={len} onChange={e=>setLen(parseFloat(e.target.value)||0)} className="w-full inp font-mono" /><span>ม.</span></div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <label className="w-24 text-slate-400 font-bold">จำนวนที่ใช้</label>
+                                <div className="flex-1 flex gap-2 items-center"><input type="number" min="1" step="1" value={qty} onChange={e=>setQty(parseInt(e.target.value)||0)} className="w-full inp font-mono" /><span>ท่อน</span></div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <label className="w-24 text-amber-400 font-bold">ราคาเหล็ก/กก.</label>
+                                <div className="flex-1 flex gap-2 items-center"><input type="number" min="0" step="1" value={price} onChange={e=>setPrice(parseFloat(e.target.value)||0)} className="w-full inp font-mono border-amber-900/50 bg-amber-950/20" /><span>บาท</span></div>
+                            </div>
+                            
+                            <div className="mt-auto pt-4 space-y-2">
+                                <div className="flex justify-between p-3 bg-[#0a101f] rounded-lg border border-slate-700">
+                                    <span className="text-slate-400">น้ำหนักรวม (Total Weight)</span>
+                                    <span className="font-bold text-lg font-mono text-emerald-300">{(selSec.w * len * qty).toLocaleString()} <span className="text-[10px]">kg</span></span>
+                                </div>
+                                <div className="flex justify-between p-3 bg-emerald-950/30 rounded-lg border border-emerald-900/50">
+                                    <span className="text-emerald-400 font-bold">ราคาประเมิน (Est. Cost)</span>
+                                    <span className="font-bold text-2xl font-mono text-emerald-400">{(selSec.w * len * qty * price).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} <span className="text-xs">฿</span></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                )}
 
-                    <div className="flex-1 w-full grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">น้ำหนัก (W)</span><span className="font-bold font-mono text-emerald-300 text-sm">{sel.w} kg/m</span></div>
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">พื้นที่ (A)</span><span className="font-bold font-mono text-white text-sm">{sel.a} cm²</span></div>
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Inertia (Ix)</span><span className="font-bold font-mono text-white text-sm">{sel.ix} cm⁴</span></div>
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Inertia (Iy)</span><span className="font-bold font-mono text-white text-sm">{sel.iy} cm⁴</span></div>
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Section Mod (Sx)</span><span className="font-bold font-mono text-white text-sm">{sel.sx} cm³</span></div>
-                        <div className="bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]"><span className="text-slate-400 block mb-0.5">Section Mod (Sy)</span><span className="font-bold font-mono text-white text-sm">{sel.sy} cm³</span></div>
-                    </div>
-                </div>
+                {/* TAB 2: REVERSE FINDER */}
+                {tab === 'reverse' && (() => {
+                    // Filter and sort sections
+                    const propKey = targetProp;
+                    const matches = getAllSecs()
+                        .filter(s => s[propKey] >= targetVal && s[propKey] > 0)
+                        .sort((a, b) => a.w - b.w) // เรียงตามน้ำหนัก (ราคาถูกสุดขึ้นก่อน)
+                        .slice(0, 10);
+
+                    return (
+                        <div className="bg-[#0B1325] p-5 rounded-xl border border-amber-500/50 shadow-lg">
+                            <div className="flex flex-col sm:flex-row gap-4 items-end border-b border-[#1E3A5F] pb-4 mb-4">
+                                <div className="flex-1 w-full">
+                                    <label className="text-amber-400 font-bold mb-1 block">ค้นหาจากคุณสมบัติ (Property)</label>
+                                    <select value={targetProp} onChange={e=>setTargetProp(e.target.value)} className="w-full inp bg-[#050811] font-bold">
+                                        <option value="sx">Section Modulus (Sx) อย่างน้อย...</option>
+                                        <option value="a">เนื้อที่หน้าตัด (Area) อย่างน้อย...</option>
+                                        <option value="ix">Moment of Inertia (Ix) อย่างน้อย...</option>
+                                    </select>
+                                </div>
+                                <div className="flex-1 w-full">
+                                    <label className="text-amber-400 font-bold mb-1 block">ค่าที่ต้องการ (Target Value)</label>
+                                    <input type="number" value={targetVal} onChange={e=>setTargetVal(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-amber-200 text-lg py-1.5" />
+                                </div>
+                            </div>
+                            
+                            <div className="text-xs font-bold text-slate-300 mb-2">💡 รายชื่อเหล็กที่ผ่านเกณฑ์ (เรียงจากเบาที่สุด/ประหยัดสุด)</div>
+                            <div className="space-y-2 overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-[#050811] text-sky-400 border-b border-[#1E3A5F]">
+                                            <th className="p-2 whitespace-nowrap">Section Name</th>
+                                            <th className="p-2">W (kg/m)</th>
+                                            <th className="p-2">Area (cm²)</th>
+                                            <th className="p-2">Ix (cm⁴)</th>
+                                            <th className="p-2">Sx (cm³)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {matches.length === 0 ? <tr><td colSpan="5" className="p-4 text-center text-slate-500">ไม่พบเหล็กที่ตรงตามเงื่อนไข</td></tr> : null}
+                                        {matches.map((s, i) => (
+                                            <tr key={s.id} className={`border-b border-[#1E3A5F] hover:bg-[#0F2547] font-mono ${i===0?'bg-emerald-950/20':''}`}>
+                                                <td className="p-2 font-sans font-bold flex items-center gap-2">
+                                                    {i===0 && <span className="text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded">เบาสุด</span>} {s.name}
+                                                </td>
+                                                <td className={`p-2 ${i===0?'text-emerald-400 font-bold':'text-slate-300'}`}>{s.w}</td>
+                                                <td className={`p-2 ${targetProp==='a'?'text-amber-300 font-bold':'text-slate-300'}`}>{s.a}</td>
+                                                <td className={`p-2 ${targetProp==='ix'?'text-amber-300 font-bold':'text-slate-300'}`}>{s.ix}</td>
+                                                <td className={`p-2 ${targetProp==='sx'?'text-amber-300 font-bold':'text-slate-300'}`}>{s.sx}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* TAB 3: COMPARE */}
+                {tab === 'compare' && (() => {
+                    const s1 = getSec(cmp1);
+                    const s2 = getSec(cmp2);
+                    return (
+                        <div className="bg-[#0B1325] p-5 rounded-xl border border-emerald-500/50 shadow-lg">
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="text-emerald-400 font-bold mb-1 block">Section 1</label>
+                                    <select value={cmp1} onChange={e=>setCmp1(e.target.value)} className="w-full inp bg-[#050811] font-mono text-[10px] sm:text-xs">
+                                        {getAllSecs().map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-sky-400 font-bold mb-1 block">Section 2</label>
+                                    <select value={cmp2} onChange={e=>setCmp2(e.target.value)} className="w-full inp bg-[#050811] font-mono text-[10px] sm:text-xs">
+                                        {getAllSecs().map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 text-center border-t border-[#1E3A5F] pt-4 font-mono">
+                                <div className="font-bold text-slate-400 text-[10px] sm:text-xs space-y-3">
+                                    <div className="h-6">Property</div><div className="h-6">W (kg/m)</div><div className="h-6">Area (cm²)</div>
+                                    <div className="h-6">Ix (cm⁴)</div><div className="h-6">Iy (cm⁴)</div><div className="h-6">Sx (cm³)</div><div className="h-6">Sy (cm³)</div>
+                                </div>
+                                <div className="font-bold text-emerald-300 space-y-3">
+                                    <div className="h-6 font-sans text-emerald-400 bg-emerald-950/50 rounded line-clamp-1">{s1.name}</div>
+                                    <div className="h-6">{s1.w}</div><div className="h-6">{s1.a}</div><div className="h-6">{s1.ix}</div>
+                                    <div className="h-6">{s1.iy}</div><div className="h-6">{s1.sx}</div><div className="h-6">{s1.sy}</div>
+                                </div>
+                                <div className="font-bold text-sky-300 space-y-3 border-l border-[#1E3A5F]">
+                                    <div className="h-6 font-sans text-sky-400 bg-sky-950/50 rounded line-clamp-1">{s2.name}</div>
+                                    <div className="h-6 flex justify-center items-center gap-1">{s2.w} {s2.w > s1.w ? <span className="text-red-400 text-[9px]">▲</span> : s2.w < s1.w ? <span className="text-emerald-400 text-[9px]">▼</span> : ''}</div>
+                                    <div className="h-6 flex justify-center items-center gap-1">{s2.a} {s2.a > s1.a ? <span className="text-emerald-400 text-[9px]">▲</span> : s2.a < s1.a ? <span className="text-red-400 text-[9px]">▼</span> : ''}</div>
+                                    <div className="h-6 flex justify-center items-center gap-1">{s2.ix} {s2.ix > s1.ix ? <span className="text-emerald-400 text-[9px]">▲</span> : s2.ix < s1.ix ? <span className="text-red-400 text-[9px]">▼</span> : ''}</div>
+                                    <div className="h-6">{s2.iy}</div>
+                                    <div className="h-6 flex justify-center items-center gap-1">{s2.sx} {s2.sx > s1.sx ? <span className="text-emerald-400 text-[9px]">▲</span> : s2.sx < s1.sx ? <span className="text-red-400 text-[9px]">▼</span> : ''}</div>
+                                    <div className="h-6">{s2.sy}</div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* TAB 4: BUILT-UP SECTION */}
+                {tab === 'builtup' && (() => {
+                    const base = DB['H-Beam'].find(s => s.id === buBase) || DB['H-Beam'][0];
+                    // การคำนวณ Built-up Section (ประกบแผ่นบน-ล่าง)
+                    // แปลง mm เป็น cm สำหรับแผ่นเพลท
+                    const ptCm = plT / 10; const pwCm = plW / 10;
+                    const plArea = pwCm * ptCm;
+                    const plWgt = plArea * 100 * 0.00785; // kg/m (สมมติ density เหล็ก 7850 kg/m3)
+                    
+                    const newW = base.w + (plWgt * 2);
+                    const newA = base.a + (plArea * 2);
+                    
+                    // Ix_new = Ix_base + 2 * (I_plate + A_plate * d^2)
+                    const I_plate_x = (pwCm * Math.pow(ptCm, 3)) / 12;
+                    const d_cg = (base.d / 10) / 2 + (ptCm / 2); // ระยะจากแกน x ถึง cg ของ plate (cm)
+                    const newIx = base.ix + 2 * (I_plate_x + plArea * Math.pow(d_cg, 2));
+                    
+                    // Iy_new = Iy_base + 2 * (I_plate_y)
+                    const I_plate_y = (ptCm * Math.pow(pwCm, 3)) / 12;
+                    const newIy = base.iy + 2 * I_plate_y;
+                    
+                    // Sx_new = Ix_new / (d_base/2 + t_plate)
+                    const c_new = (base.d / 10) / 2 + ptCm;
+                    const newSx = newIx / c_new;
+
+                    return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-[#0B1325] p-4 rounded-xl border border-fuchsia-500/50 shadow-lg space-y-4">
+                                <div className="text-fuchsia-400 font-bold uppercase tracking-widest border-b border-[#1E3A5F] pb-2">H-Beam + Cover Plates</div>
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">เหล็กแกนหลัก (Base H-Beam)</label>
+                                    <select value={buBase} onChange={e=>setBuBase(e.target.value)} className="w-full inp bg-[#050811] font-mono">
+                                        {DB['H-Beam'].map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">
+                                    <div className="col-span-2 text-[10px] text-fuchsia-300 font-bold">ขนาดแผ่นประกบ บน-ล่าง (Cover Plate)</div>
+                                    <div>
+                                        <label className="text-slate-400 text-[10px]">ความกว้าง (Width, mm)</label>
+                                        <input type="number" step="10" value={plW} onChange={e=>setPlW(parseFloat(e.target.value)||0)} className="w-full inp font-mono mt-1" />
+                                    </div>
+                                    <div>
+                                        <label className="text-slate-400 text-[10px]">ความหนา (Thk, mm)</label>
+                                        <input type="number" step="1" value={plT} onChange={e=>setPlT(parseFloat(e.target.value)||0)} className="w-full inp font-mono mt-1" />
+                                    </div>
+                                </div>
+                                <div className="text-center pt-2">
+                                    {/* Built-up SVG */}
+                                    <svg viewBox="0 0 100 100" className="w-32 h-32 mx-auto drop-shadow-[0_0_10px_rgba(217,70,239,0.4)]">
+                                        {/* Base H-Beam */}
+                                        <path d="M 25 20 H 75 V 28 H 54 V 72 H 75 V 80 H 25 V 72 H 46 V 28 H 25 Z" fill="#38BDF8" opacity="0.6" />
+                                        {/* Top/Bottom Plates */}
+                                        <rect x="15" y="10" width="70" height="10" fill="#d946ef" />
+                                        <rect x="15" y="80" width="70" height="10" fill="#d946ef" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-[#050811] to-[#1a0f2e] p-5 rounded-xl border border-fuchsia-900/50 shadow-lg flex flex-col gap-3">
+                                <div className="text-fuchsia-400 font-bold mb-2">คุณสมบัติหน้าตัดใหม่ (New Properties)</div>
+                                <div className="space-y-2 font-mono text-sm">
+                                    <div className="flex justify-between bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]">
+                                        <span className="text-slate-400">Total W</span><span className="font-bold text-emerald-400">{newW.toFixed(2)} <span className="text-[10px]">kg/m</span></span>
+                                    </div>
+                                    <div className="flex justify-between bg-[#0B1325] p-2.5 rounded border border-[#1E3A5F]">
+                                        <span className="text-slate-400">Total Area</span><span className="font-bold text-white">{newA.toFixed(2)} <span className="text-[10px]">cm²</span></span>
+                                    </div>
+                                    <div className="flex justify-between bg-fuchsia-950/30 p-2.5 rounded border border-fuchsia-900/50">
+                                        <span className="text-fuchsia-300">New Ix</span>
+                                        <span className="font-bold text-white">{newIx.toFixed(2)} <span className="text-red-400 text-[10px]">(+{(((newIx-base.ix)/base.ix)*100).toFixed(0)}%)</span></span>
+                                    </div>
+                                    <div className="flex justify-between bg-fuchsia-950/30 p-2.5 rounded border border-fuchsia-900/50">
+                                        <span className="text-fuchsia-300">New Iy</span>
+                                        <span className="font-bold text-white">{newIy.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between bg-sky-950/30 p-2.5 rounded border border-sky-900/50">
+                                        <span className="text-sky-300">New Sx</span>
+                                        <span className="font-bold text-white">{newSx.toFixed(2)} <span className="text-red-400 text-[10px]">(+{(((newSx-base.sx)/base.sx)*100).toFixed(0)}%)</span></span>
+                                    </div>
+                                </div>
+                                <div className="text-[9px] text-slate-500 mt-auto leading-relaxed text-center">
+                                    * คำนวณด้วย Parallel Axis Theorem<br/>* ค่า Ix และ Sx ที่เพิ่มขึ้น % เทียบกับ H-Beam เดิม
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
         );
     };
