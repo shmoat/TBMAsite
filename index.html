@@ -5275,6 +5275,7 @@
       
       const [activeTool, setActiveTool] = useState(null);
       const [toolSearchQ, setToolSearchQ] = useState('');
+      const [activeCategory, setActiveCategory] = useState('ALL');
       const [trackTime, setTrackTime] = useState({ curA: 0, durA: 0, curB: 0, durB: 0 });
       const [showCalendar, setShowCalendar] = useState(false);
       const [bmaEvents, setBmaEvents] = useState([]);
@@ -8134,6 +8135,16 @@
 
           {/* ASSOCIATION TOOLS VIEW */}
           {currentView === 'tools' && (() => {
+              
+              const CATEGORY_STYLES = {
+                  'ALL': { icon: '🌟', textClass: 'text-slate-100', borderClass: 'border-slate-500' },
+                  'Music & Audio': { icon: '🎵', textClass: 'text-fuchsia-400', borderClass: 'border-fuchsia-500/50' },
+                  'Civil Engineering': { icon: '🏗️', textClass: 'text-amber-400', borderClass: 'border-amber-500/50' },
+                  'Geotechnical': { icon: '🌍', textClass: 'text-emerald-400', borderClass: 'border-emerald-500/50' },
+                  'Calculate & Academic': { icon: '🧮', textClass: 'text-sky-400', borderClass: 'border-sky-500/50' },
+                  'Community Utilities': { icon: '👥', textClass: 'text-purple-400', borderClass: 'border-purple-500/50' }
+              };
+
               const TOOLS = [
                   { id: 'bpm', category: 'Music & Audio', name: 'Advanced Metronome', icon: '⏱️', desc: 'เคาะความเร็ว ปรับ Time Signature และ Rhythm Subdivision' },
                   { id: 'chords', category: 'Music & Audio', name: 'Chord Studio', icon: '🎹', desc: 'วงล้อ Circle of 5ths และสุ่มคอร์ดตามอารมณ์ (Mood Progression)' },
@@ -8153,11 +8164,15 @@
                   { id: 'randomizer', category: 'Community Utilities', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนา' },
               ];
               
-              const filteredTools = TOOLS.filter(t => 
-                  t.name.toLowerCase().includes(toolSearchQ.toLowerCase()) || 
-                  t.desc.toLowerCase().includes(toolSearchQ.toLowerCase()) ||
-                  t.category.toLowerCase().includes(toolSearchQ.toLowerCase())
-              );
+              const toolCategories = ['ALL', ...Array.from(new Set(TOOLS.map(t => t.category)))];
+
+              const filteredTools = TOOLS.filter(t => {
+                  const matchSearch = t.name.toLowerCase().includes(toolSearchQ.toLowerCase()) || 
+                                      t.desc.toLowerCase().includes(toolSearchQ.toLowerCase()) ||
+                                      t.category.toLowerCase().includes(toolSearchQ.toLowerCase());
+                  const matchCategory = activeCategory === 'ALL' || t.category === activeCategory;
+                  return matchSearch && matchCategory;
+              });
 
               return (
                   <div className="max-w-7xl mx-auto w-full px-4 py-6 space-y-5 flex-1 overflow-y-auto">
@@ -8179,25 +8194,51 @@
                                   />
                               </div>
 
+                              <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 mt-4 px-1">
+                                  {toolCategories.map(cat => {
+                                      const style = CATEGORY_STYLES[cat] || { icon: '🔧', textClass: 'text-sky-300', borderClass: 'border-sky-500/50' };
+                                      const isSelected = activeCategory === cat;
+                                      
+                                      return (
+                                          <button 
+                                              key={cat}
+                                              onClick={() => setActiveCategory(cat)}
+                                              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm border ${isSelected ? `bg-[#0B1325] ${style.borderClass} ${style.textClass} scale-105 shadow-[0_0_10px_rgba(255,255,255,0.1)]` : 'bg-[#050811] border-[#1E3A5F] text-slate-400 hover:bg-[#0F2547] hover:border-slate-500'}`}
+                                          >
+                                              <span className="text-sm">{style.icon}</span>
+                                              {cat === 'ALL' ? 'ทั้งหมด (All)' : cat}
+                                          </button>
+                                      );
+                                  })}
+                              </div>
+
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-10 mt-2">
-                                  {filteredTools.map(tool => (
-                                      <button 
-                                          key={tool.id} 
-                                          onClick={() => setActiveTool(tool.id)}
-                                          className="card p-4 flex flex-col items-start text-left hover:bg-[#0F2547] hover:border-sky-500/50 transition-all group"
-                                      >
-                                          <div className="flex items-center gap-3 mb-2 w-full">
-                                              <div className="text-3xl bg-[#050811] p-2 rounded-lg border border-[#1E3A5F] group-hover:scale-110 transition-transform">
-                                                  {tool.icon}
+                                  {filteredTools.map(tool => {
+                     	                 // ดึงสไตล์ของหมวดหมู่มาใช้
+                                      const catStyle = CATEGORY_STYLES[tool.category] || { textClass: 'text-sky-400' };
+                                      
+                                      return (
+                                          <button 
+                                              key={tool.id} 
+                                              onClick={() => setActiveTool(tool.id)}
+                                              className={`card p-4 flex flex-col items-start text-left hover:bg-[#0F2547] border border-[#1E3A5F] hover:${catStyle.borderClass} transition-all group`}
+                                          >
+                                              <div className="flex items-center gap-3 mb-2 w-full">
+                                                  <div className="text-3xl bg-[#050811] p-2 rounded-lg border border-[#1E3A5F] group-hover:scale-110 transition-transform">
+                                                      {tool.icon}
+                                                  </div>
+                                                  <div>
+                                	                      {/* นำคลาสสีมาปรับใช้กับป้ายกำกับหมวดหมู่ */}
+                                                      <div className={`text-[10px] ${catStyle.textClass} font-bold uppercase tracking-wider`}>
+                                                          {tool.category}
+                                                      </div>
+                                                      <h3 className="font-bold text-white text-base">{tool.name}</h3>
+                                                  </div>
                                               </div>
-                                              <div>
-                                                  <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">{tool.category}</div>
-                                                  <h3 className="font-bold text-white text-base">{tool.name}</h3>
-                                              </div>
-                                          </div>
-                                          <p className="text-xs text-slate-400 line-clamp-2 mt-1 leading-relaxed">{tool.desc}</p>
-                                      </button>
-                                  ))}
+                                              <p className="text-xs text-slate-400 line-clamp-2 mt-1 leading-relaxed">{tool.desc}</p>
+                                          </button>
+                                      );
+                                  })}
                                   {filteredTools.length === 0 && (
                                       <div className="col-span-full text-center py-10 text-slate-500 text-sm font-bold bg-[#0B1325] border border-dashed border-[#1E3A5F] rounded-xl">
                                           ❌ ไม่พบเครื่องมือที่ค้นหา
