@@ -8841,7 +8841,7 @@
                 ) : (
                   <div className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] shrink-0 z-20 relative">
                     
-                    {/* ข้อมูล Edit / Reply / Upload (คงเดิม) */}
+                    {/* ข้อมูล Edit / Reply / Upload */}
                     <div className="space-y-2 mb-2 text-xs">
                         {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span>✎ แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}>✕</button></div>}
                         {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span>↩️ ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}>✕</button></div>}
@@ -8849,15 +8849,7 @@
                         {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-white">{a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400 font-bold ml-1 hover:text-red-300">✕</button></span>)}</div>}
                     </div>
 
-                    {/* ช่องป้อน URL แนบลิงก์ */}
-                    {cUrlOpen && (
-                      <div className="flex gap-1.5 mb-2 text-xs animate-fade-in">
-                        <select value={cAttType} onChange={(e) => setCAttType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ</option><option value="audio">เสียง</option><option value="file">ไฟล์</option></select>
-                        <input type="text" value={cAttUrl} onChange={(e) => setCAttUrl(e.target.value)} placeholder="วางลิงก์ .gif, .png หรือลิงก์เว็บ..." className="flex-1 inp py-1" />
-                        <button type="button" onClick={() => { if (cAttUrl.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: cAttType, url: cAttUrl.trim(), size: 'URL' }]); setCAttUrl(''); setCUrlOpen(false); } }} className="btn-w py-1 px-3">แนบ</button>
-                      </div>
-                    )}
-
+                    {/* ฟอร์มช่องแชต */}
                     <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative z-30">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
@@ -8959,7 +8951,7 @@
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
+                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY GIPHY</div>
                                     </div>
                                 )}
                             </div>
