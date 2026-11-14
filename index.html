@@ -6393,17 +6393,43 @@
         }
       };
 
-      // 🌟 NEW Chat Revamp States 🌟
-      const [chatSearch, setChatSearch] = useState(''); // ค้นหาในห้องแชต
-      const [isSilentMsg, setIsSilentMsg] = useState(false); // โหมดแชตไม่แจ้งเตือน
-      const [showGifPanel, setShowGifPanel] = useState(false); // เปิดปิด GIF Panel
-      const [gifSearch, setGifSearch] = useState(''); // ค้นหา GIF
-      const [mockGifs, setMockGifs] = useState([ // Mockup GIF สำหรับ Demo
-          'https://media.giphy.com/media/VbnUQpnihPSIgIXuZv/giphy.gif',
-          'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
-          'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif',
-          'https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif'
-      ]);
+      // 🌟 Chat Revamp States 🌟
+      const [chatSearch, setChatSearch] = useState(''); 
+      const [isSilentMsg, setIsSilentMsg] = useState(false); 
+      const [showGifPanel, setShowGifPanel] = useState(false); 
+      const [gifSearch, setGifSearch] = useState(''); 
+      const [gifResults, setGifResults] = useState([]); // เก็บผลลัพธ์รูป GIF
+      const [isGifLoading, setIsGifLoading] = useState(false);
+      const gifDebounceRef = useRef(null);
+
+      // ฟังก์ชันดึง GIF จาก Tenor API อัตโนมัติเมื่อพิมพ์ค้นหา
+      useEffect(() => {
+          if (!showGifPanel) return;
+          if (gifDebounceRef.current) clearTimeout(gifDebounceRef.current);
+          
+          const fetchGifs = async (url) => {
+              setIsGifLoading(true);
+              try {
+                  const res = await fetch(url);
+                  const data = await res.json();
+                  if (data.results) setGifResults(data.results.map(g => g.media[0].tinygif.url));
+              } catch (err) { console.error(err); }
+              setIsGifLoading(false);
+          };
+
+          if (!gifSearch.trim()) {
+              // ถ้ายังไม่พิมพ์อะไร ให้ดึงอันที่กำลังฮิต (Trending) มาแสดง
+              fetchGifs('https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=12');
+              return;
+          }
+          
+          // หน่วงเวลา 0.6 วิ หลังจากหยุดพิมพ์ ค่อยยิง API เพื่อไม่ให้โหลดหนักเกินไป
+          gifDebounceRef.current = setTimeout(() => {
+              fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
+          }, 600);
+          
+          return () => clearTimeout(gifDebounceRef.current);
+      }, [gifSearch, showGifPanel]);
 
       // Notification States
       const [notifOpen, setNotifOpen] = useState(false); const [notifTab, setNotifTab] = useState('posts'); const [toasts, setToasts] = useState([]);
@@ -8796,10 +8822,9 @@
                     <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
-                            {/* ปุ่มเครื่องหมาย + (เมนูแนบไฟล์แบบ Click Toggle) */}
+                            {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้ชัดเจนขึ้น) */}
                             <div className="relative">
-                                {/* เพิ่ม State openAttachMenu (สมมติว่าคุณเพิ่ม const [openAttachMenu, setOpenAttachMenu] = useState(false); ไว้ด้านบนแล้ว ถ้ายังไม่มีให้เพิ่มด้วยครับ) */}
-                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border ${cUrlOpen ? 'bg-sky-900/50 text-sky-300 border-sky-500/50' : 'text-slate-300 hover:text-white hover:bg-[#0F2547] border-transparent hover:border-slate-700'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
+                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-md ${cUrlOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-[#0F2547] text-sky-400 border-sky-500/50 hover:bg-sky-500 hover:text-white hover:border-sky-400'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
                                     <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'}`}></i>
                                 </button>
                                 
@@ -8814,23 +8839,16 @@
                                         
                                         <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); setCUrlOpen(false); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-at w-4 text-center text-slate-400"></i> แท็กบุคคล (@)</button>
                                         
-                                        {/* แก้ไขเมนูชวนเล่นเกม */}
                                         <div className="relative">
                                             <button type="button" onClick={(e) => { e.stopPropagation(); setCGameOpen(!cGameOpen); }} className="w-full px-3 py-2.5 hover:bg-amber-900/30 rounded-lg text-amber-300 flex items-center gap-2.5 transition-colors text-left font-bold">
                                                 <i className="fas fa-gamepad w-4 text-center"></i> ชวนเล่นแชตเกม <i className={`fas fa-chevron-${cGameOpen ? 'down' : 'right'} ml-auto text-[10px]`}></i>
                                             </button>
-                                            
-                                            {/* ซ้อนเมนูรายชื่อเกมเอาไว้ */}
                                             {cGameOpen && (
                                                 <div className="mt-1 ml-6 space-y-1 border-l-2 border-[#1E3A5F] pl-2">
                                                     {[{id:'chess',n:'หมากรุก (ไม่จำกัดเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุก (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุก (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอส',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'},{id:'sttt',n:'Super Tic-Tac-Toe',i:'✖️'}].map(g => (
                                                       <button key={g.id} type="button" onClick={async (e) => { 
-                                                        e.stopPropagation();
-                                                        setCGameOpen(false); 
-                                                        setCUrlOpen(false);
-                                                        const gid = 'cg-' + Date.now(); 
-                                                        const realId = g.id.split('_')[0];
-                                                        const timerSetting = g.id.includes('_') ? parseInt(g.id.split('_')[1]) * 60 : null;
+                                                        e.stopPropagation(); setCGameOpen(false); setCUrlOpen(false);
+                                                        const gid = 'cg-' + Date.now(); const realId = g.id.split('_')[0]; const timerSetting = g.id.includes('_') ? parseInt(g.id.split('_')[1]) * 60 : null;
                                                         await db.collection('bma_chat_games').doc(gid).set({ id: gid, type: realId, name: g.n, players: [currentUser.id], status: 'waiting', gameState: {}, timerSetting, rematch: [], timestamp: Date.now() }); 
                                                         const mid = 'msg-' + Date.now(); 
                                                         await db.collection('bma_messages').doc(mid).set({ id: mid, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: 'ชวนเล่นเกม ' + g.n, isGameInvite: true, gameId: gid, gameType: realId, gameName: g.n, readBy: [currentUser.id], isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: svrTs() }); 
@@ -8864,32 +8882,42 @@
                                 )}
                             </div>
 
-                            {/* ปุ่ม GIF Panel */}
+                            {/* 📌 ปุ่ม GIF Panel (เชื่อมต่อ API จริง) */}
                             <div className="relative hidden sm:block">
                                 <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'text-slate-400 hover:text-white border-transparent hover:border-slate-700 hover:bg-[#0F2547]'}`} title="ส่ง GIF">
                                     GIF
                                 </button>
                                 {showGifPanel && (
-                                    <div className="absolute bottom-full left-0 mb-3 w-72 bg-[#0B1325] border border-[#1E3A5F] p-3 z-50 shadow-[0_0_30px_rgba(0,0,0,0.8)] rounded-xl">
+                                    <div className="absolute bottom-full left-0 mb-3 w-72 bg-[#0B1325] border border-[#1E3A5F] p-3 z-50 shadow-[0_0_30px_rgba(0,0,0,0.8)] rounded-xl animate-fade-in">
                                         <div className="relative mb-2">
                                             <i className="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                                            <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF (จำลอง)..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-7 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
+                                            <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-7 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
                                         </div>
-                                        {/* จำลองดึงข้อมูล Giphy */}
-                                        <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar">
-                                            {mockGifs.map((gif, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    onClick={() => { 
-                                                        setChatAtts([...chatAtts, { id: 'att-gif-' + Date.now(), name: 'GIPHY', type: 'image', url: gif, size: 'GIF' }]); 
-                                                        setShowGifPanel(false); 
-                                                    }} 
-                                                    className="bg-cover bg-center h-20 rounded cursor-pointer hover:ring-2 ring-purple-500 transition-all shadow-sm"
-                                                    style={{ backgroundImage: `url('${gif}')` }}
-                                                ></div>
-                                            ))}
+                                        
+                                        {/* Grid รูปภาพ GIF */}
+                                        <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar relative">
+                                            {isGifLoading ? (
+                                                <div className="col-span-2 flex items-center justify-center text-[10px] text-purple-400 font-bold animate-pulse py-10">
+                                                    ⏳ กำลังค้นหา...
+                                                </div>
+                                            ) : gifResults.length > 0 ? (
+                                                gifResults.map((gif, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        onClick={() => { 
+                                                            setChatAtts([...chatAtts, { id: 'att-gif-' + Date.now(), name: 'GIF', type: 'image', url: gif, size: 'GIF' }]); 
+                                                            setShowGifPanel(false); 
+                                                            setGifSearch('');
+                                                        }} 
+                                                        className="bg-cover bg-center h-20 rounded cursor-pointer hover:ring-2 ring-purple-500 transition-all shadow-sm"
+                                                        style={{ backgroundImage: `url('${gif}')` }}
+                                                    ></div>
+                                                ))
+                                            ) : (
+                                                <div className="col-span-2 text-center text-slate-500 text-[10px] py-10">ไม่พบ GIF ที่ค้นหา</div>
+                                            )}
                                         </div>
-                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY GIPHY</div>
+                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
                                     </div>
                                 )}
                             </div>
