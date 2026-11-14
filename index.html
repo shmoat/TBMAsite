@@ -245,7 +245,14 @@
         try { const v = window.localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } 
         catch (e) { return defaultValue; }
       });
-      useEffect(() => { window.localStorage.setItem(key, JSON.stringify(value)); }, [key, value]);
+      useEffect(() => { 
+          try {
+              window.localStorage.setItem(key, JSON.stringify(value)); 
+          } catch (e) {
+              console.warn("LocalStorage เต็มหรือไม่สามารถเซฟได้:", e);
+              // ดักจับ Error ไว้ เว็บจะได้ไม่จอดำ (แค่ไม่บันทึกสถานะเกมชั่วคราว)
+          }
+      }, [key, value]);
       return [value, setValue];
     }
 
@@ -6458,6 +6465,22 @@
 
       // DAILY GAME STATE
       const todayStr = getGameDateStr();
+      
+      // 🌟 ลบข้อมูล LocalStorage ของวันเก่าๆ ทิ้งอัตโนมัติ ป้องกันเมมโมรี่เต็ม 🌟
+      useEffect(() => {
+        try {
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            // ตรวจสอบว่าเป็น Key ของเกมที่มีวันที่กำกับ และไม่ใช่วันนี้
+            if (key && key.startsWith('bma_') && /\d{4}-\d{2}-\d{2}/.test(key) && !key.includes(todayStr)) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+        } catch (e) { console.warn("Cleanup failed", e); }
+      }, [todayStr]);
+
       const [activeGameTab, setActiveGameTab] = useState(0); 
       const [gameAppSt, setGameAppSt] = useState(() => { try { return JSON.parse(localStorage.getItem('bma_gameSt_' + todayStr)) || {}; } catch { return {}; } });
       useEffect(() => { localStorage.setItem('bma_gameSt_' + todayStr, JSON.stringify(gameAppSt)); }, [gameAppSt, todayStr]);
