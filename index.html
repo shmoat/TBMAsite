@@ -8798,7 +8798,7 @@
                       </div>
                     )}
 
-                    <form onSubmit={handleSendChat} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
+                    <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
                             {/* ปุ่มเครื่องหมาย + (เมนูแนบไฟล์) */}
