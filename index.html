@@ -6414,12 +6414,15 @@
       const [showLinkModal, setShowLinkModal] = useState(false);
       const [linkInputUrl, setLinkInputUrl] = useState('');
 
-      // ฟังก์ชันดึง GIF จาก Tenor API (เปลี่ยน API เพื่อแก้ปัญหา Rate Limit)
+     // ฟังก์ชันดึง GIF จาก Giphy API (แทนที่ Tenor v1 ที่ถูกปิดใช้งาน)
       useEffect(() => {
           if (!showGifPanel) return;
           
           let isMounted = true;
           if (gifDebounceRef.current) clearTimeout(gifDebounceRef.current);
+          
+          // ใช้ Public Key ของ Giphy (สามารถเปลี่ยนเป็น Key ของตัวเองได้หากนำไปใช้ระยะยาว)
+          const GIPHY_API_KEY = "GlVGYHqc3SyXXKbGd01T15gJUSY2l11y";
           
           const fetchGifs = async (url) => {
               setIsGifLoading(true);
@@ -6428,9 +6431,9 @@
                   const res = await fetch(url);
                   if (res.ok) {
                       const data = await res.json();
-                      if (isMounted && data.results) {
-                          // ดึง URL จาก Tenor API (tinygif เพื่อให้โหลดไว)
-                          setGifResults(data.results.map(g => g.media[0].tinygif.url));
+                      // Giphy จะเก็บข้อมูล array ไว้ใน property ที่ชื่อ data.data
+                      if (isMounted && data.data) {
+                          setGifResults(data.data.map(g => g.images.fixed_height_small.url));
                       }
                   } else {
                       if (isMounted) setGifResults([]);
@@ -6445,11 +6448,11 @@
 
           if (!gifSearch.trim()) {
               // แสดงภาพฮิต (Trending) ถ้ายังไม่ได้พิมพ์อะไร
-              fetchGifs('https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=12');
+              fetchGifs(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12`);
           } else {
               // ค้นหา
               gifDebounceRef.current = setTimeout(() => {
-                  fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
+                  fetchGifs(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=12`);
               }, 600); // หน่วงเวลา 0.6 วิ
           }
           
