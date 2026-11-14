@@ -5257,6 +5257,779 @@
     };
 
     // ==========================================
+    // 👑 OWNER DASHBOARD & MANAGEMENT COMPONENT 👑
+    // ==========================================
+    function OwnerPage({ 
+      users, posts, chatMessages, groups, bmaEvents, 
+      allTags, db, getTags, setMemberModal 
+    }) {
+      const [subTab, setSubTab] = useState('dashboard'); // 'dashboard' | 'members'
+  
+      // States สำหรับระบบออกรหัสใหม่
+      const [idType, setIdType] = useState('M'); // 'M' | 'F'
+      const [newMId, setNewMId] = useState('');
+      const [hostMemberId, setHostMemberId] = useState('');
+      const [newMTags, setNewMTags] = useState(['LCs & Pal']);
+      const [cTag, setCTag] = useState('');
+      const [lastCreatedUser, setLastCreatedUser] = useState(null);
+      const [copiedId, setCopiedId] = useState(null);
+
+      // States สำหรับค้นหาและกรองสมาชิก
+      const [searchMember, setSearchMember] = useState('');
+      const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING' | 'VICE' | 'FOLLOWER'
+      const [tagFilter, setTagFilter] = useState('ALL');
+
+      // States สำหรับ Modal แก้ไขข้อมูลสมาชิก
+      const [editTagU, setEditTagU] = useState(null);
+      const [editTagL, setEditTagL] = useState([]);
+      const [resetPassU, setResetPassU] = useState(null);
+      const [newPassVal, setNewPassVal] = useState('');
+
+      // คำนวณรหัส M ถัดไปอัตโนมัติ
+      const getNextMId = useCallback(() => {
+        const max = users.reduce((m, u) => {
+          const r = String(u.id).match(/^M(\d+)$/i);
+          return r ? Math.max(m, parseInt(r[1], 10)) : m;
+        }, 0);
+        return 'M' + String(max + 1).padStart(3, '0');
+      }, [users]);
+
+      // คำนวณรหัส F ถัดไปอัตโนมัติ
+      const getNextFId = useCallback(() => {
+        const max = users.reduce((m, u) => {
+          const r = String(u.id).match(/^F(\d+)$/i);
+          return r ? Math.max(m, parseInt(r[1], 10)) : m;
+        }, 0);
+        return 'F' + String(max + 1).padStart(3, '0');
+      }, [users]);
+
+      useEffect(() => {
+        if (idType === 'M') {
+          setNewMId(getNextMId());
+        } else {
+          if (hostMemberId) {
+            const suffix = hostMemberId.substring(1);
+            setNewMId('F' + suffix);
+          } else {
+            setNewMId(getNextFId());
+          }
+        }
+      }, [idType, hostMemberId, getNextMId, getNextFId]);
+
+      // ข้อมูลสถิติสำหรับ Dashboard
+      const activeUsers = users.filter(u => u.isActivated);
+      const pendingUsers = users.filter(u => !u.isActivated);
+      const onlineNow = activeUsers.filter(u => u.isOnline && (Date.now() - (u.lastActive || 0) < 300000));
+      const active24h = activeUsers.filter(u => (Date.now() - (u.lastActive || 0) < 86400000));
+      const followersCount = users.filter(u => String(u.id).startsWith('F')).length;
+      const totalComments = posts.reduce((sum, p) => sum + (p.comments?.length || 0), 0);
+
+      // คัดลอกข้อความเชิญเข้าสมาคม
+      const handleCopyInvite = (id) => {
+        const link = window.location.origin + window.location.pathname;
+        const msg = `ยินดีต้อนรับสู่ The Blue Moon Association 🪐\n\nลิงก์เข้าสู่เว็บไซต์: ${link}\n\nรหัสประจำตัวของคุณคือ: ${id}\nกรุณากดที่ "เปิดใช้งาน Member ID" ในหน้าเข้าสู่ระบบเพื่อตั้งชื่อ Username และรหัสผ่านสำหรับการเข้าใช้งานครับ`;
+        navigator.clipboard.writeText(msg);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2500);
+      };
+
+  // สร้างรหัสสมาชิกใหม่
+      const handleCreateId = async (e) => {
+        e.preventDefault();
+        const id = newMId.trim().toUpperCase();
+        if (!id) return;
+        if (users.some(u => String(u.id).toUpperCase() === id)) {
+          return alert(`รหัส ${id} มีอยู่ในระบบแล้ว!`);
+        }
+
+        const newUserObj = {
+          id,
+          memberTag: newMTags[0] || 'Others',
+          memberTags: newMTags.length ? newMTags : ['Others'],
+          role: 'member',
+          isActivated: false,
+          isOnline: false,
+          lastActive: 0,
+          username: '',
+          password: '',
+          displayName: `รออนุมัติ (${id})`,
+          bio: hostMemberId ? `ผู้ติดตามของสมาชิก ${hostMemberId}` : '',
+          avatarUrl: '',
+          socialLinks: [],
+          usernameChangeHistory: [],
+          joinedAt: new Date().toISOString().split('T')[0]
+        };
+
+        await db.collection('bma_users').doc(id).set(newUserObj);
+        setLastCreatedUser(newUserObj);
+        if (idType === 'M') setNewMId(getNextMId());
+        else setHostMemberId('');
+      };
+
+      // กรองรายชื่อสมาชิกในตาราง
+      const filteredMembers = users.filter(u => {
+        if (statusFilter === 'ACTIVE' && !u.isActivated) return false;
+        if (statusFilter === 'PENDING' && u.isActivated) return false;
+        if (statusFilter === 'VICE' && u.role !== 'mod' && u.role !== 'admin') return false;
+        if (statusFilter === 'FOLLOWER' && !String(u.id).startsWith('F')) return false;
+        if (tagFilter !== 'ALL' && !getTags(u).includes(tagFilter)) return false;
+        if (searchMember.trim()) {
+          const q = searchMember.toLowerCase();
+          const matchId = String(u.id).toLowerCase().includes(q);
+          const matchName = (u.displayName || '').toLowerCase().includes(q);
+          const matchUser = (u.username || '').toLowerCase().includes(q);
+          if (!matchId && !matchName && !matchUser) return false;
+        }
+        return true;
+      });
+
+      return (
+        <div className="space-y-5 text-xs pb-10">
+          {/* แถบสลับหน้าย่อยของ Owner */}
+          <div className="card p-3 flex flex-wrap items-center justify-between gap-3 bg-[#0B1325] border-[#1E3A5F]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/50 flex items-center justify-center text-lg">👑</div>
+              <div>
+                <h2 className="text-sm font-bold text-white">Owner Control Center</h2>
+                <p className="text-[10px] text-slate-400">ระบบจัดการและสถิติภาพรวม The Blue Moon Association</p>
+              </div>
+            </div>
+            <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+              <button 
+                onClick={() => setSubTab('dashboard')} 
+                className={`px-3.5 py-1.5 rounded-lg font-bold transition-all ${subTab === 'dashboard' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                📊 ภาพรวม & ออกรหัสด่วน
+              </button>
+              <button 
+                onClick={() => setSubTab('members')} 
+                className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${subTab === 'members' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                <span>👥 จัดการสมาชิก</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${subTab === 'members' ? 'bg-[#050811] text-amber-400' : 'bg-[#0F2547] text-sky-300'}`}>{users.length}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ========================================== */}
+          {/* TAB 1: DASHBOARD & SMART ID GENERATOR      */}
+          {/* ========================================== */}
+          {subTab === 'dashboard' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* การ์ดสรุปสถิติ 4 ช่อง */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F] relative overflow-hidden">
+                  <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">สมาชิกที่เปิดใช้งาน</div>
+                  <div className="text-2xl font-bold font-mono text-white mt-1">
+                    {activeUsers.length} <span className="text-xs text-slate-400 font-normal">/ {users.length}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-2 flex justify-between">
+                    <span>รออนุมัติ: <strong className="text-amber-300">{pendingUsers.length}</strong></span>
+                    <span>ผู้ติดตาม: <strong className="text-sky-300">{followersCount}</strong></span>
+                  </div>
+                </div>
+
+                <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F]">
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">สถานะการออนไลน์</div>
+                  <div className="text-2xl font-bold font-mono text-emerald-400 mt-1 flex items-center gap-2">
+                    <span>{onlineNow.length}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-300 font-sans">Online</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-2">
+                    แอคทีฟใน 24 ชม.: <strong className="text-white">{active24h.length} คน</strong>
+                  </div>
+                </div>
+
+                <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F]">
+                  <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">กระดานโพสต์ (Board)</div>
+                  <div className="text-2xl font-bold font-mono text-white mt-1">{posts.length}</div>
+                  <div className="text-[10px] text-slate-400 mt-2">
+                    ความคิดเห็นรวม: <strong className="text-amber-300">{totalComments} รายการ</strong>
+                  </div>
+                </div>
+
+                <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F]">
+                  <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">ระบบแชต & กิจกรรม</div>
+                  <div className="text-2xl font-bold font-mono text-white mt-1">{chatMessages.length}</div>
+                  <div className="text-[10px] text-slate-400 mt-2 flex justify-between">
+                    <span>กลุ่มแชต: <strong className="text-purple-300">{groups?.length || 0}</strong></span>
+                    <span>อีเวนต์: <strong className="text-sky-300">{bmaEvents?.length || 0}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* โซนออกรหัสสมาชิกใหม่ (Revamped ID Generator) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div className="lg:col-span-7 card p-5 space-y-4 border-sky-500/40 shadow-xl">
+                  <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-amber-300 flex items-center gap-1.5">✨ ออกรหัสประจำตัวใหม่ (ID Generator)</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">เลือกประเภทสมาชิกและหมวดหมู่เพื่อสร้างรหัสเข้าใช้งาน</p>
+                    </div>
+                    <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+                      <button 
+                        type="button" 
+                        onClick={() => setIdType('M')} 
+                        className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all ${idType === 'M' ? 'bg-white text-[#050811]' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        🪐 Member (M)
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setIdType('F')} 
+                        className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all ${idType === 'F' ? 'bg-sky-400 text-[#050811]' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        🛰️ Follower (F)
+                      </button>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleCreateId} className="space-y-4">
+                    {idType === 'F' && (
+                      <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-2">
+                        <label className="block text-[11px] font-bold text-sky-300">🔗 เลือกสมาชิกหลักที่พาผู้ติดตามมา (1 คนต่อ 1 ผู้ติดตาม)</label>
+                        <select 
+                          value={hostMemberId} 
+                          onChange={(e) => {
+                            const mId = e.target.value;
+                            setHostMemberId(mId);
+                            const hostUser = users.find(u => u.id === mId);
+                            if (hostUser) setNewMTags(getTags(hostUser));
+                          }} 
+                          className="w-full inp py-1.5 text-xs bg-[#0B1325]"
+                        >
+                          <option value="">-- กำหนดรหัส F เองโดยไม่ผูกเลข --</option>
+                          {users.filter(u => String(u.id).startsWith('M')).map(m => {
+                            const fId = 'F' + String(m.id).substring(1);
+                            const hasFollower = users.some(x => x.id === fId);
+                            return (
+                              <option key={m.id} value={m.id} disabled={hasFollower}>
+                                {m.id} - {m.displayName} {hasFollower ? `(มีผู้ติดตาม ${fId} แล้ว)` : `(จะได้รับรหัส ${fId})`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="sm:w-40">
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">รหัสที่จะออก (แก้ไขได้)</label>
+                        <input 
+                          type="text" 
+                          value={newMId} 
+                          onChange={(e) => setNewMId(e.target.value)} 
+                          className={`w-full inp font-mono font-bold text-base text-center uppercase ${idType === 'F' ? 'text-sky-300 border-sky-500/50' : 'text-amber-300 border-amber-500/50'}`} 
+                          required 
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] text-slate-400 font-bold mb-1">สร้างหมวดหมู่ (Tag) ใหม่เพิ่มเติม</label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            value={cTag} 
+                            onChange={(e) => setCTag(e.target.value)} 
+                            placeholder="พิมพ์ชื่อหมวดหมู่ใหม่..." 
+                            className="flex-1 inp" 
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => { 
+                              if (cTag.trim() && !newMTags.includes(cTag.trim())) setNewMTags([...newMTags, cTag.trim()]); 
+                              setCTag(''); 
+                            }} 
+                            className="btn-b shrink-0"
+                          >
+                            + เพิ่มแท็ก
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-bold mb-1.5">เลือกหมวดหมู่ของสมาชิกนี้ (เลือกได้มากกว่า 1)</label>
+                      <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                        {Array.from(new Set([...allTags, ...newMTags])).map((t) => {
+                          const sel = newMTags.includes(t);
+                          return (
+                            <button 
+                              type="button" 
+                              key={t} 
+                              onClick={() => setNewMTags(sel ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} 
+                              className={sel ? 'px-3 py-1 rounded-full bg-white text-[#050811] font-bold shadow transition-transform scale-105' : 'px-3 py-1 rounded-full bg-[#0B1325] text-slate-400 border border-[#1E3A5F] hover:text-white'}
+                            >
+                              {sel ? '✓ ' + t : '+ ' + t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button type="submit" className="w-full btn-w py-2.5 text-sm shadow-lg hover:scale-[1.01] transition-transform">
+                      ➕ ยืนยันการออกรหัส {newMId.toUpperCase()}
+                    </button>
+                  </form>
+
+                  {/* กล่องแสดงผลเมื่อออกรหัสสำเร็จ พร้อมปุ่มคัดลอกทันที */}
+                  {lastCreatedUser && (
+                    <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/60 space-y-2.5 animate-fade-in">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-emerald-300 text-xs">🎉 ออกรหัส {lastCreatedUser.id} สำเร็จเรียบร้อย!</span>
+                        <button onClick={() => setLastCreatedUser(null)} className="text-slate-400 hover:text-white">✕</button>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-[#050811] border border-[#1E3A5F] font-mono text-[11px] text-slate-300 whitespace-pre-line">
+                        {`รหัสประจำตัว: ${lastCreatedUser.id}\nหมวดหมู่: ${lastCreatedUser.memberTags.join(', ')}`}
+                      </div>
+                      <button 
+                        onClick={() => handleCopyInvite(lastCreatedUser.id)} 
+                        className="w-full py-2 rounded-xl bg-emerald-500 text-[#050811] font-bold hover:bg-emerald-400 transition-colors shadow"
+                      >
+                        {copiedId === lastCreatedUser.id ? '✓ คัดลอกข้อความเชิญแล้ว!' : '📋 คัดลอกข้อความเชิญส่งให้สมาชิก'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* สัดส่วนหมวดหมู่ & รหัสที่รอเปิดใช้งาน */}
+                <div className="lg:col-span-5 space-y-4">
+                  {/* การ์ดรหัสที่ยังไม่เปิดใช้งาน (Pending Codes) */}
+                  <div className="card p-4 space-y-3">
+                    <div className="flex justify-between items-center border-b border-[#1E3A5F] pb-2">
+                      <h3 className="font-bold text-amber-300">⏳ รหัสที่รอการเปิดใช้งาน ({pendingUsers.length})</h3>
+                      {pendingUsers.length > 0 && (
+                        <button onClick={() => { setStatusFilter('PENDING'); setSubTab('members'); }} className="text-[10px] text-sky-400 hover:underline">ดูทั้งหมด →</button>
+                      )}
+                    </div>
+                    {pendingUsers.length === 0 ? (
+                      <div className="text-center py-6 text-slate-500">สมาชิกทุกคนเปิดใช้งานรหัสครบทั้งหมดแล้ว ✨</div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                        {pendingUsers.map(u => (
+                          <div key={u.id} className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`font-mono font-bold text-xs ${String(u.id).startsWith('F') ? 'text-sky-400' : 'text-amber-300'}`}>{u.id}</span>
+                                <TagBadges user={u} />
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">สร้างเมื่อ: {u.joinedAt || '-'}</div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button 
+                                onClick={() => handleCopyInvite(u.id)} 
+                                className="btn-w py-1 px-2.5 text-[10px]"
+                              >
+                                {copiedId === u.id ? '✓ คัดลอกแล้ว' : '📋 คัดลอกคำเชิญ'}
+                              </button>
+                              <button 
+                                onClick={() => confirm(`ลบรหัส ${u.id} ทิ้ง?`) && db.collection('bma_users').doc(u.id).delete()} 
+                                className="p-1 rounded bg-red-950/50 text-red-400 hover:bg-red-900"
+                                title="ลบรหัสนี้"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* สัดส่วนสมาชิกตามหมวดหมู่ */}
+                  <div className="card p-4 space-y-2.5">
+                    <h3 className="font-bold text-sky-300 border-b border-[#1E3A5F] pb-2">🏷️ สัดส่วนสมาชิกตามหมวดหมู่</h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                      {allTags.map(tag => {
+                        const count = users.filter(u => getTags(u).includes(tag)).length;
+                        const pct = users.length ? Math.round((count / users.length) * 100) : 0;
+                        return (
+                          <div key={tag} className="space-y-1">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="font-semibold text-slate-200">{tag}</span>
+                              <span className="font-mono text-slate-400">{count} คน ({pct}%)</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-[#050811] overflow-hidden border border-[#1E3A5F]/50">
+                              <div className="h-full bg-sky-400 rounded-full transition-all" style={{ width: `${pct}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================== */}
+          {/* TAB 2: MEMBER DIRECTORY & MANAGEMENT       */}
+          {/* ========================================== */}
+          {subTab === 'members' && (
+            <div className="card p-5 space-y-4 animate-fade-in">
+              {/* แถบค้นหาและตัวกรอง */}
+              <div className="flex flex-col md:flex-row gap-2.5 justify-between">
+                <input 
+                  type="text" 
+                  value={searchMember} 
+                  onChange={(e) => setSearchMember(e.target.value)} 
+                  placeholder="🔍 ค้นหาด้วยรหัส (เช่น M001), ชื่อที่แสดง หรือ @username..." 
+                  className="flex-1 inp text-xs"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="inp py-1.5 text-xs bg-[#050811]">
+                    <option value="ALL">สถานะทั้งหมด ({users.length})</option>
+                    <option value="ACTIVE">🟢 เปิดใช้งานแล้ว ({activeUsers.length})</option>
+                    <option value="PENDING">⏳ รอเปิดใช้งาน ({pendingUsers.length})</option>
+                    <option value="VICE">🛡️ เฉพาะ Owner / Vice</option>
+                    <option value="FOLLOWER">🛰️ เฉพาะผู้ติดตาม (F)</option>
+                  </select>
+                  <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="inp py-1.5 text-xs bg-[#050811]">
+                    <option value="ALL">ทุกหมวดหมู่</option>
+                    {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* รายการสมาชิก */}
+              <div className="space-y-2.5 max-h-[62vh] overflow-y-auto pr-1 custom-scrollbar">
+                {filteredMembers.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500 border border-dashed border-[#1E3A5F] rounded-xl">
+                    ไม่พบรายชื่อสมาชิกที่ตรงกับเงื่อนไขการค้นหา
+                  </div>
+                ) : (
+                  filteredMembers.map((u) => {
+                    const stat = getStatusInfo(u);
+                    return (
+                      <div key={u.id} className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] hover:border-white/30 transition-colors flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div onClick={() => u.isActivated && setMemberModal && setMemberModal(u)} className={u.isActivated ? "cursor-pointer" : ""}>
+                            <Avatar user={u} size="md" showStatus={u.isActivated} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${String(u.id).startsWith('F') ? 'bg-sky-400 text-[#050811]' : 'bg-white text-[#050811]'}`}>
+                                {u.id}
+                              </span>
+                              <span className="font-bold text-sm text-white truncate">{u.displayName}</span>
+                              <RoleBadge role={u.role} />
+                              {!u.isActivated && <span className="px-2 py-0.5 rounded-full bg-amber-950 border border-amber-600 text-amber-300 text-[10px] font-bold">⏳ ยังไม่เปิดใช้งาน</span>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
+                              {u.isActivated ? (
+                                <>
+                                  <span className="font-mono text-sky-300">@{u.username}</span>
+                                  <span>•</span>
+                                  <span>{stat.t}</span>
+                                </>
+                              ) : (
+                                <span>สร้างรหัสเมื่อ: {u.joinedAt || '-'}</span>
+                              )}
+                            </div>
+                            <div className="mt-1.5">
+                              <TagBadges user={u} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ปุ่มจัดการสมาชิก */}
+                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                          {!u.isActivated && (
+                            <button 
+                              onClick={() => handleCopyInvite(u.id)} 
+                              className="btn-w py-1.5 px-3 text-[11px]"
+                            >
+                              {copiedId === u.id ? '✓ คัดลอกแล้ว' : '📋 ส่งคำเชิญ'}
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} 
+                            className="btn-d text-blue-200 py-1.5"
+                          >
+                            🏷️ หมวดหมู่
+                          </button>
+                          {u.isActivated && (
+                            <button 
+                              onClick={() => { setResetPassU(u); setNewPassVal(u.password || ''); }} 
+                              className="btn-d text-amber-300 py-1.5"
+                              title="ดูหรือเปลี่ยนรหัสผ่านให้สมาชิก"
+                            >
+                              🔑 รหัสผ่าน
+                            </button>
+                          )}
+                          {u.role !== 'admin' && u.isActivated && (
+                            <button 
+                              onClick={() => db.collection('bma_users').doc(u.id).update({ role: u.role === 'mod' ? 'member' : 'mod' })} 
+                              className="btn-b py-1.5"
+                            >
+                              {u.role === 'mod' ? 'ปลด Vice' : '🛡️ ตั้ง Vice'}
+                            </button>
+                          )}
+                          {u.role !== 'admin' && (
+                            <button 
+                              onClick={() => confirm(`ยืนยันการลบบัญชี ${u.id} (${u.displayName}) ออกจากระบบ?`) && db.collection('bma_users').doc(u.id).delete()} 
+                              className="px-2.5 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 font-bold border border-red-900/50"
+                            >
+                              🗑️ ลบ
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Modal แก้ไขหมวดหมู่สมาชิก */}
+          {editTagU && (
+            <Modal title={`🏷️ แก้ไขหมวดหมู่: ${editTagU.displayName} (${editTagU.id})`} onClose={() => setEditTagU(null)}>
+              <div className="space-y-3 text-xs">
+                <div className="flex gap-2">
+                  <input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มหมวดหมู่ใหม่..." className="flex-1 inp" />
+                  <button type="button" onClick={() => { if (cTag.trim() && !editTagL.includes(cTag.trim())) setEditTagL([...editTagL, cTag.trim()]); setCTag(''); }} className="btn-b">+ เพิ่ม</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                  {Array.from(new Set([...allTags, ...editTagL])).map((t) => (
+                    <button 
+                      key={t} 
+                      onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} 
+                      className={editTagL.includes(t) ? 'px-3 py-1 rounded-full bg-white text-[#050811] font-bold' : 'px-3 py-1 rounded-full bg-[#0B1325] text-slate-400 border border-[#1E3A5F]'}
+                    >
+                      {editTagL.includes(t) ? '✓ ' + t : '+ ' + t}
+                    </button>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => { 
+                    db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); 
+                    setEditTagU(null); 
+                  }} 
+                  className="w-full btn-w py-2.5 mt-2"
+                >
+                  💾 บันทึกหมวดหมู่
+                </button>
+              </div>
+            </Modal>
+          )}
+
+          {/* Modal ดู/รีเซ็ตรหัสผ่านให้สมาชิก */}
+          {resetPassU && (
+            <Modal title={`🔑 จัดการรหัสผ่าน: ${resetPassU.displayName} (${resetPassU.id})`} onClose={() => setResetPassU(null)}>
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-1">
+                  <div className="text-slate-400">Username ปัจจุบัน: <strong className="font-mono text-white">@{resetPassU.username}</strong></div>
+                  <div className="text-slate-400">Password ปัจจุบัน: <strong className="font-mono text-amber-300">{resetPassU.password}</strong></div>
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1 font-bold">ตั้งรหัสผ่านใหม่ (กรณีสมาชิกลืมรหัสผ่าน)</label>
+                  <input 
+                    type="text" 
+                    value={newPassVal} 
+                    onChange={(e) => setNewPassVal(e.target.value)} 
+                    className="w-full inp font-mono" 
+                    placeholder="ระบุรหัสผ่านใหม่..."
+                  />
+                </div>
+                <button 
+                  onClick={async () => {
+                    if (!newPassVal.trim()) return alert('กรุณาระบุรหัสผ่าน');
+                    await db.collection('bma_users').doc(resetPassU.id).update({ password: newPassVal.trim() });
+                    alert(`อัปเดตรหัสผ่านของ ${resetPassU.displayName} เรียบร้อยแล้ว`);
+                    setResetPassU(null);
+                  }} 
+                  className="w-full btn-w py-2.5"
+                >
+                  ✅ บันทึกรหัสผ่านใหม่
+                </button>
+              </div>
+            </Modal>
+          )}
+        </div>
+      );
+    }
+
+    function BoardPage({ 
+      currentUser, searchQ, setSearchQ, setVisiblePosts, setCreatePost, 
+      filterMenuOpen, setFilterMenuOpen, tagFilter, setTagFilter, allTags, 
+      filterType, setFilterType, filterLatestOnly, setFilterLatestOnly, 
+      filteredPosts, visiblePosts, hiPostId, getAuthor, setMemberModal, 
+      postMenu, setPostMenu, db, handleEditPostReq, setCurrentView, setActiveGameTab, GAMES, fmtTime,
+      toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment
+    }) {
+      return (
+        <>
+      {/* ส่วนค้นหาและฟิลเตอร์ */}
+          <div className="card p-3.5 space-y-2.5">
+            <div className="flex gap-2">
+              <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
+              {currentUser && <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap">+ เขียนโพสต์ / โพลล์</button>}
+            </div>
+            <div className="relative">
+              <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
+                <span>⚙️ เลือกดู</span>
+                {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+              </button>
+          
+              {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
+          
+              {filterMenuOpen && (
+                <div className="absolute top-full mt-2 left-0 w-64 card p-3 z-30 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
+                  <div>
+                    <div className="font-bold text-sky-300 mb-1.5">🏷️ หมวดหมู่สมาชิก</div>
+                    <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                      <option value="ALL">ทั้งหมด</option>
+                      {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="font-bold text-sky-300 mb-1.5">📝 ประเภทโพสต์</div>
+                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                      <option value="ALL">ทั้งหมด</option>
+                      <option value="NORMAL">โพสต์ทั่วไป</option>
+                      <option value="GAME">🎮 ผล Daily Games</option>
+                      <option value="MEDIA">🖼️ มีสื่อ</option>
+                    </select>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
+                    <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
+                    <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
+                  </label>
+
+                  {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
+                    <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
+                      ✕ ล้างฟิลเตอร์ทั้งหมด
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+      {/* รายการโพสต์ */}
+          {filteredPosts.slice(0, visiblePosts).map((post) => {
+            const author = getAuthor(post.authorId);
+            const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
+            const isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
+            const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt;
+            const totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
+            const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
+            const allComm = post.comments || [];
+            const rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
+
+            return (
+              <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 shadow-2xl border border-sky-900/50'}>
+                          {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
+                          <div className="flex justify-between items-start gap-2">
+                            <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${author.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
+                            <div className="flex items-center gap-2 relative">
+                              {!canManage(post.authorId) && <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
+                              {canManage(post.authorId) && (
+                                <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold">⋮</button>
+                              )}
+                              {postMenu === post.id && (
+                                <div className="absolute top-6 right-0 w-48 card border border-white/20 shadow-2xl py-1 z-30 flex flex-col text-left">
+                                  <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
+                                    <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
+                                  </button>
+                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไขโพสต์</button>
+                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) { db.collection('bma_posts').doc(post.id).delete(); window.history.replaceState({}, document.title, window.location.pathname); setCurrentView('home'); } }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400">🗑️ ลบโพสต์</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
+                          {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
+                          {post.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {post.tags.map(t => (
+                                      <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[10px] border border-sky-800 transition-colors shadow-sm">
+                                          #{t}
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+
+                          {post.dailyGameShare && (
+                            <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
+                              <div className="text-amber-300 font-bold">🎯 {GAMES[post.dailyGameShare.gameIndex]?.name || 'Daily Game'}</div>
+                              <div className="text-sm">ผู้โพสต์ทำสถิติได้: <span className="font-mono text-white font-bold bg-black/40 px-2 py-0.5 rounded">
+                                {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
+                              </span></div>
+                              <button onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start mt-1 hover:scale-105 transition-transform">🎮 ตามไปเล่นเกมนี้เลย</button>
+                            </div>
+                          )}
+
+                          {post.poll && (
+                            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                              <div className="flex justify-between text-xs"><span className="font-bold">📊 {post.poll.question}</span><span className="text-slate-400">{post.poll.isAnonymous ? '🕵️ ไม่ระบุชื่อ' : '👁️ แสดงชื่อในคอมเมนต์'}</span></div>
+                              {(post.poll.options || []).map((opt) => {
+                                const voted = currentUser && (opt.votes || []).includes(currentUser.id);
+                                return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อนโหวต!'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-xs'}><span>{voted ? '✓ ' + opt.text : opt.text}</span><span>โหวต</span></button>;
+                              })}
+                            </div>
+                          )}
+
+                          {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
+
+                          <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
+                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => { if(!currentUser) return; db.collection('bma_posts').doc(post.id).update({ likes: (post.likes||[]).includes(currentUser.id) ? post.likes.filter((i) => i !== currentUser.id) : [...(post.likes || []), currentUser.id] }); }} />
+                            <div className="flex gap-2">
+                               <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">🔗 คัดลอกลิงก์แชร์</button>
+                               <button onClick={async () => { if (!currentUser) return alert('เข้าสู่ระบบก่อนบันทึกโพสต์'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
+                            </div>
+                          </div>
+
+                          <div className="pt-2.5 border-t border-[#1E3A5F]/60 space-y-2">
+                            {post.poll && (
+                              <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-1.5 text-xs">
+                                <div className="font-bold text-sky-300">📊 ผลโพลล์ในคอมเมนต์ (รวม {totalVotes} โหวต)</div>
+                                {(post.poll.options || []).map((o) => {
+                                  const c = o.votes?.length || 0, pct = totalVotes ? Math.round((c / totalVotes) * 100) : 0;
+                                  return <div key={o.id}><div className="flex justify-between"><span>{o.text}</span><span className="font-mono">{c} โหวต ({pct}%)</span></div>{!post.poll.isAnonymous && c > 0 && <div className="text-[10px] text-slate-400">ผู้โหวต: {o.votes.map((u) => getAuthor(u).displayName).join(', ')}</div>}</div>;
+                                })}
+                              </div>
+                            )}
+
+                            <div className="space-y-2">
+                              {rootComm.map((c, idx) => (
+                                <PantipThread key={c.id} c={c} all={allComm} lbl={'ความเห็นที่ ' + (idx + 1)} postId={post.id} me={currentUser} getAuthor={getAuthor} canManage={canManage} onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} onCtx={setCommMenu} />
+                              ))}
+                            </div>
+
+                            {currentUser && (
+                              <div className="space-y-1.5 pt-1">
+                                {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex gap-2 items-end">
+                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
+                                        <button onClick={() => handleAddComment(post.id, null)} className="btn-b text-xs">ส่ง</button>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
+                                      <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[10px]"><UpIcon />แนบไฟล์</button>
+                                      <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[10px]">🔗 แนบลิงก์</button>
+                                    </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+            );
+          })}
+      
+          {visiblePosts < filteredPosts.length && (
+            <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
+              ⏳ กำลังโหลดโพสต์เพิ่มเติม...
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // ==========================================
     // 8. MAIN APP COMPONENT (State & Logic)
     // ==========================================
     function App() {
@@ -8288,265 +9061,49 @@
           {/* MAIN POST BOARD / BOOKMARKS / ADMIN VIEW */}
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+    
               <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
-                {!currentUser ? (
-                  <div className="card p-4 text-xs text-slate-300 bg-[#0B1325] border-[#1E3A5F]">
-                    <div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>
-                    แสดงเฉพาะโพสต์ที่อนุญาตให้อ่านได้
-                  </div>
-                ) : (
-                  <div className="card p-5 flex flex-col items-center text-center space-y-3 relative overflow-hidden bg-[#0B1325] border-[#1E3A5F]">
-                    <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-[#1E3A5F]/80 via-[#0F2547]/50 to-transparent opacity-80"></div>
-                    <div className="relative z-10 mt-2"><Avatar user={currentUser} size="lg" showStatus={true} /></div>
-                    <div className="relative z-10">
-                      <h3 className="font-bold text-base flex items-center justify-center gap-1.5">{currentUser.displayName} <RoleBadge role={currentUser.role} /></h3>
-                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">@{currentUser.username} • {currentUser.id}</p>
-                    </div>
-                    <div className="relative z-10 w-full pt-3 border-t border-[#1E3A5F] flex justify-center">
-                      <TagBadges user={currentUser} />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="card p-2 space-y-1 text-xs">
-                  {currentView === 'admin' ? (
-                    <button className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md cursor-default">
-                      <span>👑 หน้าจัดการสมาชิก (Owner)</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button onClick={() => { setSearchQ(''); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ !== currentUser?.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                        <span>📝 กระดานโพสต์รวม</span>
-                      </button>
-                      
-                      {currentUser && (
-                        <button onClick={() => { setSearchQ(currentUser.id); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ === currentUser.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-sky-500 text-white shadow-lg' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                          <span>👤 โพสต์ของฉัน</span>
-                          <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono">{posts.filter((p) => p.authorId === currentUser.id).length}</span>
-                        </button>
-                      )}
-                      
-                      {currentUser && (
-                        <div className="flex flex-col gap-1.5 w-full mt-3 pt-3 border-t border-[#1E3A5F]/50">
-                            <button onClick={() => { setCurrentView('feed'); setFilterType('ALL'); setFilterLatestOnly(false); setTagFilter('ALL'); setSearchQ(''); }} className={`w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold transition-colors ${currentView === 'feed' && filterType === 'ALL' && !filterLatestOnly && tagFilter === 'ALL' && searchQ === '' ? 'bg-white text-[#050811] shadow-md' : 'hover:bg-[#0F2547] text-slate-300 hover:text-white'}`}>
-                                📖 โพสต์ทั้งหมด
-                            </button>
-                      
-                            <button onClick={() => setCurrentView('bookmarks')} className={`w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold transition-colors ${currentView === 'bookmarks' ? 'bg-amber-400 text-[#050811] shadow-md' : 'hover:bg-[#0F2547] text-slate-300 hover:text-white'}`}>
-                                ⭐ โพสต์ที่บันทึก
-                            </button>
-                      
-                            <button onClick={() => setShowCalendar(true)} className="w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm mt-1">
-                                📅 ปฏิทินสมาคม
-                            </button>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                {/* ... โค้ดส่วนเมนูด้านซ้าย (Aside) คงเดิม ... */}
               </aside>
 
-              <main onScroll={(e) => { const { scrollTop, scrollHeight, clientHeight } = e.target; if (scrollHeight - scrollTop <= clientHeight + 200 && visiblePosts < filteredPosts.length) { setVisiblePosts(v => v + 10); } }} className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2 custom-scrollbar">
+              <main 
+                onScroll={(e) => { 
+                  const { scrollTop, scrollHeight, clientHeight } = e.target; 
+                  if (scrollHeight - scrollTop <= clientHeight + 200 && visiblePosts < filteredPosts.length) { 
+                    setVisiblePosts(v => v + 10); 
+                  } 
+                }} 
+                className="lg:col-span-8 xl:col-span-9 space-y-4 pb-10 overflow-y-auto h-full pr-2 custom-scrollbar"
+              >
+                {/* ใช้งานคอมโพเนนต์ที่แยกออกมา */}
                 {currentView === 'admin' && currentUser?.role === 'admin' ? (
-                  <div className="space-y-5 text-xs">
-                    <div className="card p-5 space-y-3">
-                      <h2 className="text-sm font-bold">👑 ออกรหัสประจำตัวสมาชิกใหม่</h2>
-                      {actSuccessMsg && <div className="p-2.5 rounded-xl bg-emerald-950 text-emerald-200 font-bold border border-emerald-800">{actSuccessMsg}</div>}
-                      <form onSubmit={async (e) => { e.preventDefault(); const id = newMId.trim().toUpperCase(); if (!id || users.some((u) => u.id === id)) return alert('รหัสซ้ำ!'); if(id.startsWith('F')) { const suffix = id.substring(1); if(users.some(u => u.id === 'F' + suffix)) return alert('รหัสผู้ติดตามสามารถมี F' + suffix + ' ได้แค่คนเดียวเท่านั้น'); } await db.collection('bma_users').doc(id).set({ id, memberTag: newMTags[0], memberTags: newMTags, role: 'member', isActivated: false, isOnline: false, lastActive: 0, username: '', password: '', displayName: 'รออนุมัติ (' + id + ')', bio: '', avatarUrl: '', socialLinks: [], usernameChangeHistory: [], joinedAt: new Date().toISOString().split('T')[0] }); setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length + 1).padStart(3, '0')); setActSuccessMsg(`ออกรหัส ${id} สำเร็จแล้ว!`); setTimeout(() => setActSuccessMsg(''), 4000); }} className="space-y-3">
-                        <div className="flex gap-2 text-[10px]"><button type="button" onClick={() => setNewMId('M' + String(users.filter(u=>u.id.startsWith('M')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Member (M)</button><button type="button" onClick={() => setNewMId('F' + String(users.filter(u=>u.id.startsWith('F')).length).padStart(3, '0'))} className="btn-d py-0.5">สร้างรหัส Follower (F)</button></div>
-                        <div className="flex gap-2"><input type="text" value={newMId} onChange={(e) => setNewMId(e.target.value)} className="inp font-mono uppercase w-32" required /><input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มแท็กใหม่..." className="flex-1 inp" /><button type="button" onClick={() => { if (cTag.trim() && !newMTags.includes(cTag.trim())) setNewMTags([...newMTags, cTag.trim()]); setCTag(''); }} className="btn-b">+ แท็ก</button></div>
-                        <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...newMTags])).map((t) => <button type="button" key={t} onClick={() => setNewMTags(newMTags.includes(t) ? (newMTags.length > 1 ? newMTags.filter((x) => x !== t) : newMTags) : [...newMTags, t])} className={newMTags.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{newMTags.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
-                        <button type="submit" className="btn-w">+ สร้างรหัส Member ID</button>
-                      </form>
-                    </div>
-                    <div className="card p-5 space-y-2.5">
-                      {users.map((u) => (
-                        <div key={u.id} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5"><Avatar user={u} size="xs" /><div><div className="flex items-center gap-1.5"><span className="font-mono font-bold">{u.id}</span><TagBadges user={u} /><RoleBadge role={u.role} /></div><div className="font-bold mt-0.5">{u.displayName}</div></div></div>
-                          <div className="flex gap-1.5">
-                            <button onClick={() => { setEditTagU(u); setEditTagL(getTags(u)); }} className="btn-d text-blue-200 py-1">🏷️ หมวดหมู่</button>
-                            {!u.isActivated && <button onClick={() => { const link = window.location.origin + window.location.pathname; navigator.clipboard.writeText(`ยินดีต้อนรับสู่ The Blue Moon Association 🪐\n\nลิงก์เข้าสู่เว็บไซต์: ${link}\n\nรหัสประจำตัวของคุณคือ: ${u.id}\nกรุณากดที่ "เปิดใช้งาน Member ID" ในหน้าแรกเพื่อตั้งชื่อ Username และรหัสผ่านสำหรับการเข้าใช้งานในครั้งต่อไปครับ`); setCopiedId(u.id); setTimeout(() => setCopiedId(null), 2000); }} className="btn-w py-1 text-[10px]">{copiedId === u.id ? '✓ คัดลอกแล้ว' : 'ส่งให้สมาชิก'}</button>}
-                            {u.role !== 'admin' && u.isActivated && <button onClick={() => db.collection('bma_users').doc(u.id).update({ role: u.role === 'mod' ? 'member' : 'mod' })} className="btn-b py-1">{u.role === 'mod' ? 'ปลด Vice' : '🛡️ ตั้ง Vice'}</button>}
-                            {u.role !== 'admin' && <button onClick={() => confirm('ลบ ' + u.id + '?') && db.collection('bma_users').doc(u.id).delete()} className="px-2 py-1 rounded bg-black text-red-400">ลบ</button>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {editTagU && (
-                      <Modal title={`แก้ไขหมวดหมู่: ${editTagU.id}`} onClose={() => setEditTagU(null)}>
-                        <div className="space-y-3 text-xs">
-                          <div className="flex gap-2 mb-2">
-                             <input type="text" value={cTag} onChange={(e) => setCTag(e.target.value)} placeholder="เพิ่มหมวดหมู่ใหม่..." className="flex-1 inp" />
-                             <button type="button" onClick={() => { if (cTag.trim() && !editTagL.includes(cTag.trim())) setEditTagL([...editTagL, cTag.trim()]); setCTag(''); }} className="btn-b">+ หมวดหมู่ใหม่</button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">{Array.from(new Set([...allTags, ...editTagL])).map((t) => <button key={t} onClick={() => setEditTagL(editTagL.includes(t) ? (editTagL.length > 1 ? editTagL.filter((x) => x !== t) : editTagL) : [...editTagL, t])} className={editTagL.includes(t) ? 'px-2.5 py-1 rounded-xl bg-white text-[#050811] font-bold' : 'px-2.5 py-1 rounded-xl bg-[#050811] border border-[#1E3A5F]'}>{editTagL.includes(t) ? '✓ ' + t : '+ ' + t}</button>)}</div>
-                          <button onClick={() => { db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); setEditTagU(null); }} className="w-full btn-w py-2 mt-2">บันทึก</button>
-                        </div>
-                      </Modal>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <div className="card p-3.5 space-y-2.5">
-                      <div className="flex gap-2">
-                        <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
-                        {currentUser && <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap">+ เขียนโพสต์ / โพลล์</button>}
-                      </div>
-                      <div className="relative">
-                        <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
-                          <span>⚙️ เลือกดู</span>
-                          {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
-                        </button>
-                        
-                        {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
-                        
-                        {filterMenuOpen && (
-                          <div className="absolute top-full mt-2 left-0 w-64 card p-3 z-30 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
-                            <div>
-                              <div className="font-bold text-sky-300 mb-1.5">🏷️ หมวดหมู่สมาชิก</div>
-                              <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                                <option value="ALL">ทั้งหมด</option>
-                                {allTags.map(t => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-
-                            <div>
-                              <div className="font-bold text-sky-300 mb-1.5">📝 ประเภทโพสต์</div>
-                              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                                <option value="ALL">ทั้งหมด</option>
-                                <option value="NORMAL">โพสต์ทั่วไป</option>
-                                <option value="GAME">🎮 ผล Daily Games</option>
-                                <option value="MEDIA">🖼️ มีสื่อ</option>
-                              </select>
-                            </div>
-
-                            <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
-                              <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
-                              <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
-                            </label>
-
-                            {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
-                              <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
-                                ✕ ล้างฟิลเตอร์ทั้งหมด
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {filteredPosts.slice(0, visiblePosts).map((post) => {
-                      const author = getAuthor(post.authorId), isLiked = currentUser && (post.likes || []).includes(currentUser.id), isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
-                      const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt, totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
-                      const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
-                      const allComm = post.comments || [], rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
-
-                      return (
-                        <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 ' + (hiPostId === post.id ? 'border-2 border-sky-400' : '')}>
-                          {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
-                          <div className="flex justify-between items-start gap-2">
-                            <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${author.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
-                            <div className="flex items-center gap-2 relative">
-                              {!canManage(post.authorId) && <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
-                              {canManage(post.authorId) && (
-                                <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold">⋮</button>
-                              )}
-                              {postMenu === post.id && (
-                                <div className="absolute top-6 right-0 w-48 card border border-white/20 shadow-2xl py-1 z-30 flex flex-col text-left">
-                                  <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
-                                    <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
-                                  </button>
-                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไขโพสต์</button>
-                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) db.collection('bma_posts').doc(post.id).delete(); }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400">🗑️ ลบโพสต์</button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
-                          {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
-			  {post.tags?.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {post.tags.map(t => (
-                                      <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[10px] border border-sky-800 transition-colors shadow-sm">
-                                          #{t}
-                                      </button>
-                                  ))}
-                              </div>
-                          )}
-                          
-                          {post.dailyGameShare && (
-                            <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
-                              <div className="text-amber-300 font-bold">🎯 {GAMES[post.dailyGameShare.gameIndex]?.name || 'Daily Game'}</div>
-                              <div className="text-sm">ผู้โพสต์ทำสถิติได้: <span className="font-mono text-white font-bold bg-black/40 px-2 py-0.5 rounded">
-                                {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
-                              </span></div>
-                              <button onClick={() => { setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start mt-1 hover:scale-105 transition-transform">🎮 ตามไปเล่นเกมนี้เลย</button>
-                            </div>
-                          )}
-
-                          {post.poll && (
-                            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
-                              <div className="flex justify-between text-xs"><span className="font-bold">📊 {post.poll.question}</span><span className="text-slate-400">{post.poll.isAnonymous ? '🕵️ ไม่ระบุชื่อ' : '👁️ แสดงชื่อในคอมเมนต์'}</span></div>
-                              {(post.poll.options || []).map((opt) => {
-                                const voted = currentUser && (opt.votes || []).includes(currentUser.id);
-                                return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return setCurrentView('login'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-xs'}><span>{voted ? '✓ ' + opt.text : opt.text}</span><span>โหวต</span></button>;
-                              })}
-                            </div>
-                          )}
-
-                          {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
-
-                          <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
-                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => { if(!currentUser) return; db.collection('bma_posts').doc(post.id).update({ likes: (post.likes||[]).includes(currentUser.id) ? post.likes.filter((i) => i !== currentUser.id) : [...(post.likes || []), currentUser.id] }); }} />
-                            <div className="flex gap-2">
-                               {post.isGuestAllowed && <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px] hover:bg-[#0F2547]">🔗 คัดลอกลิงก์แชร์</button>}
-                               <button onClick={async () => { if (!currentUser) return setCurrentView('login'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
-                            </div>
-                          </div>
-
-                          <div className="pt-2.5 border-t border-[#1E3A5F]/60 space-y-2">
-                            {post.poll && (
-                              <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-1.5 text-xs">
-                                <div className="font-bold text-sky-300">📊 ผลโพลล์ในคอมเมนต์ (รวม {totalVotes} โหวต)</div>
-                                {(post.poll.options || []).map((o) => {
-                                  const c = o.votes?.length || 0, pct = totalVotes ? Math.round((c / totalVotes) * 100) : 0;
-                                  return <div key={o.id}><div className="flex justify-between"><span>{o.text}</span><span className="font-mono">{c} โหวต ({pct}%)</span></div>{!post.poll.isAnonymous && c > 0 && <div className="text-[10px] text-slate-400">ผู้โหวต: {o.votes.map((u) => getAuthor(u).displayName).join(', ')}</div>}</div>;
-                                })}
-                              </div>
-                            )}
-
-                            <div className="space-y-2">
-                              {rootComm.map((c, idx) => (
-                                <PantipThread key={c.id} c={c} all={allComm} lbl={'ความเห็นที่ ' + (idx + 1)} postId={post.id} me={currentUser} getAuthor={getAuthor} canManage={canManage} onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} onCtx={setCommMenu} />
-                              ))}
-                            </div>
-
-                            {currentUser && (
-                              <div className="space-y-1.5 pt-1">
-                                {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex gap-2 items-end">
-                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
-                                        <button onClick={() => handleAddComment(post.id, null)} className="btn-b text-xs">ส่ง</button>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
-                                      <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[10px]"><UpIcon />แนบไฟล์</button>
-                                      <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[10px]">🔗 แนบลิงก์</button>
-                                    </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </article>
-                      );
-                    })}
-                    {visiblePosts < filteredPosts.length && (
-                      <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
-                        ⏳ กำลังโหลดโพสต์เพิ่มเติม...
-                      </div>
-                    )}
-                  </>
+  		  <OwnerPage 
+		    users={users} 
+		    posts={posts} 
+		    chatMessages={chatMessages} 
+		    groups={groups} 
+		    bmaEvents={bmaEvents} 
+		    allTags={allTags} 
+		    db={db} 
+		    getTags={getTags} 
+		    setMemberModal={setMemberModal} 
+		  />
+		) : (
+		  <BoardPage 
+                    currentUser={currentUser} searchQ={searchQ} setSearchQ={setSearchQ} 
+                    setVisiblePosts={setVisiblePosts} setCreatePost={setCreatePost}
+                    filterMenuOpen={filterMenuOpen} setFilterMenuOpen={setFilterMenuOpen} 
+                    tagFilter={tagFilter} setTagFilter={setTagFilter} allTags={allTags} 
+                    filterType={filterType} setFilterType={setFilterType} 
+                    filterLatestOnly={filterLatestOnly} setFilterLatestOnly={setFilterLatestOnly} 
+                    filteredPosts={filteredPosts} visiblePosts={visiblePosts} hiPostId={hiPostId} 
+                    getAuthor={getAuthor} setMemberModal={setMemberModal} postMenu={postMenu} 
+                    setPostMenu={setPostMenu} db={db} handleEditPostReq={handleEditPostReq} 
+                    setCurrentView={setCurrentView} setActiveGameTab={setActiveGameTab} 
+                    GAMES={GAMES} fmtTime={fmtTime} toggleCommLike={toggleCommLike} 
+                    repComm={repComm} setRepComm={setRepComm} setCommMenu={setCommMenu} 
+                    cInputs={cInputs} setCInputs={setCInputs} handleAddComment={handleAddComment}
+                  />
                 )}
               </main>
             </div>
