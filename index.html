@@ -6409,7 +6409,11 @@
       const [isGifLoading, setIsGifLoading] = useState(false);
       const gifDebounceRef = useRef(null);
 
-      // ฟังก์ชันดึง GIF จาก GIPHY API (แทนที่ Tenor)
+      // 🌟 State สำหรับ Pop-up แนบลิงก์
+      const [showLinkModal, setShowLinkModal] = useState(false);
+      const [linkInputUrl, setLinkInputUrl] = useState('');
+
+      // ฟังก์ชันดึง GIF จาก Tenor API (เปลี่ยน API เพื่อแก้ปัญหา Rate Limit)
       useEffect(() => {
           if (!showGifPanel) return;
           
@@ -6418,14 +6422,14 @@
           
           const fetchGifs = async (url) => {
               setIsGifLoading(true);
-              setGifResults([]); // เคลียร์ของเก่า
+              setGifResults([]); 
               try {
                   const res = await fetch(url);
                   if (res.ok) {
                       const data = await res.json();
-                      // ดึง URL ของภาพขนาดเล็กจาก GIPHY
-                      if (isMounted && data.data) {
-                          setGifResults(data.data.map(g => g.images.fixed_height_small.url));
+                      if (isMounted && data.results) {
+                          // ดึง URL จาก Tenor API (tinygif เพื่อให้โหลดไว)
+                          setGifResults(data.results.map(g => g.media[0].tinygif.url));
                       }
                   } else {
                       if (isMounted) setGifResults([]);
@@ -6439,13 +6443,13 @@
           };
 
           if (!gifSearch.trim()) {
-              // ถ้ายังไม่พิมพ์ค้นหา ให้แสดง GIF ยอดฮิต (Trending)
-              fetchGifs('https://api.giphy.com/v1/gifs/trending?api_key=dc6zaTOxFJmzC&limit=12&rating=g');
+              // แสดงภาพฮิต (Trending) ถ้ายังไม่ได้พิมพ์อะไร
+              fetchGifs('https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=12');
           } else {
-              // หน่วงเวลา 0.8 วิหลังพิมพ์เสร็จ ค่อยยิงค้นหา เพื่อความลื่นไหล
+              // ค้นหา
               gifDebounceRef.current = setTimeout(() => {
-                  fetchGifs(`https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(gifSearch)}&limit=12&rating=g`);
-              }, 800);
+                  fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
+              }, 600); // หน่วงเวลา 0.6 วิ
           }
           
           return () => {
@@ -8517,8 +8521,9 @@
                 {/* 🔍 Chat Header & Search */}
                 <div className="h-14 px-3 sm:px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between shrink-0 text-xs shadow-sm z-20">
                   <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    <button onClick={() => setLeftOpen(!leftOpen)} className="md:hidden w-8 h-8 rounded-full bg-[#0F2547] text-slate-300 flex items-center justify-center hover:text-white transition-colors shrink-0">
-                        <i className="fas fa-bars"></i>
+                    {/* ปุ่มเปิด/ปิดแถบห้องแชต (ซ้าย) รองรับทั้งมือถือและ PC */}
+                    <button onClick={() => setLeftOpen(!leftOpen)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${!leftOpen ? 'bg-sky-500 text-white shadow-md' : 'bg-[#0F2547] text-slate-300 hover:text-white hover:bg-sky-600'}`} title={leftOpen ? "ซ่อนแถบห้องแชต" : "แสดงแถบห้องแชต"}>
+                        <i className={`fas ${leftOpen ? 'fa-angle-double-left' : 'fa-bars'}`}></i>
                     </button>
                     
                     <div className="truncate font-bold text-sm sm:text-base flex items-center gap-2">
@@ -8552,24 +8557,27 @@
                         )}
                     </div>
                     
-                    {/* ปุ่มตัวเลือกเสริม (ขวาบน) */}
-                    {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && (
-                        <button onClick={() => setAddMemOpen(true)} className="w-8 h-8 rounded-full bg-sky-900/30 text-sky-300 hover:bg-sky-600 hover:text-white transition flex items-center justify-center shrink-0" title="แก้ไขสมาชิกกลุ่ม">
-                            <i className="fas fa-user-edit"></i>
-                        </button>
-                    )}
-                    {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
-                      <>
-                        <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b text-[10px] px-2" title="Archive กลุ่ม">
-                            {activeGrp.isArchived ? '🔓 เปิด' : '📦'}
-                        </button>
-                        <button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="w-8 h-8 rounded-full bg-red-950/50 text-red-400 hover:bg-red-900 hover:text-white transition flex items-center justify-center shrink-0">
-                            <i className="fas fa-trash"></i>
-                        </button>
-                      </>
-                    )}
+                    {/* ปุ่มตัวเลือกเสริม (ขวาบน) - ปรับสีให้ชัดเจนขึ้น */}
+                    <div className="flex items-center gap-1.5 border-r border-[#1E3A5F] pr-2 mr-1">
+                        {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && (
+                            <button onClick={() => setAddMemOpen(true)} className="w-8 h-8 rounded-full bg-[#0F2547] text-sky-300 border border-sky-500/30 hover:bg-sky-600 hover:text-white transition flex items-center justify-center shrink-0 shadow-sm" title="แก้ไขสมาชิกกลุ่ม">
+                                <i className="fas fa-user-edit"></i>
+                            </button>
+                        )}
+                        {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
+                          <>
+                            <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b text-[10px] px-2 shadow-sm" title="Archive กลุ่ม">
+                                {activeGrp.isArchived ? '🔓 เปิด' : '📦 Archive'}
+                            </button>
+                            <button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="w-8 h-8 rounded-full bg-red-950/80 border border-red-900 text-red-400 hover:bg-red-600 hover:text-white transition flex items-center justify-center shrink-0 shadow-sm" title="ลบกลุ่มนี้">
+                                <i className="fas fa-trash-alt"></i>
+                            </button>
+                          </>
+                        )}
+                    </div>
                     
-                    <button onClick={() => setRightOpen(!rightOpen)} className="w-8 h-8 md:w-auto md:px-3 md:py-1.5 rounded-full md:rounded-lg bg-white text-[#050811] font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors shrink-0">
+                    {/* ปุ่มเปิด/ปิดแถบสมาชิก (ขวา) รองรับทั้งมือถือและ PC */}
+                    <button onClick={() => setRightOpen(!rightOpen)} className={`w-8 h-8 md:w-auto md:px-3 md:py-1.5 rounded-full md:rounded-lg font-bold flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md border ${!rightOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-white text-[#050811] border-transparent hover:bg-slate-200'}`}>
                         <i className="fas fa-users"></i>
                         <span className="hidden md:inline">สมาชิก</span>
                     </button>
@@ -8853,20 +8861,21 @@
                     <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative z-30">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
-                            {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้ชัดเจนขึ้น) */}
+                            {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้โดดเด่นและชัดเจน) */}
                             <div className="relative">
-                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-md ${cUrlOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-[#0F2547] text-white border-white/20 hover:bg-sky-500 hover:border-sky-400'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
+                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-lg ${cUrlOpen ? 'bg-red-500 text-white border-red-400 hover:bg-red-600' : 'bg-sky-500 text-white border-sky-400 hover:bg-sky-400 hover:scale-105'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
                                     <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'} text-[14px]`}></i>
                                 </button>
                                 
-                                {/* เมนูย่อยเมื่อกดปุ่ม + (ควบคุมด้วย cUrlOpen) */}
+                                {/* เมนูย่อยเมื่อกดปุ่ม + */}
                                 {cUrlOpen && (
                                     <div className="absolute bottom-full left-0 mb-3 w-max bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-1.5 flex flex-col shadow-2xl z-50 text-xs text-left animate-fade-in">
+                                        {/* โค้ดเมนูย่อยข้างใน (cFileRef, แนบลิงก์, แท็กบุคคล ฯลฯ) คงเดิมเหมือนที่คุณมีอยู่ */}
                                         <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); setCUrlOpen(false); }} className="hidden" />
                                         
                                         <button type="button" onClick={() => { cFileRef.current?.click(); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-upload w-4 text-center text-slate-400"></i> อัปโหลดไฟล์จากเครื่อง</button>
                                         
-                                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ, วิดีโอ หรือเว็บไซต์ (URL)"); if(u && u.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'link', url: u.trim(), size: 'URL' }]); setCUrlOpen(false); } }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-link w-4 text-center text-slate-400"></i> แนบลิงก์ (URL)</button>
+                                        <button type="button" onClick={() => { setShowLinkModal(true); setCUrlOpen(false); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-link w-4 text-center text-slate-400"></i> แนบลิงก์ (URL)</button>
                                         
                                         <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); setCUrlOpen(false); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-at w-4 text-center text-slate-400"></i> แท็กบุคคล (@)</button>
                                         
@@ -8913,7 +8922,7 @@
                                 )}
                             </div>
 
-                            {/* 📌 ปุ่ม GIF Panel (ปรับแก้แล้ว) */}
+                            {/* 📌 ปุ่ม GIF Panel */}
                             <div className="relative hidden sm:block">
                                 <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border shadow-sm ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'bg-[#0F2547] text-purple-300 border-white/20 hover:bg-purple-900/50 hover:text-purple-200 hover:border-purple-500/50'}`} title="ส่ง GIF">
                                     GIF
@@ -8925,7 +8934,6 @@
                                             <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-8 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
                                         </div>
                                         
-                                        {/* Grid รูปภาพ GIF */}
                                         <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar relative">
                                             {isGifLoading ? (
                                                 <div className="col-span-2 flex flex-col items-center justify-center text-[10px] text-purple-400 font-bold py-10">
@@ -8951,7 +8959,7 @@
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY GIPHY</div>
+                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
                                     </div>
                                 )}
                             </div>
@@ -9973,6 +9981,40 @@
               db={db} 
               users={users} 
           />
+
+{/* Modal สำหรับแนบลิงก์ URL ลงในแชต */}
+          {showLinkModal && (
+            <Modal title="🔗 แนบลิงก์ (URL)" onClose={() => { setShowLinkModal(false); setLinkInputUrl(''); }}>
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">ใส่ลิงก์รูปภาพ (.png, .jpg, .gif) หรือวิดีโอ (YouTube, MP4) ระบบจะพรีวิวให้โดยอัตโนมัติ</p>
+                <div className="bg-[#050811] p-1.5 rounded-xl border border-[#1E3A5F] flex items-center focus-within:border-sky-500 transition-colors">
+                    <i className="fas fa-link text-slate-500 px-3"></i>
+                    <input 
+                        type="url" 
+                        value={linkInputUrl} 
+                        onChange={(e) => setLinkInputUrl(e.target.value)} 
+                        onKeyDown={(e) => { 
+                            if (e.key === 'Enter') { 
+                                e.preventDefault(); 
+                                if (linkInputUrl.trim()) { 
+                                    setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'link', url: linkInputUrl.trim(), size: 'URL' }]); 
+                                    setShowLinkModal(false); 
+                                    setLinkInputUrl(''); 
+                                } 
+                            } 
+                        }}
+                        placeholder="https://..." 
+                        className="w-full bg-transparent outline-none text-sm text-white py-1"
+                        autoFocus
+                    />
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                    <button onClick={() => { setShowLinkModal(false); setLinkInputUrl(''); }} className="btn-d px-5 py-2 text-xs">ยกเลิก</button>
+                    <button onClick={() => { if(linkInputUrl.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'link', url: linkInputUrl.trim(), size: 'URL' }]); setShowLinkModal(false); setLinkInputUrl(''); } }} className="btn-w px-6 py-2 text-xs shadow-lg hover:scale-105">✔️ แนบลิงก์</button>
+                </div>
+              </div>
+            </Modal>
+          )}
 
         </div>
       );
