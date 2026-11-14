@@ -8796,27 +8796,63 @@
                     <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
-                            {/* ปุ่มเครื่องหมาย + (เมนูแนบไฟล์) */}
-                            <div className="relative group/attach">
-                                <button type="button" className="w-8 h-8 rounded-full text-slate-400 hover:text-white hover:bg-[#0F2547] transition flex items-center justify-center">
-                                    <i className="fas fa-plus"></i>
+                            {/* ปุ่มเครื่องหมาย + (เมนูแนบไฟล์แบบ Click Toggle) */}
+                            <div className="relative">
+                                {/* เพิ่ม State openAttachMenu (สมมติว่าคุณเพิ่ม const [openAttachMenu, setOpenAttachMenu] = useState(false); ไว้ด้านบนแล้ว ถ้ายังไม่มีให้เพิ่มด้วยครับ) */}
+                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border ${cUrlOpen ? 'bg-sky-900/50 text-sky-300 border-sky-500/50' : 'text-slate-300 hover:text-white hover:bg-[#0F2547] border-transparent hover:border-slate-700'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
+                                    <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'}`}></i>
                                 </button>
-                                {/* เมนูย่อยเมื่อชี้ที่ปุ่ม + */}
-                                <div className="absolute bottom-full left-0 mb-2 w-max bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-1 hidden group-hover/attach:flex flex-col shadow-2xl z-50 text-xs text-left">
-                                    <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
-                                    <button type="button" onClick={() => cFileRef.current?.click()} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-upload w-4 text-center"></i> อัปโหลดไฟล์จากเครื่อง</button>
-                                    <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-link w-4 text-center"></i> แนบลิงก์ (URL)</button>
-                                    <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-at w-4 text-center"></i> แท็กบุคคล (@)</button>
-                                    <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-amber-300 hover:bg-amber-900/30 flex items-center gap-2"><i className="fas fa-gamepad w-4 text-center"></i> ชวนเล่นแชตเกม</button>
-                                    {activeRoom.type === 'dm' && (
-                                        <button type="button" onClick={async () => { const now = Date.now(), id = 'msg-' + now; await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.id, text: '👋 สะกิดคุณ!', attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() }); await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '👋 ' + currentUser.displayName + ' สะกิดคุณ!', body: 'สะกิดคุณ!', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id }); }} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-fuchsia-300 hover:bg-fuchsia-900/30 flex items-center gap-2"><i className="fas fa-hand-sparkles w-4 text-center"></i> สะกิด (Poke)</button>
-                                    )}
-                                </div>
+                                
+                                {/* เมนูย่อยเมื่อกดปุ่ม + (ควบคุมด้วย cUrlOpen) */}
+                                {cUrlOpen && (
+                                    <div className="absolute bottom-full left-0 mb-3 w-max bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-1.5 flex flex-col shadow-2xl z-50 text-xs text-left animate-fade-in">
+                                        <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); setCUrlOpen(false); }} className="hidden" />
+                                        
+                                        <button type="button" onClick={() => { cFileRef.current?.click(); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-upload w-4 text-center text-slate-400"></i> อัปโหลดไฟล์จากเครื่อง</button>
+                                        
+                                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ, วิดีโอ หรือเว็บไซต์ (URL)"); if(u && u.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'link', url: u.trim(), size: 'URL' }]); setCUrlOpen(false); } }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-link w-4 text-center text-slate-400"></i> แนบลิงก์ (URL)</button>
+                                        
+                                        <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); setCUrlOpen(false); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-at w-4 text-center text-slate-400"></i> แท็กบุคคล (@)</button>
+                                        
+                                        {/* แก้ไขเมนูชวนเล่นเกม */}
+                                        <div className="relative">
+                                            <button type="button" onClick={(e) => { e.stopPropagation(); setCGameOpen(!cGameOpen); }} className="w-full px-3 py-2.5 hover:bg-amber-900/30 rounded-lg text-amber-300 flex items-center gap-2.5 transition-colors text-left font-bold">
+                                                <i className="fas fa-gamepad w-4 text-center"></i> ชวนเล่นแชตเกม <i className={`fas fa-chevron-${cGameOpen ? 'down' : 'right'} ml-auto text-[10px]`}></i>
+                                            </button>
+                                            
+                                            {/* ซ้อนเมนูรายชื่อเกมเอาไว้ */}
+                                            {cGameOpen && (
+                                                <div className="mt-1 ml-6 space-y-1 border-l-2 border-[#1E3A5F] pl-2">
+                                                    {[{id:'chess',n:'หมากรุก (ไม่จำกัดเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุก (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุก (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอส',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'},{id:'sttt',n:'Super Tic-Tac-Toe',i:'✖️'}].map(g => (
+                                                      <button key={g.id} type="button" onClick={async (e) => { 
+                                                        e.stopPropagation();
+                                                        setCGameOpen(false); 
+                                                        setCUrlOpen(false);
+                                                        const gid = 'cg-' + Date.now(); 
+                                                        const realId = g.id.split('_')[0];
+                                                        const timerSetting = g.id.includes('_') ? parseInt(g.id.split('_')[1]) * 60 : null;
+                                                        await db.collection('bma_chat_games').doc(gid).set({ id: gid, type: realId, name: g.n, players: [currentUser.id], status: 'waiting', gameState: {}, timerSetting, rematch: [], timestamp: Date.now() }); 
+                                                        const mid = 'msg-' + Date.now(); 
+                                                        await db.collection('bma_messages').doc(mid).set({ id: mid, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: 'ชวนเล่นเกม ' + g.n, isGameInvite: true, gameId: gid, gameType: realId, gameName: g.n, readBy: [currentUser.id], isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: svrTs() }); 
+                                                        setActiveChatGameId(gid); 
+                                                      }} className="w-full text-left px-2.5 py-1.5 hover:bg-[#0F2547] rounded-lg flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
+                                                          <span>{g.i}</span> <span>{g.n}</span>
+                                                      </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {activeRoom.type === 'dm' && (
+                                            <button type="button" onClick={async () => { const now = Date.now(), id = 'msg-' + now; await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.id, text: '👋 สะกิดคุณ!', attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() }); await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '👋 ' + currentUser.displayName + ' สะกิดคุณ!', body: 'สะกิดคุณ!', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id }); setCUrlOpen(false); }} className="px-3 py-2.5 mt-1 border-t border-[#1E3A5F] hover:bg-fuchsia-900/30 rounded-lg text-fuchsia-300 flex items-center gap-2.5 transition-colors text-left font-bold"><i className="fas fa-hand-sparkles w-4 text-center"></i> สะกิดเตือน (Poke)</button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             
                             {/* ปุ่ม Emoji */}
                             <div className="relative">
-                                <button type="button" onClick={() => { setEmoOpen(!emoOpen); setShowGifPanel(false); }} className="w-8 h-8 rounded-full text-slate-400 hover:text-white hover:bg-[#0F2547] transition flex items-center justify-center text-lg">
+                                <button type="button" onClick={() => { setEmoOpen(!emoOpen); setShowGifPanel(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-lg border ${emoOpen ? 'bg-amber-900/40 border-amber-500/50' : 'text-slate-400 hover:text-white hover:bg-[#0F2547] border-transparent hover:border-slate-700'}`}>
                                     🙂
                                 </button>
                                 {emoOpen && (
@@ -8830,7 +8866,7 @@
 
                             {/* ปุ่ม GIF Panel */}
                             <div className="relative hidden sm:block">
-                                <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'text-slate-400 hover:text-white border-transparent hover:border-slate-700 hover:bg-[#0F2547]'}`} title="ส่ง GIF">
+                                <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'text-slate-400 hover:text-white border-transparent hover:border-slate-700 hover:bg-[#0F2547]'}`} title="ส่ง GIF">
                                     GIF
                                 </button>
                                 {showGifPanel && (
