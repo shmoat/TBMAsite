@@ -131,6 +131,52 @@
     .animate-music-note {
       position: absolute; top: 0; animation: floatMusicNote 2.5s ease-out forwards; pointer-events: none; z-index: 100;
     }
+    /* ================= CHAT REVAMP STYLES ================= */
+    /* Chat Bubbles */
+    .msg-bubble { position: relative; max-width: 85%; }
+    
+    /* Tail for left bubble */
+    .msg-left .msg-content::before {
+        content: ''; position: absolute; top: 0; left: -8px; width: 15px; height: 15px;
+        background: #0F2547; border-top-left-radius: 15px;
+        border-right: 1px solid #1E3A5F; border-top: 1px solid #1E3A5F;
+        clip-path: polygon(100% 0, 0 0, 100% 100%);
+    }
+
+    /* Tail for right bubble */
+    .msg-right .msg-content::after {
+        content: ''; position: absolute; top: 0; right: -8px; width: 15px; height: 15px;
+        background: #0284c7; /* sky-600 */
+        border-top-right-radius: 15px; clip-path: polygon(0 0, 100% 0, 0 100%);
+    }
+
+    /* Smart Media Grid */
+    .media-grid { display: grid; gap: 4px; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+    .media-grid-2 { grid-template-columns: 1fr 1fr; }
+    .media-grid-3 { grid-template-columns: 1fr 1fr; }
+    .media-grid-3 > div:first-child { grid-column: 1 / -1; }
+    .media-grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+    /* Rich Link Preview */
+    .link-preview {
+        display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.2);
+        margin-top: 8px; text-decoration: none; transition: background 0.2s;
+    }
+    .link-preview:hover { background: rgba(0,0,0,0.4); }
+
+    /* Waveform fake animation */
+    .waveform span {
+        display: inline-block; width: 3px; height: 15px; background-color: currentColor;
+        border-radius: 3px; margin: 0 1px; animation: wave 1s infinite alternate ease-in-out;
+    }
+    @keyframes wave { 0% { transform: scaleY(0.3); } 100% { transform: scaleY(1); } }
+
+    /* Search Highlight */
+    .search-highlight {
+        background-color: rgba(245, 158, 11, 0.4); color: #FDE68A;
+        padding: 0 2px; border-radius: 2px; border-bottom: 2px solid #F59E0B;
+    }
   </style>
 </head>
 <body class="bg-[#050811] text-white">
@@ -6347,6 +6393,18 @@
         }
       };
 
+      // 🌟 NEW Chat Revamp States 🌟
+      const [chatSearch, setChatSearch] = useState(''); // ค้นหาในห้องแชต
+      const [isSilentMsg, setIsSilentMsg] = useState(false); // โหมดแชตไม่แจ้งเตือน
+      const [showGifPanel, setShowGifPanel] = useState(false); // เปิดปิด GIF Panel
+      const [gifSearch, setGifSearch] = useState(''); // ค้นหา GIF
+      const [mockGifs, setMockGifs] = useState([ // Mockup GIF สำหรับ Demo
+          'https://media.giphy.com/media/VbnUQpnihPSIgIXuZv/giphy.gif',
+          'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif',
+          'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif',
+          'https://media.giphy.com/media/l41lFw057lAJQMwg0/giphy.gif'
+      ]);
+
       // Notification States
       const [notifOpen, setNotifOpen] = useState(false); const [notifTab, setNotifTab] = useState('posts'); const [toasts, setToasts] = useState([]);
       const [postMenu, setPostMenu] = useState(null);
@@ -7312,7 +7370,19 @@
         const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
         const fullTime = `${dStr} ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
         
-        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: finalText, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: fullTime, timestamp: now, serverCreatedAt: svrTs() });
+        await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: finalText, attachments: atts, likes: [], replyTo: rep ? { id: rep.id, senderName: getAuthor(rep.senderId).displayName, text: rep.text || '[ไฟล์แนบ]' } : null, readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, isSilent: isSilentMsg, time: fullTime, timestamp: now, serverCreatedAt: svrTs() });
+        
+        // 🌟 ถอยกลับโหมด Silent เป็นปกติหลังจากส่งเสร็จ
+        const wasSilent = isSilentMsg;
+        setIsSilentMsg(false);
+
+        // 🌟 เช็กว่าถ้าไม่ใช่โหมด Silent ถึงจะแจ้งเตือน
+        if (!wasSilent) {
+            if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
+            else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
+            else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
+        }
+      };
         
         if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
         else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
@@ -8317,81 +8387,162 @@
       </div>
       )}
 
-          {/* CHAT VIEW */}
+          {/* CHAT VIEW (REVAMPED) */}
           {currentView === 'chat' && (
-            <div className="flex-1 flex overflow-hidden min-h-0">
-              {leftOpen && (
-                <aside className="w-60 md:w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs z-10 absolute md:relative">
+            <div className="flex-1 flex overflow-hidden min-h-0 relative">
+              
+              {/* Overlay พื้นหลังดำเมื่อเปิด Drawer บนมือถือ */}
+              <div 
+                className={`fixed inset-0 bg-black/60 z-30 transition-opacity duration-300 md:hidden ${leftOpen || rightOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
+                onClick={() => { setLeftOpen(false); setRightOpen(false); }}
+              ></div>
+
+              {/* LEFT SIDEBAR (Channels & DMs Drawer) */}
+              <aside className={`absolute md:relative z-40 w-64 md:w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs transition-transform duration-300 ${leftOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}`}>
+                  <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811] sticky top-0 z-10">
+                    <div className="flex justify-between items-center w-full">
+                        <span className="text-[11px] font-bold uppercase text-slate-400">แชตรวม (Global)</span>
+                        <div className="flex gap-2">
+                            {isModOrAdmin && <button onClick={() => setCChOpen(true)} className="px-2 py-0.5 rounded bg-[#0F2547] text-[10px] font-bold text-sky-300 hover:bg-[#1E3A5F] transition-colors">+ สร้าง</button>}
+                            <button onClick={() => setLeftOpen(false)} className="md:hidden text-slate-400 hover:text-white px-2 py-1"><i className="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                  </div>
                   <div className="p-3 border-b border-[#1E3A5F]">
-                    <div className="mb-2 flex justify-between items-center"><span className="text-[11px] font-bold uppercase text-slate-400">แชตรวม (Global)</span>{isModOrAdmin && <button onClick={() => setCChOpen(true)} className="px-2 py-0.5 rounded bg-[#0F2547] text-[10px] font-bold text-sky-300">+ สร้างห้อง</button>}</div>
                     {channels.map((ch) => (
-                      <div key={ch.id} className="flex items-center gap-1 mb-1">
-                        <button onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'flex-1 px-2.5 py-1.5 rounded-xl bg-white text-[#050811] font-bold text-left truncate' : 'flex-1 px-2.5 py-1.5 rounded-xl text-slate-300 hover:bg-[#0F2547] text-left truncate'}>{ch.icon} # {ch.name}</button>
-                        {isModOrAdmin && !ch.isProtected && <button onClick={() => setDelTgt({ roomType: 'channel', id: ch.id, name: '#' + ch.name })} className="text-slate-500 hover:text-red-400">🗑️</button>}
+                      <div key={ch.id} className="flex items-center gap-1 mb-1 group">
+                        <button onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`flex-1 px-3 py-2 rounded-xl text-left truncate transition-all font-bold ${activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
+                            <span className="opacity-70 mr-1.5">{ch.icon}</span> {ch.name}
+                        </button>
+                        {isModOrAdmin && !ch.isProtected && <button onClick={() => setDelTgt({ roomType: 'channel', id: ch.id, name: '#' + ch.name })} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity px-2"><i className="fas fa-trash-alt"></i></button>}
                       </div>
                     ))}
                   </div>
+
                   <div className="p-3 border-b border-[#1E3A5F]">
-                    <div className="mb-2 flex justify-between items-center"><span className="text-[11px] font-bold uppercase text-slate-400">กลุ่มแชต (Groups)</span><button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold">+ สร้างกลุ่ม</button></div>
-                    {myGroups.map((g) => <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'group' && activeRoom.id === g.id ? 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl bg-white text-[#050811] font-bold' : 'w-full flex justify-between px-2.5 py-1.5 mb-1 rounded-xl text-slate-300 hover:bg-[#0F2547]'}><span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span><span className="text-[10px] font-mono">{(g.members || []).length}</span></button>)}
+                    <div className="mb-2 flex justify-between items-center">
+                        <span className="text-[11px] font-bold uppercase text-slate-400">กลุ่มแชต (Groups)</span>
+                        <button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold hover:bg-slate-200 transition-colors">+ สร้างกลุ่ม</button>
+                    </div>
+                    {myGroups.map((g) => (
+                        <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex justify-between items-center px-3 py-2 mb-1 rounded-xl font-bold transition-all ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
+                            <span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span>
+                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-white/20 text-white' : 'bg-[#050811] text-slate-400'}`}>{(g.members || []).length}</span>
+                        </button>
+                    ))}
                   </div>
+
                   <div className="p-3 flex-1 flex flex-col min-h-0">
                     <div className="mb-2 flex justify-between items-center">
                        <span className="text-[11px] font-bold uppercase text-slate-400">แชตส่วนตัว</span>
                        <select value={dmSortType} onChange={(e) => setDmSortType(e.target.value)} className="bg-[#0B1325] border border-[#1E3A5F] text-[10px] text-slate-300 rounded outline-none p-0.5 max-w-[80px]">
-                          <option value="latest">ใหม่สุดก่อน</option>
-                          <option value="alpha">เรียงตามอักษร</option>
+                          <option value="latest">ใหม่สุด</option>
+                          <option value="alpha">ตามอักษร</option>
                        </select>
                     </div>
-                    <div className="flex-1 overflow-y-auto no-scrollbar">
-                       {conversedDms.map((m) => <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={activeRoom.type === 'dm' && activeRoom.id === m.id ? 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl bg-white text-[#050811] text-left' : 'w-full flex items-center gap-2 p-2 mb-1 rounded-xl text-slate-200 hover:bg-[#0F2547] text-left'}><Avatar user={m} size="xs" showStatus={true} /><span className="truncate font-bold">{m.displayName}</span></button>)}
+                    <div className="flex-1 overflow-y-auto no-scrollbar pt-1">
+                       {conversedDms.map((m) => (
+                           <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex items-center gap-2.5 p-2 mb-1 rounded-xl text-left transition-all ${activeRoom.type === 'dm' && activeRoom.id === m.id ? 'bg-white text-[#050811] shadow-md' : 'text-slate-200 hover:bg-[#0F2547]'}`}>
+                               <Avatar user={m} size="xs" showStatus={true} />
+                               <span className="truncate font-bold text-sm">{m.displayName}</span>
+                           </button>
+                       ))}
                     </div>
                   </div>
-                </aside>
-              )}
+              </aside>
 
-              <main className="flex-1 flex flex-col bg-[#050811] min-w-0 h-full overflow-hidden relative">
-                {leftOpen && <div className="absolute inset-0 bg-black/50 z-0 md:hidden" onClick={() => setLeftOpen(false)}></div>}
+              {/* CENTER CHAT SECTION */}
+              <main className="flex-1 flex flex-col bg-[#050811] min-w-0 h-full overflow-hidden relative z-10">
                 
-                <div className="h-14 px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button onClick={() => setLeftOpen(!leftOpen)} className="btn-d font-semibold">{leftOpen ? '◀ ซ่อนห้อง' : '☰ ห้อง ▶'}</button>
-                    <div className="truncate font-bold text-sm">
-                      {activeCh && (activeCh.icon + ' # ' + activeCh.name)}
-                      {activeGrp && (activeGrp.name + (activeGrp.isArchived ? ' (Archived)' : ''))}
-                      {activeDmUser && <span onClick={() => setMemberModal(activeDmUser)} className="cursor-pointer hover:underline">{activeDmUser.displayName} ({activeDmUser.id})</span>}
+                {/* 🔍 Chat Header & Search */}
+                <div className="h-14 px-3 sm:px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between shrink-0 text-xs shadow-sm z-20">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button onClick={() => setLeftOpen(!leftOpen)} className="md:hidden w-8 h-8 rounded-full bg-[#0F2547] text-slate-300 flex items-center justify-center hover:text-white transition-colors shrink-0">
+                        <i className="fas fa-bars"></i>
+                    </button>
+                    
+                    <div className="truncate font-bold text-sm sm:text-base flex items-center gap-2">
+                      {activeCh && <><span className="opacity-80">{activeCh.icon}</span> <span>{activeCh.name}</span></>}
+                      {activeGrp && <><span className="opacity-80">👥</span> <span>{activeGrp.name} {activeGrp.isArchived ? '(Archived)' : ''}</span></>}
+                      {activeDmUser && (
+                          <div onClick={() => setMemberModal(activeDmUser)} className="cursor-pointer hover:underline flex items-center gap-2">
+                              <span className="opacity-80">👤</span>
+                              <span>{activeDmUser.displayName}</span>
+                              <span className="text-[10px] bg-[#050811] px-1.5 py-0.5 rounded-md border border-[#1E3A5F] font-mono text-sky-400">{activeDmUser.id}</span>
+                          </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && <button onClick={() => setAddMemOpen(true)} className="btn-b text-sky-200">แก้ไขสมาชิก</button>}
-                    {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
-                      <><button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b">{activeGrp.isArchived ? '🔓 เปิด' : '📦 Archive'}</button><button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="px-2.5 py-1 rounded-xl bg-red-950 text-red-200">🗑️</button></>
+                  
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* กล่องค้นหาในแชต */}
+                    <div className="relative hidden sm:flex items-center">
+                        <i className="fas fa-search absolute left-3 text-slate-500 text-[10px]"></i>
+                        <input 
+                            type="text" 
+                            value={chatSearch}
+                            onChange={(e) => setChatSearch(e.target.value)}
+                            placeholder="ค้นหาข้อความในห้องนี้..." 
+                            className="bg-[#050811] border border-[#1E3A5F] rounded-full py-1.5 pl-8 pr-7 text-xs text-sky-200 outline-none focus:border-sky-500 w-32 md:w-48 transition-all"
+                        />
+                        {chatSearch && (
+                            <button onClick={() => setChatSearch('')} className="absolute right-2 text-slate-500 hover:text-red-400">
+                                <i className="fas fa-times-circle"></i>
+                            </button>
+                        )}
+                    </div>
+                    
+                    {/* ปุ่มตัวเลือกเสริม (ขวาบน) */}
+                    {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && (
+                        <button onClick={() => setAddMemOpen(true)} className="w-8 h-8 rounded-full bg-sky-900/30 text-sky-300 hover:bg-sky-600 hover:text-white transition flex items-center justify-center shrink-0" title="แก้ไขสมาชิกกลุ่ม">
+                            <i className="fas fa-user-edit"></i>
+                        </button>
                     )}
-                    <button onClick={() => setRightOpen(!rightOpen)} className="btn-w">{rightOpen ? '👥 ซ่อน →' : '← 👥 สมาชิก'}</button>
+                    {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
+                      <>
+                        <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b text-[10px] px-2" title="Archive กลุ่ม">
+                            {activeGrp.isArchived ? '🔓 เปิด' : '📦'}
+                        </button>
+                        <button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="w-8 h-8 rounded-full bg-red-950/50 text-red-400 hover:bg-red-900 hover:text-white transition flex items-center justify-center shrink-0">
+                            <i className="fas fa-trash"></i>
+                        </button>
+                      </>
+                    )}
+                    
+                    <button onClick={() => setRightOpen(!rightOpen)} className="w-8 h-8 md:w-auto md:px-3 md:py-1.5 rounded-full md:rounded-lg bg-white text-[#050811] font-bold flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors shrink-0">
+                        <i className="fas fa-users"></i>
+                        <span className="hidden md:inline">สมาชิก</span>
+                    </button>
                   </div>
                 </div>
+                
+                {/* 📌 Pinned Message */}
                 {pinnedMsg && (
-                    <div className="bg-[#0B1325] border-b border-[#1E3A5F] p-2.5 px-4 flex items-center justify-between gap-2 shrink-0 cursor-pointer shadow-md z-10 hover:bg-[#0F2547]" onClick={() => document.getElementById('msg-' + pinnedMsg.id)?.scrollIntoView({behavior: 'smooth', block: 'center'})}>
-                        <div className="flex-1 min-w-0 text-xs text-slate-300 border-l-2 border-amber-400 pl-2">
-                            <div className="font-bold text-amber-300">📌 ข้อความปักหมุด</div>
-                            <div className="truncate text-slate-100">
+                    <div className="bg-amber-950/30 border-b border-amber-900/50 p-2.5 px-4 flex items-center justify-between gap-3 shrink-0 cursor-pointer shadow-md z-10 hover:bg-amber-950/50 transition-colors" onClick={() => document.getElementById('msg-' + pinnedMsg.id)?.scrollIntoView({behavior: 'smooth', block: 'center'})}>
+                        <div className="flex-1 min-w-0 text-xs text-slate-300 border-l-2 border-amber-500 pl-2.5">
+                            <div className="font-bold text-amber-400 mb-0.5 flex items-center gap-1.5"><i className="fas fa-thumbtack text-[10px]"></i> ข้อความปักหมุด</div>
+                            <div className="truncate text-slate-200">
                                 {pinnedMsg.text || (pinnedMsg.attachments?.length > 0 ? `[${pinnedMsg.attachments[0].type === 'image' ? 'รูปภาพ' : pinnedMsg.attachments[0].type === 'video' ? 'วิดีโอ' : pinnedMsg.attachments[0].type === 'audio' ? 'ไฟล์เสียง' : 'ไฟล์แนบ'}]` : 'ข้อความ')}
                             </div>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); db.collection('bma_messages').doc(pinnedMsg.id).update({ isPinned: false }); }} className="text-slate-500 hover:text-red-400 px-2 font-bold bg-[#050811] rounded-lg">เลิกปักหมุด</button>
+                        <button onClick={(e) => { e.stopPropagation(); db.collection('bma_messages').doc(pinnedMsg.id).update({ isPinned: false }); }} className="text-slate-500 hover:text-red-400 w-8 h-8 rounded-full hover:bg-black/20 flex items-center justify-center transition-colors" title="เลิกปักหมุด">
+                            <i className="fas fa-times"></i>
+                        </button>
                     </div>
                 )}
 
                 <div ref={chatBoxRef} onScroll={(e) => { 
-    		    if (e.target.scrollTop < 100 && visibleChatLimit < roomMsgs.length) { 
-		        setVisibleChatLimit(v => v + 50); 
-		    } 
-		}} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3.5 custom-scrollbar">
-		  {visibleChatLimit < roomMsgs.length && (
-		      <div className="text-center py-2 text-[10px] text-sky-400 font-bold animate-pulse">
-		          ⏳ กำลังโหลดข้อความเก่า...
-		      </div>
-		  )}
+    		        if (e.target.scrollTop < 100 && visibleChatLimit < roomMsgs.length) { 
+		                setVisibleChatLimit(v => v + 50); 
+		            } 
+		        }} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gradient-to-b from-[#050811] to-[#030509]">
+                    
+                  {visibleChatLimit < roomMsgs.length && (
+                      <div className="text-center py-2 text-[10px] text-sky-400 font-bold animate-pulse bg-sky-950/20 rounded-full w-max mx-auto px-4 border border-sky-900/50">
+                          ⏳ กำลังโหลดข้อความเก่า...
+                      </div>
+                  )}
+
                   {roomMsgs.slice(Math.max(0, roomMsgs.length - visibleChatLimit)).map((msg) => {
                     const tStr = getTimeStr(msg);
                     if (msg.isSystemPostAlert) {
@@ -8439,139 +8590,370 @@
                       );
                     }
                     const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
-                    return (
-                      <div id={'msg-' + msg.id} key={msg.id} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} className="flex items-start gap-3 p-1.5 rounded-xl hover:bg-[#0B1325]/60">
-                        <div onClick={() => setMemberModal(s)} className="cursor-pointer"><Avatar user={s} size="sm" showStatus={true} /></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span onClick={() => setMemberModal(s)} className="text-xs font-bold cursor-pointer hover:underline">{s.displayName}</span>
-                            <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${s.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{s.id}</span><RoleBadge role={s.role} /><span className="text-[10px] font-mono text-slate-400">{tStr}</span>
-                            {!msg.isDeleted && (rdrs.length ? <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 rounded">✓✓ อ่านแล้ว</span> : <span className="text-[10px] text-sky-300 bg-sky-950/50 px-1.5 rounded">✓ ส่งแล้ว</span>)}
-                          </div>
-                          {msg.isDeleted ? <p className="text-xs italic text-slate-500 mt-1">🚫 ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง</p> : (
-                            <>
-                              {msg.replyTo && <div className="mt-1 px-2.5 py-1 rounded bg-[#0B1325] border-l-2 border-sky-400 text-[11px] text-slate-300"><strong className="text-sky-300">↩️ {msg.replyTo.senderName}:</strong> {msg.replyTo.text}</div>}
-                              {msg.roomKey === 'happy-birthday-dear' && msg.replyTo && msg.replyTo.senderName === 'SYSTEM' && currentUser?.id !== getAuthor(msg.replyTo.targetUserId)?.id && currentUser?.id !== msg.senderId ? (
-                                <div className="text-xs text-slate-500 italic">คำอวยพรนี้ถูกซ่อนไว้ (เฉพาะเจ้าของวันเกิดและผู้ส่งเท่านั้นที่เห็นได้) 🔒</div>
-                              ) : (
-                                <FormattedText text={msg.text} currentUser={currentUser} isEdited={msg.isEdited} />
-                              )}
-                              {msg.attachments?.length > 0 && <div className="mt-2 space-y-2">{msg.attachments.map((att) => <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />)}</div>}
-                              <div className="flex gap-2 mt-1 items-center">
-                                <LikeButton likes={msg.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_messages').doc(msg.id).update({ likes: (msg.likes||[]).includes(currentUser?.id) ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} />
-                                {!(msg.roomKey === 'happy-birthday-dear' && msg.targetUserId && Date.now() - msg.timestamp > 86400000) && (
-                                  <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">↩️ ตอบกลับ</button>
+                    const isMe = currentUser && msg.senderId === currentUser.id; // เช็กว่าเป็นข้อความของเราหรือไม่
+
+                    // --- ฟังก์ชันช่วยเหลือสำหรับ Highlight คำค้นหา ---
+                    const highlightText = (text, highlight) => {
+                        if (!highlight.trim()) return <FormattedText text={text} currentUser={currentUser} isEdited={msg.isEdited} />;
+                        const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+                        return (
+                            <span className="break-words">
+                                {parts.map((part, i) => 
+                                    part.toLowerCase() === highlight.toLowerCase() ? 
+                                        <span key={i} className="search-highlight">{part}</span> : part
                                 )}
-                              </div>
-                            </>
-                          )}
+                                {msg.isEdited && <span className="ml-2 text-[10px] italic text-slate-400 opacity-70">(แก้ไขแล้ว)</span>}
+                            </span>
+                        );
+                    };
+
+                    // --- ฟังก์ชันช่วยเหลือสำหรับ Smart Media Grid ---
+                    const renderMediaGrid = (attachments) => {
+                        if (!attachments || attachments.length === 0) return null;
+                        
+                        // กรองเฉพาะรูปภาพเพื่อนำมาจัด Grid
+                        const images = attachments.filter(a => a.type === 'image');
+                        const others = attachments.filter(a => a.type !== 'image');
+                        
+                        let gridClass = '';
+                        if (images.length === 2) gridClass = 'media-grid-2';
+                        else if (images.length === 3) gridClass = 'media-grid-3';
+                        else if (images.length >= 4) gridClass = 'media-grid-4';
+
+                        return (
+                            <div className="mt-2 space-y-2">
+                                {/* แสดง Grid รูปภาพ */}
+                                {images.length > 0 && (
+                                    <div className={images.length > 1 ? `media-grid ${gridClass} w-full max-w-sm` : 'w-full max-w-sm'}>
+                                        {images.slice(0, 4).map((att, idx) => (
+                                            <div key={att.id} className="relative">
+                                                <SmartMedia att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />
+                                                {/* ถ้ามีรูปมากกว่า 4 รูป ให้แสดง +X บนรูปสุดท้าย */}
+                                                {idx === 3 && images.length > 4 && (
+                                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xl font-bold rounded-xl pointer-events-none">
+                                                        +{images.length - 4}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {/* แสดงไฟล์อื่นๆ (Video, Audio, Link) แยกลงมาด้านล่าง */}
+                                {others.length > 0 && (
+                                    <div className="space-y-2 w-full max-w-sm">
+                                        {others.map(att => (
+                                            <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    };
+
+                    return (
+                      <div id={'msg-' + msg.id} key={msg.id} 
+                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} 
+                           className={`flex items-end gap-2.5 group/msg ${isMe ? 'msg-right self-end flex-row-reverse' : 'msg-left self-start'} ${chatSearch && (msg.text||'').toLowerCase().includes(chatSearch.toLowerCase()) ? 'ring-2 ring-amber-500/50 rounded-2xl p-1 bg-amber-900/10' : ''}`}
+                      >
+                        {/* Avatar */}
+                        <div onClick={() => setMemberModal(s)} className="cursor-pointer shrink-0 mb-1 z-10">
+                            <Avatar user={s} size="sm" showStatus={!isMe} />
+                        </div>
+                        
+                        {/* Bubble Container */}
+                        <div className={`msg-bubble flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                            
+                            {/* Meta Info (Name, Time, Read Status) */}
+                            <div className={`text-[10px] text-slate-400 mb-1 flex items-center gap-2 ${isMe ? 'mr-1 flex-row-reverse' : 'ml-1'}`}>
+                                {!isMe && (
+                                    <div className="flex items-center gap-1.5 cursor-pointer hover:underline" onClick={() => setMemberModal(s)}>
+                                        <span className="font-bold text-sky-300">{s.displayName}</span>
+                                        <RoleBadge role={s.role} />
+                                    </div>
+                                )}
+                                <span>{tStr}</span>
+                                
+                                {/* Read Receipt แบบใหม่มี Popover */}
+                                {!msg.isDeleted && isMe && (
+                                    <div className="relative group/read cursor-pointer flex items-center gap-1">
+                                        {rdrs.length ? (
+                                            <span className="font-bold text-emerald-400 hover:underline">✓✓ อ่านแล้ว {rdrs.length}</span>
+                                        ) : (
+                                            <span className="text-sky-300">✓ ส่งแล้ว</span>
+                                        )}
+                                        
+                                        {/* Popover แสดงรายชื่อคนอ่าน (เฉพาะตอนมีคนอ่านและชี้เมาส์) */}
+                                        {rdrs.length > 0 && (
+                                            <div className="absolute bottom-full right-0 mb-2 w-max min-w-[150px] max-w-[200px] bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-2 hidden group-hover/read:block z-50 shadow-2xl">
+                                                <div className="text-[10px] text-slate-400 mb-1.5 font-bold border-b border-[#1E3A5F] pb-1">👀 อ่านแล้วโดย:</div>
+                                                <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                                                    {rdrs.map(rId => {
+                                                        const rUser = getAuthor(rId);
+                                                        return (
+                                                            <div key={rId} className="flex items-center gap-2">
+                                                                <Avatar user={rUser} size="xs" /> 
+                                                                <span className="text-[10px] text-white truncate">{rUser.displayName}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {/* ป้ายบอกโหมด Silent */}
+                                {msg.isSilent && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700" title="ข้อความนี้ถูกส่งมาแบบไม่แจ้งเตือน">🔕</span>}
+                            </div>
+                            
+                            {/* Message Content Body */}
+                            <div className={`msg-content text-sm p-3 rounded-2xl relative shadow-md ${isMe ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-[#0F2547] border border-[#1E3A5F] text-slate-200 rounded-tl-none'} ${msg.isDeleted ? 'bg-slate-800 border-slate-700 text-slate-400' : ''}`}>
+                                
+                                {msg.isDeleted ? (
+                                    <p className="text-xs italic">🚫 ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง</p>
+                                ) : (
+                                    <>
+                                        {/* Reply Quote */}
+                                        {msg.replyTo && (
+                                            <div className={`mb-2 px-2.5 py-1.5 rounded-lg border-l-2 text-[11px] opacity-90 cursor-pointer ${isMe ? 'bg-sky-700 border-white text-sky-100' : 'bg-[#050811] border-sky-400 text-slate-300'}`} onClick={() => document.getElementById('msg-' + msg.replyTo.id)?.scrollIntoView({behavior: 'smooth', block: 'center'})}>
+                                                <strong className={isMe ? 'text-white' : 'text-sky-300'}>↩️ {msg.replyTo.senderName}:</strong> 
+                                                <div className="line-clamp-2 mt-0.5">{msg.replyTo.text}</div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Text Content with Highlight */}
+                                        {msg.text && (
+                                            <div className="whitespace-pre-line leading-relaxed">
+                                                {highlightText(msg.text, chatSearch)}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Smart Media Grid Attachments */}
+                                        {renderMediaGrid(msg.attachments)}
+                                    </>
+                                )}
+                            </div>
+                            
+                            {/* Action Buttons (Like & Reply) - Shows on Hover */}
+                            {!msg.isDeleted && (
+                                <div className={`flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity ${isMe ? 'mr-2' : 'ml-2'}`}>
+                                    <LikeButton likes={msg.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_messages').doc(msg.id).update({ likes: (msg.likes||[]).includes(currentUser?.id) ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} />
+                                    {!(msg.roomKey === 'happy-birthday-dear' && msg.targetUserId && Date.now() - msg.timestamp > 86400000) && (
+                                        <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[9px] hover:bg-[#0F2547] text-slate-300 transition-colors">
+                                            ↩️ ตอบ
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                       </div>
                     );
                   })}
-                  {roomTypers.length > 0 && <div className="text-xs text-sky-300 animate-pulse">💬 <strong>{roomTypers.map((t) => t.displayName).join(', ')}</strong> กำลังพิมพ์...</div>}
+                  
+                  {roomTypers.length > 0 && (
+                      <div className="text-[10px] text-sky-300 animate-pulse bg-sky-950/30 w-max px-3 py-1.5 rounded-full border border-sky-900/50 self-start ml-2 mt-2 flex items-center gap-2">
+                          <div className="flex gap-[2px] items-center h-2 waveform text-sky-400">
+                             <span style={{animationDelay: '0s'}}></span>
+                             <span style={{animationDelay: '0.2s'}}></span>
+                             <span style={{animationDelay: '0.4s'}}></span>
+                          </div>
+                          <strong>{roomTypers.map((t) => t.displayName).join(', ')}</strong> กำลังพิมพ์...
+                      </div>
+                  )}
                 </div>
 
+                {/* Mention Dropdown */}
                 {mentOpen && (
-                  <div className="absolute bottom-24 left-6 max-w-sm w-full card p-2.5 z-40 max-h-48 overflow-y-auto space-y-1 text-xs">
-                    {mentionList().map((m, i) => <button key={i} onClick={() => { const w = chatIn.split(/\s+/); if (w[w.length - 1]?.startsWith('@')) { w[w.length - 1] = m.token; setChatIn(w.join(' ') + ' '); } else setChatIn((chatIn ? chatIn + ' ' : '') + m.token + ' '); setMentOpen(false); }} className="w-full flex justify-between px-2.5 py-1.5 rounded-xl hover:bg-[#0F2547]"><span className="font-mono font-bold">{m.label}</span><span className="text-slate-400">{m.sub}</span></button>)}
+                  <div className="absolute bottom-24 left-4 max-w-sm w-full card p-2 z-40 max-h-48 overflow-y-auto space-y-1 text-xs shadow-[0_0_20px_rgba(0,0,0,0.8)] border border-sky-500/50">
+                    <div className="text-[10px] text-slate-400 font-bold mb-1 px-2 border-b border-[#1E3A5F] pb-1">แท็กบุคคลหรือกลุ่ม</div>
+                    {mentionList().map((m, i) => (
+                        <button key={i} onClick={() => { const w = chatIn.split(/\s+/); if (w[w.length - 1]?.startsWith('@')) { w[w.length - 1] = m.token; setChatIn(w.join(' ') + ' '); } else setChatIn((chatIn ? chatIn + ' ' : '') + m.token + ' '); setMentOpen(false); }} className="w-full flex justify-between items-center px-3 py-2 rounded-lg hover:bg-sky-900/40 transition-colors">
+                            <span className="font-mono font-bold text-sky-100">{m.label}</span>
+                            <span className="text-slate-500 text-[10px]">{m.sub}</span>
+                        </button>
+                    ))}
                   </div>
                 )}
 
+                {/* Chat Input Area */}
                 {activeCh?.isSystemReadOnly || activeGrp?.isArchived ? (
                   <div className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] text-center text-xs text-slate-400 shrink-0">ห้องนี้อยู่ในโหมดอ่านอย่างเดียว</div>
                 ) : (
-                  <form onSubmit={handleSendChat} className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] space-y-2 shrink-0 text-xs relative">
-                    {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span>✎ แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}>✕</button></div>}
-                    {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span>↩️ ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}>✕</button></div>}
-                    {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลดไฟล์...</div>}
-                    {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F]">{a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400">✕</button></span>)}</div>}
+                  <div className="p-3 bg-[#0B1325] border-t border-[#1E3A5F] shrink-0 z-20 relative">
+                    
+                    {/* ข้อมูล Edit / Reply / Upload (คงเดิม) */}
+                    <div className="space-y-2 mb-2 text-xs">
+                        {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span>✎ แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}>✕</button></div>}
+                        {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span>↩️ ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}>✕</button></div>}
+                        {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลดไฟล์...</div>}
+                        {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-white">{a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400 font-bold ml-1 hover:text-red-300">✕</button></span>)}</div>}
+                    </div>
+
+                    {/* ช่องป้อน URL แนบลิงก์ */}
                     {cUrlOpen && (
-                      <div className="flex gap-1.5">
-                        <select value={cAttType} onChange={(e) => setCAttType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="audio">เสียง (Audio)</option><option value="file">ไฟล์</option></select>
+                      <div className="flex gap-1.5 mb-2 text-xs animate-fade-in">
+                        <select value={cAttType} onChange={(e) => setCAttType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ</option><option value="audio">เสียง</option><option value="file">ไฟล์</option></select>
                         <input type="text" value={cAttUrl} onChange={(e) => setCAttUrl(e.target.value)} placeholder="วางลิงก์ .gif, .png หรือลิงก์เว็บ..." className="flex-1 inp py-1" />
-                        <button type="button" onClick={() => { if (cAttUrl.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: cAttType, url: cAttUrl.trim(), size: 'URL' }]); setCAttUrl(''); setCUrlOpen(false); } }} className="btn-w py-1">แนบ</button>
+                        <button type="button" onClick={() => { if (cAttUrl.trim()) { setChatAtts([...chatAtts, { id: 'att-' + Date.now(), name: 'Link', type: cAttType, url: cAttUrl.trim(), size: 'URL' }]); setCAttUrl(''); setCUrlOpen(false); } }} className="btn-w py-1 px-3">แนบ</button>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                      <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
-                      <button type="button" onClick={() => cFileRef.current?.click()} className="btn-d py-1 shrink-0"><UpIcon />อัปโหลดไฟล์</button>
-                      <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="btn-d py-1 shrink-0">🔗 แนบลิงก์</button>
-                      <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`btn-d py-1 shrink-0 ${isRecording ? 'text-red-400 font-bold bg-red-900/30 animate-pulse' : ''}`}>{isRecording ? '⏹️ หยุดบันทึก' : '🎤 เสียง'}</button>
-                      <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="btn-b py-1 font-bold shrink-0">@ แท็ก</button>
-                      <div className="relative shrink-0">
-                         <button type="button" onClick={() => setEmoOpen(!emoOpen)} className="btn-d py-1 text-lg leading-none px-2">😀</button>
-                         {emoOpen && (
-                           <div className="absolute bottom-full left-0 mb-2 w-64 card p-2 z-50 shadow-2xl border-white/20 text-xl grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
-                             {['😀','😂','🤣','😊','😍','😘','🥰','😜','😎','🤩','😭','😡','🤯','🥶','😱','🤡','👻','💀','👽','👾','💖','💔','💯','💥','💦','💨','👍','👎','👏','🙌','🤝','🙏','💪','🏆','🔥','✨','🎉','🎊','🎈','🧸'].map(em => (
-                               <button key={em} type="button" onClick={() => { setChatIn(chatIn + em); setEmoOpen(false); document.querySelector('textarea.max-h-24')?.focus(); }} className="hover:bg-[#0F2547] rounded p-1 transition-colors">{em}</button>
-                             ))}
-                           </div>
-                         )}
-                      </div>
-                      <div className="relative shrink-0">
-                        <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="btn-b py-1 font-bold text-sky-300 border-sky-500/50 bg-sky-950/30 shadow">🎮 ชวนเล่นเกม</button>
-                        {cGameOpen && (
-                          <div className="absolute bottom-full left-0 mb-2 w-48 card py-1.5 z-50 shadow-2xl border-white/20 text-xs">
-                            {[{id:'chess',n:'หมากรุกสากล (ไม่จับเวลา)',i:'♟️'}, {id:'chess_3',n:'หมากรุกสากล (3 นาที)',i:'⏳'}, {id:'chess_5',n:'หมากรุกสากล (5 นาที)',i:'⏳'}, {id:'checkers',n:'หมากฮอสสากล',i:'🔴'},{id:'snl',n:'บันไดงู',i:'🐍'},{id:'connect4',n:'Connect 4',i:'🟡'},{id:'domino',n:'โดมิโน',i:'🁣'},{id:'sttt',n:'Super Tic-Tac-Toe',i:'✖️'}].map(g => (
-                              <button key={g.id} type="button" onClick={async () => { 
-                                setCGameOpen(false); 
-                                const gid = 'cg-' + Date.now(); 
-                                const realId = g.id.split('_')[0];
-                                const timerSetting = g.id.includes('_') ? parseInt(g.id.split('_')[1]) * 60 : null;
-                                await db.collection('bma_chat_games').doc(gid).set({ id: gid, type: realId, name: g.n, players: [currentUser.id], status: 'waiting', gameState: {}, timerSetting, rematch: [], timestamp: Date.now() }); 
-                                const mid = 'msg-' + Date.now(); 
-                                await db.collection('bma_messages').doc(mid).set({ id: mid, roomKey, senderId: currentUser.id, receiverId: activeRoom.type === 'dm' ? activeRoom.id : null, text: 'ชวนเล่นเกม ' + g.n, isGameInvite: true, gameId: gid, gameType: realId, gameName: g.n, readBy: [currentUser.id], isDeleted: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: Date.now(), serverCreatedAt: svrTs() }); 
-                                setActiveChatGameId(gid); 
-                              }} className="w-full text-left px-3.5 py-2 hover:bg-[#0F2547] flex gap-2"><span>{g.i}</span> <span>{g.n}</span></button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {activeRoom.type === 'dm' && (
-                        <button type="button" onClick={async () => {
-                          const now = Date.now(), id = 'msg-' + now;
-                          await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.id, text: '👋 สะกิดคุณ!', attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
-                          await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '👋 ' + currentUser.displayName + ' สะกิดคุณ!', body: 'สะกิดคุณ!', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
-                        }} className="btn-b py-1 font-bold text-amber-300 border-amber-500/50 bg-amber-950/30 shrink-0">👋 สะกิด</button>
-                      )}
-                    </div>
-                    <div className="flex gap-2 items-end">
-                      <textarea rows={1} value={chatIn} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(e); } }} onChange={(e) => { const v = e.target.value; setChatIn(v); setTyping(v.trim().length > 0); clearTimeout(typTimer.current); typTimer.current = setTimeout(() => setTyping(false), 3500); const lw = v.split(/\s+/).pop() || ''; if (lw.startsWith('@')) { setMentOpen(true); setMentF(lw.slice(1).toLowerCase()); } else setMentOpen(false); }} placeholder="เริ่มบทสนทนา..." className="flex-1 inp text-sm resize-none max-h-24" />
-                      <button type="submit" className="btn-w text-sm">ส่ง</button>
-                    </div>
-                  </form>
-                )}
-              </main>
 
-              {rightOpen && (
-                <aside className="absolute md:relative z-10 w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0">
-                  <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center font-bold"><span>👥 สมาชิก ({activeMembers.length})</span><button onClick={() => setRightOpen(false)} className="md:hidden">✕</button></div>
+                    <form onSubmit={handleSendChat} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
+                        
+                        <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
+                            {/* ปุ่มเครื่องหมาย + (เมนูแนบไฟล์) */}
+                            <div className="relative group/attach">
+                                <button type="button" className="w-8 h-8 rounded-full text-slate-400 hover:text-white hover:bg-[#0F2547] transition flex items-center justify-center">
+                                    <i className="fas fa-plus"></i>
+                                </button>
+                                {/* เมนูย่อยเมื่อชี้ที่ปุ่ม + */}
+                                <div className="absolute bottom-full left-0 mb-2 w-max bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-1 hidden group-hover/attach:flex flex-col shadow-2xl z-50 text-xs text-left">
+                                    <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
+                                    <button type="button" onClick={() => cFileRef.current?.click()} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-upload w-4 text-center"></i> อัปโหลดไฟล์จากเครื่อง</button>
+                                    <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-link w-4 text-center"></i> แนบลิงก์ (URL)</button>
+                                    <button type="button" onClick={() => { setMentOpen(!mentOpen); setMentF(''); }} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-slate-300 hover:text-white flex items-center gap-2"><i className="fas fa-at w-4 text-center"></i> แท็กบุคคล (@)</button>
+                                    <button type="button" onClick={() => setCGameOpen(!cGameOpen)} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-amber-300 hover:bg-amber-900/30 flex items-center gap-2"><i className="fas fa-gamepad w-4 text-center"></i> ชวนเล่นแชตเกม</button>
+                                    {activeRoom.type === 'dm' && (
+                                        <button type="button" onClick={async () => { const now = Date.now(), id = 'msg-' + now; await db.collection('bma_messages').doc(id).set({ id, roomKey, senderId: currentUser.id, receiverId: activeRoom.id, text: '👋 สะกิดคุณ!', attachments: [], likes: [], readBy: [currentUser.id], isEdited: false, isDeleted: false, isSystemPostAlert: false, time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() }); await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '👋 ' + currentUser.displayName + ' สะกิดคุณ!', body: 'สะกิดคุณ!', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id }); }} className="px-3 py-2 hover:bg-[#0F2547] rounded-lg text-fuchsia-300 hover:bg-fuchsia-900/30 flex items-center gap-2"><i className="fas fa-hand-sparkles w-4 text-center"></i> สะกิด (Poke)</button>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* ปุ่ม Emoji */}
+                            <div className="relative">
+                                <button type="button" onClick={() => { setEmoOpen(!emoOpen); setShowGifPanel(false); }} className="w-8 h-8 rounded-full text-slate-400 hover:text-white hover:bg-[#0F2547] transition flex items-center justify-center text-lg">
+                                    🙂
+                                </button>
+                                {emoOpen && (
+                                    <div className="absolute bottom-full left-0 mb-3 w-64 bg-[#0B1325] border border-[#1E3A5F] p-2 z-50 shadow-2xl rounded-xl text-xl grid grid-cols-6 gap-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                        {['😀','😂','🤣','😊','😍','😘','🥰','😜','😎','🤩','😭','😡','🤯','🥶','😱','🤡','👻','💀','👽','👾','💖','💔','💯','💥','💦','💨','👍','👎','👏','🙌','🤝','🙏','💪','🏆','🔥','✨','🎉','🎊','🎈','🧸'].map(em => (
+                                            <button key={em} type="button" onClick={() => { setChatIn(chatIn + em); setEmoOpen(false); document.querySelector('textarea.max-h-24')?.focus(); }} className="hover:bg-[#0F2547] rounded p-1 transition-colors flex items-center justify-center h-8">{em}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ปุ่ม GIF Panel */}
+                            <div className="relative hidden sm:block">
+                                <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'text-slate-400 hover:text-white border-transparent hover:border-slate-700 hover:bg-[#0F2547]'}`} title="ส่ง GIF">
+                                    GIF
+                                </button>
+                                {showGifPanel && (
+                                    <div className="absolute bottom-full left-0 mb-3 w-72 bg-[#0B1325] border border-[#1E3A5F] p-3 z-50 shadow-[0_0_30px_rgba(0,0,0,0.8)] rounded-xl">
+                                        <div className="relative mb-2">
+                                            <i className="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                                            <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF (จำลอง)..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-7 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
+                                        </div>
+                                        {/* จำลองดึงข้อมูล Giphy */}
+                                        <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar">
+                                            {mockGifs.map((gif, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    onClick={() => { 
+                                                        setChatAtts([...chatAtts, { id: 'att-gif-' + Date.now(), name: 'GIPHY', type: 'image', url: gif, size: 'GIF' }]); 
+                                                        setShowGifPanel(false); 
+                                                    }} 
+                                                    className="bg-cover bg-center h-20 rounded cursor-pointer hover:ring-2 ring-purple-500 transition-all shadow-sm"
+                                                    style={{ backgroundImage: `url('${gif}')` }}
+                                                ></div>
+                                            ))}
+                                        </div>
+                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY GIPHY</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Input Field */}
+                        <textarea 
+                            rows={1} 
+                            value={chatIn} 
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(e); } }} 
+                            onChange={(e) => { 
+                                const v = e.target.value; 
+                                setChatIn(v); 
+                                setTyping(v.trim().length > 0); 
+                                clearTimeout(typTimer.current); 
+                                typTimer.current = setTimeout(() => setTyping(false), 3500); 
+                                const lw = v.split(/\s+/).pop() || ''; 
+                                if (lw.startsWith('@')) { setMentOpen(true); setMentF(lw.slice(1).toLowerCase()); } 
+                                else setMentOpen(false); 
+                            }} 
+                            placeholder="พิมพ์ข้อความ... (ใช้ @ เพื่อแท็ก)" 
+                            className="flex-1 bg-transparent text-sm text-white resize-none outline-none py-2.5 custom-scrollbar max-h-24 placeholder-slate-500" 
+                        />
+                        
+                        {/* Right Actions */}
+                        <div className="flex items-center gap-1 pb-1 pr-1 shrink-0">
+                            {/* ปุ่มบันทึกเสียง (ใช้ Waveform icon ถ้ากำลังอัด) */}
+                            <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`w-8 h-8 rounded-full transition flex items-center justify-center ${isRecording ? 'bg-red-900/50 text-red-400 animate-pulse' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'}`} title={isRecording ? "หยุดบันทึกเสียง" : "ส่งข้อความเสียง"}>
+                                {isRecording ? (
+                                    <div className="flex gap-[2px] waveform text-red-400 h-3.5 items-center">
+                                        <span style={{animationDelay: '0.1s'}}></span>
+                                        <span style={{animationDelay: '0.3s'}}></span>
+                                        <span style={{animationDelay: '0.2s'}}></span>
+                                    </div>
+                                ) : (
+                                    <i className="fas fa-microphone"></i>
+                                )}
+                            </button>
+                            
+                            {/* ปุ่ม Silent Toggle */}
+                            <button type="button" onClick={() => setIsSilentMsg(!isSilentMsg)} className={`w-8 h-8 rounded-full transition flex items-center justify-center ${isSilentMsg ? 'text-amber-400 bg-amber-900/30' : 'text-slate-400 hover:text-amber-400 hover:bg-[#0F2547]'}`} title={isSilentMsg ? "โหมดส่งข้อความ: ไม่แจ้งเตือน (Silent)" : "โหมดส่งข้อความ: แจ้งเตือนปกติ"}>
+                                <i className={`fas ${isSilentMsg ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+                            </button>
+                            
+                            {/* ปุ่มส่งข้อความ */}
+                            <button type="submit" className="w-8 h-8 rounded-full bg-sky-500 text-white hover:bg-sky-400 transition flex items-center justify-center shadow-md ml-0.5" title="ส่งข้อความ">
+                                <i className="fas fa-paper-plane text-xs -ml-0.5"></i>
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* Alert text for silent mode */}
+                    {isSilentMsg && (
+                        <div className="absolute -top-6 right-4 bg-amber-950/90 border border-amber-500/50 text-amber-300 text-[10px] px-3 py-1 rounded-full shadow-lg z-50 animate-fade-in font-bold">
+                            🔕 ส่งแบบไม่แจ้งเตือน
+                        </div>
+                    )}
+                  </div>
+                )}
+              </main>   
+
+              {/* RIGHT SIDEBAR (Members Drawer) */}
+              <aside className={`absolute md:relative z-40 w-64 md:w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0 transition-transform duration-300 ${rightOpen ? 'translate-x-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)]' : 'translate-x-full md:translate-x-0'}`}>
+                  <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811]">
+                      <span className="font-bold text-slate-200">👥 สมาชิกห้อง ({activeMembers.length})</span>
+                      <button onClick={() => setRightOpen(false)} className="md:hidden w-7 h-7 rounded bg-[#0F2547] text-slate-400 hover:text-white flex items-center justify-center"><i className="fas fa-times"></i></button>
+                  </div>
                   
-                  <div className="p-2 border-b border-[#1E3A5F] relative z-20">
-                    <button onClick={() => setRightFilterMenuOpen(!rightFilterMenuOpen)} className={`w-full px-3 py-1.5 rounded-full text-xs font-bold flex justify-center items-center gap-2 border transition-colors ${rightTag !== 'ALL' || rightOnlineOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
-                      <span>⚙️ เลือกดู</span>
-                      {(rightTag !== 'ALL' || rightOnlineOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+                  <div className="p-3 border-b border-[#1E3A5F] relative z-20 bg-gradient-to-b from-[#050811] to-transparent">
+                    <button onClick={() => setRightFilterMenuOpen(!rightFilterMenuOpen)} className={`w-full px-3 py-2 rounded-xl text-xs font-bold flex justify-between items-center border transition-colors shadow-sm ${rightTag !== 'ALL' || rightOnlineOnly ? 'bg-sky-600 border-sky-500 text-white' : 'bg-white text-[#050811] border-transparent hover:bg-slate-200'}`}>
+                      <div className="flex items-center gap-2">
+                          <i className="fas fa-sliders-h"></i> 
+                          <span>คัดกรองสมาชิก</span>
+                      </div>
+                      {(rightTag !== 'ALL' || rightOnlineOnly) ? <span className="bg-[#050811] text-sky-400 px-1.5 py-0.5 rounded-md text-[10px]">เปิดอยู่</span> : <i className="fas fa-chevron-down text-[10px]"></i>}
                     </button>
                     
                     {rightFilterMenuOpen && (
                       <>
                         <div className="fixed inset-0 z-30" onClick={() => setRightFilterMenuOpen(false)}></div>
-                        <div className="absolute top-full mt-2 left-2 right-2 card p-3 z-40 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
+                        <div className="absolute top-full mt-2 left-3 right-3 bg-[#0B1325] p-3 z-40 shadow-[0_0_20px_rgba(0,0,0,0.8)] border border-[#1E3A5F] rounded-xl text-xs flex flex-col gap-3">
                           <div>
-                            <div className="font-bold text-sky-300 mb-1.5">🏷️ หมวดหมู่สมาชิก</div>
-                            <select value={rightTag} onChange={e => setRightTag(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                              <option value="ALL">ทั้งหมด</option>
+                            <div className="font-bold text-sky-300 mb-1.5 flex items-center gap-1.5"><i className="fas fa-tag"></i> หมวดหมู่สมาชิก</div>
+                            <select value={rightTag} onChange={e => setRightTag(e.target.value)} className="w-full inp py-1.5 text-xs text-white bg-[#050811]">
+                              <option value="ALL">ทั้งหมด (All Tags)</option>
                               {allTags.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
-                            <input type="checkbox" checked={rightOnlineOnly} onChange={e => setRightOnlineOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
-                            <span className="font-bold text-slate-200">🟢 ดูเฉพาะคนที่ออนไลน์ 24 ชม.</span>
+                            <input type="checkbox" checked={rightOnlineOnly} onChange={e => setRightOnlineOnly(e.target.checked)} className="rounded bg-[#050811] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
+                            <span className="font-bold text-slate-200">🟢 เฉพาะคนที่ออนไลน์ใน 24 ชม.</span>
                           </label>
                           {(rightTag !== 'ALL' || rightOnlineOnly) && (
-                            <button onClick={() => { setRightTag('ALL'); setRightOnlineOnly(false); setRightFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
-                              ✕ ล้างฟิลเตอร์ทั้งหมด
+                            <button onClick={() => { setRightTag('ALL'); setRightOnlineOnly(false); setRightFilterMenuOpen(false); }} className="mt-2 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
+                              ✕ ล้างฟิลเตอร์
                             </button>
                           )}
                         </div>
@@ -8579,7 +8961,7 @@
                     )}
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                     {activeMembers.filter((m) => {
                        if (rightTag !== 'ALL' && !getTags(m).includes(rightTag)) return false;
                        if (rightOnlineOnly && (Date.now() - (m.lastActive || 0) > 86400000)) return false;
@@ -8587,19 +8969,20 @@
                     }).map((m) => {
                        const stat = getStatusInfo(m);
                        return (
-                           <div key={m.id} onClick={() => setMemberModal(m)} className="p-2 card hover:border-white/50 cursor-pointer flex items-center gap-2">
-                               <Avatar user={m} size="xs" showStatus={true} />
+                           <div key={m.id} onClick={() => setMemberModal(m)} className={`p-2 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-colors ${stat.t === 'Online' ? 'bg-[#0B1325] border-emerald-900/40 hover:border-emerald-500/80' : 'bg-[#050811] border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                               <Avatar user={m} size="sm" showStatus={true} />
                                <div className="min-w-0 flex-1">
-                                   <div className="font-bold truncate text-[11px]">{m.displayName} ({m.id})</div>
-                                   <div className={`text-[9px] mb-1 ${stat.t === 'Online' ? 'text-emerald-400' : stat.t === 'AFK' ? 'text-amber-400' : 'text-slate-400'}`}>{stat.t}</div>
-                                   <TagBadges user={m} />
+                                   <div className="font-bold truncate text-[12px] text-slate-100">{m.displayName}</div>
+                                   <div className="flex items-center gap-1.5 mt-0.5">
+                                       <span className="text-[9px] font-mono bg-black/40 px-1 rounded text-sky-400">{m.id}</span>
+                                       <div className={`text-[9px] font-bold ${stat.t === 'Online' ? 'text-emerald-400' : stat.t === 'AFK' ? 'text-amber-400' : 'text-slate-500'}`}>{stat.t}</div>
+                                   </div>
                                </div>
                            </div>
                        );
                     })}
                   </div>
-                </aside>
-              )}
+              </aside>
             </div>
           )}
 
