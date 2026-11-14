@@ -8462,12 +8462,12 @@
               ></div>
 
               {/* LEFT SIDEBAR (Channels & DMs Drawer) */}
-              <aside className={`absolute md:relative z-40 w-64 md:w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs transition-transform duration-300 ${leftOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}`}>
+              <aside className={`absolute z-40 w-64 bg-[#070C18] border-r border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto text-xs transition-transform duration-300 ${leftOpen ? 'translate-x-0 shadow-2xl relative' : '-translate-x-full absolute'} md:w-64`}>
                   <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811] sticky top-0 z-10">
                     <div className="flex justify-between items-center w-full">
                         <span className="text-[11px] font-bold uppercase text-slate-400">แชตรวม (Global)</span>
                         <div className="flex gap-2">
-                            {isModOrAdmin && <button onClick={() => setCChOpen(true)} className="px-2 py-0.5 rounded bg-[#0F2547] text-[10px] font-bold text-sky-300 hover:bg-[#1E3A5F] transition-colors">+ สร้าง</button>}
+                            {isModOrAdmin && <button onClick={() => setCChOpen(true)} className="px-2 py-0.5 rounded bg-[#0F2547] text-[10px] font-bold text-sky-300 hover:bg-[#1E3A5F] transition-colors"><i className="fas fa-plus mr-1"></i> สร้าง</button>}
                             <button onClick={() => setLeftOpen(false)} className="md:hidden text-slate-400 hover:text-white px-2 py-1"><i className="fas fa-times"></i></button>
                         </div>
                     </div>
@@ -8486,7 +8486,7 @@
                   <div className="p-3 border-b border-[#1E3A5F]">
                     <div className="mb-2 flex justify-between items-center">
                         <span className="text-[11px] font-bold uppercase text-slate-400">กลุ่มแชต (Groups)</span>
-                        <button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold hover:bg-slate-200 transition-colors">+ สร้างกลุ่ม</button>
+                        <button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold hover:bg-slate-200 transition-colors"><i className="fas fa-plus mr-1"></i> สร้างกลุ่ม</button>
                     </div>
                     {myGroups.map((g) => (
                         <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex justify-between items-center px-3 py-2 mb-1 rounded-xl font-bold transition-all ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
@@ -8521,8 +8521,8 @@
                 {/* 🔍 Chat Header & Search */}
                 <div className="h-14 px-3 sm:px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between shrink-0 text-xs shadow-sm z-20">
                   <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    {/* ปุ่มเปิด/ปิดแถบห้องแชต (ซ้าย) รองรับทั้งมือถือและ PC */}
-                    <button onClick={() => setLeftOpen(!leftOpen)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${!leftOpen ? 'bg-sky-500 text-white shadow-md' : 'bg-[#0F2547] text-slate-300 hover:text-white hover:bg-sky-600'}`} title={leftOpen ? "ซ่อนแถบห้องแชต" : "แสดงแถบห้องแชต"}>
+                    {/* 📌 ปุ่มเปิด/ปิดแถบห้องแชต (ซ้าย) รองรับทั้งมือถือและ PC */}
+                    <button onClick={() => setLeftOpen(!leftOpen)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${!leftOpen ? 'bg-sky-500 text-white shadow-md' : 'bg-[#0F2547] text-slate-300 hover:text-white hover:bg-sky-600 border border-[#1E3A5F]'}`} title={leftOpen ? "ซ่อนแถบเมนู (ซ้าย)" : "แสดงแถบเมนู (ซ้าย)"}>
                         <i className={`fas ${leftOpen ? 'fa-angle-double-left' : 'fa-bars'}`}></i>
                     </button>
                     
@@ -8557,7 +8557,7 @@
                         )}
                     </div>
                     
-                    {/* ปุ่มตัวเลือกเสริม (ขวาบน) - ปรับสีให้ชัดเจนขึ้น */}
+                    {/* 📌 ปุ่มตัวเลือกเสริม (ขวาบน) - ปรับไอคอนและสีให้ชัดเจน */}
                     <div className="flex items-center gap-1.5 border-r border-[#1E3A5F] pr-2 mr-1">
                         {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && (
                             <button onClick={() => setAddMemOpen(true)} className="w-8 h-8 rounded-full bg-[#0F2547] text-sky-300 border border-sky-500/30 hover:bg-sky-600 hover:text-white transition flex items-center justify-center shrink-0 shadow-sm" title="แก้ไขสมาชิกกลุ่ม">
@@ -8566,8 +8566,8 @@
                         )}
                         {activeRoom.type === 'group' && activeGrp && currentUser?.id === activeGrp.createdBy && (
                           <>
-                            <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b text-[10px] px-2 shadow-sm" title="Archive กลุ่ม">
-                                {activeGrp.isArchived ? '🔓 เปิด' : '📦 Archive'}
+                            <button onClick={() => db.collection('bma_groups').doc(activeGrp.id).update({ isArchived: !activeGrp.isArchived })} className="btn-b text-[10px] px-2 shadow-sm flex items-center gap-1" title="Archive กลุ่ม">
+                                <i className={`fas ${activeGrp.isArchived ? 'fa-unlock' : 'fa-box'}`}></i> {activeGrp.isArchived ? 'เปิด' : 'Archive'}
                             </button>
                             <button onClick={() => setDelTgt({ roomType: 'group', id: activeGrp.id, name: activeGrp.name })} className="w-8 h-8 rounded-full bg-red-950/80 border border-red-900 text-red-400 hover:bg-red-600 hover:text-white transition flex items-center justify-center shrink-0 shadow-sm" title="ลบกลุ่มนี้">
                                 <i className="fas fa-trash-alt"></i>
@@ -8576,9 +8576,9 @@
                         )}
                     </div>
                     
-                    {/* ปุ่มเปิด/ปิดแถบสมาชิก (ขวา) รองรับทั้งมือถือและ PC */}
-                    <button onClick={() => setRightOpen(!rightOpen)} className={`w-8 h-8 md:w-auto md:px-3 md:py-1.5 rounded-full md:rounded-lg font-bold flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md border ${!rightOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-white text-[#050811] border-transparent hover:bg-slate-200'}`}>
-                        <i className="fas fa-users"></i>
+                    {/* 📌 ปุ่มเปิด/ปิดแถบสมาชิก (ขวา) รองรับทั้งมือถือและ PC */}
+                    <button onClick={() => setRightOpen(!rightOpen)} className={`w-8 h-8 md:w-auto md:px-3 md:py-1.5 rounded-full md:rounded-lg font-bold flex items-center justify-center gap-2 transition-colors shrink-0 shadow-md border ${!rightOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-[#0F2547] text-slate-300 border-[#1E3A5F] hover:bg-slate-200 hover:text-black'}`} title={rightOpen ? "ซ่อนแถบสมาชิก (ขวา)" : "แสดงแถบสมาชิก (ขวา)"}>
+                        <i className={`fas ${rightOpen ? 'fa-angle-double-right' : 'fa-users'}`}></i>
                         <span className="hidden md:inline">สมาชิก</span>
                     </button>
                   </div>
@@ -8615,20 +8615,20 @@
                     const tStr = getTimeStr(msg);
                     if (msg.isSystemPostAlert) {
                       const pa = getAuthor(msg.senderId);
-                      return <div key={msg.id} className="p-3.5 card flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" /><div><div className="text-[10px] text-blue-300 font-bold">📝 โพสต์ใหม่ • {tStr}</div><div className="text-xs font-bold">{msg.text}</div>{msg.postTitle && <div className="text-xs text-slate-300">"{msg.postTitle}"</div>}</div></div>{msg.linkedPostId && <button onClick={() => jumpToPost(msg.linkedPostId)} className="btn-w text-xs shrink-0">🔗 ดูโพสต์ →</button>}</div>;
+                      return <div key={msg.id} className="p-3.5 card flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" /><div><div className="text-[10px] text-blue-300 font-bold">📝 โพสต์ใหม่ • {tStr}</div><div className="text-xs font-bold">{msg.text}</div>{msg.postTitle && <div className="text-xs text-slate-300">"{msg.postTitle}"</div>}</div></div>{msg.linkedPostId && <button onClick={() => jumpToPost(msg.linkedPostId)} className="btn-w text-xs shrink-0"><i className="fas fa-link mr-1"></i> ดูโพสต์</button>}</div>;
                     }
                     if (msg.isGameInvite) {
                       const pa = getAuthor(msg.senderId);
-                      return <div key={msg.id} className="p-3.5 card border-sky-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-sky-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5 font-bold">🎮 ชวนเล่นเกม {msg.gameName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform">⚔️ เข้าร่วม / เปิดเกม</button></div>;
+                      return <div key={msg.id} className="p-3.5 card border-sky-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-sky-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5 font-bold">🎮 ชวนเล่นเกม {msg.gameName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform"><i className="fas fa-gamepad mr-1"></i> เข้าร่วม / เปิดเกม</button></div>;
                     }
                     if (msg.isGameResult) {
                       const pa = getAuthor(msg.senderId);
                       const wName = msg.gameResultData.winner === 'draw' ? 'เสมอ' : getAuthor(msg.gameResultData.winner)?.displayName;
-                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">🏆 ผลการแข่งขัน {msg.gameName}</p><p className="text-xs font-bold text-amber-400 mt-1">ผู้ชนะ: {wName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-b text-xs self-start ml-11 hover:scale-105 transition-transform text-amber-300 border-amber-500/50">👁️ ดูหน้ากระดานสรุป</button></div>;
+                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">🏆 ผลการแข่งขัน {msg.gameName}</p><p className="text-xs font-bold text-amber-400 mt-1">ผู้ชนะ: {wName}</p></div></div><button onClick={() => setActiveChatGameId(msg.gameId)} className="btn-b text-xs self-start ml-11 hover:scale-105 transition-transform text-amber-300 border-amber-500/50"><i className="fas fa-eye mr-1"></i> ดูหน้ากระดานสรุป</button></div>;
                     }
                     if (msg.dailyGameShare) {
                       const pa = getAuthor(msg.senderId);
-                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">{msg.text}</p></div></div><button onClick={() => { setActiveGameTab(msg.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform">🎮 ท้าดวลเกมนี้เลย</button></div>;
+                      return <div key={msg.id} className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg"><div className="flex items-center gap-3"><Avatar user={pa} size="sm" showStatus={true} /><div><div className="flex items-center gap-1.5"><span className="text-xs font-bold text-amber-300">{pa.displayName}</span><span className="text-[10px] text-slate-400">{tStr}</span></div><p className="text-sm mt-0.5">{msg.text}</p></div></div><button onClick={() => { setActiveGameTab(msg.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start ml-11 hover:scale-105 transition-transform"><i className="fas fa-play mr-1"></i> ท้าดวลเกมนี้เลย</button></div>;
                     }
                      if (msg.isEventInvite) {
                       const pa = getAuthor(msg.senderId);
@@ -8644,23 +8644,22 @@
                            <div className="bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] text-xs shadow-inner mt-1">
                               <div className="font-bold text-sky-200 mb-1.5 leading-snug">{msg.eventName}</div>
                               <div className="text-slate-400 text-[10px] flex items-center gap-1.5">
-                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]">📍 {msg.eventDate}</span>
-                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]">🕒 {msg.eventTime}</span>
+                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]"><i className="fas fa-map-marker-alt"></i> {msg.eventDate}</span>
+                                 <span className="bg-[#0B1325] px-1.5 py-0.5 rounded border border-[#1E3A5F]"><i className="fas fa-clock"></i> {msg.eventTime}</span>
                               </div>
                            </div>
                            	{/* ปุ่มตอบรับ (RSVP) */}
                            <div className="flex gap-1.5 mt-1.5">
-                              <button onClick={() => updateEventRSVP(msg.eventId, 'going')} className="flex-1 btn-w text-[10px] py-1.5 shadow-md hover:bg-emerald-500 hover:text-white hover:border-transparent transition-colors">✓ ไป</button>
+                              <button onClick={() => updateEventRSVP(msg.eventId, 'going')} className="flex-1 btn-w text-[10px] py-1.5 shadow-md hover:bg-emerald-500 hover:text-white hover:border-transparent transition-colors"><i className="fas fa-check"></i> ไป</button>
                               <button onClick={() => updateEventRSVP(msg.eventId, 'maybe')} className="flex-1 btn-d text-[10px] py-1.5 border-amber-500/50 text-amber-300 hover:bg-amber-900 transition-colors">🤷 อาจจะ</button>
-                              <button onClick={() => updateEventRSVP(msg.eventId, 'decline')} className="flex-1 btn-d text-[10px] py-1.5 border-red-500/50 text-red-300 hover:bg-red-900 transition-colors">✕ ไม่ไป</button>
+                              <button onClick={() => updateEventRSVP(msg.eventId, 'decline')} className="flex-1 btn-d text-[10px] py-1.5 border-red-500/50 text-red-300 hover:bg-red-900 transition-colors"><i className="fas fa-times"></i> ไม่ไป</button>
                            </div>
                         </div>
                       );
                     }
                     const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
-                    const isMe = currentUser && msg.senderId === currentUser.id; // เช็กว่าเป็นข้อความของเราหรือไม่
+                    const isMe = currentUser && msg.senderId === currentUser.id;
 
-                    // --- ฟังก์ชันช่วยเหลือสำหรับ Highlight คำค้นหา ---
                     const highlightText = (text, highlight) => {
                         if (!highlight.trim()) return <FormattedText text={text} currentUser={currentUser} isEdited={msg.isEdited} />;
                         const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
@@ -8675,11 +8674,9 @@
                         );
                     };
 
-                    // --- ฟังก์ชันช่วยเหลือสำหรับ Smart Media Grid ---
                     const renderMediaGrid = (attachments) => {
                         if (!attachments || attachments.length === 0) return null;
                         
-                        // กรองเฉพาะรูปภาพเพื่อนำมาจัด Grid
                         const images = attachments.filter(a => a.type === 'image');
                         const others = attachments.filter(a => a.type !== 'image');
                         
@@ -8690,13 +8687,11 @@
 
                         return (
                             <div className="mt-2 space-y-2">
-                                {/* แสดง Grid รูปภาพ */}
                                 {images.length > 0 && (
                                     <div className={images.length > 1 ? `media-grid ${gridClass} w-full max-w-sm` : 'w-full max-w-sm'}>
                                         {images.slice(0, 4).map((att, idx) => (
                                             <div key={att.id} className="relative">
                                                 <SmartMedia att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />
-                                                {/* ถ้ามีรูปมากกว่า 4 รูป ให้แสดง +X บนรูปสุดท้าย */}
                                                 {idx === 3 && images.length > 4 && (
                                                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xl font-bold rounded-xl pointer-events-none">
                                                         +{images.length - 4}
@@ -8707,7 +8702,6 @@
                                     </div>
                                 )}
                                 
-                                {/* แสดงไฟล์อื่นๆ (Video, Audio, Link) แยกลงมาด้านล่าง */}
                                 {others.length > 0 && (
                                     <div className="space-y-2 w-full max-w-sm">
                                         {others.map(att => (
@@ -8724,15 +8718,12 @@
                            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} 
                            className={`flex items-end gap-2.5 group/msg ${isMe ? 'msg-right self-end flex-row-reverse' : 'msg-left self-start'} ${chatSearch && (msg.text||'').toLowerCase().includes(chatSearch.toLowerCase()) ? 'ring-2 ring-amber-500/50 rounded-2xl p-1 bg-amber-900/10' : ''}`}
                       >
-                        {/* Avatar */}
                         <div onClick={() => setMemberModal(s)} className="cursor-pointer shrink-0 mb-1 z-10">
                             <Avatar user={s} size="sm" showStatus={!isMe} />
                         </div>
                         
-                        {/* Bubble Container */}
                         <div className={`msg-bubble flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                             
-                            {/* Meta Info (Name, Time, Read Status) */}
                             <div className={`text-[10px] text-slate-400 mb-1 flex items-center gap-2 ${isMe ? 'mr-1 flex-row-reverse' : 'ml-1'}`}>
                                 {!isMe && (
                                     <div className="flex items-center gap-1.5 cursor-pointer hover:underline" onClick={() => setMemberModal(s)}>
@@ -8742,7 +8733,6 @@
                                 )}
                                 <span>{tStr}</span>
                                 
-                                {/* Read Receipt แบบใหม่มี Popover */}
                                 {!msg.isDeleted && isMe && (
                                     <div className="relative group/read cursor-pointer flex items-center gap-1">
                                         {rdrs.length ? (
@@ -8751,7 +8741,6 @@
                                             <span className="text-sky-300">✓ ส่งแล้ว</span>
                                         )}
                                         
-                                        {/* Popover แสดงรายชื่อคนอ่าน (เฉพาะตอนมีคนอ่านและชี้เมาส์) */}
                                         {rdrs.length > 0 && (
                                             <div className="absolute bottom-full right-0 mb-2 w-max min-w-[150px] max-w-[200px] bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-2 hidden group-hover/read:block z-50 shadow-2xl">
                                                 <div className="text-[10px] text-slate-400 mb-1.5 font-bold border-b border-[#1E3A5F] pb-1">👀 อ่านแล้วโดย:</div>
@@ -8770,45 +8759,39 @@
                                         )}
                                     </div>
                                 )}
-                                {/* ป้ายบอกโหมด Silent */}
-                                {msg.isSilent && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700" title="ข้อความนี้ถูกส่งมาแบบไม่แจ้งเตือน">🔕</span>}
+                                {msg.isSilent && <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700" title="ข้อความนี้ถูกส่งมาแบบไม่แจ้งเตือน"><i className="fas fa-bell-slash"></i></span>}
                             </div>
                             
-                            {/* Message Content Body */}
                             <div className={`msg-content text-sm p-3 rounded-2xl relative shadow-md ${isMe ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-[#0F2547] border border-[#1E3A5F] text-slate-200 rounded-tl-none'} ${msg.isDeleted ? 'bg-slate-800 border-slate-700 text-slate-400' : ''}`}>
                                 
                                 {msg.isDeleted ? (
-                                    <p className="text-xs italic">🚫 ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง</p>
+                                    <p className="text-xs italic"><i className="fas fa-ban mr-1"></i> ข้อความนี้ถูกยกเลิกไปโดยผู้ส่ง</p>
                                 ) : (
                                     <>
-                                        {/* Reply Quote */}
                                         {msg.replyTo && (
                                             <div className={`mb-2 px-2.5 py-1.5 rounded-lg border-l-2 text-[11px] opacity-90 cursor-pointer ${isMe ? 'bg-sky-700 border-white text-sky-100' : 'bg-[#050811] border-sky-400 text-slate-300'}`} onClick={() => document.getElementById('msg-' + msg.replyTo.id)?.scrollIntoView({behavior: 'smooth', block: 'center'})}>
-                                                <strong className={isMe ? 'text-white' : 'text-sky-300'}>↩️ {msg.replyTo.senderName}:</strong> 
+                                                <strong className={isMe ? 'text-white' : 'text-sky-300'}><i className="fas fa-reply mr-1"></i> {msg.replyTo.senderName}:</strong> 
                                                 <div className="line-clamp-2 mt-0.5">{msg.replyTo.text}</div>
                                             </div>
                                         )}
                                         
-                                        {/* Text Content with Highlight */}
                                         {msg.text && (
                                             <div className="whitespace-pre-line leading-relaxed">
                                                 {highlightText(msg.text, chatSearch)}
                                             </div>
                                         )}
                                         
-                                        {/* Smart Media Grid Attachments */}
                                         {renderMediaGrid(msg.attachments)}
                                     </>
                                 )}
                             </div>
                             
-                            {/* Action Buttons (Like & Reply) - Shows on Hover */}
                             {!msg.isDeleted && (
                                 <div className={`flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity ${isMe ? 'mr-2' : 'ml-2'}`}>
                                     <LikeButton likes={msg.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => db.collection('bma_messages').doc(msg.id).update({ likes: (msg.likes||[]).includes(currentUser?.id) ? msg.likes.filter((i) => i !== currentUser.id) : [...(msg.likes || []), currentUser.id] })} />
                                     {!(msg.roomKey === 'happy-birthday-dear' && msg.targetUserId && Date.now() - msg.timestamp > 86400000) && (
                                         <button onClick={() => setRepMsg(msg)} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[9px] hover:bg-[#0F2547] text-slate-300 transition-colors">
-                                            ↩️ ตอบ
+                                            <i className="fas fa-reply"></i> ตอบ
                                         </button>
                                     )}
                                 </div>
@@ -8851,26 +8834,24 @@
                     
                     {/* ข้อมูล Edit / Reply / Upload */}
                     <div className="space-y-2 mb-2 text-xs">
-                        {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span>✎ แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}>✕</button></div>}
-                        {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span>↩️ ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}>✕</button></div>}
-                        {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลดไฟล์...</div>}
-                        {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-white">{a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400 font-bold ml-1 hover:text-red-300">✕</button></span>)}</div>}
+                        {editMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-amber-950/70 text-amber-200"><span><i className="fas fa-pen mr-1"></i> แก้ไข: {editMsg.text}</span><button type="button" onClick={() => { setEditMsg(null); setChatIn(''); }}><i className="fas fa-times"></i></button></div>}
+                        {repMsg && <div className="flex justify-between px-2.5 py-1 rounded bg-sky-950/70 text-sky-200"><span><i className="fas fa-reply mr-1"></i> ตอบกลับ {getAuthor(repMsg.senderId).displayName}: {repMsg.text || '[ไฟล์]'}</span><button type="button" onClick={() => setRepMsg(null)}><i className="fas fa-times"></i></button></div>}
+                        {uploading && <div className="text-sky-300 animate-pulse"><i className="fas fa-spinner fa-spin mr-1"></i> กำลังอัปโหลดไฟล์...</div>}
+                        {chatAtts.length > 0 && <div className="flex flex-wrap gap-1">{chatAtts.map((a) => <span key={a.id} className="px-2 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-white flex items-center gap-1.5"><i className={`fas ${a.type==='image'?'fa-image':a.type==='video'?'fa-video':a.type==='audio'?'fa-music':a.type==='link'?'fa-link':'fa-file'} text-slate-400`}></i> {a.name} <button type="button" onClick={() => setChatAtts(chatAtts.filter((x) => x.id !== a.id))} className="text-red-400 font-bold ml-1 hover:text-red-300"><i className="fas fa-times"></i></button></span>)}</div>}
                     </div>
 
-                    {/* ฟอร์มช่องแชต */}
                     <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative z-30">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
-                            {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้โดดเด่นและชัดเจน) */}
+                            {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้ชัดเจนขึ้น) */}
                             <div className="relative">
-                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-lg ${cUrlOpen ? 'bg-red-500 text-white border-red-400 hover:bg-red-600' : 'bg-sky-500 text-white border-sky-400 hover:bg-sky-400 hover:scale-105'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
+                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-md ${cUrlOpen ? 'bg-red-500 text-white border-red-400 hover:bg-red-600' : 'bg-sky-500 text-white border-sky-400 hover:bg-sky-400 hover:scale-105'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
                                     <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'} text-[14px]`}></i>
                                 </button>
                                 
-                                {/* เมนูย่อยเมื่อกดปุ่ม + */}
+                                {/* เมนูย่อยเมื่อกดปุ่ม + (ควบคุมด้วย cUrlOpen) */}
                                 {cUrlOpen && (
                                     <div className="absolute bottom-full left-0 mb-3 w-max bg-[#0B1325] border border-[#1E3A5F] rounded-xl p-1.5 flex flex-col shadow-2xl z-50 text-xs text-left animate-fade-in">
-                                        {/* โค้ดเมนูย่อยข้างใน (cFileRef, แนบลิงก์, แท็กบุคคล ฯลฯ) คงเดิมเหมือนที่คุณมีอยู่ */}
                                         <input type="file" multiple ref={cFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setChatAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); setCUrlOpen(false); }} className="hidden" />
                                         
                                         <button type="button" onClick={() => { cFileRef.current?.click(); }} className="px-3 py-2.5 hover:bg-[#0F2547] rounded-lg text-slate-200 hover:text-white flex items-center gap-2.5 transition-colors text-left"><i className="fas fa-upload w-4 text-center text-slate-400"></i> อัปโหลดไฟล์จากเครื่อง</button>
@@ -8922,7 +8903,7 @@
                                 )}
                             </div>
 
-                            {/* 📌 ปุ่ม GIF Panel */}
+                            {/* 📌 ปุ่ม GIF Panel (เชื่อม API Giphy) */}
                             <div className="relative hidden sm:block">
                                 <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border shadow-sm ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'bg-[#0F2547] text-purple-300 border-white/20 hover:bg-purple-900/50 hover:text-purple-200 hover:border-purple-500/50'}`} title="ส่ง GIF">
                                     GIF
@@ -8934,6 +8915,7 @@
                                             <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-8 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
                                         </div>
                                         
+                                        {/* Grid รูปภาพ GIF */}
                                         <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar relative">
                                             {isGifLoading ? (
                                                 <div className="col-span-2 flex flex-col items-center justify-center text-[10px] text-purple-400 font-bold py-10">
@@ -8959,7 +8941,7 @@
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
+                                        <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY GIPHY</div>
                                     </div>
                                 )}
                             </div>
@@ -9019,10 +9001,10 @@
                     )}
                   </div>
                 )}
-              </main>   
+              </main>
 
               {/* RIGHT SIDEBAR (Members Drawer) */}
-              <aside className={`absolute md:relative z-40 w-64 md:w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0 transition-transform duration-300 ${rightOpen ? 'translate-x-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)]' : 'translate-x-full md:translate-x-0'}`}>
+              <aside className={`absolute z-40 w-64 bg-[#070C18] border-l border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-hidden text-xs right-0 transition-transform duration-300 ${rightOpen ? 'translate-x-0 shadow-[-10px_0_20px_rgba(0,0,0,0.5)] relative' : 'translate-x-full absolute'} md:w-64`}>
                   <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811]">
                       <span className="font-bold text-slate-200">👥 สมาชิกห้อง ({activeMembers.length})</span>
                       <button onClick={() => setRightOpen(false)} className="md:hidden w-7 h-7 rounded bg-[#0F2547] text-slate-400 hover:text-white flex items-center justify-center"><i className="fas fa-times"></i></button>
