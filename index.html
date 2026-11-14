@@ -9063,7 +9063,61 @@
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
     
               <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
-                {/* ... โค้ดส่วนเมนูด้านซ้าย (Aside) คงเดิม ... */}
+                {!currentUser ? (
+                  <div className="card p-4 text-xs text-slate-300 bg-[#0B1325] border-[#1E3A5F]">
+                    <div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>
+                    แสดงเฉพาะโพสต์ที่อนุญาตให้อ่านได้
+                  </div>
+                ) : (
+                  <div className="card p-5 flex flex-col items-center text-center space-y-3 relative overflow-hidden bg-[#0B1325] border-[#1E3A5F]">
+                    <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-[#1E3A5F]/80 via-[#0F2547]/50 to-transparent opacity-80"></div>
+                    <div className="relative z-10 mt-2"><Avatar user={currentUser} size="lg" showStatus={true} /></div>
+                    <div className="relative z-10">
+                      <h3 className="font-bold text-base flex items-center justify-center gap-1.5">{currentUser.displayName} <RoleBadge role={currentUser.role} /></h3>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">@{currentUser.username} • {currentUser.id}</p>
+                    </div>
+                    <div className="relative z-10 w-full pt-3 border-t border-[#1E3A5F] flex justify-center">
+                      <TagBadges user={currentUser} />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="card p-2 space-y-1 text-xs">
+                  {currentView === 'admin' ? (
+                    <button className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md cursor-default">
+                      <span>👑 หน้าจัดการสมาชิก (Owner)</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button onClick={() => { setSearchQ(''); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ !== currentUser?.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
+                        <span>📝 กระดานโพสต์รวม</span>
+                      </button>
+                      
+                      {currentUser && (
+                        <button onClick={() => { setSearchQ(currentUser.id); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ === currentUser.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-sky-500 text-white shadow-lg' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
+                          <span>👤 โพสต์ของฉัน</span>
+                          <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono">{posts.filter((p) => p.authorId === currentUser.id).length}</span>
+                        </button>
+                      )}
+                      
+                      {currentUser && (
+                        <div className="flex flex-col gap-1.5 w-full mt-3 pt-3 border-t border-[#1E3A5F]/50">
+                            <button onClick={() => { setCurrentView('feed'); setFilterType('ALL'); setFilterLatestOnly(false); setTagFilter('ALL'); setSearchQ(''); }} className={`w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold transition-colors ${currentView === 'feed' && filterType === 'ALL' && !filterLatestOnly && tagFilter === 'ALL' && searchQ === '' ? 'bg-white text-[#050811] shadow-md' : 'hover:bg-[#0F2547] text-slate-300 hover:text-white'}`}>
+                                📖 โพสต์ทั้งหมด
+                            </button>
+                      
+                            <button onClick={() => setCurrentView('bookmarks')} className={`w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold transition-colors ${currentView === 'bookmarks' ? 'bg-amber-400 text-[#050811] shadow-md' : 'hover:bg-[#0F2547] text-slate-300 hover:text-white'}`}>
+                                ⭐ โพสต์ที่บันทึก
+                            </button>
+                      
+                            <button onClick={() => setShowCalendar(true)} className="w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm mt-1">
+                                📅 ปฏิทินสมาคม
+                            </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </aside>
 
               <main 
