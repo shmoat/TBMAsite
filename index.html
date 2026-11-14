@@ -8835,7 +8835,7 @@
                       </div>
                     )}
 
-                    <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative">
+                    <form onSubmit={async (e) => { e.preventDefault(); await handleSendChat(e); }} className="flex items-end gap-2 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-1 pr-1.5 focus-within:border-sky-500 transition-colors relative z-30">
                         
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
                             {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้ชัดเจนขึ้น) */}
@@ -8931,7 +8931,9 @@
                                                     ></div>
                                                 ))
                                             ) : (
-                                                <div className="col-span-2 text-center text-slate-500 text-[10px] py-10">ไม่พบ GIF ที่คุณค้นหา</div>
+                                                <div className="col-span-2 text-center text-slate-500 text-[10px] py-10">
+                                                    {gifSearch.trim() ? 'ไม่พบ GIF ที่คุณค้นหา' : 'พิมพ์เพื่อค้นหา GIF'}
+                                                </div>
                                             )}
                                         </div>
                                         <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
