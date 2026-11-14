@@ -7765,18 +7765,26 @@
                      }}
                 ></div>
 
-                {[['home', '🪐', 'Home'], ['feed', '📝', 'Board'], ['chat', '💬', 'Chat'], ['members', '👥', 'Members'], ['daily_game', '🎮', 'Daily Game'], ['discjam', '💿', 'Disc Jam'], ['tools', '🛠️', 'Tools']].map(([v, icon, l]) => 
-                  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === v ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+                {[
+		  ['home', <i className="fas fa-home"></i>, 'Home'], 
+		  ['feed', <i className="fas fa-clipboard-list"></i>, 'Board'], 
+		  ['chat', <i className="fas fa-comments"></i>, 'Chat'], 
+		  ['members', <i className="fas fa-users"></i>, 'Members'], 
+		  ['daily_game', <i className="fas fa-gamepad"></i>, 'Daily Game'], 
+		  ['discjam', <i className="fas fa-compact-disc"></i>, 'Disc Jam'], 
+		  ['tools', <i className="fas fa-tools"></i>, 'Tools']
+		].map(([v, icon, l]) => 
+		  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === v ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
                       <span className="text-sm sm:text-base shrink-0">{icon}</span>
                       <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>{l}</span>
                   </button>
                 )}
                 {currentUser?.role === 'admin' && (
-                    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
-                        <span className="text-sm sm:text-base shrink-0">👑</span>
-                        <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === 'admin' ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>Owner</span>
-                    </button>
-                )}
+		    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
+		        <span className="text-sm sm:text-base shrink-0"><i className="fas fa-crown"></i></span>
+		        <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === 'admin' ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>Owner</span>
+		    </button>
+		)}
               </nav>
 
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
