@@ -6405,30 +6405,45 @@
       // ฟังก์ชันดึง GIF จาก Tenor API อัตโนมัติเมื่อพิมพ์ค้นหา
       useEffect(() => {
           if (!showGifPanel) return;
+          
+          let isMounted = true; // ป้องกันการเซ็ต State ถ้าคอมโพเนนต์ถูกปิดไปแล้ว
           if (gifDebounceRef.current) clearTimeout(gifDebounceRef.current);
           
           const fetchGifs = async (url) => {
               setIsGifLoading(true);
+              setGifResults([]); // เคลียร์ผลลัพธ์เก่าก่อน
               try {
                   const res = await fetch(url);
-                  const data = await res.json();
-                  if (data.results) setGifResults(data.results.map(g => g.media[0].tinygif.url));
-              } catch (err) { console.error(err); }
-              setIsGifLoading(false);
+                  if (res.ok) {
+                      const data = await res.json();
+                      if (isMounted && data.results) {
+                          setGifResults(data.results.map(g => g.media[0].tinygif.url));
+                      }
+                  } else {
+                      if (isMounted) setGifResults([]);
+                  }
+              } catch (err) { 
+                  console.error("GIF Fetch Error:", err); 
+                  if (isMounted) setGifResults([]);
+              } finally {
+                  if (isMounted) setIsGifLoading(false);
+              }
           };
 
           if (!gifSearch.trim()) {
               // ถ้ายังไม่พิมพ์อะไร ให้ดึงอันที่กำลังฮิต (Trending) มาแสดง
               fetchGifs('https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=12');
-              return;
+          } else {
+              // หน่วงเวลา 0.8 วิ หลังจากหยุดพิมพ์ ค่อยยิง API เพื่อไม่ให้โหลดหนักเกินไป
+              gifDebounceRef.current = setTimeout(() => {
+                  fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
+              }, 800);
           }
           
-          // หน่วงเวลา 0.6 วิ หลังจากหยุดพิมพ์ ค่อยยิง API เพื่อไม่ให้โหลดหนักเกินไป
-          gifDebounceRef.current = setTimeout(() => {
-              fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
-          }, 600);
-          
-          return () => clearTimeout(gifDebounceRef.current);
+          return () => {
+              isMounted = false;
+              clearTimeout(gifDebounceRef.current);
+          };
       }, [gifSearch, showGifPanel]);
 
       // Notification States
@@ -8824,8 +8839,8 @@
                         <div className="flex items-center gap-1 pb-1 pl-1 shrink-0">
                             {/* 📌 ปุ่มเครื่องหมาย + (ปรับสีให้ชัดเจนขึ้น) */}
                             <div className="relative">
-                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-md ${cUrlOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-[#0F2547] text-sky-400 border-sky-500/50 hover:bg-sky-500 hover:text-white hover:border-sky-400'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
-                                    <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'}`}></i>
+                                <button type="button" onClick={() => setCUrlOpen(!cUrlOpen)} className={`w-8 h-8 rounded-full transition flex items-center justify-center font-bold border shadow-md ${cUrlOpen ? 'bg-sky-500 text-white border-sky-400' : 'bg-[#0F2547] text-white border-white/20 hover:bg-sky-500 hover:border-sky-400'}`} title="แนบไฟล์ / ฟังก์ชันพิเศษ">
+                                    <i className={`fas ${cUrlOpen ? 'fa-times' : 'fa-plus'} text-[14px]`}></i>
                                 </button>
                                 
                                 {/* เมนูย่อยเมื่อกดปุ่ม + (ควบคุมด้วย cUrlOpen) */}
@@ -8870,7 +8885,7 @@
                             
                             {/* ปุ่ม Emoji */}
                             <div className="relative">
-                                <button type="button" onClick={() => { setEmoOpen(!emoOpen); setShowGifPanel(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-lg border ${emoOpen ? 'bg-amber-900/40 border-amber-500/50' : 'text-slate-400 hover:text-white hover:bg-[#0F2547] border-transparent hover:border-slate-700'}`}>
+                                <button type="button" onClick={() => { setEmoOpen(!emoOpen); setShowGifPanel(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[16px] border shadow-sm ${emoOpen ? 'bg-amber-900/40 border-amber-500/50' : 'text-slate-200 bg-[#0F2547] border-white/20 hover:text-white hover:bg-amber-900/40 hover:border-amber-500/50'}`} title="ส่งอีโมจิ">
                                     🙂
                                 </button>
                                 {emoOpen && (
@@ -8882,23 +8897,24 @@
                                 )}
                             </div>
 
-                            {/* 📌 ปุ่ม GIF Panel (เชื่อมต่อ API จริง) */}
+                            {/* 📌 ปุ่ม GIF Panel (ปรับแก้แล้ว) */}
                             <div className="relative hidden sm:block">
-                                <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'text-slate-400 hover:text-white border-transparent hover:border-slate-700 hover:bg-[#0F2547]'}`} title="ส่ง GIF">
+                                <button type="button" onClick={() => { setShowGifPanel(!showGifPanel); setEmoOpen(false); setCUrlOpen(false); }} className={`w-8 h-8 rounded-full transition flex items-center justify-center text-[10px] font-bold border shadow-sm ${showGifPanel ? 'bg-purple-900/50 text-purple-300 border-purple-500/50' : 'bg-[#0F2547] text-purple-300 border-white/20 hover:bg-purple-900/50 hover:text-purple-200 hover:border-purple-500/50'}`} title="ส่ง GIF">
                                     GIF
                                 </button>
                                 {showGifPanel && (
                                     <div className="absolute bottom-full left-0 mb-3 w-72 bg-[#0B1325] border border-[#1E3A5F] p-3 z-50 shadow-[0_0_30px_rgba(0,0,0,0.8)] rounded-xl animate-fade-in">
                                         <div className="relative mb-2">
-                                            <i className="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
-                                            <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-7 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
+                                            <i className="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                                            <input type="text" value={gifSearch} onChange={e => setGifSearch(e.target.value)} placeholder="ค้นหา GIF..." className="w-full bg-[#050811] border border-[#1E3A5F] rounded py-1.5 pl-8 pr-2 text-xs text-white outline-none focus:border-purple-500 transition-colors" />
                                         </div>
                                         
                                         {/* Grid รูปภาพ GIF */}
                                         <div className="grid grid-cols-2 gap-1.5 h-48 overflow-y-auto custom-scrollbar relative">
                                             {isGifLoading ? (
-                                                <div className="col-span-2 flex items-center justify-center text-[10px] text-purple-400 font-bold animate-pulse py-10">
-                                                    ⏳ กำลังค้นหา...
+                                                <div className="col-span-2 flex flex-col items-center justify-center text-[10px] text-purple-400 font-bold py-10">
+                                                    <i className="fas fa-circle-notch fa-spin text-2xl mb-2"></i>
+                                                    กำลังค้นหา GIF...
                                                 </div>
                                             ) : gifResults.length > 0 ? (
                                                 gifResults.map((gif, idx) => (
@@ -8914,7 +8930,7 @@
                                                     ></div>
                                                 ))
                                             ) : (
-                                                <div className="col-span-2 text-center text-slate-500 text-[10px] py-10">ไม่พบ GIF ที่ค้นหา</div>
+                                                <div className="col-span-2 text-center text-slate-500 text-[10px] py-10">ไม่พบ GIF ที่คุณค้นหา</div>
                                             )}
                                         </div>
                                         <div className="text-[8px] text-slate-500 text-right mt-1.5 font-bold tracking-widest">POWERED BY TENOR</div>
