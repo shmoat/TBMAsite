@@ -6393,31 +6393,32 @@
         }
       };
 
-      // 🌟 Chat Revamp States 🌟
+      // 🌟 NEW Chat Revamp States 🌟
       const [chatSearch, setChatSearch] = useState(''); 
       const [isSilentMsg, setIsSilentMsg] = useState(false); 
       const [showGifPanel, setShowGifPanel] = useState(false); 
       const [gifSearch, setGifSearch] = useState(''); 
-      const [gifResults, setGifResults] = useState([]); // เก็บผลลัพธ์รูป GIF
+      const [gifResults, setGifResults] = useState([]); 
       const [isGifLoading, setIsGifLoading] = useState(false);
       const gifDebounceRef = useRef(null);
 
-      // ฟังก์ชันดึง GIF จาก Tenor API อัตโนมัติเมื่อพิมพ์ค้นหา
+      // ฟังก์ชันดึง GIF จาก GIPHY API (แทนที่ Tenor)
       useEffect(() => {
           if (!showGifPanel) return;
           
-          let isMounted = true; // ป้องกันการเซ็ต State ถ้าคอมโพเนนต์ถูกปิดไปแล้ว
+          let isMounted = true;
           if (gifDebounceRef.current) clearTimeout(gifDebounceRef.current);
           
           const fetchGifs = async (url) => {
               setIsGifLoading(true);
-              setGifResults([]); // เคลียร์ผลลัพธ์เก่าก่อน
+              setGifResults([]); // เคลียร์ของเก่า
               try {
                   const res = await fetch(url);
                   if (res.ok) {
                       const data = await res.json();
-                      if (isMounted && data.results) {
-                          setGifResults(data.results.map(g => g.media[0].tinygif.url));
+                      // ดึง URL ของภาพขนาดเล็กจาก GIPHY
+                      if (isMounted && data.data) {
+                          setGifResults(data.data.map(g => g.images.fixed_height_small.url));
                       }
                   } else {
                       if (isMounted) setGifResults([]);
@@ -6431,12 +6432,12 @@
           };
 
           if (!gifSearch.trim()) {
-              // ถ้ายังไม่พิมพ์อะไร ให้ดึงอันที่กำลังฮิต (Trending) มาแสดง
-              fetchGifs('https://api.tenor.com/v1/trending?key=LIVDSRZULELA&limit=12');
+              // ถ้ายังไม่พิมพ์ค้นหา ให้แสดง GIF ยอดฮิต (Trending)
+              fetchGifs('https://api.giphy.com/v1/gifs/trending?api_key=dc6zaTOxFJmzC&limit=12&rating=g');
           } else {
-              // หน่วงเวลา 0.8 วิ หลังจากหยุดพิมพ์ ค่อยยิง API เพื่อไม่ให้โหลดหนักเกินไป
+              // หน่วงเวลา 0.8 วิหลังพิมพ์เสร็จ ค่อยยิงค้นหา เพื่อความลื่นไหล
               gifDebounceRef.current = setTimeout(() => {
-                  fetchGifs(`https://api.tenor.com/v1/search?q=${encodeURIComponent(gifSearch)}&key=LIVDSRZULELA&limit=12`);
+                  fetchGifs(`https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(gifSearch)}&limit=12&rating=g`);
               }, 800);
           }
           
