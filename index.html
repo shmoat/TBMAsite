@@ -7383,11 +7383,6 @@
             else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
         }
       };
-        
-        if (activeRoom.type === 'dm') await sendNotif({ recipientId: activeRoom.id, actorId: currentUser.id, category: 'messages', subType: 'dm_chat', title: '💬 ข้อความส่วนตัวจาก ' + currentUser.displayName, body: text || '[ไฟล์แนบ]', targetView: 'chat', targetRoomType: 'dm', targetRoomId: currentUser.id });
-        else if (activeRoom.type === 'group' && activeGrp) { for (const mId of activeGrp.members || []) if (mId !== currentUser.id) await sendNotif({ recipientId: mId, actorId: currentUser.id, category: 'messages', subType: 'group_chat', title: '👥 ข้อความในกลุ่ม ' + activeGrp.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'group', targetRoomId: activeGrp.id }); }
-        else if (activeCh) await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'messages', subType: 'global_chat', title: '🌐 ข้อความใน #' + activeCh.name, body: currentUser.displayName + ': ' + (text || '[ไฟล์แนบ]'), targetView: 'chat', targetRoomType: 'channel', targetRoomId: activeCh.id });
-      };
 
       const handleSendDjChat = async (e) => {
         e.preventDefault();
