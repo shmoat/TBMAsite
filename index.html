@@ -7815,9 +7815,9 @@
                           <TagBadges user={currentUser} />
                           
                           <div className="w-full border-t border-[#1E3A5F] mt-4 pt-4 space-y-2">
-                              <button onClick={() => { setProfMenuOpen(false); setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="w-full btn-b py-2 text-xs flex justify-center items-center gap-2 hover:bg-sky-600 transition-colors shadow"><span>⚙️</span> ตั้งค่าโปรไฟล์</button>
-                              <button onClick={async () => { setProfMenuOpen(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors text-xs flex justify-center items-center gap-2 shadow"><span>🚪</span> ออกจากระบบ</button>
-                          </div>
+			      <button onClick={() => { setProfMenuOpen(false); setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="w-full btn-b py-2 text-xs flex justify-center items-center gap-2 hover:bg-sky-600 transition-colors shadow"><i className="fas fa-cog text-sm"></i> ตั้งค่าโปรไฟล์</button>
+			      <button onClick={async () => { setProfMenuOpen(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors text-xs flex justify-center items-center gap-2 shadow"><i className="fas fa-sign-out-alt text-sm"></i> ออกจากระบบ</button>
+			  </div>
                        </div>
                      )}
                    </div>
