@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BoothHereๆ - กิจกรรม 4 ฐาน</title>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
-    <!-- โหลดไลบรารีสแกน QR Code -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root {
@@ -185,7 +184,7 @@
             border-radius: 8px;
             position: relative;
             overflow: hidden;
-            touch-action: none; /* Prevent scroll while dragging */
+            touch-action: none;
             border: 2px dashed #475569;
         }
         .drag-item {
@@ -219,7 +218,7 @@
         .toast.success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); display: block; }
         .toast.error { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); display: block; }
 
-        /* Customizing Quiz from previous layout */
+        /* Customizing Quiz */
         .food-items { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
         .food-btn { font-size: 24px; padding: 10px 15px; background: #1e293b; border: 2px solid transparent; border-radius: 8px; cursor: pointer; }
         .food-btn:hover { background: #334155; border-color: var(--accent); }
@@ -272,7 +271,7 @@
         <div class="modal-content">
             <span class="close-modal" onclick="closeModal('builder-modal')">&times;</span>
             <h2>สร้างด่านฐานที่ 1</h2>
-            <p>เพิ่มองค์ประกอบเพื่อสร้างที่ซ่อนให้ตัวเงินตัวทอง (แตะ 2 ครั้งที่ไอเทมเพื่อลบ)</p>
+            <p>เพิ่มองค์ประกอบเพื่อสร้างที่ซ่อน (แตะ 2 ครั้งเพื่อลบ)</p>
             
             <div class="toolbar">
                 <button class="tool-btn" onclick="addBuildItem('🌳')">🌳</button>
@@ -285,16 +284,21 @@
 
             <div id="builder-canvas"></div>
             
+            <div style="margin-top:15px; text-align:left;">
+                <label style="font-size:12px; color:var(--text-muted);">ลิงก์เว็บไซต์ของคุณ (เพื่อให้สแกนแล้วเปิดเว็บได้จริง เช่น https://tbmasite.vercel.app/booth.html):</label>
+                <input type="text" id="base-url-input" placeholder="https://your-website.com/boothhere.html" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border-color); background:var(--primary-bg); color:#fff; box-sizing: border-box; margin-top: 5px;">
+            </div>
+
             <button class="btn btn-play" onclick="generateMapQR()" style="margin-top: 15px;">💾 บันทึกด่าน & สร้าง QR Code</button>
             
             <div id="qr-result" style="margin-top: 20px; display: none;">
-                <p style="color: var(--success); font-weight: 600;">สร้าง QR Code สำเร็จ! (สำหรับให้คนสแกนเข้าฐาน 1)</p>
-                <img id="qr-image" src="" alt="QR Code" style="border-radius: 12px; border: 4px solid #fff;">
+                <p style="color: var(--success); font-weight: 600;">สร้าง QR Code สำเร็จ! (ทดลองสแกนดูได้เลย)</p>
+                <img id="qr-image" src="" alt="QR Code" style="border-radius: 12px; border: 4px solid #fff; max-width: 100%;">
             </div>
         </div>
     </div>
 
-    <!-- Quiz Container (Hidden initially) -->
+    <!-- Quiz Container -->
     <div class="container" id="quiz-container" style="display:none;">
         <div class="header">
             <h1>BoothHereๆ - แบบทดสอบบุคลิกภาพ</h1>
@@ -314,7 +318,6 @@
             4: { name: 'ฐาน 4: สมดุลป่าคอนกรีต', icon: '🏙️', scanned: false, played: false }
         };
 
-        // Handle URL parameters (e.g. scanning QR from normal camera app)
         const urlParams = new URLSearchParams(window.location.search);
         const scanId = urlParams.get('scan');
         const mapDataUrl = urlParams.get('map');
@@ -347,7 +350,6 @@
                             : s.scanned ? `<button class="btn btn-play" onclick="openActivity(${i})">เริ่มมินิเกม</button>`
                             : `<button class="btn" style="background:#1e293b; color:#64748b;" disabled>ต้องสแกนก่อน</button>`;
 
-                // Dev Sim mode for testing without camera
                 let simHtml = !s.scanned ? `<div style="margin-top:8px; font-size:11px; color:#64748b; cursor:pointer;" onclick="simScan(${i})">[ทดสอบสแกนฐาน ${i}]</div>` : '';
 
                 grid.innerHTML += `
@@ -366,22 +368,17 @@
             renderStations(); 
         }
 
-        // --- QR Scanner Logic ---
+        // --- QR Scanner ---
         document.getElementById('btn-start-scan').addEventListener('click', () => {
             document.getElementById('scanner-container').style.display = 'block';
             document.getElementById('btn-start-scan').style.display = 'none';
             document.getElementById('btn-stop-scan').style.display = 'block';
             
-            if(!html5QrcodeScanner) {
-                html5QrcodeScanner = new Html5Qrcode("reader");
-            }
+            if(!html5QrcodeScanner) { html5QrcodeScanner = new Html5Qrcode("reader"); }
             
             const config = { fps: 10, qrbox: { width: 250, height: 250 } };
             html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanError)
-            .catch(err => {
-                alert("ไม่สามารถเข้าถึงกล้องได้: " + err);
-                stopScanner();
-            });
+            .catch(err => { alert("ไม่สามารถเข้าถึงกล้องได้: " + err); stopScanner(); });
         });
 
         document.getElementById('btn-stop-scan').addEventListener('click', stopScanner);
@@ -413,17 +410,15 @@
                     alert("QR Code ไม่ใช่ของกิจกรรมนี้");
                 }
             } catch(e) {
-                alert("QR Code ไม่ถูกต้อง");
+                alert("QR Code ไม่ถูกต้อง หรือเป็นลิงก์อื่น");
             }
         }
-        function onScanError(errorMessage) { /* Hide errors during scan */ }
+        function onScanError(errorMessage) {}
 
-
-        // --- Activity Logic ---
+        // --- Activity System ---
         function showToast(msg, type) {
             const t = document.getElementById('toast-msg');
-            t.className = `toast ${type}`;
-            t.innerText = msg;
+            t.className = `toast ${type}`; t.innerText = msg;
         }
 
         function winGame() {
@@ -450,33 +445,48 @@
             document.getElementById('activity-modal').style.display = 'flex';
         }
 
-        // --- GAME 1: Hide & Seek (Dynamic Map) ---
+        // --- GAME 1 ---
         let foundCount = 0;
         let totalLizards = 0;
         
         function renderGame1(container) {
-            foundCount = 0;
-            totalLizards = 0;
+            foundCount = 0; totalLizards = 0;
             const savedMap = localStorage.getItem('boothHereMap1');
             
-            // Default Map if not provided via QR
+            // Default Map
             let elements = [
                 {e:'🌳', x:20, y:20}, {e:'🏠', x:70, y:30}, {e:'💧', x:40, y:70},
                 {e:'🦎', x:25, y:25}, {e:'🦎', x:45, y:75}
             ];
 
             if(savedMap) {
-                try { elements = JSON.parse(decodeURIComponent(savedMap)); } catch(e){}
+                try {
+                    const decodedStr = decodeURIComponent(savedMap);
+                    if(decodedStr.includes('_') || decodedStr.includes('-')) {
+                        // รูปแบบบีบอัดใหม่: 🌳20-20_🦎45-75
+                        elements = decodedStr.split('_').map(item => {
+                            let parts = item.split('-');
+                            if(parts.length === 2) {
+                                let y = parseInt(parts[1]);
+                                let match = parts[0].match(/(.*?)(\d+)$/); // แยกอิโมจิและ X
+                                if(match) return { e: match[1], x: parseInt(match[2]), y: y };
+                            }
+                        }).filter(Boolean);
+                    } else {
+                        // รูปแบบ JSON เดิมเผื่อพัง
+                        elements = JSON.parse(decodedStr);
+                    }
+                } catch(e){}
             }
 
             totalLizards = elements.filter(el => el.e === '🦎').length;
-            if(totalLizards === 0) totalLizards = 1; // Failsafe
+            if(totalLizards === 0) totalLizards = 1;
 
             document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: หาตัวเงินตัวทองที่ซ่อนอยู่ในฉากให้ครบ ${totalLizards} ตัว!</b><br><span style="font-size:12px; color:var(--text-muted)">แตะที่ตัวน้องเพื่อจับ</span>`;
             
             let html = `<div id="play-canvas" style="background:#0f172a; border: 2px solid #3b82f6;">`;
             
-            elements.forEach((el, idx) => {
+            elements.forEach((el) => {
                 let isLizard = el.e === '🦎';
                 let clickEvt = isLizard ? `onclick="catchLizard(this)"` : '';
                 let zIndex = isLizard ? `z-index: 5;` : `z-index: 1;`;
@@ -498,11 +508,10 @@
             if(foundCount >= totalLizards) winGame();
         }
 
-        // --- GAME 2, 3, 4 (Reused from previous code) ---
+        // --- GAME 2, 3, 4 ---
         let feedCount = 0;
         function renderGame2(container) {
-            feedCount = 0;
-            document.getElementById('modal-desc').innerHTML = "วิถีชีวิต: กินซากสัตว์และสัตว์เล็ก<br>ประโยชน์: 'เทศบาล' คอยกำจัดซากเน่าและหนู<br><br><b>ภารกิจ: ป้อนของที่มีประโยชน์ให้น้อง (2 ชิ้น)</b>";
+            feedCount = 0; document.getElementById('modal-desc').innerHTML = "วิถีชีวิต: กินซากสัตว์และสัตว์เล็ก<br>ประโยชน์: 'เทศบาล' คอยกำจัดซากเน่าและหนู<br><br><b>ภารกิจ: ป้อนของที่มีประโยชน์ให้น้อง (2 ชิ้น)</b>";
             container.innerHTML = `
                 <div style="font-size:60px; text-align:center;" id="lizard-emoji">🦖</div>
                 <div class="food-items">
@@ -530,8 +539,7 @@
             { q: "เสียงขู่ฟ่อๆ แปลว่ามันบอกให้เราถอยไป?", a: true, exp: "ถูกต้อง! พวกมันกลัวคนและสร้างเกราะป้องกัน" }
         ];
         function renderGame3(container) {
-            qIndex = 0; document.getElementById('modal-desc').innerHTML = "<b>ภารกิจ: ตอบคำถามถูก-ผิด ให้ผ่าน 2 ข้อ</b>";
-            showQuestion3(container);
+            qIndex = 0; document.getElementById('modal-desc').innerHTML = "<b>ภารกิจ: ตอบคำถามถูก-ผิด ให้ผ่าน 2 ข้อ</b>"; showQuestion3(container);
         }
         function showQuestion3(container) {
             if(qIndex >= qs.length) { container.innerHTML = `<div class="quiz-q">🎉 ยอดเยี่ยม!</div>`; winGame(); return; }
@@ -579,35 +587,25 @@
         });
 
         // --- MAP BUILDER LOGIC ---
-        let mapElements = [];
-        
         function openBuilder() {
             document.getElementById('builder-canvas').innerHTML = '';
             document.getElementById('qr-result').style.display = 'none';
-            mapElements = [];
             document.getElementById('builder-modal').style.display = 'flex';
         }
 
         function addBuildItem(emoji) {
             const canvas = document.getElementById('builder-canvas');
             const el = document.createElement('div');
-            el.innerText = emoji;
-            el.className = 'drag-item';
-            el.dataset.emoji = emoji;
-            // Center default
+            el.innerText = emoji; el.className = 'drag-item'; el.dataset.emoji = emoji;
             el.style.left = '50%'; el.style.top = '50%';
-            
-            // Delete on double tap
             el.ondblclick = () => { el.remove(); };
-            
             makeDraggable(el);
             canvas.appendChild(el);
         }
 
         function makeDraggable(el) {
             let p1=0, p2=0, p3=0, p4=0;
-            el.onmousedown = dragStart;
-            el.ontouchstart = dragStartTouch;
+            el.onmousedown = dragStart; el.ontouchstart = dragStartTouch;
 
             function dragStart(e) {
                 e.preventDefault(); p3 = e.clientX; p4 = e.clientY;
@@ -626,7 +624,6 @@
             function setPos() {
                 let cvs = document.getElementById('builder-canvas');
                 let newTop = el.offsetTop - p2; let newLeft = el.offsetLeft - p1;
-                // Boundaries
                 newTop = Math.max(10, Math.min(cvs.clientHeight - 10, newTop));
                 newLeft = Math.max(10, Math.min(cvs.clientWidth - 10, newLeft));
                 el.style.top = newTop + "px"; el.style.left = newLeft + "px";
@@ -639,38 +636,37 @@
             const items = cvs.getElementsByClassName('drag-item');
             if(items.length === 0) return alert("กรุณาวางของอย่างน้อย 1 ชิ้น");
             
-            let layout = [];
+            let mapStringArr = [];
             let hasLizard = false;
             for(let item of items) {
                 let e = item.dataset.emoji;
                 if(e === '🦎') hasLizard = true;
-                // Convert px to percentage to support different screen sizes
                 let x = Math.round((item.offsetLeft / cvs.clientWidth) * 100);
                 let y = Math.round((item.offsetTop / cvs.clientHeight) * 100);
-                layout.push({e: e, x: x, y: y});
+                mapStringArr.push(`${e}${x}-${y}`); // บีบอัดข้อมูล เช่น 🌳20-20
             }
 
             if(!hasLizard) return alert("อย่าลืมซ่อนตัวเงินตัวทอง (🦎) ด้วย!");
 
-            const encodedMap = encodeURIComponent(JSON.stringify(layout));
+            const shortMap = mapStringArr.join('_'); // รวมเป็น 🌳20-20_🦎45-75
+            const encodedMap = encodeURIComponent(shortMap);
             
-            // Generate Play URL
-            const baseUrl = window.location.origin + window.location.pathname;
+            // ใช้ URL จริงจากช่องกรอก หรือดึงจากเบราว์เซอร์ปัจจุบัน
+            let baseUrl = document.getElementById('base-url-input').value.trim();
+            if(!baseUrl) baseUrl = window.location.origin + window.location.pathname;
+            
             const playUrl = `${baseUrl}?scan=1&map=${encodedMap}`;
             
-            // Call API to generate QR Code image
-            const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(playUrl)}`;
+            // ขยายขนาด QR Code ให้ชัดขึ้นเป็น 400x400
+            const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(playUrl)}`;
             
             document.getElementById('qr-image').src = qrApi;
             document.getElementById('qr-result').style.display = 'block';
             
-            // Save locally so the admin can test immediately without scanning
             localStorage.setItem('boothHereMap1', encodedMap);
         }
 
-        // Init App
         renderStations();
-
     </script>
 </body>
 </html>
