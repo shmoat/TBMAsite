@@ -245,26 +245,21 @@
             border: 2px solid var(--accent);
             touch-action: none;
         }
-        
-        /* Map Layers */
         .g4-road { position: absolute; left: 0; width: 100%; height: 60px; background: #1e293b; border-top: 1px dashed #475569; border-bottom: 1px dashed #475569; }
         .g4-grass { position: absolute; left: 0; width: 100%; height: 60px; background: #064e3b; }
         .g4-water { position: absolute; left: 0; width: 100%; height: 60px; background: #0c4a6e; }
-        
         .g4-entity {
             position: absolute;
             width: 40px; height: 40px;
             font-size: 30px;
             line-height: 40px;
             text-align: center;
-            transition: top 0.1s, left 0.1s; /* smooth walking */
+            transition: top 0.1s, left 0.1s;
             z-index: 20;
             user-select: none;
         }
-        
         .g4-car { z-index: 15; transition: left 0.05s linear; }
 
-        /* Gamepad D-PAD for Mobile */
         .dpad-container {
             display: flex;
             flex-direction: column;
@@ -290,11 +285,38 @@
         .toast { padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; display: none; }
         .toast.success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); display: block; }
         .toast.error { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); display: block; }
+        .toast.warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); display: block; }
 
         .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .qr-item { background: #fff; padding: 10px; border-radius: 8px; color: #000; text-align: center; }
         .qr-item img { width: 100%; height: auto; }
         .qr-item p { margin: 5px 0 0 0; font-weight: bold; font-size: 12px; }
+
+        /* Quiz Styles */
+        .question-card {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+            text-align: left;
+        }
+        .question-card:hover { border-color: var(--accent); }
+        .question-text { font-weight: 400; font-size: 16px; margin-bottom: 20px; }
+        .options-container { display: flex; justify-content: space-between; align-items: center; position: relative; }
+        .options-container::before { content: ''; position: absolute; top: 50%; left: 5%; right: 5%; height: 2px; background-color: var(--border-color); z-index: 1; transform: translateY(-50%); }
+        .option { display: flex; flex-direction: column; align-items: center; cursor: pointer; z-index: 2; background-color: var(--card-bg); padding: 0 5px; }
+        .option input[type="radio"] { appearance: none; width: 24px; height: 24px; border: 2px solid var(--text-muted); border-radius: 50%; margin-bottom: 8px; cursor: pointer; outline: none; transition: all 0.2s; background-color: var(--card-bg); }
+        .option input[type="radio"]:checked { border-color: var(--accent); background-color: var(--accent); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); }
+        .option span { font-size: 12px; color: var(--text-muted); }
+        .option input[type="radio"]:checked + span { color: var(--accent); font-weight: 600; }
+        .labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+        
+        #result-section { display: none; margin-top: 40px; padding: 30px; background-color: #000000; border: 2px solid var(--text-main); border-radius: 16px; text-align: center; animation: fadeIn 0.5s ease-out; }
+        #result-title { font-size: 28px; font-weight: 600; color: #ffffff; margin-bottom: 15px; }
+        #result-desc { font-size: 16px; color: #cbd5e1; line-height: 1.8; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     </style>
 </head>
@@ -360,14 +382,22 @@
         </div>
     </div>
 
-    <!-- Quiz Container -->
+    <!-- Quiz Container (Merged) -->
     <div class="container" id="quiz-container" style="display:none;">
         <div class="header">
             <h1>BoothHereๆ - แบบทดสอบบุคลิกภาพ</h1>
+            <p class="subtitle">คุณคล้ายตัวเงินตัวทองสายพันธุ์ไหน? (ให้คะแนน 1-5)</p>
         </div>
-        <div style="text-align:center; padding: 30px; color: var(--text-muted);">
-            (แบบทดสอบบุคลิกภาพ 12 ข้อจะโหลดขึ้นที่นี่)<br><br>
-            <button class="btn btn-play" onclick="location.reload()">เริ่มกิจกรรมใหม่ทั้งหมด</button>
+        
+        <form id="quiz-form">
+            <div id="questions-container"></div>
+            <button type="submit" class="btn btn-play" style="padding: 16px; font-size: 18px; margin-top: 30px;">ประมวลผลลัพธ์</button>
+        </form>
+
+        <div id="result-section">
+            <div id="result-title"></div>
+            <div id="result-desc"></div>
+            <button class="btn btn-warning" onclick="location.reload()" style="margin-top: 25px;">🔄 เริ่มกิจกรรมใหม่ทั้งหมด</button>
         </div>
     </div>
 
@@ -583,6 +613,7 @@
 
         function renderGame2(container) {
             document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: กินอาหารให้ได้ ${TARGET_SCORE} คะแนนใน 20 วินาที</b><br><span style="font-size:12px; color:var(--text-muted)">ลากหรือแตะซ้ายขวาเพื่อเลื่อนตัวเงินตัวทอง (อาหาร +10 / ขยะ -5)</span>`;
+            
             container.innerHTML = `
                 <div class="score-board">
                     <div>คะแนน: <span id="g2-score" style="color:var(--accent)">0</span></div>
@@ -820,7 +851,7 @@
         }
 
         // --- GAME 4 (Crossy Lizard) ---
-        let g4Lizard = { x: 3, y: 5 }; // Grid based (0-6 cols, 0-6 rows)
+        let g4Lizard = { x: 3, y: 5 };
         let g4Rats = [];
         let g4Cars = [];
         let g4Ticks = 0;
@@ -835,7 +866,6 @@
                     <div>กินหนู: <span id="g4-score" style="color:var(--accent)">0</span></div>
                 </div>
                 <div id="crossy-canvas">
-                    <!-- พื้นหลังถนน/หญ้า -->
                     <div class="g4-grass" style="top: 0%;"></div>
                     <div class="g4-water" style="top: 14%;"></div>
                     <div class="g4-road" style="top: 28%;"></div>
@@ -852,7 +882,6 @@
                     </div>
                 </div>
                 
-                <!-- D-PAD for Mobile (and visual for PC) -->
                 <div class="dpad-container">
                     <div class="dpad-btn" onclick="moveG4(0, -1)">⬆️</div>
                     <div class="dpad-row">
@@ -878,24 +907,20 @@
         window.startGame4 = function() {
             document.getElementById('g4-overlay').style.display = 'none';
             
-            // Initial State
-            g4Lizard = { x: 3, y: 6 }; // Start bottom (row 6)
+            g4Lizard = { x: 3, y: 6 };
             g4Rats = [];
             g4Cars = [];
             ratCount = 0;
-            totalRats = Math.floor(Math.random() * 3) + 3; // 3-5 rats
+            totalRats = Math.floor(Math.random() * 3) + 3;
             g4Ticks = 0;
 
             document.getElementById('g4-score').innerText = `0 / ${totalRats}`;
-            
-            // Clean up old elements
             document.querySelectorAll('.g4-rat, .g4-car').forEach(e => e.remove());
             
-            // Spawn Rats
             const canvas = document.getElementById('crossy-canvas');
             for(let i=0; i<totalRats; i++) {
-                let rx = Math.floor(Math.random() * 7); // 0-6
-                let ry = Math.floor(Math.random() * 5); // 0-4 (not on start/end rows exactly)
+                let rx = Math.floor(Math.random() * 7);
+                let ry = Math.floor(Math.random() * 5); 
                 
                 let ratEl = document.createElement('div');
                 ratEl.className = 'g4-entity g4-rat';
@@ -912,11 +937,9 @@
 
         window.moveG4 = function(dx, dy) {
             if(document.getElementById('g4-overlay').style.display !== 'none') return;
-            
             let nx = g4Lizard.x + dx;
             let ny = g4Lizard.y + dy;
             
-            // Boundaries (7x7 grid: 0-6)
             if(nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6) {
                 g4Lizard.x = nx;
                 g4Lizard.y = ny;
@@ -930,9 +953,6 @@
             liz.style.left = `calc(${g4Lizard.x * 14.28}% + 5px)`;
             liz.style.top = `calc(${g4Lizard.y * 14.28}% + 10px)`;
             
-            // Rotation based on movement direction logic could go here, keeping simple for now
-            
-            // Win condition (reached top row 0 AND ate all rats)
             if(g4Lizard.y === 0 && ratCount >= totalRats) {
                 endGame4(true);
             } else if (g4Lizard.y === 0) {
@@ -957,11 +977,10 @@
             g4Ticks++;
             const canvas = document.getElementById('crossy-canvas');
             
-            // Car Spawner (Row 2, 3, 5 are roads)
-            if(g4Ticks % 15 === 0) { // spawn rate
+            if(g4Ticks % 15 === 0) {
                 const roadRows = [2, 3, 5];
                 const row = roadRows[Math.floor(Math.random() * roadRows.length)];
-                const dir = row % 2 === 0 ? 1 : -1; // Even rows go right, odd go left
+                const dir = row % 2 === 0 ? 1 : -1;
                 
                 let car = document.createElement('div');
                 car.className = 'g4-entity g4-car';
@@ -969,30 +988,25 @@
                 car.style.top = `calc(${row * 14.28}% + 10px)`;
                 car.style.left = dir === 1 ? '-10%' : '110%';
                 
-                // Mirror car emoji if going left
                 if(dir === -1) car.style.transform = 'scaleX(-1)';
                 
                 canvas.appendChild(car);
                 g4Cars.push({ el: car, row: row, pos: dir === 1 ? -10 : 110, dir: dir, active: true });
             }
 
-            // Move Cars
             for(let i = g4Cars.length - 1; i >= 0; i--) {
                 let car = g4Cars[i];
                 if(!car.active) continue;
                 
-                car.pos += (car.dir * 4); // Speed
+                car.pos += (car.dir * 4);
                 car.el.style.left = car.pos + '%';
                 
-                // Grid collision check (approximate percentage to grid)
                 let carGridX = Math.floor((car.pos + 5) / 14.28); 
                 
                 if(car.row === g4Lizard.y && carGridX === g4Lizard.x) {
-                    // HIT BY CAR
                     endGame4(false);
                 }
                 
-                // Cleanup offscreen cars
                 if((car.dir === 1 && car.pos > 110) || (car.dir === -1 && car.pos < -10)) {
                     car.active = false;
                     car.el.remove();
@@ -1038,20 +1052,18 @@
 
         // --- Admin Controls ---
         window.promptAdmin = function(action) {
-            // Get DDMM
             const today = new Date();
             const dd = String(today.getDate()).padStart(2, '0');
             const mm = String(today.getMonth() + 1).padStart(2, '0');
             const pass = dd + mm;
             
-            const input = prompt("กรุณาใส่รหัสผ่านผู้ดูแลบูธ (DDMM ของวันนี้):");
+            const input = prompt("กรุณาใส่รหัสผ่านผู้ดูแลบูธ:");
             if(input === pass) {
                 if(action === 'qr') {
                     document.getElementById('qr-modal').style.display = 'flex';
                 } else if (action === 'reset') {
                     if(confirm("ยืนยันการล้างข้อมูล? ผู้เล่นทุกคนที่ใช้เครื่องนี้จะต้องสแกน QR และเล่นใหม่ตั้งแต่ฐาน 1")) {
                         localStorage.removeItem('boothHereStations');
-                        localStorage.removeItem('boothHereMap1');
                         location.reload();
                     }
                 }
@@ -1074,6 +1086,64 @@
             document.getElementById('qr-hint').style.display = 'block';
         }
 
+        // --- QUIZ LOGIC ---
+        const quizQuestions = [
+            "ไม่ว่าจะตกอยู่ในสถานการณ์ที่ยากลำบากแค่ไหน คุณก็มักจะหาทางเอาตัวรอดและลุยไปข้างหน้าได้เสมอ",
+            "คุณชอบคุมโทนสไตล์การแต่งตัวหรือสิ่งของเครื่องใช้ให้เป็นสีเข้มๆ เช่น สีดำ หรือสีกรมท่า มากกว่าสีสันฉูดฉาด",
+            "คุณไม่ชอบวิ่งตามกระแสสังคม แต่เน้นใช้ชีวิตบนพื้นฐานความเป็นจริงและชอบสร้างความมั่นคงให้ตัวเองมากกว่า",
+            "หลายครั้งที่คุณเผลอพูดจาแข็งกร้าว ปากแจ๋ว หรือทำหน้าตาดุดัน เพื่อปกปิดความอ่อนไหวหรือความกังวลที่ซ่อนอยู่ข้างใน",
+            "เมื่อต้องอยู่ในที่ที่มีคนพลุกพล่านหรือมีความวุ่นวาย คุณจะรู้สึกหมดพลังและต้องรีบปลีกตัวออกมาหา 'เซฟโซน' ของตัวเองทันที",
+            "วันหยุดที่สมบูรณ์แบบของคุณ คือการได้ขลุกตัวอยู่เงียบๆ ในห้อง ค่อยๆ ทำอะไรตามจังหวะของตัวเองแบบสโลว์ไลฟ์",
+            "คุณเป็นคนอยู่ง่ายกินง่าย ปรับตัวเข้ากับสภาพแวดล้อมได้ทุกรูปแบบ และไม่ค่อยแคร์ว่าคนอื่นจะมองหรือตัดสินคุณยังไง",
+            "ถึงแม้ภายนอกคุณจะดูพร้อมบวกหรือชอบโวยวายไว้ก่อน แต่ลึกๆ แล้วคุณรักสงบ และมักจะเลือกวิธี 'หนีดีกว่า' เมื่อต้องปะทะจริงๆ",
+            "คุณชอบทำงานหรือใช้ชีวิตในพื้นที่ที่คุณคุ้นเคยและรู้สึกปลอดภัย มากกว่าการออกไปเสี่ยงในสภาพแวดล้อมใหม่ๆ ที่เอาแน่เอานอนไม่ได้",
+            "คนรอบข้างมักจะมองว่าคุณเป็นคนเรียบร้อย เป็นมิตร ดูไม่มีพิษมีภัย และน่าทะนุถนอม",
+            "ถึงภายนอกคุณจะดูขรึมๆ ลึกลับ หรือเข้าถึงยาก แต่ถ้าได้สนิทกันจริงๆ คุณเป็นคนง่ายๆ สบายๆ และยืดหยุ่นได้ดีมาก",
+            "คุณเป็นคนตื่นตระหนกตกใจง่าย ไม่ชอบทำตัวโดดเด่น และมักจะหลีกเลี่ยงการเป็นจุดสนใจของคนหมู่มาก"
+        ];
+
+        const qContainer = document.getElementById('questions-container');
+        quizQuestions.forEach((q, index) => {
+            const num = index + 1;
+            qContainer.innerHTML += `
+                <div class="question-card">
+                    <div class="question-text">${num}. ${q}</div>
+                    <div class="options-container">
+                        <label class="option"><input type="radio" name="q${num}" value="1" required><span>1</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="2"><span>2</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="3"><span>3</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="4"><span>4</span></label>
+                        <label class="option"><input type="radio" name="q${num}" value="5"><span>5</span></label>
+                    </div>
+                    <div class="labels"><span>ไม่ตรงเลย</span><span>ตรงมากที่สุด</span></div>
+                </div>
+            `;
+        });
+
+        document.getElementById('quiz-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const getVal = (name) => parseInt(document.querySelector(`input[name="${name}"]:checked`).value);
+            const scores = [
+                { name: 'เหี้ยลายดอก (The Survivor)', score: getVal('q1') + getVal('q7'), desc: 'คุณคือสุดยอดนักสู้ชีวิต หน้ามึน อยู่ง่ายกินง่าย ยืดหยุ่นได้กับทุกสถานการณ์ เอาตัวรอดเก่งเป็นที่หนึ่ง และไม่ปล่อยให้คำวิจารณ์ของใครมาทำลายความสุขในแต่ละวันของคุณ' },
+                { name: 'มังกรดำ (The Dark Mode)', score: getVal('q2') + getVal('q11'), desc: 'คุณมีสไตล์ที่โดดเด่นชัดเจน รักความเรียบเท่และสุขุม ภายนอกดูดาร์กๆ ลึกลับ และอาจจะดูเข้าถึงยากในตอนแรก แต่เนื้อแท้แล้วคุณเป็นคนปรับตัวเก่งและชิลล์กว่าที่หลายคนคิด' },
+                { name: 'แลนดอน (The Grounded)', score: getVal('q3') + getVal('q9'), desc: 'คุณคือสายซัพพอร์ตความมั่นคง ติดดิน ไม่ชอบความหวือหวาหรือการไหลไปตามกระแสนิยม คุณชอบสร้างรากฐานชีวิตให้แข็งแรง และมีความสุขกับการอยู่ในพื้นที่แห้งๆ ปลอดภัยของตัวเอง' },
+                { name: 'เห่าช้าง (The Tsundere)', score: getVal('q4') + getVal('q8'), desc: 'คุณคือคนหน้าดุสไตล์ซึนเดเระ ชอบสร้างเกราะป้องกันตัวเองด้วยความเสียงดังหรือท่าทีแข็งกร้าว แต่จริงๆ แล้วข้างในใจบางมาก รักสงบ และเกลียดความขัดแย้งที่สุด' },
+                { name: 'ตะกวด (The Introvert)', score: getVal('q5') + getVal('q12'), desc: 'คุณคือสายโลกส่วนตัวสูง ขี้อาย และตกใจง่าย คุณมีเรดาร์ตรวจจับความวุ่นวายที่ไวมาก ถ้าบรรยากาศเริ่มไม่ดีหรือคนเริ่มเยอะ คุณพร้อมจะสับเกียร์หมาหนีกลับไปชาร์จแบตในเซฟโซนทันที' },
+                { name: 'ตุ๊ดตู่ (The Slow-Life)', score: getVal('q6') + getVal('q10'), desc: 'คุณคือสายติดบ้านที่น่าทะนุถนอมที่สุดในกลุ่ม คุณมีจังหวะชีวิตที่ค่อยเป็นค่อยไป ไม่ชอบการแข่งขันหรือความเร่งรีบ เป็นคนซอฟต์ๆ ที่ใครอยู่ใกล้ก็รู้สึกสบายใจและปลอดภัย' }
+            ];
+
+            scores.sort((a, b) => b.score - a.score);
+            const result = scores[0];
+
+            document.getElementById('result-title').innerText = "คุณคือ " + result.name + "!";
+            document.getElementById('result-desc').innerText = result.desc;
+            
+            const resultSection = document.getElementById('result-section');
+            resultSection.style.display = 'block';
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        });
+
+        // Init Check
         renderStations();
     </script>
 </body>
