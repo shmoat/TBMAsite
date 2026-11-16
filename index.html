@@ -4969,6 +4969,90 @@
             }
         };
 
+	const downloadQR = () => {
+            const a = document.createElement('a');
+            a.href = qrImg;
+            a.download = `bma-qrcode-${Date.now()}.png`;
+            a.click();
+        };
+
+        return (
+            <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mx-auto text-xs">
+                <form onSubmit={generate} className="flex-1 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                    <div className="font-bold text-sky-400 text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-qrcode"></i> ตั้งค่า QR Code</div>
+                    
+                    <div>
+                        <label className="text-slate-400 font-bold mb-1 block">URL หรือ ข้อความ</label>
+                        <input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="https://..." className="w-full inp text-sm" required />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">สี QR Code</label>
+                            <div className="flex items-center gap-2">
+                                <input type="color" value={fgColor} onChange={(e) => setFgColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-0 p-0" />
+                                <input type="text" value={fgColor} onChange={(e) => setFgColor(e.target.value)} className="flex-1 inp font-mono" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">สีพื้นหลัง</label>
+                            <div className="flex items-center gap-2">
+                                <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-0 p-0" />
+                                <input type="text" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="flex-1 inp font-mono" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer p-3 bg-[#050811] rounded-xl border border-[#1E3A5F]">
+                        <input type="checkbox" checked={hasLogo} onChange={(e) => setHasLogo(e.target.checked)} className="accent-sky-500 w-4 h-4" />
+                        <span className="font-bold text-slate-200">ใส่โลโก้สมาคมตรงกลาง</span>
+                    </label>
+
+                    <div className="p-4 bg-gradient-to-br from-[#050811] to-[#0a101f] rounded-xl border border-emerald-900/50 space-y-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={isDynamic} onChange={(e) => setIsDynamic(e.target.checked)} className="accent-emerald-500 w-4 h-4" />
+                            <span className="font-bold text-emerald-400 text-sm">เปิดใช้ลิงก์แบบกำหนดอายุ (Dynamic)</span>
+                        </label>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">สามารถตั้งวันหมดอายุและจำนวนครั้งที่สแกนได้ หากครบกำหนด QR Code นี้จะสแกนเข้าไม่ได้อีกต่อไป</p>
+                        
+                        {isDynamic && (
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1E3A5F]/50 animate-fade-in">
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">วันหมดอายุ (ไม่บังคับ)</label>
+                                    <input type="datetime-local" value={expireDate} onChange={(e) => setExpireDate(e.target.value)} className="w-full inp text-[10px]" />
+                                </div>
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">จำกัดสแกนกี่ครั้ง (ไม่บังคับ)</label>
+                                    <input type="number" min="1" value={scanLimit} onChange={(e) => setScanLimit(e.target.value)} placeholder="ไม่จำกัด" className="w-full inp text-sm" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button type="submit" disabled={loading} className="w-full btn-w py-3 shadow-lg text-sm mt-2 font-bold">
+                        {loading ? '⏳ กำลังสร้าง...' : '✨ สร้าง QR Code'}
+                    </button>
+                </form>
+
+                <div className="w-full md:w-72 flex flex-col items-center justify-center p-6 bg-[#050811] rounded-2xl border border-[#1E3A5F] shadow-2xl relative">
+                    <div className="text-sky-400 font-bold mb-4 text-sm">ผลลัพธ์ (Preview)</div>
+                    <div className="w-48 h-48 sm:w-56 sm:h-56 bg-white rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.5)] overflow-hidden p-2">
+                        {qrImg ? (
+                            <img src={qrImg} alt="QR Code" className="w-full h-full object-contain" />
+                        ) : (
+                            <div className="text-slate-400 text-4xl opacity-20"><i className="fas fa-qrcode"></i></div>
+                        )}
+                    </div>
+                    {qrImg && (
+                        <button onClick={downloadQR} className="mt-6 w-full btn-b py-2.5 font-bold shadow-md hover:scale-105 transition-transform flex items-center justify-center gap-2">
+                            <i className="fas fa-download"></i> ดาวน์โหลดภาพ
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // ==========================================
     // 7. 📅 ASSOCIATION CALENDAR COMPONENT 📅
     // ==========================================
