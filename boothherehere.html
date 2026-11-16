@@ -921,7 +921,7 @@
             let baseUrl = document.getElementById('base-url-input').value.trim();
             if(!baseUrl) baseUrl = window.location.origin + window.location.pathname;
 
-            const logoUrl = "https://tbmasite.vercel.app/your-logo.png"; // แก้ไขลิงก์โลโก้ตรงนี้
+            const logoUrl = "https://tbmasite.vercel.app/tbmalogo.png"; // แก้ไขลิงก์โลโก้ตรงนี้
             const encodedLogo = encodeURIComponent(logoUrl);
 
             let mainQrApi = `https://quickchart.io/qr?text=${encodeURIComponent(baseUrl)}&size=400&margin=2&centerImageUrl=${encodedLogo}`;
