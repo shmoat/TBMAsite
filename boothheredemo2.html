@@ -221,7 +221,7 @@
             font-weight: bold;
             color: #fff;
         }
-        #g2-overlay {
+        #g2-overlay, #g4-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.8);
@@ -229,19 +229,67 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 20;
+            z-index: 30;
             padding: 20px;
             border-radius: 8px;
         }
 
+        /* Game 4: Crossy Lizard */
+        #crossy-canvas {
+            width: 100%;
+            height: 400px;
+            background: #334155;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid var(--accent);
+            touch-action: none;
+        }
+        
+        /* Map Layers */
+        .g4-road { position: absolute; left: 0; width: 100%; height: 60px; background: #1e293b; border-top: 1px dashed #475569; border-bottom: 1px dashed #475569; }
+        .g4-grass { position: absolute; left: 0; width: 100%; height: 60px; background: #064e3b; }
+        .g4-water { position: absolute; left: 0; width: 100%; height: 60px; background: #0c4a6e; }
+        
+        .g4-entity {
+            position: absolute;
+            width: 40px; height: 40px;
+            font-size: 30px;
+            line-height: 40px;
+            text-align: center;
+            transition: top 0.1s, left 0.1s; /* smooth walking */
+            z-index: 20;
+            user-select: none;
+        }
+        
+        .g4-car { z-index: 15; transition: left 0.05s linear; }
+
+        /* Gamepad D-PAD for Mobile */
+        .dpad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 15px;
+            gap: 5px;
+        }
+        .dpad-row { display: flex; gap: 5px; }
+        .dpad-btn {
+            width: 50px; height: 50px;
+            background: #334155;
+            border-radius: 8px;
+            border: 2px solid #475569;
+            font-size: 24px;
+            color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .dpad-btn:active { background: var(--accent); }
+
         .toast { padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; display: none; }
         .toast.success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); display: block; }
         .toast.error { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); display: block; }
-
-        /* Game 4 */
-        .quiz-q { font-size: 16px; margin-bottom: 20px; font-weight: 600; color: #fff; }
-        .word-inputs { display: flex; justify-content: center; gap: 5px; margin: 20px 0; }
-        .char-box { width: 40px; height: 40px; text-align: center; font-size: 20px; font-family: 'Prompt', sans-serif; background: #1e293b; border: 1px solid var(--accent); color: #fff; border-radius: 8px; }
 
         .qr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .qr-item { background: #fff; padding: 10px; border-radius: 8px; color: #000; text-align: center; }
@@ -272,7 +320,8 @@
         <!-- Admin Builder Tool -->
         <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #1e293b; text-align: center;">
             <p style="color: var(--text-muted); font-size: 12px;">โซนผู้ดูแลบูธ (Admin)</p>
-            <button class="btn" style="background-color: #334155;" onclick="openQRGenerator()">🖨️ สร้าง QR Code สำหรับปริ๊นท์ (ทั้ง 4 ฐาน)</button>
+            <button class="btn" style="background-color: #334155; margin-bottom: 10px;" onclick="promptAdmin('qr')">🖨️ สร้าง QR Code สำหรับปริ๊นท์ (ทั้ง 4 ฐาน)</button>
+            <button class="btn" style="background-color: var(--danger);" onclick="promptAdmin('reset')">🗑️ ล้างข้อมูลการเล่นทั้งหมด (Reset)</button>
         </div>
     </div>
 
@@ -284,7 +333,7 @@
             <p id="modal-desc">คำอธิบาย</p>
             <div id="toast-msg" class="toast"></div>
             <div id="game-container" class="game-area"></div>
-            <button class="btn btn-success" id="btn-finish-activity" style="display: none;">✅ ผ่านด่าน! กลับไปหน้าหลัก</button>
+            <button class="btn btn-success" id="btn-finish-activity" style="display: none; margin-top: 15px;">✅ ผ่านด่าน! กลับไปหน้าหลัก</button>
         </div>
     </div>
 
@@ -328,7 +377,7 @@
             1: { name: 'ฐาน 1: ซ่อนแอบเนียนๆ', icon: '🌿', scanned: false, played: false },
             2: { name: 'ฐาน 2: เทศบาลประจำเมือง', icon: '🗑️', scanned: false, played: false },
             3: { name: 'ฐาน 3: เกราะป้องกันตัว', icon: '🛡️', scanned: false, played: false },
-            4: { name: 'ฐาน 4: สมดุลป่าคอนกรีต', icon: '🏙️', scanned: false, played: false }
+            4: { name: 'ฐาน 4: สมดุลป่าคอนกรีต', icon: '⚖️', scanned: false, played: false }
         };
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -437,6 +486,10 @@
         function closeModal(id) { 
             if(id === 'activity-modal' && window.g2Loop) { clearInterval(window.g2Loop); window.g2Loop = null; }
             if(id === 'activity-modal' && window.g2Spawn) { clearInterval(window.g2Spawn); window.g2Spawn = null; }
+            if(id === 'activity-modal' && window.g4Loop) { clearInterval(window.g4Loop); window.g4Loop = null; }
+            if(id === 'activity-modal') {
+                 document.removeEventListener('keydown', handleG4Keydown);
+            }
             document.getElementById(id).style.display = 'none'; 
         }
 
@@ -462,13 +515,10 @@
         let totalLizards = 3;
         
         function renderGame1(container) {
-            foundCount = 0;
-            totalLizards = 3; 
-            
+            foundCount = 0; totalLizards = 3; 
             document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: หาตัวเงินตัวทองที่ซ่อนอยู่ในฉากให้ครบ ${totalLizards} ตัว!</b><br><span style="font-size:12px; color:var(--text-muted)">แตะที่ตัวน้องเพื่อจับ</span>`;
             
             let html = '<div id="play-canvas" style="background:#0f172a; border: 2px solid #3b82f6; position: relative;">';
-            
             let elements = [];
             const props = ['🌳', '💧', '🏠', '🌿', '🪨', '🍄', '🪵'];
             
@@ -533,7 +583,6 @@
 
         function renderGame2(container) {
             document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: กินอาหารให้ได้ ${TARGET_SCORE} คะแนนใน 20 วินาที</b><br><span style="font-size:12px; color:var(--text-muted)">ลากหรือแตะซ้ายขวาเพื่อเลื่อนตัวเงินตัวทอง (อาหาร +10 / ขยะ -5)</span>`;
-            
             container.innerHTML = `
                 <div class="score-board">
                     <div>คะแนน: <span id="g2-score" style="color:var(--accent)">0</span></div>
@@ -562,13 +611,8 @@
             canvas.addEventListener('mousedown', () => isDragging = true);
             window.addEventListener('mouseup', () => isDragging = false);
             canvas.addEventListener('mousemove', (e) => { if(isDragging) moveCatcher(e.clientX); });
-            
-            canvas.addEventListener('touchstart', (e) => {
-                isDragging = true; moveCatcher(e.touches[0].clientX);
-            }, {passive: false});
-            canvas.addEventListener('touchmove', (e) => {
-                if(isDragging) { e.preventDefault(); moveCatcher(e.touches[0].clientX); }
-            }, {passive: false});
+            canvas.addEventListener('touchstart', (e) => { isDragging = true; moveCatcher(e.touches[0].clientX); }, {passive: false});
+            canvas.addEventListener('touchmove', (e) => { if(isDragging) { e.preventDefault(); moveCatcher(e.touches[0].clientX); } }, {passive: false});
             window.addEventListener('touchend', () => isDragging = false);
         }
 
@@ -579,7 +623,6 @@
             catcherX = 50; document.getElementById('catcher-lizard').style.left = '50%';
             document.getElementById('g2-score').innerText = g2Score;
             document.getElementById('g2-time').innerText = g2Time;
-            
             document.querySelectorAll('.falling-item').forEach(el => el.remove());
 
             window.g2Spawn = setInterval(spawnFood, 800);
@@ -590,13 +633,9 @@
             const canvas = document.getElementById('catcher-canvas');
             const itemDef = foods[Math.floor(Math.random() * foods.length)];
             const el = document.createElement('div');
-            el.innerText = itemDef.emoji;
-            el.className = 'falling-item';
-            
+            el.innerText = itemDef.emoji; el.className = 'falling-item';
             let startX = Math.floor(Math.random() * 80) + 10;
-            el.style.left = startX + '%';
-            el.style.top = '-10%';
-            
+            el.style.left = startX + '%'; el.style.top = '-10%';
             canvas.appendChild(el);
             fallingItems.push({ el: el, x: startX, y: -10, def: itemDef });
         }
@@ -618,16 +657,12 @@
                 if(item.y > 80 && item.y < 95 && Math.abs(item.x - catcherX) < 12) {
                     g2Score += item.def.point;
                     document.getElementById('g2-score').innerText = g2Score;
-                    
                     let lizard = document.getElementById('catcher-lizard');
                     if(item.def.type === 'good') {
-                        lizard.innerText = '😋';
-                        setTimeout(() => lizard.innerText = '🦎', 300);
+                        lizard.innerText = '😋'; setTimeout(() => lizard.innerText = '🦎', 300);
                     } else {
-                        lizard.innerText = '🤮';
-                        setTimeout(() => lizard.innerText = '🦎', 300);
+                        lizard.innerText = '🤮'; setTimeout(() => lizard.innerText = '🦎', 300);
                     }
-
                     item.el.remove();
                     fallingItems.splice(i, 1);
                 } 
@@ -639,12 +674,9 @@
         }
 
         function endGame2() {
-            clearInterval(window.g2Loop);
-            clearInterval(window.g2Spawn);
-            
+            clearInterval(window.g2Loop); clearInterval(window.g2Spawn);
             const overlay = document.getElementById('g2-overlay');
             overlay.style.display = 'flex';
-            
             if(g2Score >= TARGET_SCORE) {
                 overlay.innerHTML = `
                     <h3 style="color:var(--success); margin:0 0 10px 0;">🎉 ภารกิจสำเร็จ!</h3>
@@ -677,9 +709,7 @@
         function renderGame3(container) {
             g3Questions = [...allG3Questions].sort(() => Math.random() - 0.5);
             g3Summary = [];
-
             document.getElementById('modal-desc').innerHTML = '<b>ภารกิจ: ตอบถูกให้ครบทุกข้อ (ปัดการ์ด)</b><br><span style="font-size:12px; color:var(--text-muted)">ปัดขวา = จริง (ถูก) 🟩 | ปัดซ้าย = ไม่จริง (ผิด) 🟥</span>';
-
             container.innerHTML = `
                 <div id="tinder-container" style="position:relative; width:100%; height:320px; background:#0f172a; border-radius:12px; overflow:hidden; touch-action:none; border: 2px solid var(--border-color);">
                     <div id="tinder-glow" style="position:absolute; top:0; left:0; right:0; bottom:0; opacity:0; transition: background 0.2s, opacity 0.2s; pointer-events:none; z-index:1;"></div>
@@ -705,24 +735,13 @@
                 const q = g3Questions[i];
                 const card = document.createElement('div');
                 card.className = 'swipe-card';
-                card.style.position = 'absolute';
-                card.style.left = '50%';
-                card.style.top = '50%';
+                card.style.position = 'absolute'; card.style.left = '50%'; card.style.top = '50%';
                 card.style.transform = `translate(-50%, -50%) scale(${1 - (i * 0.05)}) translateY(${i * 15}px)`;
-                card.style.width = '75%';
-                card.style.height = '65%';
-                card.style.backgroundColor = '#1e293b';
-                card.style.border = '2px solid #334155';
-                card.style.borderRadius = '16px';
-                card.style.display = 'flex';
-                card.style.alignItems = 'center';
-                card.style.justifyContent = 'center';
-                card.style.padding = '20px';
-                card.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)';
-                card.style.color = '#fff';
-                card.style.textAlign = 'center';
-                card.style.fontWeight = '600';
-                card.style.fontSize = '16px';
+                card.style.width = '75%'; card.style.height = '65%';
+                card.style.backgroundColor = '#1e293b'; card.style.border = '2px solid #334155'; card.style.borderRadius = '16px';
+                card.style.display = 'flex'; card.style.alignItems = 'center'; card.style.justifyContent = 'center';
+                card.style.padding = '20px'; card.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)';
+                card.style.color = '#fff'; card.style.textAlign = 'center'; card.style.fontWeight = '600'; card.style.fontSize = '16px';
                 card.style.zIndex = g3Questions.length - i;
                 card.innerText = q.q;
                 
@@ -737,9 +756,7 @@
         }
 
         function makeSwipeable(el, qData) {
-            let startX = 0;
-            let currentX = 0;
-            let isDragging = false;
+            let startX = 0, currentX = 0, isDragging = false;
             const glow = document.getElementById('tinder-glow');
 
             const onMove = (e) => {
@@ -747,56 +764,36 @@
                 e.preventDefault(); 
                 const x = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
                 currentX = x - startX;
-                
                 const rotate = currentX * 0.05;
                 el.style.transform = `translate(calc(-50% + ${currentX}px), -50%) rotate(${rotate}deg)`;
                 
-                if (currentX > 0) {
-                    glow.style.background = 'linear-gradient(to right, transparent, rgba(16, 185, 129, 0.6))';
-                } else {
-                    glow.style.background = 'linear-gradient(to left, transparent, rgba(239, 68, 68, 0.6))';
-                }
+                if (currentX > 0) { glow.style.background = 'linear-gradient(to right, transparent, rgba(16, 185, 129, 0.6))'; } 
+                else { glow.style.background = 'linear-gradient(to left, transparent, rgba(239, 68, 68, 0.6))'; }
                 glow.style.opacity = Math.min(Math.abs(currentX) / 100, 1);
             };
 
             const onEnd = (e) => {
                 if (!isDragging) return;
-                isDragging = false;
-                el.style.cursor = 'grab';
-                
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('touchmove', onMove);
-                document.removeEventListener('mouseup', onEnd);
-                document.removeEventListener('touchend', onEnd);
-
-                el.style.transition = 'transform 0.3s ease-out';
-                glow.style.opacity = 0;
+                isDragging = false; el.style.cursor = 'grab';
+                document.removeEventListener('mousemove', onMove); document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('mouseup', onEnd); document.removeEventListener('touchend', onEnd);
+                el.style.transition = 'transform 0.3s ease-out'; glow.style.opacity = 0;
 
                 const threshold = 80;
-                if (currentX > threshold) {
-                    handleSwipe(el, qData, true);
-                } else if (currentX < -threshold) {
-                    handleSwipe(el, qData, false);
-                } else {
-                    el.style.transform = 'translate(-50%, -50%) rotate(0deg)';
-                }
+                if (currentX > threshold) { handleSwipe(el, qData, true); } 
+                else if (currentX < -threshold) { handleSwipe(el, qData, false); } 
+                else { el.style.transform = 'translate(-50%, -50%) rotate(0deg)'; }
                 currentX = 0;
             };
 
             const onStart = (e) => {
-                isDragging = true;
-                el.style.transition = 'none';
-                el.style.cursor = 'grabbing';
+                isDragging = true; el.style.transition = 'none'; el.style.cursor = 'grabbing';
                 startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-                
-                document.addEventListener('mousemove', onMove, {passive: false});
-                document.addEventListener('touchmove', onMove, {passive: false});
-                document.addEventListener('mouseup', onEnd);
-                document.addEventListener('touchend', onEnd);
+                document.addEventListener('mousemove', onMove, {passive: false}); document.addEventListener('touchmove', onMove, {passive: false});
+                document.addEventListener('mouseup', onEnd); document.addEventListener('touchend', onEnd);
             };
 
-            el.addEventListener('mousedown', onStart);
-            el.addEventListener('touchstart', onStart, {passive: true});
+            el.addEventListener('mousedown', onStart); el.addEventListener('touchstart', onStart, {passive: true});
         }
 
         function handleSwipe(el, qData, choice) {
@@ -813,9 +810,8 @@
                     g3Questions.push(qData);
                 }
                 
-                if (g3Questions.length > 0) {
-                    renderG3Cards();
-                } else {
+                if (g3Questions.length > 0) { renderG3Cards(); } 
+                else {
                     document.getElementById('g3-summary-list').innerHTML = g3Summary.join('');
                     document.getElementById('g3-overlay').style.display = 'flex';
                     winGame();
@@ -823,28 +819,213 @@
             }, 250);
         }
 
-        // --- Game 4 ---
+        // --- GAME 4 (Crossy Lizard) ---
+        let g4Lizard = { x: 3, y: 5 }; // Grid based (0-6 cols, 0-6 rows)
+        let g4Rats = [];
+        let g4Cars = [];
+        let g4Ticks = 0;
+        let ratCount = 0;
+        let totalRats = 0;
+        
         function renderGame4(container) {
-            document.getElementById('modal-desc').innerHTML = "<b>ภารกิจ: เติมคำในช่องว่าง</b>";
+            document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: พาน้องข้ามถนนและกินหนูให้หมดเพื่อรักษาสมดุล</b><br><span style="font-size:12px; color:var(--text-muted)">ใช้ปุ่มทิศทาง (หรือคีย์บอร์ดลูกศร) เพื่อเดิน</span>`;
+            
             container.innerHTML = `
-                <div class="quiz-q">น้องทำหน้าที่เหมือนพนักงานอะไรในเมือง? (ท_ศ_า_)</div>
-                <div class="word-inputs">
-                    <input type="text" class="char-box" value="เ" readonly>
-                    <input type="text" class="char-box" id="c1" maxlength="1">
-                    <input type="text" class="char-box" id="c2" maxlength="1">
-                    <input type="text" class="char-box" value="บ" readonly>
-                    <input type="text" class="char-box" value="า" readonly>
-                    <input type="text" class="char-box" id="c3" maxlength="1">
+                <div class="score-board">
+                    <div>กินหนู: <span id="g4-score" style="color:var(--accent)">0</span></div>
                 </div>
-                <button class="btn btn-play" onclick="checkWord()">ตรวจคำตอบ</button>
+                <div id="crossy-canvas">
+                    <!-- พื้นหลังถนน/หญ้า -->
+                    <div class="g4-grass" style="top: 0%;"></div>
+                    <div class="g4-water" style="top: 14%;"></div>
+                    <div class="g4-road" style="top: 28%;"></div>
+                    <div class="g4-road" style="top: 42%;"></div>
+                    <div class="g4-grass" style="top: 56%;"></div>
+                    <div class="g4-road" style="top: 70%;"></div>
+                    <div class="g4-grass" style="top: 84%;"></div>
+                    
+                    <div id="g4-lizard" class="g4-entity">🦎</div>
+                    
+                    <div id="g4-overlay" style="display:flex;">
+                        <h3 style="color:#fff; margin:0 0 15px 0;">ลุยป่าคอนกรีต!</h3>
+                        <button class="btn btn-play" style="width:auto; padding:10px 30px;" onclick="startGame4()">▶️ เริ่มเกม</button>
+                    </div>
+                </div>
+                
+                <!-- D-PAD for Mobile (and visual for PC) -->
+                <div class="dpad-container">
+                    <div class="dpad-btn" onclick="moveG4(0, -1)">⬆️</div>
+                    <div class="dpad-row">
+                        <div class="dpad-btn" onclick="moveG4(-1, 0)">⬅️</div>
+                        <div class="dpad-btn" onclick="moveG4(0, 1)">⬇️</div>
+                        <div class="dpad-btn" onclick="moveG4(1, 0)">➡️</div>
+                    </div>
+                </div>
             `;
-        }
-        window.checkWord = function() {
-            if((document.getElementById('c1').value + document.getElementById('c2').value + document.getElementById('c3').value) === "ทศล") {
-                showToast("✅ เทศบาลป่าคอนกรีตตัวจริง", "success"); winGame();
-            } else { showToast("❌ ลองใหม่!", "error"); }
+            
+            document.addEventListener('keydown', handleG4Keydown);
         }
 
+        function handleG4Keydown(e) {
+            if(document.getElementById('g4-overlay').style.display !== 'none') return;
+            if(e.key === 'ArrowUp' || e.key === 'w') moveG4(0, -1);
+            if(e.key === 'ArrowDown' || e.key === 's') moveG4(0, 1);
+            if(e.key === 'ArrowLeft' || e.key === 'a') moveG4(-1, 0);
+            if(e.key === 'ArrowRight' || e.key === 'd') moveG4(1, 0);
+            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+        }
+
+        window.startGame4 = function() {
+            document.getElementById('g4-overlay').style.display = 'none';
+            
+            // Initial State
+            g4Lizard = { x: 3, y: 6 }; // Start bottom (row 6)
+            g4Rats = [];
+            g4Cars = [];
+            ratCount = 0;
+            totalRats = Math.floor(Math.random() * 3) + 3; // 3-5 rats
+            g4Ticks = 0;
+
+            document.getElementById('g4-score').innerText = `0 / ${totalRats}`;
+            
+            // Clean up old elements
+            document.querySelectorAll('.g4-rat, .g4-car').forEach(e => e.remove());
+            
+            // Spawn Rats
+            const canvas = document.getElementById('crossy-canvas');
+            for(let i=0; i<totalRats; i++) {
+                let rx = Math.floor(Math.random() * 7); // 0-6
+                let ry = Math.floor(Math.random() * 5); // 0-4 (not on start/end rows exactly)
+                
+                let ratEl = document.createElement('div');
+                ratEl.className = 'g4-entity g4-rat';
+                ratEl.innerText = '🐀';
+                ratEl.style.left = `calc(${rx * 14.28}% + 5px)`;
+                ratEl.style.top = `calc(${ry * 14.28}% + 10px)`;
+                canvas.appendChild(ratEl);
+                g4Rats.push({x: rx, y: ry, el: ratEl, active: true});
+            }
+
+            updateLizardPos();
+            window.g4Loop = setInterval(updateGame4, 100);
+        }
+
+        window.moveG4 = function(dx, dy) {
+            if(document.getElementById('g4-overlay').style.display !== 'none') return;
+            
+            let nx = g4Lizard.x + dx;
+            let ny = g4Lizard.y + dy;
+            
+            // Boundaries (7x7 grid: 0-6)
+            if(nx >= 0 && nx <= 6 && ny >= 0 && ny <= 6) {
+                g4Lizard.x = nx;
+                g4Lizard.y = ny;
+                updateLizardPos();
+                checkRatCollision();
+            }
+        }
+
+        function updateLizardPos() {
+            const liz = document.getElementById('g4-lizard');
+            liz.style.left = `calc(${g4Lizard.x * 14.28}% + 5px)`;
+            liz.style.top = `calc(${g4Lizard.y * 14.28}% + 10px)`;
+            
+            // Rotation based on movement direction logic could go here, keeping simple for now
+            
+            // Win condition (reached top row 0 AND ate all rats)
+            if(g4Lizard.y === 0 && ratCount >= totalRats) {
+                endGame4(true);
+            } else if (g4Lizard.y === 0) {
+                showToast("คุณต้องกินหนูให้หมดก่อนถึงจะผ่านได้!", "warning");
+            }
+        }
+
+        function checkRatCollision() {
+            for(let rat of g4Rats) {
+                if(rat.active && rat.x === g4Lizard.x && rat.y === g4Lizard.y) {
+                    rat.active = false;
+                    rat.el.style.opacity = '0';
+                    rat.el.style.transform = 'scale(0)';
+                    ratCount++;
+                    document.getElementById('g4-score').innerText = `${ratCount} / ${totalRats}`;
+                    showToast("😋 งั่ม! ช่วยเมืองกำจัดหนูไปอีก 1", "success");
+                }
+            }
+        }
+
+        function updateGame4() {
+            g4Ticks++;
+            const canvas = document.getElementById('crossy-canvas');
+            
+            // Car Spawner (Row 2, 3, 5 are roads)
+            if(g4Ticks % 15 === 0) { // spawn rate
+                const roadRows = [2, 3, 5];
+                const row = roadRows[Math.floor(Math.random() * roadRows.length)];
+                const dir = row % 2 === 0 ? 1 : -1; // Even rows go right, odd go left
+                
+                let car = document.createElement('div');
+                car.className = 'g4-entity g4-car';
+                car.innerText = ['🚗', '🚕', '🚙'][Math.floor(Math.random()*3)];
+                car.style.top = `calc(${row * 14.28}% + 10px)`;
+                car.style.left = dir === 1 ? '-10%' : '110%';
+                
+                // Mirror car emoji if going left
+                if(dir === -1) car.style.transform = 'scaleX(-1)';
+                
+                canvas.appendChild(car);
+                g4Cars.push({ el: car, row: row, pos: dir === 1 ? -10 : 110, dir: dir, active: true });
+            }
+
+            // Move Cars
+            for(let i = g4Cars.length - 1; i >= 0; i--) {
+                let car = g4Cars[i];
+                if(!car.active) continue;
+                
+                car.pos += (car.dir * 4); // Speed
+                car.el.style.left = car.pos + '%';
+                
+                // Grid collision check (approximate percentage to grid)
+                let carGridX = Math.floor((car.pos + 5) / 14.28); 
+                
+                if(car.row === g4Lizard.y && carGridX === g4Lizard.x) {
+                    // HIT BY CAR
+                    endGame4(false);
+                }
+                
+                // Cleanup offscreen cars
+                if((car.dir === 1 && car.pos > 110) || (car.dir === -1 && car.pos < -10)) {
+                    car.active = false;
+                    car.el.remove();
+                    g4Cars.splice(i, 1);
+                }
+            }
+        }
+
+        function endGame4(win) {
+            clearInterval(window.g4Loop);
+            const overlay = document.getElementById('g4-overlay');
+            overlay.style.display = 'flex';
+            
+            if(win) {
+                overlay.innerHTML = `
+                    <h3 style="color:var(--success); margin:0 0 10px 0;">🎉 สมดุลเมืองสำเร็จ!</h3>
+                    <p style="color:#fff; font-size:14px; text-align:center;">คุณพาน้องกลับสวนสาธารณะและกำจัดหนูท่อได้ครบถ้วน!<br><br>
+                    <b>คุณค่าของน้องในป่าคอนกรีต:</b><br>
+                    ตัวเงินตัวทองไม่ได้ตั้งใจมาก่อกวนมนุษย์ พวกมันคือกลไกควบคุมธรรมชาติชั้นเลิศ ที่ช่วยคานอำนาจประชากรหนูท่อและสัตว์มีพิษไม่ให้ล้นเมือง หากไม่มีพวกมัน กรุงเทพฯ และสังคมเมืองอาจเต็มไปด้วยโรคระบาดจากหนูและซากเน่าเหม็น<br><br>
+                    ดังนั้น หากพบเห็น แค่ "อยู่ห่างๆ" ปล่อยให้มันเดินผ่านไปทำหน้าที่ของมันก็พอครับ</p>
+                `;
+                winGame();
+            } else {
+                overlay.innerHTML = `
+                    <h3 style="color:var(--danger); margin:0 0 10px 0;">💥 โดนรถชน!</h3>
+                    <p style="color:#fff; font-size:14px; text-align:center;">
+                    การใช้ชีวิตในป่าคอนกรีตนั้นอันตรายมากสำหรับสัตว์ป่า<br>ลองพาน้องข้ามถนนและกินหนูให้ครบใหม่อีกครั้งนะ!</p>
+                    <button class="btn btn-warning" style="width:auto; padding:10px 30px;" onclick="startGame4()">🔄 เล่นใหม่</button>
+                `;
+            }
+        }
+
+        // --- GLOBAL ACTIONS ---
         document.getElementById('btn-finish-activity').addEventListener('click', () => {
             stationData[currentActiveStation].played = true; saveData();
             closeModal('activity-modal'); renderStations();
@@ -855,9 +1036,28 @@
             document.getElementById('quiz-container').style.display = 'block';
         });
 
-        // --- Admin: Generate Clean QRs ---
-        function openQRGenerator() {
-            document.getElementById('qr-modal').style.display = 'flex';
+        // --- Admin Controls ---
+        window.promptAdmin = function(action) {
+            // Get DDMM
+            const today = new Date();
+            const dd = String(today.getDate()).padStart(2, '0');
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const pass = dd + mm;
+            
+            const input = prompt("กรุณาใส่รหัสผ่านผู้ดูแลบูธ (DDMM ของวันนี้):");
+            if(input === pass) {
+                if(action === 'qr') {
+                    document.getElementById('qr-modal').style.display = 'flex';
+                } else if (action === 'reset') {
+                    if(confirm("ยืนยันการล้างข้อมูล? ผู้เล่นทุกคนที่ใช้เครื่องนี้จะต้องสแกน QR และเล่นใหม่ตั้งแต่ฐาน 1")) {
+                        localStorage.removeItem('boothHereStations');
+                        localStorage.removeItem('boothHereMap1');
+                        location.reload();
+                    }
+                }
+            } else if(input !== null) {
+                alert("รหัสผ่านไม่ถูกต้อง");
+            }
         }
 
         window.generateAllQRs = function() {
