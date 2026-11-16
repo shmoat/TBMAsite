@@ -372,7 +372,12 @@
 
             <button class="btn btn-play" onclick="generateAllQRs()" style="margin-top: 15px;">💾 สร้างภาพ QR Code</button>
             
-            <div class="qr-grid" id="qr-result-grid" style="display:none;">
+            <!-- แก้ไขให้แสดง 3 คอลัมน์ และมี QR หลักอยู่ด้านบน -->
+            <div class="qr-grid" id="qr-result-grid" style="display:none; grid-template-columns: repeat(3, 1fr);">
+                <div class="qr-item" style="grid-column: 1 / -1; max-width: 200px; margin: 0 auto;">
+                    <img id="qr-img-main" src="">
+                    <p style="color:var(--accent);">หน้าเว็บไซต์หลัก</p>
+                </div>
                 <div class="qr-item"><img id="qr-img-1" src=""><p>ฐานที่ 1</p></div>
                 <div class="qr-item"><img id="qr-img-2" src=""><p>ฐานที่ 2</p></div>
                 <div class="qr-item"><img id="qr-img-3" src=""><p>ฐานที่ 3</p></div>
@@ -1076,9 +1081,18 @@
             let baseUrl = document.getElementById('base-url-input').value.trim();
             if(!baseUrl) baseUrl = window.location.origin + window.location.pathname;
 
+            // ⚠️ สำคัญ: เปลี่ยนลิงก์ด้านล่างนี้ให้เป็นลิงก์โลโก้ The Blue Moon Association ของคุณ
+            const logoUrl = "https://tbmasite.vercel.app/tbmalogo.png"; // เปลี่ยนชื่อไฟล์ให้ตรงกับที่คุณอัปโหลดไว้
+            const encodedLogo = encodeURIComponent(logoUrl);
+
+            // 1. สร้าง QR Code สำหรับหน้าเว็บไซต์หลัก (แบบมีโลโก้)
+            let mainQrApi = `https://quickchart.io/qr?text=${encodeURIComponent(baseUrl)}&size=400&margin=2&centerImageUrl=${encodedLogo}`;
+            document.getElementById('qr-img-main').src = mainQrApi;
+
+            // 2. สร้าง QR Code สำหรับ 4 ฐาน (แบบมีโลโก้)
             for(let i=1; i<=4; i++) {
                 let url = `${baseUrl}?scan=${i}`;
-                let qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+                let qrApi = `https://quickchart.io/qr?text=${encodeURIComponent(url)}&size=300&margin=2&centerImageUrl=${encodedLogo}`;
                 document.getElementById(`qr-img-${i}`).src = qrApi;
             }
             
