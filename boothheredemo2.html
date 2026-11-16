@@ -187,14 +187,58 @@
             border: 2px dashed #475569;
         }
 
+        /* Game 2: Catcher Canvas */
+        #catcher-canvas {
+            width: 100%;
+            height: 350px;
+            background: #0f172a;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid var(--accent);
+            touch-action: none; /* Prevent scroll */
+        }
+        #catcher-lizard {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 50px;
+            user-select: none;
+            z-index: 10;
+        }
+        .falling-item {
+            position: absolute;
+            font-size: 30px;
+            user-select: none;
+            z-index: 5;
+            transition: top 0.05s linear;
+        }
+        .score-board {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            font-weight: bold;
+            color: #fff;
+        }
+        #g2-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
         .toast { padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; display: none; }
         .toast.success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); display: block; }
         .toast.error { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); display: block; }
 
-        /* Customizing Quiz */
-        .food-items { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
-        .food-btn { font-size: 24px; padding: 10px 15px; background: #1e293b; border: 2px solid transparent; border-radius: 8px; cursor: pointer; }
-        .food-btn:hover { background: #334155; border-color: var(--accent); }
+        /* Game 3 & 4 */
         .quiz-q { font-size: 16px; margin-bottom: 20px; font-weight: 600; color: #fff; }
         .word-inputs { display: flex; justify-content: center; gap: 5px; margin: 20px 0; }
         .char-box { width: 40px; height: 40px; text-align: center; font-size: 20px; font-family: 'Prompt', sans-serif; background: #1e293b; border: 1px solid var(--accent); color: #fff; border-radius: 8px; }
@@ -383,6 +427,8 @@
         function showToast(msg, type) {
             const t = document.getElementById('toast-msg');
             t.className = `toast ${type}`; t.innerText = msg;
+            // auto hide
+            setTimeout(() => { if(t.innerText === msg) t.className = 'toast'; }, 3000);
         }
 
         function winGame() {
@@ -390,7 +436,12 @@
             document.getElementById('btn-finish-activity').style.display = 'block';
         }
 
-        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        function closeModal(id) { 
+            // Cleanup G2 Interval if closed
+            if(id === 'activity-modal' && g2Loop) { clearInterval(g2Loop); g2Loop = null; }
+            if(id === 'activity-modal' && g2Spawn) { clearInterval(g2Spawn); g2Spawn = null; }
+            document.getElementById(id).style.display = 'none'; 
+        }
 
         function openActivity(id) {
             currentActiveStation = id;
@@ -415,41 +466,36 @@
         
         function renderGame1(container) {
             foundCount = 0;
-            totalLizards = 3; // หา 3 ตัวเสมอ
+            totalLizards = 3; 
             
-            document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: หาตัวเงินตัวทองที่ซ่อนอยู่ในฉากให้ครบ ${totalLizards} ตัว!</b><br><span style="font-size:12px; color:var(--text-muted)">ด่านจะสุ่มใหม่ทุกครั้ง! แตะที่ตัวน้องเพื่อจับ</span>`;
+            document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: หาตัวเงินตัวทองที่ซ่อนอยู่ในฉากให้ครบ ${totalLizards} ตัว!</b><br><span style="font-size:12px; color:var(--text-muted)">แตะที่ตัวน้องเพื่อจับ</span>`;
             
             let html = `<div id="play-canvas" style="background:#0f172a; border: 2px solid #3b82f6; position: relative;">`;
             
             let elements = [];
             const props = ['🌳', '💧', '🏠', '🌿', '🪨', '🍄', '🪵'];
             
-            // สุ่มของประกอบฉาก 20 ชิ้น
             for(let i=0; i<20; i++) {
                 let e = props[Math.floor(Math.random() * props.length)];
-                let x = Math.floor(Math.random() * 90) + 5; // 5% - 95%
+                let x = Math.floor(Math.random() * 90) + 5;
                 let y = Math.floor(Math.random() * 90) + 5;
-                let size = Math.floor(Math.random() * 25) + 25; // 25px - 50px
+                let size = Math.floor(Math.random() * 25) + 25;
                 elements.push({ e: e, x: x, y: y, isLizard: false, size: size });
             }
 
-            // ใส่ตัวเงินตัวทอง 3 ตัว
             for(let i=0; i<totalLizards; i++) {
                 let x = Math.floor(Math.random() * 90) + 5;
                 let y = Math.floor(Math.random() * 90) + 5;
-                let size = Math.floor(Math.random() * 10) + 30; // 30px - 40px
+                let size = Math.floor(Math.random() * 10) + 30;
                 elements.push({ e: '🦎', x: x, y: y, isLizard: true, size: size });
             }
 
-            // สลับตำแหน่งเพื่อความเนียน (z-index)
             elements.sort(() => Math.random() - 0.5);
 
             elements.forEach((el) => {
                 let clickEvt = el.isLizard ? `onclick="catchLizard(this)"` : '';
-                // ปล่อยให้ของประกอบฉากคลิกทะลุได้ (pointer-events:none) เพื่อให้หาตัวเหี้ยที่ซ่อนข้างหลังเจอ
                 let ptrEvent = el.isLizard ? `pointer-events: auto; cursor: pointer;` : `pointer-events: none; opacity: 0.9;`;
                 let zIndex = el.isLizard ? `z-index: 5;` : `z-index: ${Math.floor(Math.random()*4)};`;
-                
                 html += `<div style="position:absolute; left:${el.x}%; top:${el.y}%; font-size:${el.size}px; transform:translate(-50%,-50%); user-select:none; ${ptrEvent} ${zIndex} transition: all 0.3s;" ${clickEvt}>${el.e}</div>`;
             });
             
@@ -467,31 +513,171 @@
             if(foundCount >= totalLizards) winGame();
         }
 
-        // --- GAME 2, 3, 4 ---
-        let feedCount = 0;
+        // --- GAME 2 (Catcher) ---
+        let g2Score = 0;
+        let g2Time = 20;
+        let g2Loop, g2Spawn;
+        let catcherX = 50; // percentage
+        let fallingItems = [];
+        const TARGET_SCORE = 50;
+        const speed = 2.5; // fall speed
+
+        const foods = [
+            { emoji: '🐟', type: 'good', point: 10 },
+            { emoji: '🐀', type: 'good', point: 10 },
+            { emoji: '🥩', type: 'good', point: 10 },
+            { emoji: '🐸', type: 'good', point: 10 },
+            { emoji: '🛍️', type: 'bad', point: -5 }, // พลาสติก
+            { emoji: '🍾', type: 'bad', point: -5 }, // ขวดแก้ว
+            { emoji: '🥫', type: 'bad', point: -5 }  // กระป๋อง
+        ];
+
         function renderGame2(container) {
-            feedCount = 0; document.getElementById('modal-desc').innerHTML = "วิถีชีวิต: กินซากสัตว์และสัตว์เล็ก<br>ประโยชน์: 'เทศบาล' คอยกำจัดซากเน่าและหนู<br><br><b>ภารกิจ: ป้อนของที่มีประโยชน์ให้น้อง (2 ชิ้น)</b>";
+            document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: กินอาหารให้ได้ ${TARGET_SCORE} คะแนนใน 20 วินาที</b><br><span style="font-size:12px; color:var(--text-muted)">ลากหรือแตะซ้ายขวาเพื่อเลื่อนตัวเงินตัวทอง (อาหาร +10 / ขยะ -5)</span>`;
+            
             container.innerHTML = `
-                <div style="font-size:60px; text-align:center;" id="lizard-emoji">🦖</div>
-                <div class="food-items">
-                    <button class="food-btn" onclick="feed(true, 'ซากปลา')">🐟</button>
-                    <button class="food-btn" onclick="feed(true, 'หนู')">🐀</button>
-                    <button class="food-btn" onclick="feed(false, 'พลาสติก')">🛍️</button>
+                <div class="score-board">
+                    <div>คะแนน: <span id="g2-score" style="color:var(--accent)">0</span></div>
+                    <div>เวลา: <span id="g2-time" style="color:var(--warning)">20</span>s</div>
+                </div>
+                <div id="catcher-canvas">
+                    <div id="catcher-lizard">🦎</div>
+                    <div id="g2-overlay">
+                        <h3 style="color:#fff; margin:0 0 15px 0;">พร้อมไหม?</h3>
+                        <button class="btn btn-play" style="width:auto; padding:10px 30px;" onclick="startGame2()">▶️ เริ่มเกม</button>
+                    </div>
                 </div>
             `;
+
+            // Catcher movement setup
+            const canvas = document.getElementById('catcher-canvas');
+            let isDragging = false;
+
+            const moveCatcher = (clientX) => {
+                const rect = canvas.getBoundingClientRect();
+                let x = clientX - rect.left;
+                catcherX = (x / rect.width) * 100;
+                // clamp
+                catcherX = Math.max(10, Math.min(90, catcherX));
+                document.getElementById('catcher-lizard').style.left = catcherX + '%';
+            };
+
+            canvas.addEventListener('mousedown', () => isDragging = true);
+            window.addEventListener('mouseup', () => isDragging = false);
+            canvas.addEventListener('mousemove', (e) => { if(isDragging) moveCatcher(e.clientX); });
+            
+            // Touch support
+            canvas.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                moveCatcher(e.touches[0].clientX);
+            }, {passive: false});
+            canvas.addEventListener('touchmove', (e) => {
+                if(isDragging) { e.preventDefault(); moveCatcher(e.touches[0].clientX); }
+            }, {passive: false});
+            window.addEventListener('touchend', () => isDragging = false);
         }
-        window.feed = function(isGood, name) {
-            const lizard = document.getElementById('lizard-emoji');
-            if(isGood) {
-                feedCount++; lizard.innerText = "😋"; showToast(`✅ ${name} ช่วยเมืองกำจัดขยะชีวภาพ`, "success");
-                setTimeout(() => lizard.innerText = "🦖", 1000);
-                if(feedCount >= 2) winGame();
-            } else {
-                lizard.innerText = "🤮"; showToast(`❌ ขยะทำให้น้องตายได้!`, "error");
-                setTimeout(() => lizard.innerText = "🦖", 1500);
+
+        window.startGame2 = function() {
+            document.getElementById('g2-overlay').style.display = 'none';
+            document.getElementById('toast-msg').className = 'toast';
+            g2Score = 0; g2Time = 20; fallingItems = [];
+            catcherX = 50; document.getElementById('catcher-lizard').style.left = '50%';
+            document.getElementById('g2-score').innerText = g2Score;
+            document.getElementById('g2-time').innerText = g2Time;
+            
+            // clear old items
+            document.querySelectorAll('.falling-item').forEach(el => el.remove());
+
+            g2Spawn = setInterval(spawnFood, 800);
+            g2Loop = setInterval(updateGame2, 50); // 20fps logic
+        }
+
+        function spawnFood() {
+            const canvas = document.getElementById('catcher-canvas');
+            const itemDef = foods[Math.floor(Math.random() * foods.length)];
+            const el = document.createElement('div');
+            el.innerText = itemDef.emoji;
+            el.className = 'falling-item';
+            
+            let startX = Math.floor(Math.random() * 80) + 10;
+            el.style.left = startX + '%';
+            el.style.top = '-10%';
+            
+            canvas.appendChild(el);
+            fallingItems.push({ el: el, x: startX, y: -10, def: itemDef });
+        }
+
+        function updateGame2() {
+            // Update time every 20 ticks (1 sec)
+            let tickCount = window.g2Tick || 0;
+            window.g2Tick = tickCount + 1;
+            if(window.g2Tick % 20 === 0) {
+                g2Time--;
+                document.getElementById('g2-time').innerText = g2Time;
+                if(g2Time <= 0) return endGame2();
+            }
+
+            // Move items & Check collision
+            const catcherY = 85; // approx percentage from top
+            
+            for(let i = fallingItems.length - 1; i >= 0; i--) {
+                let item = fallingItems[i];
+                item.y += speed;
+                item.el.style.top = item.y + '%';
+
+                // Collision Detection
+                // Catcher is around item.y 80-95, and item.x should be near catcherX (±10%)
+                if(item.y > 80 && item.y < 95 && Math.abs(item.x - catcherX) < 12) {
+                    // Caught
+                    g2Score += item.def.point;
+                    document.getElementById('g2-score').innerText = g2Score;
+                    
+                    // visual feedback
+                    let lizard = document.getElementById('catcher-lizard');
+                    if(item.def.type === 'good') {
+                        lizard.innerText = '😋';
+                        setTimeout(() => lizard.innerText = '🦎', 300);
+                    } else {
+                        lizard.innerText = '🤮';
+                        setTimeout(() => lizard.innerText = '🦎', 300);
+                    }
+
+                    item.el.remove();
+                    fallingItems.splice(i, 1);
+                } 
+                // Missed (out of bounds)
+                else if(item.y > 105) {
+                    item.el.remove();
+                    fallingItems.splice(i, 1);
+                }
             }
         }
 
+        function endGame2() {
+            clearInterval(g2Loop);
+            clearInterval(g2Spawn);
+            
+            const overlay = document.getElementById('g2-overlay');
+            overlay.style.display = 'flex';
+            
+            if(g2Score >= TARGET_SCORE) {
+                overlay.innerHTML = `
+                    <h3 style="color:var(--success); margin:0 0 10px 0;">🎉 ภารกิจสำเร็จ!</h3>
+                    <p style="color:#fff; font-size:14px; text-align:center;">คุณทำได้ ${g2Score} คะแนน<br><br>
+                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองมีกระเพาะที่แข็งแรงมาก ย่อยซากสัตว์และกระดูกได้ ช่วยทำหน้าที่เป็น 'เทศบาล' ควบคุมโรคระบาดและประชากรหนูในเมือง แต่พวกมัน "ย่อยขยะพลาสติกไม่ได้" การกินขยะเข้าไปทำให้พวกมันตายได้ในที่สุด</p>
+                `;
+                winGame();
+            } else {
+                overlay.innerHTML = `
+                    <h3 style="color:var(--danger); margin:0 0 10px 0;">😢 ไม่ผ่านเกณฑ์ (ได้ ${g2Score}/${TARGET_SCORE})</h3>
+                    <p style="color:#fff; font-size:14px; text-align:center;">
+                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองกินซากสัตว์ ปลา หนู กบ แต่กินขยะของมนุษย์ไม่ได้นะ!<br><br>ลองเล่นใหม่อีกครั้งให้ถึง 50 คะแนน!</p>
+                    <button class="btn btn-warning" style="width:auto; padding:10px 30px;" onclick="startGame2()">🔄 เล่นใหม่</button>
+                `;
+            }
+        }
+
+        // --- Game 3 & 4 (Unchanged) ---
         let qIndex = 0;
         const qs = [
             { q: "ถ้าแลบลิ้นใส่ แปลว่าจะพุ่งเข้ามากัดเรา?", a: false, exp: "แค่ดมกลิ่นค้นหาอาหาร ไม่ใช่การขู่กัด" },
@@ -555,7 +741,6 @@
             if(!baseUrl) baseUrl = window.location.origin + window.location.pathname;
 
             for(let i=1; i<=4; i++) {
-                // ข้อมูล URL จะเหลือแค่ ?scan=1 สั้นและสแกนติดง่าย 100%
                 let url = `${baseUrl}?scan=${i}`;
                 let qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
                 document.getElementById(`qr-img-${i}`).src = qrApi;
