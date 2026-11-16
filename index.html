@@ -19,7 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <style>
     /* ================= CORE STYLES ================= */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Thai:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
@@ -4880,6 +4880,165 @@
         );
     };
 
+    const QRCodeGenerator = ({ currentUser, db }) => {
+        const [text, setText] = useState('');
+        const [fgColor, setFgColor] = useState('#38BDF8'); 
+        const [bgColor, setBgColor] = useState('#050811'); 
+        const [hasLogo, setHasLogo] = useState(true);
+        const [isDynamic, setIsDynamic] = useState(false);
+        const [expireDate, setExpireDate] = useState('');
+        const [scanLimit, setScanLimit] = useState('');
+        const [qrImg, setQrImg] = useState('');
+        const [loading, setLoading] = useState(false);
+
+        const generate = async (e) => {
+            e.preventDefault();
+            if (!text.trim()) return alert('กรุณาระบุ URL หรือข้อความ');
+            if (isDynamic && !currentUser) return alert('คุณต้องเข้าสู่ระบบเพื่อสร้าง QR Code แบบมีวันหมดอายุ (Dynamic)');
+            if (isDynamic && !text.startsWith('http')) return alert('Dynamic QR Code รองรับเฉพาะ URL (ต้องขึ้นต้นด้วย http:// หรือ https://)');
+
+            setLoading(true);
+            try {
+                let textToEncode = text.trim();
+                
+                if (isDynamic) {
+                    const qrId = 'qr-' + Date.now() + Math.random().toString(36).slice(2, 6);
+                    const payload = {
+                        id: qrId,
+                        target: textToEncode,
+                        createdBy: currentUser.id,
+                        scans: 0,
+                        createdAt: Date.now()
+                    };
+                    if (expireDate) payload.expiresAt = new Date(expireDate).getTime();
+                    if (scanLimit) payload.scanLimit = parseInt(scanLimit);
+                    
+                    await db.collection('bma_qrcodes').doc(qrId).set(payload);
+                    textToEncode = window.location.origin + window.location.pathname + '?qr=' + qrId;
+                }
+
+                const canvas = document.createElement('canvas');
+                await window.QRCode.toCanvas(canvas, textToEncode, {
+                    width: 300,
+                    margin: 2,
+                    color: { dark: fgColor, light: bgColor },
+                    errorCorrectionLevel: hasLogo ? 'H' : 'M'
+                });
+
+                if (hasLogo) {
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => {
+                        const size = 60;
+                        const center = (canvas.width - size) / 2;
+                        
+                        // วาดพื้นหลังเพื่อไม่ให้โลโก้กลืนไปกับ QR
+                        ctx.fillStyle = bgColor;
+                        ctx.beginPath();
+                        ctx.roundRect(center - 5, center - 5, size + 10, size + 10, 10);
+                        ctx.fill();
+                        
+                        ctx.drawImage(img, center, center, size, size);
+                        setQrImg(canvas.toDataURL());
+                        setLoading(false);
+                    };
+                    // โลโก้ของสมาคม (จาก Favicon)
+                    img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M 52 10 L 14 86 L 86 86 Q 50 62 52 10 Z' fill='%230F2547' stroke='%23FFFFFF' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E";
+                } else {
+                    setQrImg(canvas.toDataURL());
+                    setLoading(false);
+                }
+            } catch (error) {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+                setLoading(false);
+            }
+        };
+
+        const downloadQR = () => {
+            const a = document.createElement('a');
+            a.href = qrImg;
+            a.download = `bma-qrcode-${Date.now()}.png`;
+            a.click();
+        };
+
+        return (
+            <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mx-auto text-xs">
+                <form onSubmit={generate} className="flex-1 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                    <div className="font-bold text-sky-400 text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-qrcode"></i> ตั้งค่า QR Code</div>
+                    
+                    <div>
+                        <label className="text-slate-400 font-bold mb-1 block">URL หรือ ข้อความ</label>
+                        <input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder="https://..." className="w-full inp text-sm" required />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">สี QR Code</label>
+                            <div className="flex items-center gap-2">
+                                <input type="color" value={fgColor} onChange={(e) => setFgColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-0 p-0" />
+                                <input type="text" value={fgColor} onChange={(e) => setFgColor(e.target.value)} className="flex-1 inp font-mono" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">สีพื้นหลัง</label>
+                            <div className="flex items-center gap-2">
+                                <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-0 p-0" />
+                                <input type="text" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="flex-1 inp font-mono" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer p-3 bg-[#050811] rounded-xl border border-[#1E3A5F]">
+                        <input type="checkbox" checked={hasLogo} onChange={(e) => setHasLogo(e.target.checked)} className="accent-sky-500 w-4 h-4" />
+                        <span className="font-bold text-slate-200">ใส่โลโก้สมาคมตรงกลาง</span>
+                    </label>
+
+                    <div className="p-4 bg-gradient-to-br from-[#050811] to-[#0a101f] rounded-xl border border-emerald-900/50 space-y-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={isDynamic} onChange={(e) => setIsDynamic(e.target.checked)} className="accent-emerald-500 w-4 h-4" />
+                            <span className="font-bold text-emerald-400 text-sm">เปิดใช้ลิงก์แบบกำหนดอายุ (Dynamic)</span>
+                        </label>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">สามารถตั้งวันหมดอายุและจำนวนครั้งที่สแกนได้ หากครบกำหนด QR Code นี้จะสแกนเข้าไม่ได้อีกต่อไป</p>
+                        
+                        {isDynamic && (
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-[#1E3A5F]/50 animate-fade-in">
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">วันหมดอายุ (ไม่บังคับ)</label>
+                                    <input type="datetime-local" value={expireDate} onChange={(e) => setExpireDate(e.target.value)} className="w-full inp text-[10px]" />
+                                </div>
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">จำกัดสแกนกี่ครั้ง (ไม่บังคับ)</label>
+                                    <input type="number" min="1" value={scanLimit} onChange={(e) => setScanLimit(e.target.value)} placeholder="ไม่จำกัด" className="w-full inp text-sm" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button type="submit" disabled={loading} className="w-full btn-w py-3 shadow-lg text-sm mt-2 font-bold">
+                        {loading ? '⏳ กำลังสร้าง...' : '✨ สร้าง QR Code'}
+                    </button>
+                </form>
+
+                <div className="w-full md:w-72 flex flex-col items-center justify-center p-6 bg-[#050811] rounded-2xl border border-[#1E3A5F] shadow-2xl relative">
+                    <div className="text-sky-400 font-bold mb-4 text-sm">ผลลัพธ์ (Preview)</div>
+                    <div className="w-48 h-48 sm:w-56 sm:h-56 bg-white rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.5)] overflow-hidden p-2">
+                        {qrImg ? (
+                            <img src={qrImg} alt="QR Code" className="w-full h-full object-contain" />
+                        ) : (
+                            <div className="text-slate-400 text-4xl opacity-20"><i className="fas fa-qrcode"></i></div>
+                        )}
+                    </div>
+                    {qrImg && (
+                        <button onClick={downloadQR} className="mt-6 w-full btn-b py-2.5 font-bold shadow-md hover:scale-105 transition-transform flex items-center justify-center gap-2">
+                            <i className="fas fa-download"></i> ดาวน์โหลดภาพ
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // ==========================================
     // 7. 📅 ASSOCIATION CALENDAR COMPONENT 📅
     // ==========================================
@@ -5453,13 +5612,13 @@
                 onClick={() => setSubTab('dashboard')} 
                 className={`px-3.5 py-1.5 rounded-lg font-bold transition-all ${subTab === 'dashboard' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
               >
-                📊 ภาพรวม & ออกรหัสด่วน
+                <i className="fas fa-chart-pie mr-1"></i> ภาพรวม & ออกรหัสด่วน
               </button>
               <button 
                 onClick={() => setSubTab('members')} 
                 className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${subTab === 'members' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
               >
-                <span>👥 จัดการสมาชิก</span>
+                <span><i className="fas fa-users mr-1"></i> จัดการสมาชิก</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${subTab === 'members' ? 'bg-[#050811] text-amber-400' : 'bg-[#0F2547] text-sky-300'}`}>{users.length}</span>
               </button>
             </div>
@@ -5921,7 +6080,7 @@
             </div>
             <div className="relative">
               <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
-                <span>⚙️ เลือกดู</span>
+                <span><i className="fas fa-cog"></i>เลือกดู</span>
                 {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
               </button>
           
@@ -6255,6 +6414,42 @@
       // ==========================================
       const urlParams = new URLSearchParams(window.location.search);
       const sharedPostId = urlParams.get('post');
+      const qrIdParam = urlParams.get('qr');
+      const [qrLoading, setQrLoading] = useState(!!qrIdParam);
+
+      // สำหรับประมวลผลเมื่อมีคนสแกน Dynamic QR Code เข้ามา
+      useEffect(() => {
+          if (qrIdParam && db) {
+              db.collection('bma_qrcodes').doc(qrIdParam).get().then(doc => {
+                  if (doc.exists) {
+                      const data = doc.data();
+                      // เช็กวันหมดอายุ
+                      if (data.expiresAt && Date.now() > data.expiresAt) {
+                          alert('❌ ลิงก์นี้หมดอายุแล้ว (Expired)');
+                          window.history.replaceState({}, document.title, window.location.pathname);
+                          setQrLoading(false);
+                      } 
+                      // เช็กจำนวนครั้ง
+                      else if (data.scanLimit && data.scans >= data.scanLimit) {
+                          alert('❌ ลิงก์นี้ถูกสแกนครบจำนวนที่กำหนดแล้ว (Limit Exceeded)');
+                          window.history.replaceState({}, document.title, window.location.pathname);
+                          setQrLoading(false);
+                      } 
+                      // ใช้งานได้ปกติ ให้วิ่งไปที่ Target URL ทันที
+                      else {
+                          db.collection('bma_qrcodes').doc(qrIdParam).update({
+                              scans: firebase.firestore.FieldValue.increment(1)
+                          });
+                          window.location.href = data.target;
+                      }
+                  } else {
+                      alert('❌ ไม่พบข้อมูล QR Code นี้ในระบบ หรือถูกลบไปแล้ว');
+                      window.history.replaceState({}, document.title, window.location.pathname);
+                      setQrLoading(false);
+                  }
+              }).catch(() => setQrLoading(false));
+          }
+      }, [qrIdParam, db]);
       
       const [currentView, setCurrentView] = useState(() => {
           if (sharedPostId) return 'single_post';
@@ -7664,6 +7859,8 @@
         setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab]||{}), showModal: false, status: 'viewing_board' } }));
         setCurrentView('feed');
       };
+	// วาง if ตรงนี้ (ก่อนคำว่า return)
+      if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
         <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
@@ -9249,7 +9446,7 @@
             <div style={{ top: commMenu.y + 'px', left: commMenu.x + 'px' }} onClick={(e) => e.stopPropagation()} className="fixed z-50 w-44 card border-2 border-white/40 shadow-2xl py-1 text-xs">
               <button onClick={() => { setRepComm({ ...repComm, [commMenu.postId]: { ...commMenu.comment, labelNum: commMenu.lbl } }); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-sky-300 font-bold">↩️ ตอบกลับ</button>
               <button onClick={() => { toggleCommLike(commMenu.postId, commMenu.comment.id); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">♥ ถูกใจ</button>
-              <button onClick={() => { navigator.clipboard.writeText(commMenu.comment.text || ''); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">📋 คัดลอก</button>
+              <button onClick={() => { navigator.clipboard.writeText(commMenu.comment.text || ''); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]"><i className="fas fa-copy mr-1"></i> คัดลอก</button>
             </div>
           )}
 
@@ -9288,8 +9485,8 @@
                                   <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
                                     <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
                                   </button>
-                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไขโพสต์</button>
-                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) { db.collection('bma_posts').doc(post.id).delete(); window.history.replaceState({}, document.title, window.location.pathname); setCurrentView('home'); } }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400">🗑️ ลบโพสต์</button>
+                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300"><i className="fas fa-pen mr-1"></i> แก้ไขโพสต์</button>
+                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) { db.collection('bma_posts').doc(post.id).delete(); window.history.replaceState({}, document.title, window.location.pathname); setCurrentView('home'); } }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400"><i className="fas fa-trash-alt mr-1"></i> ลบโพสต์</button>
                                 </div>
                               )}
                             </div>
@@ -9355,7 +9552,7 @@
 
                             {currentUser && (
                               <div className="space-y-1.5 pt-1">
-                                {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
+                                {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span><i className="fas fa-reply mr-1"></i> ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
                                 <div className="flex flex-col gap-2">
                                     <div className="flex gap-2 items-end">
                                         <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
@@ -9391,7 +9588,6 @@
                   'ALL': { icon: '🌟', textClass: 'text-slate-100', borderClass: 'border-slate-500' },
                   'Music & Audio': { icon: '🎵', textClass: 'text-fuchsia-400', borderClass: 'border-fuchsia-500/50' },
                   'Civil Engineering': { icon: '🏗️', textClass: 'text-amber-400', borderClass: 'border-amber-500/50' },
-                  'Geotechnical': { icon: '🌍', textClass: 'text-emerald-400', borderClass: 'border-emerald-500/50' },
                   'Calculate & Academic': { icon: '🧮', textClass: 'text-sky-400', borderClass: 'border-sky-500/50' },
                   'Community Utilities': { icon: '👥', textClass: 'text-purple-400', borderClass: 'border-purple-500/50' }
               };
@@ -9406,13 +9602,14 @@
                   { id: 'rc_design', category: 'Civil Engineering', name: 'RC Beam Design', icon: '📏', desc: 'ออกแบบและคำนวณปริมาณเหล็กเสริมคาน (USD)' },
                   { id: 'steel_table', category: 'Civil Engineering', name: 'Steel Table', icon: '🏭', desc: 'ตารางคุณสมบัติเหล็กรูปพรรณ (H-Beam)' },
                   { id: 'concrete', category: 'Civil Engineering', name: 'Concrete Mix', icon: '🧱', desc: 'คำนวณปริมาตรคอนกรีตเผื่อ SF และประเมินวัสดุ' },
-		  { id: 'soil_phase', category: 'Geotechnical', name: '3-Phase Diagram', icon: '🌍', desc: 'คำนวณความสัมพันธ์มวลดิน (Void ratio, Saturation)' },
-                  { id: 'mohr_circle', category: 'Geotechnical', name: 'Soil Strength', icon: '📉', desc: 'วิเคราะห์หากำลังรับแรงเฉือนดิน (c, φ) และ Mohr Circle' },
+		  { id: 'soil_phase', category: 'Civil Engineering', name: '3-Phase Diagram', icon: '🌍', desc: 'คำนวณความสัมพันธ์มวลดิน (Void ratio, Saturation)' },
+                  { id: 'mohr_circle', category: 'Civil Engineering', name: 'Soil Strength', icon: '📉', desc: 'วิเคราะห์หากำลังรับแรงเฉือนดิน (c, φ) และ Mohr Circle' },
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
                   { id: 'splitter', category: 'Community Utilities', name: 'Lunar Splitter', icon: '💸', desc: 'หารบิลคำนวณ VAT/Service Charge อย่างยุติธรรม' },
                   { id: 'randomizer', category: 'Community Utilities', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนา' },
+		  { id: 'qrcode', category: 'Community Utilities', name: 'QR Generator', icon: '🔲', desc: 'สร้าง QR Code ปรับสี ใส่โลโก้ และตั้งค่าวันหมดอายุหรือจำกัดสแกนได้' },
               ];
               
               const toolCategories = ['ALL', ...Array.from(new Set(TOOLS.map(t => t.category)))];
@@ -9529,6 +9726,7 @@
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
                                   {activeTool === 'splitter' && <LunarSplitter />}
                                   {activeTool === 'randomizer' && <Randomizer />}
+				  {activeTool === 'qrcode' && <QRCodeGenerator currentUser={currentUser} db={db} />}
                               </div>
                           </div>
                       )}
@@ -9568,12 +9766,12 @@
                   ) : (
                     <>
                       <button onClick={() => { setSearchQ(''); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ !== currentUser?.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] shadow-md' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                        <span>📝 กระดานโพสต์รวม</span>
+                        <span><i className="fas fa-clipboard-list w-5 text-center"></i> กระดานโพสต์รวม</span>
                       </button>
                       
                       {currentUser && (
                         <button onClick={() => { setSearchQ(currentUser.id); setCurrentView('feed'); }} className={currentView === 'feed' && searchQ === currentUser.id ? 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-sky-500 text-white shadow-lg' : 'w-full flex justify-between items-center px-4 py-2.5 rounded-xl hover:bg-[#0F2547] text-slate-300 hover:text-white transition-colors'}>
-                          <span>👤 โพสต์ของฉัน</span>
+                          <span><i className="fas fa-user-edit w-5 text-center"></i> โพสต์ของฉัน</span>
                           <span className="bg-[#050811] px-2 py-0.5 rounded-full border border-[#1E3A5F] font-mono">{posts.filter((p) => p.authorId === currentUser.id).length}</span>
                         </button>
                       )}
@@ -9585,11 +9783,11 @@
                             </button>
                       
                             <button onClick={() => setCurrentView('bookmarks')} className={`w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold transition-colors ${currentView === 'bookmarks' ? 'bg-amber-400 text-[#050811] shadow-md' : 'hover:bg-[#0F2547] text-slate-300 hover:text-white'}`}>
-                                ⭐ โพสต์ที่บันทึก
+                                <i className="fas fa-star w-5 text-center"></i> โพสต์ที่บันทึก
                             </button>
                       
                             <button onClick={() => setShowCalendar(true)} className="w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm mt-1">
-                                📅 ปฏิทินสมาคม
+                                <i className="fas fa-calendar-alt w-5 text-center"></i> ปฏิทินสมาคม
                             </button>
                         </div>
                       )}
@@ -9890,7 +10088,7 @@
                 </label>
                 {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
                   <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] cursor-pointer mt-2">
-                    <span className="font-bold text-amber-300">📌 ปักหมุดโพสต์ไว้บนสุด</span>
+                    <span className="font-bold text-amber-300"><i className="fas fa-thumbtack mr-1"></i> ปักหมุดโพสต์ไว้บนสุด</span>
                     <input type="checkbox" checked={pPinned} onChange={(e) => setPPinned(e.target.checked)} />
                   </label>
                 )}
