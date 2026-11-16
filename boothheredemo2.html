@@ -196,7 +196,7 @@
             position: relative;
             overflow: hidden;
             border: 2px solid var(--accent);
-            touch-action: none; /* Prevent scroll */
+            touch-action: none;
         }
         #catcher-lizard {
             position: absolute;
@@ -238,7 +238,7 @@
         .toast.success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); display: block; }
         .toast.error { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid var(--danger); display: block; }
 
-        /* Game 3 & 4 */
+        /* Game 4 */
         .quiz-q { font-size: 16px; margin-bottom: 20px; font-weight: 600; color: #fff; }
         .word-inputs { display: flex; justify-content: center; gap: 5px; margin: 20px 0; }
         .char-box { width: 40px; height: 40px; text-align: center; font-size: 20px; font-family: 'Prompt', sans-serif; background: #1e293b; border: 1px solid var(--accent); color: #fff; border-radius: 8px; }
@@ -427,19 +427,16 @@
         function showToast(msg, type) {
             const t = document.getElementById('toast-msg');
             t.className = `toast ${type}`; t.innerText = msg;
-            // auto hide
             setTimeout(() => { if(t.innerText === msg) t.className = 'toast'; }, 3000);
         }
 
         function winGame() {
-            showToast("ยอดเยี่ยม! คุณผ่านการทดสอบด่านนี้แล้ว", "success");
             document.getElementById('btn-finish-activity').style.display = 'block';
         }
 
         function closeModal(id) { 
-            // Cleanup G2 Interval if closed
-            if(id === 'activity-modal' && g2Loop) { clearInterval(g2Loop); g2Loop = null; }
-            if(id === 'activity-modal' && g2Spawn) { clearInterval(g2Spawn); g2Spawn = null; }
+            if(id === 'activity-modal' && window.g2Loop) { clearInterval(window.g2Loop); window.g2Loop = null; }
+            if(id === 'activity-modal' && window.g2Spawn) { clearInterval(window.g2Spawn); window.g2Spawn = null; }
             document.getElementById(id).style.display = 'none'; 
         }
 
@@ -470,7 +467,7 @@
             
             document.getElementById('modal-desc').innerHTML = `<b>ภารกิจ: หาตัวเงินตัวทองที่ซ่อนอยู่ในฉากให้ครบ ${totalLizards} ตัว!</b><br><span style="font-size:12px; color:var(--text-muted)">แตะที่ตัวน้องเพื่อจับ</span>`;
             
-            let html = `<div id="play-canvas" style="background:#0f172a; border: 2px solid #3b82f6; position: relative;">`;
+            let html = '<div id="play-canvas" style="background:#0f172a; border: 2px solid #3b82f6; position: relative;">';
             
             let elements = [];
             const props = ['🌳', '💧', '🏠', '🌿', '🪨', '🍄', '🪵'];
@@ -493,9 +490,9 @@
             elements.sort(() => Math.random() - 0.5);
 
             elements.forEach((el) => {
-                let clickEvt = el.isLizard ? `onclick="catchLizard(this)"` : '';
-                let ptrEvent = el.isLizard ? `pointer-events: auto; cursor: pointer;` : `pointer-events: none; opacity: 0.9;`;
-                let zIndex = el.isLizard ? `z-index: 5;` : `z-index: ${Math.floor(Math.random()*4)};`;
+                let clickEvt = el.isLizard ? 'onclick="catchLizard(this)"' : '';
+                let ptrEvent = el.isLizard ? 'pointer-events: auto; cursor: pointer;' : 'pointer-events: none; opacity: 0.9;';
+                let zIndex = el.isLizard ? 'z-index: 5;' : `z-index: ${Math.floor(Math.random()*4)};`;
                 html += `<div style="position:absolute; left:${el.x}%; top:${el.y}%; font-size:${el.size}px; transform:translate(-50%,-50%); user-select:none; ${ptrEvent} ${zIndex} transition: all 0.3s;" ${clickEvt}>${el.e}</div>`;
             });
             
@@ -509,27 +506,29 @@
             el.style.transform = 'translate(-50%,-50%) scale(2)';
             foundCount++;
             document.getElementById('g1-score').innerText = foundCount;
-            showToast(`✅ จับได้ 1 ตัว! เก่งมาก!`, "success");
-            if(foundCount >= totalLizards) winGame();
+            showToast('✅ จับได้ 1 ตัว! เก่งมาก!', 'success');
+            if(foundCount >= totalLizards) {
+                showToast('ยอดเยี่ยม! คุณผ่านการทดสอบด่านนี้แล้ว', 'success');
+                winGame();
+            }
         }
 
         // --- GAME 2 (Catcher) ---
         let g2Score = 0;
         let g2Time = 20;
-        let g2Loop, g2Spawn;
-        let catcherX = 50; // percentage
+        let catcherX = 50;
         let fallingItems = [];
         const TARGET_SCORE = 50;
-        const speed = 2.5; // fall speed
+        const speed = 2.5;
 
         const foods = [
             { emoji: '🐟', type: 'good', point: 10 },
             { emoji: '🐀', type: 'good', point: 10 },
             { emoji: '🥩', type: 'good', point: 10 },
             { emoji: '🐸', type: 'good', point: 10 },
-            { emoji: '🛍️', type: 'bad', point: -5 }, // พลาสติก
-            { emoji: '🍾', type: 'bad', point: -5 }, // ขวดแก้ว
-            { emoji: '🥫', type: 'bad', point: -5 }  // กระป๋อง
+            { emoji: '🛍️', type: 'bad', point: -5 }, 
+            { emoji: '🍾', type: 'bad', point: -5 }, 
+            { emoji: '🥫', type: 'bad', point: -5 }  
         ];
 
         function renderGame2(container) {
@@ -549,7 +548,6 @@
                 </div>
             `;
 
-            // Catcher movement setup
             const canvas = document.getElementById('catcher-canvas');
             let isDragging = false;
 
@@ -557,7 +555,6 @@
                 const rect = canvas.getBoundingClientRect();
                 let x = clientX - rect.left;
                 catcherX = (x / rect.width) * 100;
-                // clamp
                 catcherX = Math.max(10, Math.min(90, catcherX));
                 document.getElementById('catcher-lizard').style.left = catcherX + '%';
             };
@@ -566,10 +563,8 @@
             window.addEventListener('mouseup', () => isDragging = false);
             canvas.addEventListener('mousemove', (e) => { if(isDragging) moveCatcher(e.clientX); });
             
-            // Touch support
             canvas.addEventListener('touchstart', (e) => {
-                isDragging = true;
-                moveCatcher(e.touches[0].clientX);
+                isDragging = true; moveCatcher(e.touches[0].clientX);
             }, {passive: false});
             canvas.addEventListener('touchmove', (e) => {
                 if(isDragging) { e.preventDefault(); moveCatcher(e.touches[0].clientX); }
@@ -585,11 +580,10 @@
             document.getElementById('g2-score').innerText = g2Score;
             document.getElementById('g2-time').innerText = g2Time;
             
-            // clear old items
             document.querySelectorAll('.falling-item').forEach(el => el.remove());
 
-            g2Spawn = setInterval(spawnFood, 800);
-            g2Loop = setInterval(updateGame2, 50); // 20fps logic
+            window.g2Spawn = setInterval(spawnFood, 800);
+            window.g2Loop = setInterval(updateGame2, 50); 
         }
 
         function spawnFood() {
@@ -608,7 +602,6 @@
         }
 
         function updateGame2() {
-            // Update time every 20 ticks (1 sec)
             let tickCount = window.g2Tick || 0;
             window.g2Tick = tickCount + 1;
             if(window.g2Tick % 20 === 0) {
@@ -616,23 +609,16 @@
                 document.getElementById('g2-time').innerText = g2Time;
                 if(g2Time <= 0) return endGame2();
             }
-
-            // Move items & Check collision
-            const catcherY = 85; // approx percentage from top
             
             for(let i = fallingItems.length - 1; i >= 0; i--) {
                 let item = fallingItems[i];
                 item.y += speed;
                 item.el.style.top = item.y + '%';
 
-                // Collision Detection
-                // Catcher is around item.y 80-95, and item.x should be near catcherX (±10%)
                 if(item.y > 80 && item.y < 95 && Math.abs(item.x - catcherX) < 12) {
-                    // Caught
                     g2Score += item.def.point;
                     document.getElementById('g2-score').innerText = g2Score;
                     
-                    // visual feedback
                     let lizard = document.getElementById('catcher-lizard');
                     if(item.def.type === 'good') {
                         lizard.innerText = '😋';
@@ -645,7 +631,6 @@
                     item.el.remove();
                     fallingItems.splice(i, 1);
                 } 
-                // Missed (out of bounds)
                 else if(item.y > 105) {
                     item.el.remove();
                     fallingItems.splice(i, 1);
@@ -654,8 +639,8 @@
         }
 
         function endGame2() {
-            clearInterval(g2Loop);
-            clearInterval(g2Spawn);
+            clearInterval(window.g2Loop);
+            clearInterval(window.g2Spawn);
             
             const overlay = document.getElementById('g2-overlay');
             overlay.style.display = 'flex';
@@ -664,42 +649,181 @@
                 overlay.innerHTML = `
                     <h3 style="color:var(--success); margin:0 0 10px 0;">🎉 ภารกิจสำเร็จ!</h3>
                     <p style="color:#fff; font-size:14px; text-align:center;">คุณทำได้ ${g2Score} คะแนน<br><br>
-                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองมีกระเพาะที่แข็งแรงมาก ย่อยซากสัตว์และกระดูกได้ ช่วยทำหน้าที่เป็น 'เทศบาล' ควบคุมโรคระบาดและประชากรหนูในเมือง แต่พวกมัน "ย่อยขยะพลาสติกไม่ได้" การกินขยะเข้าไปทำให้พวกมันตายได้ในที่สุด</p>
+                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองมีกระเพาะที่แข็งแรงมาก ย่อยซากสัตว์และกระดูกได้ ช่วยทำหน้าที่เป็น 'เทศบาล' ควบคุมโรคระบาดในเมือง แต่พวกมัน "ย่อยขยะพลาสติกไม่ได้" การกินขยะจะทำให้พวกมันตายได้</p>
                 `;
                 winGame();
             } else {
                 overlay.innerHTML = `
                     <h3 style="color:var(--danger); margin:0 0 10px 0;">😢 ไม่ผ่านเกณฑ์ (ได้ ${g2Score}/${TARGET_SCORE})</h3>
                     <p style="color:#fff; font-size:14px; text-align:center;">
-                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองกินซากสัตว์ ปลา หนู กบ แต่กินขยะของมนุษย์ไม่ได้นะ!<br><br>ลองเล่นใหม่อีกครั้งให้ถึง 50 คะแนน!</p>
+                    <b>เกร็ดความรู้:</b> ตัวเงินตัวทองกินซากสัตว์ ปลา หนู แต่กินขยะมนุษย์ไม่ได้!<br><br>ลองเล่นใหม่อีกครั้งให้ถึง 50 คะแนน</p>
                     <button class="btn btn-warning" style="width:auto; padding:10px 30px;" onclick="startGame2()">🔄 เล่นใหม่</button>
                 `;
             }
         }
 
-        // --- Game 3 & 4 (Unchanged) ---
-        let qIndex = 0;
-        const qs = [
-            { q: "ถ้าแลบลิ้นใส่ แปลว่าจะพุ่งเข้ามากัดเรา?", a: false, exp: "แค่ดมกลิ่นค้นหาอาหาร ไม่ใช่การขู่กัด" },
-            { q: "เสียงขู่ฟ่อๆ แปลว่ามันบอกให้เราถอยไป?", a: true, exp: "ถูกต้อง! พวกมันกลัวคนและสร้างเกราะป้องกัน" }
+        // --- GAME 3 (Tinder Swipe) ---
+        let g3Questions = [];
+        let g3Summary = [];
+        const allG3Questions = [
+            { q: 'ถ้ามันแลบลิ้นใส่ แปลว่ามันกำลังจะพุ่งเข้ามากัดเรา?', a: false, exp: 'การแลบลิ้นคือการดมกลิ่นและรับรู้สภาพแวดล้อม ไม่ใช่การเตรียมกัด' },
+            { q: 'เสียงขู่ฟ่อๆ และพองคอ แปลว่ามันบอกให้เราถอยไป?', a: true, exp: 'ถูกต้อง มันกลัวคนมาก จึงสร้างเกราะป้องกันโดยขู่ให้เราถอยห่าง' },
+            { q: 'ตัวเงินตัวทองเป็นสัตว์ดุร้าย ชอบวิ่งไล่ทำร้ายคนเป็นนิสัย?', a: false, exp: 'จริงๆ แล้วมันขี้อาย รักสงบ และมักจะเลือกวิ่งหนีมากกว่าการปะทะ' },
+            { q: 'การฟาดหางคือหนึ่งในวิธีป้องกันตัวเมื่อจวนตัวจริงๆ?', a: true, exp: 'หางของมันแข็งแรงมากและจะใช้ฟาดเพื่อป้องกันตัวเมื่อหนีไม่ได้' },
+            { q: 'ตัวเงินตัวทองบางตัวสามารถแกล้งตายเพื่อหลอกศัตรูได้?', a: true, exp: 'การอยู่นิ่งๆ หรือแกล้งตาย เป็นหนึ่งในสัญชาตญาณเอาตัวรอดขั้นพื้นฐาน' },
+            { q: 'เมื่อเจอตัวเงินตัวทองเข้าบ้าน ควรใช้ไม้ตีเพื่อไล่ตะเพิด?', a: false, exp: 'ไม่ควรทำร้ายมัน แค่เปิดทางให้มันออกไป หรือโทรเรียกกู้ภัยมาจับจะดีที่สุด' }
         ];
+
         function renderGame3(container) {
-            qIndex = 0; document.getElementById('modal-desc').innerHTML = "<b>ภารกิจ: ตอบคำถามถูก-ผิด ให้ผ่าน 2 ข้อ</b>"; showQuestion3(container);
-        }
-        function showQuestion3(container) {
-            if(qIndex >= qs.length) { container.innerHTML = `<div class="quiz-q">🎉 ยอดเยี่ยม!</div>`; winGame(); return; }
+            g3Questions = [...allG3Questions].sort(() => Math.random() - 0.5);
+            g3Summary = [];
+
+            document.getElementById('modal-desc').innerHTML = '<b>ภารกิจ: ตอบถูกให้ครบทุกข้อ (ปัดการ์ด)</b><br><span style="font-size:12px; color:var(--text-muted)">ปัดขวา = จริง (ถูก) 🟩 | ปัดซ้าย = ไม่จริง (ผิด) 🟥</span>';
+
             container.innerHTML = `
-                <div class="quiz-q">ข้อ ${qIndex+1}: ${qs[qIndex].q}</div>
-                <div style="display:flex; gap:10px; justify-content:center;">
-                    <button class="btn btn-success" onclick="checkQ3(true)">✅ ใช่</button>
-                    <button class="btn btn-danger" onclick="checkQ3(false)">❌ ไม่ใช่</button>
-                </div>`;
-        }
-        window.checkQ3 = function(ans) {
-            if(ans === qs[qIndex].a) { showToast(`✅ ${qs[qIndex].exp}`, "success"); qIndex++; setTimeout(() => showQuestion3(document.getElementById('game-container')), 1500); }
-            else { showToast(`❌ ยังไม่ถูกนะ`, "error"); }
+                <div id="tinder-container" style="position:relative; width:100%; height:320px; background:#0f172a; border-radius:12px; overflow:hidden; touch-action:none; border: 2px solid var(--border-color);">
+                    <div id="tinder-glow" style="position:absolute; top:0; left:0; right:0; bottom:0; opacity:0; transition: background 0.2s, opacity 0.2s; pointer-events:none; z-index:1;"></div>
+                    <div id="cards-stack" style="position:absolute; inset:0; z-index:2;"></div>
+                    <div id="g3-overlay" style="position:absolute; inset:0; background:rgba(0,0,0,0.95); z-index:10; display:none; flex-direction:column; padding:20px; overflow-y:auto; touch-action:auto;">
+                        <h3 style="color:var(--success); margin-top:0;">🎉 สรุปเกราะป้องกัน</h3>
+                        <ul id="g3-summary-list" style="color:#fff; font-size:13px; text-align:left; padding-left:15px; margin:0; line-height:1.5; flex-grow:1; list-style-type:square;"></ul>
+                        <button class="btn btn-success" style="margin-top:15px; min-height:45px;" onclick="document.getElementById('btn-finish-activity').click()">✅ เข้าใจแล้ว! (กลับหน้าหลัก)</button>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:15px; padding:0 20px;">
+                    <div style="text-align:center;"><span style="color:var(--danger); font-size:24px; font-weight:bold;">⬅️ ผิด</span></div>
+                    <div style="text-align:center;"><span style="color:var(--success); font-size:24px; font-weight:bold;">ถูก ➡️</span></div>
+                </div>
+            `;
+            renderG3Cards();
         }
 
+        function renderG3Cards() {
+            const stack = document.getElementById('cards-stack');
+            stack.innerHTML = '';
+            for (let i = g3Questions.length - 1; i >= 0; i--) {
+                const q = g3Questions[i];
+                const card = document.createElement('div');
+                card.className = 'swipe-card';
+                card.style.position = 'absolute';
+                card.style.left = '50%';
+                card.style.top = '50%';
+                card.style.transform = `translate(-50%, -50%) scale(${1 - (i * 0.05)}) translateY(${i * 15}px)`;
+                card.style.width = '75%';
+                card.style.height = '65%';
+                card.style.backgroundColor = '#1e293b';
+                card.style.border = '2px solid #334155';
+                card.style.borderRadius = '16px';
+                card.style.display = 'flex';
+                card.style.alignItems = 'center';
+                card.style.justifyContent = 'center';
+                card.style.padding = '20px';
+                card.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)';
+                card.style.color = '#fff';
+                card.style.textAlign = 'center';
+                card.style.fontWeight = '600';
+                card.style.fontSize = '16px';
+                card.style.zIndex = g3Questions.length - i;
+                card.innerText = q.q;
+                
+                if (i === 0) {
+                    card.style.cursor = 'grab';
+                    makeSwipeable(card, q);
+                } else {
+                    card.style.opacity = 1 - (i * 0.2);
+                }
+                stack.appendChild(card);
+            }
+        }
+
+        function makeSwipeable(el, qData) {
+            let startX = 0;
+            let currentX = 0;
+            let isDragging = false;
+            const glow = document.getElementById('tinder-glow');
+
+            const onMove = (e) => {
+                if (!isDragging) return;
+                e.preventDefault(); 
+                const x = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                currentX = x - startX;
+                
+                const rotate = currentX * 0.05;
+                el.style.transform = `translate(calc(-50% + ${currentX}px), -50%) rotate(${rotate}deg)`;
+                
+                if (currentX > 0) {
+                    glow.style.background = 'linear-gradient(to right, transparent, rgba(16, 185, 129, 0.6))';
+                } else {
+                    glow.style.background = 'linear-gradient(to left, transparent, rgba(239, 68, 68, 0.6))';
+                }
+                glow.style.opacity = Math.min(Math.abs(currentX) / 100, 1);
+            };
+
+            const onEnd = (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                el.style.cursor = 'grab';
+                
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('mouseup', onEnd);
+                document.removeEventListener('touchend', onEnd);
+
+                el.style.transition = 'transform 0.3s ease-out';
+                glow.style.opacity = 0;
+
+                const threshold = 80;
+                if (currentX > threshold) {
+                    handleSwipe(el, qData, true);
+                } else if (currentX < -threshold) {
+                    handleSwipe(el, qData, false);
+                } else {
+                    el.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+                }
+                currentX = 0;
+            };
+
+            const onStart = (e) => {
+                isDragging = true;
+                el.style.transition = 'none';
+                el.style.cursor = 'grabbing';
+                startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+                
+                document.addEventListener('mousemove', onMove, {passive: false});
+                document.addEventListener('touchmove', onMove, {passive: false});
+                document.addEventListener('mouseup', onEnd);
+                document.addEventListener('touchend', onEnd);
+            };
+
+            el.addEventListener('mousedown', onStart);
+            el.addEventListener('touchstart', onStart, {passive: true});
+        }
+
+        function handleSwipe(el, qData, choice) {
+            const endX = choice ? window.innerWidth : -window.innerWidth;
+            el.style.transform = `translate(calc(-50% + ${endX}px), -50%) rotate(${choice ? 30 : -30}deg)`;
+            
+            setTimeout(() => {
+                g3Questions.shift(); 
+                if (choice === qData.a) {
+                    showToast('✅ ถูกต้อง!', 'success');
+                    g3Summary.push(`<li style="margin-bottom:10px;"><b>${qData.q}</b><br><span style="color:var(--success)">✅ ${qData.exp}</span></li>`);
+                } else {
+                    showToast('❌ ผิด! เอาไปต่อคิวหลังสุดนะ', 'error');
+                    g3Questions.push(qData);
+                }
+                
+                if (g3Questions.length > 0) {
+                    renderG3Cards();
+                } else {
+                    document.getElementById('g3-summary-list').innerHTML = g3Summary.join('');
+                    document.getElementById('g3-overlay').style.display = 'flex';
+                    winGame();
+                }
+            }, 250);
+        }
+
+        // --- Game 4 ---
         function renderGame4(container) {
             document.getElementById('modal-desc').innerHTML = "<b>ภารกิจ: เติมคำในช่องว่าง</b>";
             container.innerHTML = `
