@@ -4842,42 +4842,478 @@
         );
     };
 
+    // 1. Advanced Group Bill Splitter (เคลียร์หนี้กลุ่ม)
     const LunarSplitter = () => {
-        const [subtotal, setSubtotal] = useState(''); const [vat, setVat] = useState(7); const [sc, setSc] = useState(10); const [people, setPeople] = useState(1);
-        const st = parseFloat(subtotal) || 0; const serv = st * (sc/100); const v = (st + serv) * (vat/100); const total = st + serv + v; const perPerson = total / Math.max(1, people);
+        const [members, setMembers] = useState([{ id: 1, name: 'นาย A' }, { id: 2, name: 'นาย B' }]);
+        const [bills, setBills] = useState([]);
+        const [newMem, setNewMem] = useState('');
+        const [bName, setBName] = useState('');
+        const [bAmt, setBAmt] = useState('');
+        const [bPayer, setBPayer] = useState(1);
+
+        const addMember = (e) => {
+            e.preventDefault();
+            if (newMem.trim()) {
+                setMembers([...members, { id: Date.now(), name: newMem.trim() }]);
+                setNewMem('');
+            }
+        };
+
+        const addBill = (e) => {
+            e.preventDefault();
+            if (bName.trim() && parseFloat(bAmt) > 0) {
+                setBills([...bills, { id: Date.now(), name: bName.trim(), amt: parseFloat(bAmt), payer: bPayer }]);
+                setBName(''); setBAmt('');
+            }
+        };
+
+        const calculateDebts = () => {
+            if (members.length === 0 || bills.length === 0) return [];
+            let balances = {};
+            members.forEach(m => balances[m.id] = 0);
+
+            bills.forEach(b => {
+                if (balances[b.payer] !== undefined) balances[b.payer] += b.amt;
+                const splitAmt = b.amt / members.length;
+                members.forEach(m => balances[m.id] -= splitAmt);
+            });
+
+            let debtors = [], creditors = [];
+            for (const [id, amt] of Object.entries(balances)) {
+                if (amt < -0.01) debtors.push({ id: parseInt(id), amt: -amt });
+                else if (amt > 0.01) creditors.push({ id: parseInt(id), amt: amt });
+            }
+
+            debtors.sort((a, b) => b.amt - a.amt);
+            creditors.sort((a, b) => b.amt - a.amt);
+
+            let transactions = [];
+            let i = 0, j = 0;
+            while (i < debtors.length && j < creditors.length) {
+                let d = debtors[i], c = creditors[j];
+                let amount = Math.min(d.amt, c.amt);
+                transactions.push({
+                    from: members.find(m => m.id === d.id)?.name || 'Unknown',
+                    to: members.find(m => m.id === c.id)?.name || 'Unknown',
+                    amt: amount
+                });
+                d.amt -= amount;
+                c.amt -= amount;
+                if (d.amt < 0.01) i++;
+                if (c.amt < 0.01) j++;
+            }
+            return transactions;
+        };
+
+        const transactions = calculateDebts();
+
         return (
-          <div className="max-w-md mx-auto space-y-4">
-            <div><label className="text-xs text-slate-400">ค่าอาหารรวม (ก่อน VAT/Service)</label><input type="number" value={subtotal} onChange={e=>setSubtotal(e.target.value)} className="inp text-xl" placeholder="0.00" /></div>
-            <div className="flex gap-4">
-              <div className="flex-1"><label className="text-xs text-slate-400">Service Charge (%)</label><input type="number" value={sc} onChange={e=>setSc(e.target.value)} className="inp" /></div>
-              <div className="flex-1"><label className="text-xs text-slate-400">VAT (%)</label><input type="number" value={vat} onChange={e=>setVat(e.target.value)} className="inp" /></div>
+            <div className="flex flex-col gap-6 py-2 w-full max-w-2xl mx-auto text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg">
+                        <div className="font-bold text-sky-300 mb-3 border-b border-[#1E3A5F] pb-2"><i className="fas fa-users"></i> สมาชิกทริป ({members.length} คน)</div>
+                        <form onSubmit={addMember} className="flex gap-2 mb-3">
+                            <input type="text" value={newMem} onChange={e => setNewMem(e.target.value)} placeholder="ชื่อสมาชิก..." className="flex-1 inp py-1.5" />
+                            <button type="submit" className="btn-b py-1.5 px-3">+</button>
+                        </form>
+                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                            {members.map(m => (
+                                <span key={m.id} className="bg-[#050811] border border-[#1E3A5F] px-2 py-1 rounded-full text-slate-300 flex items-center gap-2">
+                                    {m.name} <button onClick={() => setMembers(members.filter(x => x.id !== m.id))} className="text-red-400 hover:text-red-300">✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg">
+                        <div className="font-bold text-amber-300 mb-3 border-b border-[#1E3A5F] pb-2"><i className="fas fa-receipt"></i> บิลค่าใช้จ่าย ({bills.length} รายการ)</div>
+                        <form onSubmit={addBill} className="space-y-2 mb-3">
+                            <input type="text" value={bName} onChange={e => setBName(e.target.value)} placeholder="ชื่อรายการ (เช่น ค่าที่พัก)..." className="w-full inp py-1.5" required />
+                            <div className="flex gap-2">
+                                <input type="number" value={bAmt} onChange={e => setBAmt(e.target.value)} placeholder="จำนวนเงิน" className="flex-1 inp py-1.5 font-mono" required />
+                                <select value={bPayer} onChange={e => setBPayer(parseInt(e.target.value))} className="flex-1 inp py-1.5 bg-[#050811]">
+                                    {members.map(m => <option key={m.id} value={m.id}>จ่ายโดย: {m.name}</option>)}
+                                </select>
+                            </div>
+                            <button type="submit" className="w-full btn-b py-1.5 border-amber-500/50 text-amber-300 hover:bg-amber-900">+ เพิ่มบิล</button>
+                        </form>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
+                            {bills.map(b => (
+                                <div key={b.id} className="flex justify-between items-center bg-[#050811] p-2 rounded border border-[#1E3A5F] text-[10px]">
+                                    <div className="flex flex-col"><span className="font-bold text-slate-200">{b.name}</span><span className="text-slate-500">จ่ายโดย {members.find(m => m.id === b.payer)?.name}</span></div>
+                                    <div className="flex items-center gap-2"><span className="font-mono text-amber-300 font-bold">{b.amt.toLocaleString()} ฿</span> <button onClick={() => setBills(bills.filter(x => x.id !== b.id))} className="text-red-400">✕</button></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#050811] to-[#0a101f] p-5 rounded-xl border border-emerald-500/50 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl"><i className="fas fa-hand-holding-usd"></i></div>
+                    <div className="text-emerald-400 font-bold text-sm uppercase tracking-widest mb-4">สรุปการเคลียร์หนี้ (ใครโอนให้ใคร)</div>
+                    
+                    {transactions.length === 0 ? (
+                        <div className="text-slate-500 text-center py-6 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีหนี้ที่ต้องเคลียร์ หรือเพิ่มสมาชิก/บิลไม่ครบ</div>
+                    ) : (
+                        <div className="space-y-2 relative z-10">
+                            {transactions.map((t, i) => (
+                                <div key={i} className="flex items-center justify-between p-3 bg-emerald-950/30 rounded-xl border border-emerald-900/50">
+                                    <div className="flex items-center gap-3">
+                                        <span className="font-bold text-slate-200 bg-[#0B1325] px-2.5 py-1 rounded border border-[#1E3A5F]">{t.from}</span>
+                                        <span className="text-emerald-500 text-lg animate-pulse">➡️</span>
+                                        <span className="font-bold text-slate-200 bg-[#0B1325] px-2.5 py-1 rounded border border-[#1E3A5F]">{t.to}</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-emerald-300 text-sm sm:text-base bg-[#050811] px-3 py-1 rounded-lg border border-emerald-900/50 shadow-inner">
+                                        {t.amt.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ฿
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="text-[10px] text-slate-400 mt-4 text-center">💡 ระบบประมวลผลการเคลียร์เงินที่ซับซ้อน ให้เหลือเส้นทางการโอนที่น้อยที่สุด (Greedy Algorithm)</div>
+                </div>
             </div>
-            <div><label className="text-xs text-slate-400">จำนวนคนหาร</label><input type="number" value={people} onChange={e=>setPeople(e.target.value)} className="inp" min="1" /></div>
-            <div className="bg-[#0F2547] p-4 rounded-xl border border-[#1E3A5F] space-y-2 mt-4">
-              <div className="flex justify-between text-sm"><span>ยอดรวมทั้งหมด:</span> <span className="font-bold">{total.toFixed(2)} บาท</span></div>
-              <div className="flex justify-between text-lg text-emerald-400"><span>หารคนละ:</span> <span className="font-bold">{perPerson.toFixed(2)} บาท</span></div>
-            </div>
-          </div>
         );
     };
 
+    // 2. Randomizer & Spin the Wheel
     const Randomizer = () => {
-        const [names, setNames] = useState("สมาชิก A\nสมาชิก B\nสมาชิก C\nสมาชิก D"); const [result, setResult] = useState(null); const [spinning, setSpinning] = useState(false);
+        const [names, setNames] = useState("ตัวเลือก 1\nตัวเลือก 2\nตัวเลือก 3\nตัวเลือก 4\nตัวเลือก 5"); 
+        const [result, setResult] = useState(null); 
+        const [spinning, setSpinning] = useState(false);
+        const [mode, setMode] = useState('wheel'); // text, wheel
+        const [rotation, setRotation] = useState(0);
+
+        const colors = ['#f87171', '#fbbf24', '#34d399', '#38bdf8', '#c084fc', '#fb7185', '#a3e635'];
+
         const handleSpin = () => {
-          const list = names.split('\n').map(n=>n.trim()).filter(Boolean); if(list.length === 0) return;
-          setSpinning(true); setResult(null); let count = 0;
-          const interval = setInterval(() => { setResult(list[Math.floor(Math.random() * list.length)]); count++; if(count > 15) { clearInterval(interval); setSpinning(false); setResult(list[Math.floor(Math.random() * list.length)]); } }, 100);
+            const list = names.split('\n').map(n => n.trim()).filter(Boolean); 
+            if(list.length === 0) return;
+            
+            setSpinning(true); setResult(null);
+
+            if (mode === 'text') {
+                let count = 0;
+                const interval = setInterval(() => { 
+                    setResult(list[Math.floor(Math.random() * list.length)]); 
+                    count++; 
+                    if(count > 15) { 
+                        clearInterval(interval); 
+                        setSpinning(false); 
+                        setResult(list[Math.floor(Math.random() * list.length)]); 
+                    } 
+                }, 100);
+            } else {
+                // Wheel Logic
+                const winIdx = Math.floor(Math.random() * list.length);
+                const sliceDeg = 360 / list.length;
+                const centerDeg = (winIdx * sliceDeg) + (sliceDeg / 2);
+                const targetRot = 270 - centerDeg; // Align with top pointer (270deg)
+                
+                const currentBase = rotation - (rotation % 360);
+                const newRot = currentBase + (360 * 5) + targetRot + 360; // Spin 5 times
+                
+                setRotation(newRot);
+                setTimeout(() => {
+                    setSpinning(false);
+                    setResult(list[winIdx]);
+                }, 4000); // Wait for CSS transition
+            }
         };
+
+        const list = names.split('\n').map(n => n.trim()).filter(Boolean);
+        const sliceAngle = 360 / Math.max(1, list.length);
+        const conicGradient = list.map((_, i) => `${colors[i % colors.length]} ${i * sliceAngle}deg ${(i + 1) * sliceAngle}deg`).join(', ');
+
         return (
-          <div className="max-w-md mx-auto space-y-4">
-            <div><label className="text-xs text-slate-400">ใส่รายชื่อ (1 ชื่อต่อ 1 บรรทัด)</label><textarea rows="5" value={names} onChange={e=>setNames(e.target.value)} className="inp resize-none"></textarea></div>
-            <button onClick={handleSpin} disabled={spinning} className="w-full btn-b py-3 text-lg bg-sky-600 hover:bg-sky-500 border-sky-400">🎲 สุ่มผู้โชคดี</button>
-            {result && (
-               <div className={`mt-6 p-6 text-center rounded-xl border border-amber-500 ${spinning ? 'bg-[#0F2547]' : 'bg-amber-500/20 animate-bounce'}`}>
-                 <div className="text-xs text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ:</div><div className="text-3xl font-bold text-amber-400">{result}</div>
-               </div>
-            )}
-          </div>
+            <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mx-auto items-center md:items-start text-xs">
+                <div className="w-full md:w-1/3 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4 shrink-0">
+                    <div className="flex justify-between items-center border-b border-[#1E3A5F] pb-2">
+                        <label className="text-amber-400 font-bold"><i className="fas fa-list-ul"></i> ตัวเลือก</label>
+                        <select value={mode} onChange={e => setMode(e.target.value)} className="bg-[#050811] text-sky-200 border border-[#1E3A5F] rounded p-1 outline-none">
+                            <option value="wheel">วงล้อ (Wheel)</option>
+                            <option value="text">ข้อความ (Text)</option>
+                        </select>
+                    </div>
+                    <textarea rows="8" value={names} onChange={e=>setNames(e.target.value)} className="w-full inp resize-none text-sm leading-relaxed custom-scrollbar" placeholder="ใส่ชื่อหรือตัวเลือก บรรทัดละ 1 ข้อความ..."></textarea>
+                    <button onClick={handleSpin} disabled={spinning} className="w-full btn-w py-3 shadow-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50">
+                        {spinning ? 'กำลังสุ่ม...' : '🎲 สุ่มเลย!'}
+                    </button>
+                    {mode === 'text' && result && !spinning && (
+                        <div className="p-4 text-center rounded-xl bg-amber-500/20 border border-amber-500 animate-bounce mt-4">
+                            <div className="text-[10px] text-slate-300 mb-1">ผลลัพธ์:</div>
+                            <div className="text-xl font-bold text-amber-400">{result}</div>
+                        </div>
+                    )}
+                </div>
+
+                {mode === 'wheel' && (
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#050811] rounded-2xl border border-[#1E3A5F] shadow-2xl relative w-full h-[400px]">
+                        {/* Wheel Pointer */}
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-white z-20 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                        
+                        {/* Wheel */}
+                        <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full border-4 border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden"
+                             style={{ background: `conic-gradient(${conicGradient})`, transform: `rotate(${rotation}deg)`, transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' }}>
+                            {list.map((name, i) => {
+                                const angle = (i * sliceAngle) + (sliceAngle / 2);
+                                return (
+                                    <div key={i} className="absolute top-1/2 left-1/2 w-[50%] h-[20px] origin-left -translate-y-1/2 flex items-center pl-4 sm:pl-6"
+                                         style={{ transform: `rotate(${angle}deg)` }}>
+                                        <span className="text-white font-bold drop-shadow-md truncate w-full text-left" style={{ transform: 'rotate(180deg) scale(-1, -1)' }}>{name}</span>
+                                    </div>
+                                );
+                            })}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-slate-800 rounded-full border-4 border-slate-600 shadow-inner flex items-center justify-center">
+                                <Logo s={24} />
+                            </div>
+                        </div>
+
+                        {/* Result Popup for Wheel */}
+                        {result && !spinning && (
+                            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-30 flex items-center justify-center animate-fade-in rounded-2xl">
+                                <div className="bg-[#0B1325] border-2 border-amber-400 p-8 rounded-2xl text-center shadow-[0_0_40px_rgba(251,191,36,0.6)] animate-bounce">
+                                    <div className="text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ</div>
+                                    <div className="text-3xl sm:text-4xl font-bold text-amber-400">{result}</div>
+                                    <button onClick={() => setResult(null)} className="mt-6 px-6 py-2 bg-slate-800 text-slate-300 rounded-full hover:bg-slate-700 transition-colors">ปิด</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // 3. Smart Date & Working Days Calculator
+    const SmartDateCalc = () => {
+        const [mode, setMode] = useState('diff'); // diff, add
+        const [d1, setD1] = useState(new Date().toISOString().split('T')[0]);
+        const [d2, setD2] = useState('');
+        const [addAmt, setAddAmt] = useState(30);
+        const [addUnit, setAddUnit] = useState('days'); // days, workdays, months, years
+        const [isSub, setIsSub] = useState(false);
+        const [excludeWeekends, setExcludeWeekends] = useState(false);
+        const [resDiff, setResDiff] = useState(null);
+        const [resAdd, setResAdd] = useState(null);
+
+        const calcDiff = () => {
+            if(!d1 || !d2) return;
+            const date1 = new Date(d1); const date2 = new Date(d2);
+            const diffTime = Math.abs(date2 - date1);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            let workDays = 0;
+            let curDate = new Date(Math.min(date1, date2));
+            const endDate = new Date(Math.max(date1, date2));
+            while(curDate < endDate) {
+                const day = curDate.getDay();
+                if(day !== 0 && day !== 6) workDays++;
+                curDate.setDate(curDate.getDate() + 1);
+            }
+            
+            setResDiff({
+                days: diffDays,
+                workDays,
+                weeks: Math.floor(diffDays / 7),
+                months: (date2.getFullYear() - date1.getFullYear()) * 12 + (date2.getMonth() - date1.getMonth())
+            });
+        };
+
+        const calcAdd = () => {
+            if(!d1 || isNaN(addAmt)) return;
+            let resultDate = new Date(d1);
+            const amt = isSub ? -addAmt : addAmt;
+
+            if (addUnit === 'days') {
+                if (excludeWeekends) {
+                    let added = 0;
+                    const step = amt > 0 ? 1 : -1;
+                    while(added < Math.abs(amt)) {
+                        resultDate.setDate(resultDate.getDate() + step);
+                        const day = resultDate.getDay();
+                        if(day !== 0 && day !== 6) added++;
+                    }
+                } else {
+                    resultDate.setDate(resultDate.getDate() + amt);
+                }
+            } else if (addUnit === 'months') {
+                resultDate.setMonth(resultDate.getMonth() + amt);
+            } else if (addUnit === 'years') {
+                resultDate.setFullYear(resultDate.getFullYear() + amt);
+            }
+            
+            const formatter = new Intl.DateTimeFormat('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            setResAdd(formatter.format(resultDate));
+        };
+
+        useEffect(() => { if(mode === 'diff') calcDiff(); else calcAdd(); }, [d1, d2, addAmt, addUnit, isSub, excludeWeekends, mode]);
+
+        return (
+            <div className="flex flex-col md:flex-row gap-6 w-full max-w-3xl mx-auto text-xs">
+                <div className="w-full md:w-1/2 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                    <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] font-bold text-[11px]">
+                        <button onClick={() => setMode('diff')} className={`flex-1 py-2 rounded-lg transition-colors ${mode === 'diff' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>📅 หาระยะห่าง (Diff)</button>
+                        <button onClick={() => setMode('add')} className={`flex-1 py-2 rounded-lg transition-colors ${mode === 'add' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>⏱️ คำนวณวันหน้า/ย้อนหลัง</button>
+                    </div>
+
+                    <div className="space-y-3 pt-2">
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">วันที่เริ่มต้น (Start Date)</label>
+                            <input type="date" value={d1} onChange={e=>setD1(e.target.value)} className="w-full inp text-slate-200" />
+                        </div>
+                        
+                        {mode === 'diff' ? (
+                            <div className="animate-fade-in">
+                                <label className="text-slate-400 font-bold mb-1 block">วันที่สิ้นสุด (End Date)</label>
+                                <input type="date" value={d2} onChange={e=>setD2(e.target.value)} className="w-full inp text-slate-200" />
+                            </div>
+                        ) : (
+                            <div className="animate-fade-in space-y-3">
+                                <div>
+                                    <label className="text-slate-400 font-bold mb-1 block">ระยะเวลา</label>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setIsSub(false)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${!isSub ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>+</button>
+                                        <button onClick={()=>setIsSub(true)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${isSub ? 'bg-red-900/50 text-red-400 border-red-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>-</button>
+                                        <input type="number" value={addAmt} onChange={e=>setAddAmt(parseInt(e.target.value)||0)} className="flex-1 inp font-mono text-center" />
+                                        <select value={addUnit} onChange={e=>setAddUnit(e.target.value)} className="inp bg-[#050811]">
+                                            <option value="days">วัน (Days)</option>
+                                            <option value="months">เดือน (Months)</option>
+                                            <option value="years">ปี (Years)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                {addUnit === 'days' && (
+                                    <label className="flex items-center gap-2 cursor-pointer p-2 bg-[#050811] rounded border border-[#1E3A5F]">
+                                        <input type="checkbox" checked={excludeWeekends} onChange={e=>setExcludeWeekends(e.target.checked)} className="accent-sky-500 w-3.5 h-3.5" />
+                                        <span className="text-slate-300">ข้ามนับวันเสาร์-อาทิตย์ (นับเฉพาะวันทำงาน)</span>
+                                    </label>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#050811] to-[#0F2547] rounded-2xl border border-sky-900/50 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 opacity-5 text-8xl -mt-4 -mr-4 pointer-events-none"><i className="fas fa-calendar-check"></i></div>
+                    <div className="text-sky-400 font-bold text-sm uppercase tracking-widest mb-4 z-10">ผลลัพธ์ (Result)</div>
+                    
+                    {mode === 'diff' ? (
+                        resDiff && d2 ? (
+                            <div className="grid grid-cols-2 gap-3 w-full z-10">
+                                <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] text-center shadow-inner">
+                                    <div className="text-3xl font-mono font-bold text-white mb-1">{resDiff.days.toLocaleString()}</div>
+                                    <div className="text-[10px] text-slate-400">วัน (Total Days)</div>
+                                </div>
+                                <div className="bg-emerald-950/30 p-4 rounded-xl border border-emerald-900/50 text-center shadow-inner">
+                                    <div className="text-3xl font-mono font-bold text-emerald-400 mb-1">{resDiff.workDays.toLocaleString()}</div>
+                                    <div className="text-[10px] text-emerald-600">วันทำงาน (ตัด ส.-อา.)</div>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F] text-center shadow-inner">
+                                    <div className="text-xl font-mono font-bold text-sky-200">{resDiff.weeks}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">สัปดาห์ (Weeks)</div>
+                                </div>
+                                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F] text-center shadow-inner">
+                                    <div className="text-xl font-mono font-bold text-sky-200">{resDiff.months}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">เดือนโดยประมาณ</div>
+                                </div>
+                            </div>
+                        ) : <div className="text-slate-500 z-10 border border-dashed border-[#1E3A5F] p-4 rounded-xl w-full text-center">กรุณาเลือกวันที่สิ้นสุด</div>
+                    ) : (
+                        <div className="w-full z-10 flex flex-col items-center justify-center bg-[#0B1325] border-2 border-sky-500/30 p-6 rounded-2xl shadow-[0_0_30px_rgba(14,165,233,0.1)]">
+                            <div className="text-[10px] text-slate-400 mb-2">วันที่เป้าหมายคือ</div>
+                            <div className="text-lg sm:text-xl font-bold text-sky-300 text-center leading-snug">{resAdd || '-'}</div>
+                            {excludeWeekends && addUnit === 'days' && <div className="mt-3 text-[9px] font-bold text-emerald-400 bg-emerald-950/50 px-2 py-1 rounded border border-emerald-900/50">✨ คำนวณแบบข้ามวันหยุดสุดสัปดาห์แล้ว</div>}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // 4. Secret Cipher & Cryptography
+    const SecretCipher = () => {
+        const [text, setText] = useState('');
+        const [type, setType] = useState('base64');
+        const [action, setAction] = useState('encrypt'); // encrypt, decrypt
+        const [result, setResult] = useState('');
+
+        const RULES = {
+            base64: { name: 'Base64 Encoding', icon: '💻', rule: 'เข้ารหัสข้อความพื้นฐานเป็นตัวอักษร A-Z, a-z, 0-9 และสัญลักษณ์ ถอดรหัสได้ด้วยมาตรฐานสากล' },
+            caesar: { name: 'Caesar Cipher (Shift +3)', icon: '🏛️', rule: 'เลื่อนตัวอักษรภาษาอังกฤษไปด้านหน้า 3 ตำแหน่ง (A->D) ไม่รองรับภาษาไทยหรือสัญลักษณ์พิเศษ' },
+            atbash: { name: 'Atbash Cipher', icon: '🪞', rule: 'สลับตัวอักษรภาษาอังกฤษจากหน้าไปหลัง (A<->Z, B<->Y) การถอดรหัสใช้หลักการเดียวกัน' },
+            reverse: { name: 'Mirror Text (สลับหลังไปหน้า)', icon: '🔄', rule: 'กลับข้อความจากหลังมาหน้า ใช้ได้กับทุกภาษา อ่านยากนิดหน่อยแต่น่าสนุก' }
+        };
+
+        const handleProcess = () => {
+            if(!text.trim()) return setResult('');
+            try {
+                let res = '';
+                if(type === 'base64') {
+                    if(action === 'encrypt') res = btoa(encodeURIComponent(text));
+                    else res = decodeURIComponent(atob(text));
+                } else if(type === 'reverse') {
+                    res = text.split('').reverse().join('');
+                } else if(type === 'caesar') {
+                    const shift = action === 'encrypt' ? 3 : 23; // 26 - 3
+                    res = text.replace(/[a-zA-Z]/g, c => {
+                        const base = c <= 'Z' ? 65 : 97;
+                        return String.fromCharCode((c.charCodeAt(0) - base + shift) % 26 + base);
+                    });
+                } else if(type === 'atbash') {
+                    res = text.replace(/[a-zA-Z]/g, c => {
+                        const base = c <= 'Z' ? 65 : 97;
+                        return String.fromCharCode(25 - (c.charCodeAt(0) - base) + base);
+                    });
+                }
+                setResult(res);
+            } catch(e) {
+                setResult('⚠️ ข้อความผิดรูปแบบ ไม่สามารถถอดรหัสได้');
+            }
+        };
+
+        useEffect(() => { handleProcess(); }, [text, type, action]);
+
+        return (
+            <div className="flex flex-col gap-5 py-2 w-full max-w-3xl mx-auto text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                        <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] font-bold text-[11px]">
+                            <button onClick={() => setAction('encrypt')} className={`flex-1 py-2 rounded-lg transition-colors ${action === 'encrypt' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>🔒 เข้ารหัสลับ (Encrypt)</button>
+                            <button onClick={() => setAction('decrypt')} className={`flex-1 py-2 rounded-lg transition-colors ${action === 'decrypt' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>🔓 ถอดรหัส (Decrypt)</button>
+                        </div>
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">เลือกรูปแบบรหัส (Cipher Type)</label>
+                            <select value={type} onChange={e=>setType(e.target.value)} className="w-full inp bg-[#050811] font-bold">
+                                {Object.keys(RULES).map(k => <option key={k} value={k}>{RULES[k].icon} {RULES[k].name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">ข้อความ (Input)</label>
+                            <textarea rows="5" value={text} onChange={e=>setText(e.target.value)} placeholder={action === 'encrypt' ? "พิมพ์ข้อความที่ต้องการซ่อน..." : "วางรหัสลับที่ก๊อปปี้มา..."} className="w-full inp resize-none custom-scrollbar font-mono"></textarea>
+                        </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-[#050811] to-[#1a0f2e] p-5 rounded-2xl border border-purple-500/40 shadow-2xl flex flex-col">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="font-bold text-purple-300 uppercase tracking-widest">ผลลัพธ์ (Result)</span>
+                            {result && !result.includes('⚠️') && (
+                                <button onClick={() => { navigator.clipboard.writeText(result); alert('คัดลอกรหัสเรียบร้อยแล้ว เอาไปแปะในแชตได้เลย!'); }} className="btn-d py-1 px-3 text-[10px] bg-purple-900/50 border-purple-500/50 text-purple-200 hover:bg-purple-600 hover:text-white transition-colors">
+                                    <i className="fas fa-copy"></i> คัดลอก
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex-1 w-full bg-[#0B1325] border-2 border-dashed border-[#1E3A5F] rounded-xl p-4 font-mono text-sm sm:text-base text-white break-words overflow-y-auto max-h-48 custom-scrollbar">
+                            {result || <span className="text-slate-600 opacity-50">รอการประมวลผล...</span>}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-[#0B1325] border-l-4 border-amber-500 p-4 rounded-r-xl shadow-inner">
+                    <div className="font-bold text-amber-400 mb-1 flex items-center gap-2"><i className="fas fa-info-circle"></i> กฎและรูปแบบของ {RULES[type].name}</div>
+                    <div className="text-slate-300 leading-relaxed">{RULES[type].rule}</div>
+                </div>
+            </div>
         );
     };
 
@@ -9621,9 +10057,11 @@
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
-                  { id: 'splitter', category: 'Community Utilities', name: 'Lunar Splitter', icon: '💸', desc: 'หารบิลคำนวณ VAT/Service Charge อย่างยุติธรรม' },
-                  { id: 'randomizer', category: 'Community Utilities', name: 'Randomizer', icon: '🎲', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนา' },
-		  { id: 'qrcode', category: 'Community Utilities', name: 'QR Generator', icon: '🔲', desc: 'สร้าง QR Code ปรับสี ใส่โลโก้ และตั้งค่าวันหมดอายุหรือจำกัดสแกนได้' },
+                  { id: 'splitter', category: 'Community Utilities', name: 'Group Bill Splitter', icon: '💸', desc: 'คำนวณเคลียร์หนี้ทริปกลุ่มที่ซับซ้อน สรุปใครต้องโอนให้ใครแบบเข้าใจง่าย' },
+                  { id: 'smartdate', category: 'Community Utilities', name: 'Smart Date Calculator', icon: '🗓️', desc: 'หาระยะห่างของวัน และคำนวณวันหน้า/ย้อนหลังแบบข้ามวันหยุดสุดสัปดาห์ได้' },
+                  { id: 'cipher', category: 'Community Utilities', name: 'Secret Cipher', icon: '🕵️', desc: 'เข้ารหัสข้อความลับ (Base64, Caesar, ฯลฯ) เอาไว้ส่งความลับให้เพื่อนในแชต' },
+                  { id: 'qrcode', category: 'Community Utilities', name: 'QR Generator', icon: '🔲', desc: 'สร้าง QR Code ปรับสี ใส่โลโก้ และตั้งค่าวันหมดอายุหรือจำกัดสแกนได้' },
+                  { id: 'randomizer', category: 'Community Utilities', name: 'Spin the Wheel', icon: '🎡', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนาแบบข้อความ และวงล้อหมุนอนิเมชั่น' },
               ];
               
               const toolCategories = ['ALL', ...Array.from(new Set(TOOLS.map(t => t.category)))];
@@ -9739,8 +10177,10 @@
                                   {activeTool === 'solver' && <MatrixSolver />}
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
                                   {activeTool === 'splitter' && <LunarSplitter />}
+                                  {activeTool === 'smartdate' && <SmartDateCalc />}
+                                  {activeTool === 'cipher' && <SecretCipher />}
+                                  {activeTool === 'qrcode' && <QRCodeGenerator currentUser={currentUser} db={db} />}
                                   {activeTool === 'randomizer' && <Randomizer />}
-				  {activeTool === 'qrcode' && <QRCodeGenerator currentUser={currentUser} db={db} />}
                               </div>
                           </div>
                       )}
