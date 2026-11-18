@@ -7405,7 +7405,7 @@
       currentUser, searchQ, setSearchQ, setVisiblePosts, setCreatePost, 
       filterMenuOpen, setFilterMenuOpen, tagFilter, setTagFilter, allTags, 
       filterType, setFilterType, filterLatestOnly, setFilterLatestOnly, 
-      filteredPosts, visiblePosts, hiPostId, getAuthor, setMemberModal, 
+      filteredPosts, posts, visiblePosts, hiPostId, getAuthor, setMemberModal,  // 🟢 เพิ่ม posts เข้าไปตรงนี้
       postMenu, setPostMenu, db, handleEditPostReq, setCurrentView, setActiveGameTab, GAMES, fmtTime,
       toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment
     }) {
@@ -11485,6 +11485,7 @@
 		) : (
 		  <BoardPage 
                     currentUser={currentUser} searchQ={searchQ} setSearchQ={setSearchQ} 
+		    posts={posts}
                     setVisiblePosts={setVisiblePosts} setCreatePost={setCreatePost}
                     filterMenuOpen={filterMenuOpen} setFilterMenuOpen={setFilterMenuOpen} 
                     tagFilter={tagFilter} setTagFilter={setTagFilter} allTags={allTags} 
