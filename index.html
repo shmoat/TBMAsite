@@ -3443,36 +3443,37 @@
             }
         };
 
-        const generateVisualContext = (val, baseValStr, catStr) => {
-            if (!val || val <= 0) return null;
-            let ctx = null;
-            const bVal = parseFloat(baseValStr);
+        // 1. นำตรรกะ Visual Context มาใส่ใน useEffect เพื่อป้องกัน Infinite Loop
+        useEffect(() => {
+            const val = parseFloat(inputValue);
+            if (isNaN(val) || val <= 0 || category === 'Custom (พิมพ์หน่วยเอง)') {
+                setVisualContext(null);
+                return;
+            }
 
-            if (catStr === 'Length (ความยาว)') {
-                // แปลงค่าที่กรอกให้เป็นเมตร (m) ก่อนเพื่อนำไปเปรียบเทียบ
-                const meters = bVal / CATEGORIES[catStr][fromUnit];
+            let ctx = null;
+            if (category === 'Length (ความยาว)') {
+                const meters = val / CATEGORIES[category][fromUnit];
                 if (meters > 1000) ctx = { txt: `เทียบเท่าความยาวสนามฟุตบอล ${(meters/105).toFixed(1)} สนาม ⚽`, bg: 'bg-emerald-950/40', textCol: 'text-emerald-300' };
                 else if (meters > 10) ctx = { txt: `ความยาวพอๆ กับตึก ${(meters/3).toFixed(1)} ชั้น 🏢`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
                 else if (meters > 0.1) ctx = { txt: `ยาวประมาณไม้บรรทัด ${(meters/0.3).toFixed(1)} อันต่อกัน 📏`, bg: 'bg-amber-950/40', textCol: 'text-amber-300' };
             } 
-            else if (catStr === 'Mass (น้ำหนัก)') {
-                // แปลงเป็น kg
-                const kg = bVal / CATEGORIES[catStr][fromUnit];
+            else if (category === 'Mass (น้ำหนัก)') {
+                const kg = val / CATEGORIES[category][fromUnit];
                 if (kg > 1000) ctx = { txt: `น้ำหนักเทียบเท่าช้างเอเชีย ${(kg/3000).toFixed(2)} ตัว 🐘`, bg: 'bg-slate-800', textCol: 'text-slate-300' };
                 else if (kg > 50) ctx = { txt: `น้ำหนักพอๆ กับผู้ใหญ่ ${(kg/65).toFixed(1)} คน 🧑`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
                 else if (kg > 1) ctx = { txt: `หนักเท่าแตงโม ${(kg/3).toFixed(1)} ลูก 🍉`, bg: 'bg-red-950/40', textCol: 'text-red-300' };
             }
-            else if (catStr === 'Volume (ปริมาตร)') {
-                // แปลงเป็นลิตร
-                const liters = bVal / CATEGORIES[catStr][fromUnit];
+            else if (category === 'Volume (ปริมาตร)') {
+                const liters = val / CATEGORIES[category][fromUnit];
                 if (liters > 1000) ctx = { txt: `ใส่น้ำเต็มสระว่ายน้ำโอลิมปิกได้ ${(liters/2500000).toExponential(2)} สระ 🏊‍♂️`, bg: 'bg-blue-950/40', textCol: 'text-blue-300' };
                 else if (liters > 10) ctx = { txt: `เทียบเท่าน้ำขวดใหญ่ (1.5L) จำนวน ${(liters/1.5).toFixed(0)} ขวด 💧`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
             }
-            else if (catStr === 'Temperature (อุณหภูมิ)') {
+            else if (category === 'Temperature (อุณหภูมิ)') {
                 let celsius = 0;
-                if (fromUnit === 'C') celsius = bVal;
-                else if (fromUnit === 'F') celsius = (bVal - 32) * 5/9;
-                else if (fromUnit === 'K') celsius = bVal - 273.15;
+                if (fromUnit === 'C') celsius = val;
+                else if (fromUnit === 'F') celsius = (val - 32) * 5/9;
+                else if (fromUnit === 'K') celsius = val - 273.15;
                 
                 if (celsius > 100) ctx = { txt: `อุณหภูมินี้ น้ำจะเดือดจนระเหยเป็นไอ ♨️`, bg: 'bg-red-950/40', textCol: 'text-red-400' };
                 else if (celsius > 35) ctx = { txt: `อุณหภูมิประมาณแดดประเทศไทยตอนเที่ยง 🥵`, bg: 'bg-amber-950/40', textCol: 'text-amber-400' };
@@ -3481,12 +3482,13 @@
             }
 
             setVisualContext(ctx);
-        };
+        }, [inputValue, fromUnit, category]);
 
+        // 2. ฟังก์ชันคำนวณผลลัพธ์ที่ตัดการอัปเดต State (Visual Context) ออกไปแล้ว
         const calculateResult = () => {
-          if (inputValue === '') { setVisualContext(null); return ''; }
+          if (inputValue === '') return '';
           const val = parseFloat(inputValue); 
-          if (isNaN(val)) { setVisualContext(null); return 'Invalid Input'; }
+          if (isNaN(val)) return 'Invalid Input';
           let resultNum = 0;
                     
           if (category === 'Temperature (อุณหภูมิ)') {
@@ -3505,9 +3507,6 @@
           } else {
             resultNum = (val / CATEGORIES[category][fromUnit]) * CATEGORIES[category][toUnit];
           }
-
-          // สร้างคำอธิบายประกอบ
-          generateVisualContext(val, inputValue, category);
 
           if (useSciNotation) return resultNum.toExponential(precision > 0 ? precision - 1 : 2);
                     
