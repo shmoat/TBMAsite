@@ -458,135 +458,53 @@
     function FormattedText({ text, currentUser, isEdited }) {
       if (!text) return null;
       const myTags = currentUser ? getTags(currentUser) : [];
-
       return (
-        <div className="text-sm text-slate-100 mt-1 leading-relaxed break-words space-y-1">
-          {text.split('\n').map((line, i) => {
-            let isQuote = false;
-            let isBullet = false;
-            let content = line;
-
-            // ตรวจสอบ Markdown: Blockquote และ Bullet Point
-            if (content.startsWith('> ')) { isQuote = true; content = content.substring(2); }
-            else if (content.startsWith('- ')) { isBullet = true; content = content.substring(2); }
-
-            // แบ่งข้อความเพื่อหา ลิงก์, แท็ก (@), และตัวหนา (**text**)
-            const parts = content.split(/(https?:\/\/[^\s]+|@\[[^\]]+\]|@[a-zA-Z0-9_&-]+|\*\*.*?\*\*)/g);
-
-            const lineContent = parts.map((p, j) => {
-              if (!p) return null;
-              if (p.startsWith('http')) return <a key={j} href={p} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline break-all">{p}</a>;
-              if (p.startsWith('**') && p.endsWith('**')) return <strong key={j} className="text-white font-bold">{p.slice(2, -2)}</strong>;
-              if (p.startsWith('@')) {
-                  const lw = p.toLowerCase();
-                  const hi = currentUser && (lw === '@everyone' || (lw === '@here' && currentUser.isOnline) || myTags.some((t) => p === '@[' + t + ']' || lw === '@' + t.toLowerCase()) || lw === '@' + String(currentUser.id).toLowerCase() || (currentUser.username && lw === '@' + currentUser.username.toLowerCase()));
-                  return <span key={j} className={hi ? 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-amber-400 text-[#050811] font-mono text-xs font-bold shadow-sm' : 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#0F2547] border border-blue-400/50 text-blue-200 font-mono text-xs'}>{p}</span>;
-              }
-              return <span key={j}>{p}</span>;
-            });
-
-            if (isQuote) return <blockquote key={i} className="border-l-4 border-sky-500 pl-3 py-1.5 my-1.5 bg-sky-900/20 text-sky-100 italic rounded-r-lg">{lineContent}</blockquote>;
-            if (isBullet) return <li key={i} className="ml-5 list-disc marker:text-sky-400">{lineContent}</li>;
-            return <div key={i}>{lineContent}</div>;
+        <p className="text-sm text-slate-100 mt-1 whitespace-pre-line leading-relaxed break-words">
+          {text.split(/(https?:\/\/[^\s]+|@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g).map((p, i) => {
+            if(p.startsWith('http')) return <a key={i} href={p} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline underline-offset-2 break-all">{p}</a>;
+            if (p.startsWith('@')) {
+                const lw = p.toLowerCase();
+                const hi = currentUser && (lw === '@everyone' || (lw === '@here' && currentUser.isOnline) || myTags.some((t) => p === '@[' + t + ']' || lw === '@' + t.toLowerCase()) || lw === '@' + String(currentUser.id).toLowerCase() || (currentUser.username && lw === '@' + currentUser.username.toLowerCase()));
+                return <span key={i} className={hi ? 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-amber-400 text-[#050811] font-mono text-xs font-bold' : 'inline-block px-1.5 py-0.5 mx-0.5 rounded bg-[#0F2547] border border-blue-400/50 text-blue-200 font-mono text-xs'}>{p}</span>;
+            }
+            return <span key={i}>{p}</span>;
           })}
-          {isEdited && <div className="text-[10px] italic text-slate-400 mt-2 opacity-70">(แก้ไขแล้ว)</div>}
-        </div>
+          {isEdited && <span className="ml-2 text-[10px] italic text-slate-400">(แก้ไขแล้ว)</span>}
+        </p>
       );
     }
 
-    function LikeButton({ likes, currentUser, onLike, getAuthor, postId, db }) {
-      const parsedLikes = (likes || []).map(l => typeof l === 'string' ? { userId: l, type: 'like' } : l);
-      const myReact = currentUser ? parsedLikes.find(l => l.userId === currentUser.id) : null;
-      
+    function LikeButton({ likes, currentUser, onLike, getAuthor }) {
+      const liked = currentUser && (likes || []).includes(currentUser.id);
       const [showNames, setShowNames] = useState(false);
-      const [showPicker, setShowPicker] = useState(false);
-      const hideTimer = useRef(null);
+      const pressTimer = useRef(null);
       
-      const EMOJIS = {
-          'like': { icon: '👍', label: 'ถูกใจ', color: 'text-sky-400' },
-          'love': { icon: '❤️', label: 'รักเลย', color: 'text-red-500' },
-          'haha': { icon: '😂', label: 'ฮ่าๆ', color: 'text-amber-400' },
-          'wow': { icon: '😮', label: 'ว้าว', color: 'text-amber-400' },
-          'sad': { icon: '😢', label: 'เศร้า', color: 'text-amber-400' },
-          'angry': { icon: '😡', label: 'โกรธ', color: 'text-orange-500' }
-      };
-
-      const handleReaction = async (type) => {
-          if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อน');
-          if (!postId || !db) {
-              // กรณีที่เป็นคอมเมนต์ (เรียกใช้แบบเก่าที่ส่งแค่ onLike มา)
-              if (onLike) onLike();
-              return;
-          }
-          
-          let newLikes = [...parsedLikes];
-          if (myReact && myReact.type === type) {
-              newLikes = newLikes.filter(l => l.userId !== currentUser.id);
-          } else if (myReact) {
-              newLikes = newLikes.map(l => l.userId === currentUser.id ? { ...l, type } : l);
-          } else {
-              newLikes.push({ userId: currentUser.id, type });
-          }
-          
-          await db.collection('bma_posts').doc(postId).update({ likes: newLikes });
-          setShowPicker(false);
-      };
-
-      const summary = {};
-      parsedLikes.forEach(l => { summary[l.type] = (summary[l.type] || 0) + 1; });
-      const topReacts = Object.entries(summary).sort((a, b) => b[1] - a[1]).slice(0, 3).map(r => r[0]);
+      const showL = (e) => { if(likes?.length) setShowNames({ x: e.clientX, y: e.clientY }); };
+      const hideL = () => setShowNames(false);
 
       return (
-        <div className="relative inline-block"
-             onMouseEnter={() => { clearTimeout(hideTimer.current); if(postId) setShowPicker(true); }}
-             onMouseLeave={() => { hideTimer.current = setTimeout(() => setShowPicker(false), 300); }}
-        >
-          {showPicker && currentUser && postId && (
-              <div className="absolute bottom-full left-0 mb-2 bg-[#0B1325] border border-[#1E3A5F] rounded-full px-2 py-1.5 flex gap-1 shadow-2xl animate-fade-in z-40">
-                  {Object.entries(EMOJIS).map(([type, data]) => (
-                      <button key={type} onClick={(e) => { e.stopPropagation(); handleReaction(type); }} className={`w-8 h-8 rounded-full text-lg hover:scale-125 transition-transform origin-bottom flex items-center justify-center ${myReact?.type === type ? 'bg-white/20' : 'hover:bg-white/10'}`} title={data.label}>
-                          {data.icon}
-                      </button>
-                  ))}
-              </div>
-          )}
-          
+        <div className="relative inline-block">
           <button 
-            onClick={(e) => { e.stopPropagation(); handleReaction(myReact ? myReact.type : 'like'); }}
-            onMouseEnter={(e) => { if(parsedLikes.length) setShowNames({ x: e.clientX, y: e.clientY }); }}
-            onMouseLeave={() => setShowNames(false)}
-            className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1.5 ${myReact ? 'bg-white/10 border-white/20' : 'bg-[#0B1325] border-[#1E3A5F] hover:bg-[#0F2547]'}`}
-          >
-            {myReact ? (
-                <span className={EMOJIS[myReact.type].color}>{EMOJIS[myReact.type].icon} {EMOJIS[myReact.type].label}</span>
-            ) : (
-                <span className="text-slate-400">👍 ถูกใจ</span>
-            )}
-            
-            {parsedLikes.length > 0 && (
-                <span className="flex items-center gap-0.5 ml-1 border-l border-white/20 pl-1.5">
-                    {topReacts.map(t => EMOJIS[t].icon).join('')} <span className="text-slate-300 font-mono ml-0.5">{parsedLikes.length}</span>
-                </span>
-            )}
-          </button>
+            onClick={onLike}
+            onMouseEnter={showL} onMouseLeave={hideL}
+            onTouchStart={(e) => { 
+              const touch = e.touches[0];
+              pressTimer.current = setTimeout(() => { showL({clientX: touch.clientX, clientY: touch.clientY}); }, 400); 
+            }}
+            onTouchEnd={() => { clearTimeout(pressTimer.current); hideL(); }}
+            className={liked ? 'px-2 py-0.5 rounded-full bg-white text-[#050811] text-[10px] font-bold' : 'px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]'}
+          >♥ ถูกใจ {likes?.length ? '(' + likes.length + ')' : ''}</button>
           
-          {showNames && parsedLikes.length > 0 && (
-            <div className="fixed z-50 bg-black/90 text-white text-[10px] px-3 py-2 rounded-lg border border-[#1E3A5F] pointer-events-none transform -translate-y-full -translate-x-1/2 mt-[-10px]" style={{ left: showNames.x, top: showNames.y, width: 'max-content', maxWidth: '200px' }}>
-              <div className="space-y-1">
-                  {parsedLikes.map(l => (
-                      <div key={l.userId} className="flex items-center gap-1.5">
-                          <span>{EMOJIS[l.type].icon}</span>
-                          <span className="truncate">{getAuthor(l.userId).displayName}</span>
-                      </div>
-                  ))}
-              </div>
+          {showNames && (
+            <div className="fixed z-50 bg-black/90 text-white text-[10px] px-2 py-1.5 rounded-lg border border-[#1E3A5F] pointer-events-none transform -translate-y-full -translate-x-1/2 mt-[-10px]" style={{ left: showNames.x, top: showNames.y, width: 'max-content', maxWidth: '200px' }}>
+              👍 {likes.map(id => getAuthor(id).displayName).join(', ')}
             </div>
           )}
         </div>
       );
     }
 
-    function PantipThread({ c, all, lbl, postId, me, getAuthor, canManage, onDel, onLike, onReply, onCtx, isQA, isOwner, onMarkBestAnswer }) {
+    function PantipThread({ c, all, lbl, postId, me, getAuthor, canManage, onDel, onLike, onReply, onCtx }) {
       const ca = getAuthor(c.authorId);
       const subs = all.filter((x) => (x.parentId || x.replyTo?.id) === c.id);
       return (
@@ -595,11 +513,6 @@
             <div className="flex justify-between mb-1 pb-1 border-b border-[#1E3A5F]/50 text-[10px]">
               <span className="font-mono font-bold text-sky-300">{lbl}</span>
               <div className="flex gap-2">
-                {isQA && isOwner && (
-                    <button onClick={() => onMarkBestAnswer(c.id)} className="text-emerald-400 font-bold hover:bg-emerald-900/50 px-2 rounded transition-colors" title="เลือกเป็นคำตอบที่ดีที่สุด">
-                        👑 เลือกเป็น Best Answer
-                    </button>
-                )}
                 <span className="text-slate-500">{c.createdAt}</span>
                 {canManage(c.authorId) && <button onClick={() => onDel(postId, c.id)} className="text-slate-500 hover:text-red-400">ลบ</button>}
               </div>
@@ -3501,7 +3414,6 @@
         const [useSciNotation, setUseSciNotation] = useState(false);
         const [precision, setPrecision] = useState(6);
         const [copied, setCopied] = useState(false);
-        const [visualContext, setVisualContext] = useState(null);
 
         useEffect(() => {
           if (category === 'Temperature (อุณหภูมิ)') { setFromUnit('C'); setToUnit('F'); }
@@ -3510,7 +3422,6 @@
               setFromUnit(units[0]); setToUnit(units[1] || units[0]); 
           }
           setInputValue('');
-          setVisualContext(null);
         }, [category]);
 
         const parseCompoundUnit = (unitStr) => {
@@ -3530,52 +3441,9 @@
             }
         };
 
-        // 1. นำตรรกะ Visual Context มาใส่ใน useEffect เพื่อป้องกัน Infinite Loop
-        useEffect(() => {
-            const val = parseFloat(inputValue);
-            if (isNaN(val) || val <= 0 || category === 'Custom (พิมพ์หน่วยเอง)') {
-                setVisualContext(null);
-                return;
-            }
-
-            let ctx = null;
-            if (category === 'Length (ความยาว)') {
-                const meters = val / CATEGORIES[category][fromUnit];
-                if (meters > 1000) ctx = { txt: `เทียบเท่าความยาวสนามฟุตบอล ${(meters/105).toFixed(1)} สนาม ⚽`, bg: 'bg-emerald-950/40', textCol: 'text-emerald-300' };
-                else if (meters > 10) ctx = { txt: `ความยาวพอๆ กับตึก ${(meters/3).toFixed(1)} ชั้น 🏢`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
-                else if (meters > 0.1) ctx = { txt: `ยาวประมาณไม้บรรทัด ${(meters/0.3).toFixed(1)} อันต่อกัน 📏`, bg: 'bg-amber-950/40', textCol: 'text-amber-300' };
-            } 
-            else if (category === 'Mass (น้ำหนัก)') {
-                const kg = val / CATEGORIES[category][fromUnit];
-                if (kg > 1000) ctx = { txt: `น้ำหนักเทียบเท่าช้างเอเชีย ${(kg/3000).toFixed(2)} ตัว 🐘`, bg: 'bg-slate-800', textCol: 'text-slate-300' };
-                else if (kg > 50) ctx = { txt: `น้ำหนักพอๆ กับผู้ใหญ่ ${(kg/65).toFixed(1)} คน 🧑`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
-                else if (kg > 1) ctx = { txt: `หนักเท่าแตงโม ${(kg/3).toFixed(1)} ลูก 🍉`, bg: 'bg-red-950/40', textCol: 'text-red-300' };
-            }
-            else if (category === 'Volume (ปริมาตร)') {
-                const liters = val / CATEGORIES[category][fromUnit];
-                if (liters > 1000) ctx = { txt: `ใส่น้ำเต็มสระว่ายน้ำโอลิมปิกได้ ${(liters/2500000).toExponential(2)} สระ 🏊‍♂️`, bg: 'bg-blue-950/40', textCol: 'text-blue-300' };
-                else if (liters > 10) ctx = { txt: `เทียบเท่าน้ำขวดใหญ่ (1.5L) จำนวน ${(liters/1.5).toFixed(0)} ขวด 💧`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
-            }
-            else if (category === 'Temperature (อุณหภูมิ)') {
-                let celsius = 0;
-                if (fromUnit === 'C') celsius = val;
-                else if (fromUnit === 'F') celsius = (val - 32) * 5/9;
-                else if (fromUnit === 'K') celsius = val - 273.15;
-                
-                if (celsius > 100) ctx = { txt: `อุณหภูมินี้ น้ำจะเดือดจนระเหยเป็นไอ ♨️`, bg: 'bg-red-950/40', textCol: 'text-red-400' };
-                else if (celsius > 35) ctx = { txt: `อุณหภูมิประมาณแดดประเทศไทยตอนเที่ยง 🥵`, bg: 'bg-amber-950/40', textCol: 'text-amber-400' };
-                else if (celsius > 20) ctx = { txt: `อากาศห้องแอร์กำลังเย็นสบาย ❄️`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
-                else if (celsius < 0) ctx = { txt: `จุดเยือกแข็ง น้ำกลายเป็นน้ำแข็งแล้ว 🧊`, bg: 'bg-blue-950/40', textCol: 'text-blue-200' };
-            }
-
-            setVisualContext(ctx);
-        }, [inputValue, fromUnit, category]);
-
-        // 2. ฟังก์ชันคำนวณผลลัพธ์ที่ตัดการอัปเดต State (Visual Context) ออกไปแล้ว
         const calculateResult = () => {
           if (inputValue === '') return '';
-          const val = parseFloat(inputValue); 
-          if (isNaN(val)) return 'Invalid Input';
+          const val = parseFloat(inputValue); if (isNaN(val)) return 'Invalid Input';
           let resultNum = 0;
                     
           if (category === 'Temperature (อุณหภูมิ)') {
@@ -3689,639 +3557,65 @@
                 </button>
               </div>
             </div>
-            
-            {/* Visual Context Box */}
-            {visualContext && (
-                <div className={`mt-2 p-3 rounded-lg ${visualContext.bg} border border-[#1E3A5F]/50 text-center animate-fade-in shadow-inner z-10`}>
-                    <div className={`text-xs font-bold ${visualContext.textCol}`}>{visualContext.txt}</div>
+                      
+            {category === 'Temperature (อุณหภูมิ)' && (
+                <div className="text-[10px] text-slate-500 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50 shadow-inner">
+                   สูตร: K = °C + 273.15 | °F = (°C × 9/5) + 32
                 </div>
             )}
-                      
-            {/* แสดงสูตรการแปลงสำหรับทุกหมวดหมู่ */}
-            {category === 'Temperature (อุณหภูมิ)' ? (
-                <div className="text-[10px] text-slate-500 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50 shadow-inner z-10">
-                   สูตร: {
-                       (fromUnit === 'C' && toUnit === 'F') ? '°F = (°C × 9/5) + 32' :
-                       (fromUnit === 'F' && toUnit === 'C') ? '°C = (°F - 32) × 5/9' :
-                       (fromUnit === 'C' && toUnit === 'K') ? 'K = °C + 273.15' :
-                       (fromUnit === 'K' && toUnit === 'C') ? '°C = K - 273.15' :
-                       (fromUnit === 'F' && toUnit === 'K') ? 'K = (°F - 32) × 5/9 + 273.15' :
-                       (fromUnit === 'K' && toUnit === 'F') ? '°F = (K - 273.15) × 9/5 + 32' :
-                       'K = °C + 273.15 | °F = (°C × 9/5) + 32'
-                   }
-                </div>
-            ) : category === 'Custom (พิมพ์หน่วยเอง)' ? (
-                <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed z-10">
+            {category === 'Custom (พิมพ์หน่วยเอง)' && (
+                <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed">
                    💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br/>(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h, L, mL) <br/>ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
-                </div>
-            ) : (
-                <div className="text-[10px] text-slate-400 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-sky-900/50 shadow-inner z-10">
-                   <i className="fas fa-info-circle text-sky-400 mr-1"></i>
-                   สูตรแปลงหน่วย: 1 {fromUnit} = {
-                       (() => {
-                           const rate = CATEGORIES[category][toUnit] / CATEGORIES[category][fromUnit];
-                           return (rate >= 10000 || rate <= 0.0001) 
-                               ? rate.toExponential(4) 
-                               : rate.toLocaleString(undefined, { maximumFractionDigits: 6 });
-                       })()
-                   } {toUnit}
                 </div>
             )}
           </div>
         );
     };
 
-    const GradeCrisisManager = () => {
-        const [midtermFull, setMidtermFull] = useState(30);
-        const [midtermScore, setMidtermScore] = useState(15);
-        const [projectFull, setProjectFull] = useState(30);
-        const [projectScore, setProjectScore] = useState(25);
-        const [finalFull, setFinalFull] = useState(40);
-        
-        const [targetGrade, setTargetGrade] = useState(80); // A=80, B+=75, B=70, C+=65, C=60, D+=55, D=50
-
-        const currentScore = midtermScore + projectScore;
-        const totalFullSoFar = midtermFull + projectFull;
-        const needScore = targetGrade - currentScore;
-
-        let status = 'safe';
-        let msg = 'สบายๆ ชิลๆ';
-        let colorClass = 'text-emerald-400';
-        let bgClass = 'bg-emerald-950/30 border-emerald-500/50';
-
-        if (needScore > finalFull) {
-            status = 'impossible';
-            msg = 'ปาฏิหาริย์เท่านั้นที่ช่วยคุณได้ (ต้องการคะแนนมากกว่าคะแนนเต็ม)';
-            colorClass = 'text-red-500 font-bold animate-pulse';
-            bgClass = 'bg-red-950/50 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]';
-        } else if (needScore > finalFull * 0.85) {
-            status = 'danger';
-            msg = 'วิกฤตหนัก! ต้องอ่านหนังสือแบบไม่ได้นอน';
-            colorClass = 'text-red-400';
-            bgClass = 'bg-red-950/30 border-red-500/50';
-        } else if (needScore > finalFull * 0.6) {
-            status = 'warning';
-            msg = 'ต้องตั้งใจอ่านหนังสือแล้วนะ ประมาทไม่ได้';
-            colorClass = 'text-amber-400';
-            bgClass = 'bg-amber-950/30 border-amber-500/50';
-        } else if (needScore <= 0) {
-            status = 'passed';
-            msg = 'ถึงไม่ไปสอบก็ผ่านเป้าหมายแล้ว นอนตีพุงอยู่บ้านได้เลย!';
-            colorClass = 'text-sky-400 font-bold';
-            bgClass = 'bg-sky-950/30 border-sky-500/50';
-        }
-
-        const gaugeWidth = Math.max(0, Math.min(100, (needScore / finalFull) * 100));
-
-        return (
-            <div className="flex flex-col gap-6 py-4 w-full max-w-2xl mx-auto text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
-                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-edit"></i> ใส่คะแนนที่มีปัจจุบัน</div>
-                        
-                        <div className="flex items-center gap-3">
-                            <span className="w-20 text-slate-400 font-bold">มิดเทอม (Mid)</span>
-                            <input type="number" value={midtermScore} onChange={e=>setMidtermScore(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
-                            <span className="text-slate-500">/</span>
-                            <input type="number" value={midtermFull} onChange={e=>setMidtermFull(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="w-20 text-slate-400 font-bold">เก็บ/โปรเจกต์</span>
-                            <input type="number" value={projectScore} onChange={e=>setProjectScore(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
-                            <span className="text-slate-500">/</span>
-                            <input type="number" value={projectFull} onChange={e=>setProjectFull(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
-                        </div>
-                        
-                        <div className="pt-2 border-t border-[#1E3A5F] flex justify-between items-center bg-[#050811] p-3 rounded-xl mt-2">
-                            <span className="text-slate-300 font-bold">คะแนนเก็บรวมตอนนี้</span>
-                            <span className="text-xl font-mono font-bold text-white">{currentScore} <span className="text-[10px] text-slate-500">/ {totalFullSoFar}</span></span>
-                        </div>
-                    </div>
-
-                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col justify-between">
-                        <div>
-                            <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-4"><i className="fas fa-bullseye"></i> กำหนดเป้าหมาย</div>
-                            
-                            <div className="flex items-center gap-3 mb-4">
-                                <span className="text-slate-400 font-bold">เป้าหมายเกรดที่อยากได้:</span>
-                                <select value={targetGrade} onChange={e=>setTargetGrade(parseInt(e.target.value))} className="flex-1 inp bg-[#050811] font-bold text-amber-300 text-center">
-                                    <option value="80">A (80 คะแนน)</option>
-                                    <option value="75">B+ (75 คะแนน)</option>
-                                    <option value="70">B (70 คะแนน)</option>
-                                    <option value="65">C+ (65 คะแนน)</option>
-                                    <option value="60">C (60 คะแนน)</option>
-                                    <option value="55">D+ (55 คะแนน)</option>
-                                    <option value="50">D (50 คะแนน - แค่ผ่าน)</option>
-                                </select>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-slate-400 font-bold">คะแนนเต็มไฟนอล (Final):</span>
-                                <input type="number" value={finalFull} onChange={e=>setFinalFull(parseFloat(e.target.value)||0)} className="w-20 inp font-mono text-center" />
-                            </div>
-                        </div>
-                        <div className="text-[10px] text-slate-500 text-center mt-4">⚠️ ตรวจสอบให้แน่ใจว่าผลรวมคะแนนเต็ม 3 ช่อง = 100 พอดี</div>
-                    </div>
-                </div>
-
-                {/* Panic Result Box */}
-                <div className={`p-6 rounded-2xl border ${bgClass} shadow-2xl relative overflow-hidden transition-colors duration-500 text-center flex flex-col items-center justify-center min-h-[200px]`}>
-                    <div className="text-slate-300 font-bold mb-2">เพื่อให้ได้เกรดเป้าหมาย คุณต้องทำคะแนนสอบไฟนอลให้ได้:</div>
-                    
-                    <div className={`text-5xl md:text-6xl font-mono font-bold my-4 ${colorClass}`}>
-                        {needScore > 0 ? needScore : 0} <span className="text-xl sm:text-2xl text-slate-400 font-sans">/ {finalFull}</span>
-                    </div>
-                    
-                    <div className={`text-sm md:text-base font-bold mb-6 ${colorClass}`}>"{msg}"</div>
-
-                    {/* Panic Meter Gauge */}
-                    <div className="w-full max-w-sm">
-                        <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
-                            <span className="text-emerald-400">ชิลๆ</span>
-                            <span className="text-amber-400">เริ่มเครียด</span>
-                            <span className="text-red-400">วิกฤต</span>
-                        </div>
-                        <div className="h-3 w-full bg-[#050811] rounded-full overflow-hidden border border-slate-700/50">
-                            <div className={`h-full transition-all duration-700 ease-out ${status === 'impossible' ? 'bg-red-500' : status === 'danger' ? 'bg-red-400' : status === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${gaugeWidth}%` }}></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const FinancialReality = () => {
-        const [mode, setMode] = useState('loan'); // loan, invest
-        const [principal, setPrincipal] = useState(3000000); // 3 ล้านบาท
-        const [rate, setRate] = useState(3.5); // % ต่อปี
-        const [years, setYears] = useState(30);
-
-        // Calculate Home Loan (ลดต้นลดดอก)
-        const r = (rate / 100) / 12;
-        const n = years * 12;
-        const monthlyPay = (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-        const totalPaid = monthlyPay * n;
-        const totalInterest = totalPaid - principal;
-        const interestPct = (totalInterest / totalPaid) * 100;
-
-        // Calculate Compound Invest
-        const investTotal = principal * Math.pow(1 + (rate/100), years);
-        const investProfit = investTotal - principal;
-        const profitPct = (investProfit / investTotal) * 100;
-
-        return (
-            <div className="flex flex-col gap-6 py-4 w-full max-w-3xl mx-auto text-xs">
-                <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
-                    <button onClick={()=>setMode('loan')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode==='loan'?'bg-red-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-home mr-1"></i> ผ่อนบ้าน (ลดต้นลดดอก)</button>
-                    <button onClick={()=>setMode('invest')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode==='invest'?'bg-emerald-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-chart-line mr-1"></i> เงินลงทุน (ดอกเบี้ยทบต้น)</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
-                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-sliders-h"></i> กรอกข้อมูลตัวเลข</div>
-                        
-                        <div>
-                            <label className="text-slate-400 font-bold mb-1 block">{mode === 'loan' ? 'ยอดกู้ (เงินต้น) / บาท' : 'เงินต้นสำหรับลงทุน (บาท)'}</label>
-                            <input type="number" value={principal} onChange={e=>setPrincipal(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-lg py-2" />
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="flex-1">
-                                <label className="text-slate-400 font-bold mb-1 block">ดอกเบี้ยต่อปี (%)</label>
-                                <input type="number" step="0.1" value={rate} onChange={e=>setRate(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-center py-2" />
-                            </div>
-                            <div className="flex-1">
-                                <label className="text-slate-400 font-bold mb-1 block">ระยะเวลา (ปี)</label>
-                                <input type="number" min="1" value={years} onChange={e=>setYears(parseInt(e.target.value)||0)} className="w-full inp font-mono text-center py-2" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className={`p-6 rounded-2xl border shadow-2xl flex flex-col justify-center min-h-[220px] ${mode === 'loan' ? 'bg-gradient-to-br from-[#1a0b0b] to-[#050811] border-red-900/50' : 'bg-gradient-to-br from-[#0b1a11] to-[#050811] border-emerald-900/50'}`}>
-                        {mode === 'loan' ? (
-                            <>
-                                <div className="text-red-400 font-bold text-sm uppercase tracking-widest text-center mb-4">ความจริงของการผ่อนบ้าน</div>
-                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
-                                    <span className="text-slate-400">เงินต้นทั้งหมด:</span>
-                                    <span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
-                                    <span className="text-slate-400">ดอกเบี้ยที่แบงก์ได้:</span>
-                                    <span className="font-mono text-red-400 text-lg font-bold">{totalInterest.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-end pb-2 mb-4 bg-red-950/30 p-2 rounded">
-                                    <span className="text-white font-bold">รวมที่ต้องจ่ายจริง:</span>
-                                    <span className="font-mono text-white text-2xl font-bold">{totalPaid.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
-                                </div>
-                                <div className="text-center font-bold text-amber-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
-                                    ผ่อนเดือนละ: {monthlyPay.toLocaleString(undefined, {maximumFractionDigits:0})} ฿ ตลอด {years} ปี
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-emerald-400 font-bold text-sm uppercase tracking-widest text-center mb-4">พลังของดอกเบี้ยทบต้น</div>
-                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
-                                    <span className="text-slate-400">เงินต้นทั้งหมด:</span>
-                                    <span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
-                                    <span className="text-slate-400">ผลกำไรที่งอกเงย:</span>
-                                    <span className="font-mono text-emerald-400 text-lg font-bold">+{investProfit.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
-                                </div>
-                                <div className="flex justify-between items-end pb-2 mb-4 bg-emerald-950/30 p-2 rounded">
-                                    <span className="text-white font-bold">รวมเงินสุทธิในปีที่ {years}:</span>
-                                    <span className="font-mono text-white text-2xl font-bold">{investTotal.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
-                                </div>
-                                <div className="text-center font-bold text-emerald-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
-                                    กำไรโตขึ้นจากเงินต้นถึง {(profitPct * (investTotal/principal)).toLocaleString(undefined, {maximumFractionDigits:0})}%
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Graph Area */}
-                <div className="bg-[#050811] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg mt-2">
-                    <div className="text-center text-slate-400 font-bold mb-4 text-[10px]">กราฟแสดงสัดส่วน {mode === 'loan' ? '(เงินต้น vs ดอกเบี้ย)' : '(เงินต้น vs กำไร)'}</div>
-                    
-                    <div className="w-full h-8 flex rounded-xl overflow-hidden shadow-inner font-mono text-[10px] font-bold text-[#050811] relative">
-                        {mode === 'loan' ? (
-                            <>
-                                <div className="bg-sky-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - interestPct}%` }}>
-                                    {(100 - interestPct) > 10 ? 'เงินต้น ' + (100 - interestPct).toFixed(1) + '%' : ''}
-                                </div>
-                                <div className="bg-red-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${interestPct}%` }}>
-                                    {interestPct > 10 ? 'ดอกเบี้ยแบงก์ ' + interestPct.toFixed(1) + '%' : ''}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="bg-slate-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - profitPct}%` }}>
-                                    {(100 - profitPct) > 10 ? 'เงินต้น ' + (100 - profitPct).toFixed(1) + '%' : ''}
-                                </div>
-                                <div className="bg-emerald-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${profitPct}%` }}>
-                                    {profitPct > 10 ? 'กำไร ' + profitPct.toFixed(1) + '%' : ''}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    {mode === 'loan' && interestPct > 40 && (
-                        <div className="text-center mt-3 text-[10px] text-red-300 font-bold">⚠️ จ่ายดอกเบี้ยเยอะมาก! ควรวางแผนรีไฟแนนซ์ (Refinance) ทุก 3 ปีเพื่อลดดอกเบี้ยครับ</div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    const GachaSimulator = () => {
-        const [rate, setRate] = useState(1.0); // % โอกาสออกหน้าตู้
-        const [pulls, setPulls] = useState(10); // จำนวนครั้งที่สุ่ม
-        
-        const calcChance = () => {
-            if(rate <= 0 || pulls <= 0) return 0;
-            const failRate = 1 - (rate / 100);
-            const totalFailChance = Math.pow(failRate, pulls);
-            return (1 - totalFailChance) * 100;
-        };
-
-        const resultChance = calcChance();
-        
-        // กราฟิกสุ่มลูกแก้ว (Visuals)
-        const [balls, setBalls] = useState([]);
-        const triggerAnim = () => {
-            setBalls([]); // reset
-            setTimeout(() => {
-                const newBalls = Array.from({length: Math.min(pulls, 50)}).map((_, i) => ({
-                    id: i,
-                    isWin: Math.random() * 100 < rate,
-                    delay: Math.random() * 1.5,
-                    left: Math.random() * 80 + 10
-                }));
-                setBalls(newBalls);
-            }, 100);
-        };
-
-        return (
-            <div className="flex flex-col md:flex-row gap-6 py-4 w-full max-w-4xl mx-auto text-xs items-center">
-                
-                <div className="w-full md:w-1/2 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
-                    <div className="text-purple-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-dice"></i> Gacha Rate Reality Check</div>
-                    
-                    <div>
-                        <label className="text-slate-400 font-bold mb-1 block">เรตออกหน้าตู้ (Drop Rate %)</label>
-                        <div className="flex items-center gap-2">
-                            <input type="number" step="0.01" min="0" max="100" value={rate} onChange={e=>setRate(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-lg" />
-                            <span className="text-xl">%</span>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-slate-400 font-bold mb-1 block">จำนวนครั้งที่กดสุ่ม (Pulls/Rolls)</label>
-                        <div className="flex items-center gap-2">
-                            <input type="number" min="1" max="1000" value={pulls} onChange={e=>setPulls(parseInt(e.target.value)||0)} className="w-full inp font-mono text-lg" />
-                            <span className="text-xl whitespace-nowrap">ครั้ง</span>
-                        </div>
-                    </div>
-                    
-                    <button onClick={triggerAnim} className="w-full btn-b py-3 font-bold bg-purple-900/40 border-purple-500/50 hover:bg-purple-600 hover:text-white transition-colors text-sm shadow">
-                        🎰 กดสุ่มตู้กาชาจำลอง
-                    </button>
-                    
-                    <div className="text-[10px] text-slate-500 bg-[#050811] p-3 rounded-lg border border-[#1E3A5F] mt-4 leading-relaxed">
-                        <span className="font-bold text-sky-400">💡 ความจริงของความน่าจะเป็น (Binomial Distribution):</span><br/>
-                        ต่อให้เรตออกคือ 1% การสุ่ม 100 ครั้ง โอกาสที่จะได้ก็ไม่ใช่ 100% แต่เป็นแค่ 63.4% เท่านั้น เพราะแต่ละครั้งของการสุ่ม (Independent Events) มันคือการคำนวณใหม่เสมอ เครื่องมือนี้คำนวณจากโอกาสที่ "คุณจะไม่ออกของเลยสักครั้งเดียว" มาหักลบออก
-                    </div>
-                </div>
-
-                <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#12071a] to-[#050811] rounded-2xl border border-purple-900/50 shadow-2xl relative min-h-[350px]">
-                    <div className="text-slate-400 font-bold text-sm uppercase tracking-widest mb-4 z-10 text-center">โอกาสที่คุณจะได้ของชิ้นนี้<br/>อย่างน้อย 1 ชิ้น คือ...</div>
-                    
-                    <div className="relative z-10 text-5xl sm:text-6xl font-mono font-bold my-2 text-purple-400 drop-shadow-[0_0_20px_rgba(168,85,247,0.5)] bg-[#050811]/50 px-4 py-2 rounded-2xl backdrop-blur-sm border border-purple-900/30">
-                        {resultChance.toFixed(2)}<span className="text-3xl text-slate-400">%</span>
-                    </div>
-
-                    <div className={`mt-6 text-sm font-bold z-10 px-4 py-1.5 rounded-full border ${resultChance > 90 ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900' : resultChance > 50 ? 'bg-amber-950/50 text-amber-400 border-amber-900' : 'bg-red-950/50 text-red-400 border-red-900'}`}>
-                        {resultChance > 90 ? 'ออกแน่นอน (เกือบการันตี) 🎉' : resultChance > 50 ? 'มีโอกาสได้สูง ลุยเลย! 🤔' : 'เตรียมตัวเกลือได้เลย 🧂'}
-                    </div>
-
-                    {/* อนิเมชันจำลองการดรอปลูกแก้วกาชา */}
-                    <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0 opacity-50">
-                        {balls.map((b) => (
-                            <div key={b.id} 
-                                 className={`absolute top-[-30px] rounded-full shadow-[0_0_15px_currentColor]`}
-                                 style={{ 
-                                     left: `${b.left}%`, 
-                                     width: b.isWin ? '24px' : '12px',
-                                     height: b.isWin ? '24px' : '12px',
-                                     backgroundColor: b.isWin ? '#eab308' : '#64748b',
-                                     color: b.isWin ? '#eab308' : '#64748b',
-                                     animation: `fallDown 2s ease-in forwards ${b.delay}s`,
-                                     zIndex: b.isWin ? 20 : 10
-                                 }}>
-                            </div>
-                        ))}
-                    </div>
-                    <style dangerouslySetInnerHTML={{__html: `
-                        @keyframes fallDown {
-                            0% { transform: translateY(-30px) rotate(0deg); opacity: 1; }
-                            80% { opacity: 1; }
-                            100% { transform: translateY(400px) rotate(360deg); opacity: 0; }
-                        }
-                    `}} />
-                </div>
-            </div>
-        );
-    };
-
-    const InteractiveProjectile = () => {
-        const [v0, setV0] = useState(50); // m/s
-        const [angle, setAngle] = useState(45); // degree
-        const [isFlying, setIsFlying] = useState(false);
-
-        const g = 9.81;
-        const rad = angle * (Math.PI / 180);
-        
-        // Calculate physics
-        const tTotal = (2 * v0 * Math.sin(rad)) / g;
-        const sMax = (v0 * v0 * Math.sin(2 * rad)) / g;
-        const hMax = (v0 * v0 * Math.sin(rad) * Math.sin(rad)) / (2 * g);
-
-        // Drawing properties
-        const canvasRef = useRef(null);
-        const animRef = useRef(null);
-
-        const drawTrajectory = () => {
-            if(v0 <= 0 || angle <= 0 || angle >= 90) return;
-            const canvas = canvasRef.current;
-            if(!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width; const h = canvas.height;
-            
-            ctx.clearRect(0, 0, w, h);
-            
-            // Draw Grid
-            ctx.strokeStyle = '#1E3A5F'; ctx.lineWidth = 1;
-            for(let i=0; i<w; i+=40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
-            for(let i=0; i<h; i+=40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
-            
-            // Ground
-            ctx.strokeStyle = '#34D399'; ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(0, h-5); ctx.lineTo(w, h-5); ctx.stroke();
-
-            // Transform Scale (Fitting inside canvas)
-            const scaleX = (w - 20) / Math.max(10, sMax);
-            const scaleY = (h - 20) / Math.max(10, hMax);
-            const scale = Math.min(scaleX, scaleY);
-
-            // Animate
-            let t = 0;
-            setIsFlying(true);
-            
-            const animate = () => {
-                if (t > tTotal) { setIsFlying(false); return; }
-                
-                const x = (v0 * Math.cos(rad) * t) * scale + 10;
-                const y = (h - 5) - ((v0 * Math.sin(rad) * t - 0.5 * g * t * t) * scale);
-                
-                // Draw dot trail
-                ctx.fillStyle = '#38BDF8';
-                ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI*2); ctx.fill();
-                
-                t += tTotal / 100; // 100 frames
-                animRef.current = requestAnimationFrame(animate);
-            };
-            
-            if(animRef.current) cancelAnimationFrame(animRef.current);
-            animate();
-        };
-
-        useEffect(() => {
-            return () => { if(animRef.current) cancelAnimationFrame(animRef.current); };
-        }, []);
-
-        return (
-            <div className="flex flex-col gap-5 py-4 w-full max-w-3xl mx-auto text-xs">
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="col-span-1 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
-                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-rocket"></i> พารามิเตอร์เริ่มต้น</div>
-                        
-                        <div>
-                            <label className="text-slate-400 font-bold mb-1 block">ความเร็วต้น (v₀) - m/s</label>
-                            <input type="number" min="1" max="500" value={v0} onChange={e=>setV0(parseFloat(e.target.value)||0)} className="w-full inp font-mono" />
-                        </div>
-                        <div>
-                            <label className="text-slate-400 font-bold mb-1 block">มุมยิง (θ) - องศา</label>
-                            <input type="range" min="1" max="89" value={angle} onChange={e=>setAngle(parseInt(e.target.value))} className="w-full accent-sky-500 mt-2" />
-                            <div className="text-center font-bold text-sky-300 mt-1">{angle}°</div>
-                        </div>
-                        
-                        <button onClick={drawTrajectory} disabled={isFlying} className="w-full btn-b py-2.5 font-bold shadow-lg mt-2 border-sky-500/50 hover:bg-sky-600 disabled:opacity-50">
-                            {isFlying ? '🚀 กำลังลอย...' : '🚀 ยิงจรวดจำลอง'}
-                        </button>
-                    </div>
-
-                    <div className="col-span-2 bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F] shadow-inner relative flex flex-col justify-between">
-                        <canvas ref={canvasRef} width="500" height="220" className="w-full h-48 bg-[#0a101f] border border-slate-700 rounded-xl shadow-inner mb-4"></canvas>
-                        
-                        <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
-                                <div className="text-[9px] text-slate-400 font-sans font-bold">ระยะไกลสุด (Sx)</div>
-                                <div className="text-base sm:text-lg text-emerald-400 font-bold mt-0.5">{sMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div>
-                            </div>
-                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
-                                <div className="text-[9px] text-slate-400 font-sans font-bold">จุดสูงสุด (Sy)</div>
-                                <div className="text-base sm:text-lg text-sky-400 font-bold mt-0.5">{hMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div>
-                            </div>
-                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
-                                <div className="text-[9px] text-slate-400 font-sans font-bold">เวลาตกพื้น (t)</div>
-                                <div className="text-base sm:text-lg text-amber-400 font-bold mt-0.5">{tTotal.toFixed(2)} <span className="text-[10px] font-sans">s</span></div>
-                            </div>
-                        </div>
-                        <div className="absolute top-6 left-6 text-[10px] text-slate-500 font-bold">g = 9.81 m/s² (ไม่มีแรงต้านอากาศ)</div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const MathSymbolBuilder = () => {
-        const [expression, setExpression] = useState('');
-        
-        // ชุดปุ่มคำสั่ง LaTeX ที่ใช้บ่อย
-        const btnGroups = {
-            'เศษส่วน & รูท': [
-                { l: 'a/b', v: '\\frac{x}{y}' }, 
-                { l: '√x', v: '\\sqrt{x}' }, 
-                { l: 'ⁿ√x', v: '\\sqrt[n]{x}' }
-            ],
-            'เลขยกกำลัง & ห้อย': [
-                { l: 'x²', v: 'x^2' }, 
-                { l: 'xⁿ', v: 'x^n' }, 
-                { l: 'xᵢ', v: 'x_i' }
-            ],
-            'แคลคูลัส': [
-                { l: '∫', v: '\\int' }, 
-                { l: '∫ limits', v: '\\int_{a}^{b}' }, 
-                { l: 'lim', v: '\\lim_{x \\to \\infty}' }, 
-                { l: '∑', v: '\\sum_{i=1}^{n}' }
-            ],
-            'กรีก & สัญลักษณ์': [
-                { l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, 
-                { l: 'θ', v: '\\theta' }, { l: 'π', v: '\\pi' }, 
-                { l: '±', v: '\\pm' }, { l: '∞', v: '\\infty' }, 
-                { l: '≈', v: '\\approx' }, { l: '≠', v: '\\neq' }
-            ]
-        };
-
-        const insertSymbol = (val) => {
-            setExpression(prev => prev + ' ' + val + ' ');
-        };
-
-        // ใช้ API CodeCogs สำหรับเรนเดอร์ภาพ LaTeX แบบเรียลไทม์
-        const previewUrl = expression.trim() 
-            ? `https://latex.codecogs.com/svg.image?\\color{white}\\large ${encodeURIComponent(expression)}` 
-            : null;
-
-        return (
-            <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
-                
-                <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col gap-4">
-                    <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
-                        <span><i className="fas fa-square-root-alt"></i> เครื่องมือสร้างสมการ (LaTeX Builder)</span>
-                        {previewUrl && (
-                            <button onClick={() => { navigator.clipboard.writeText(expression); alert('คัดลอกโค้ด LaTeX เรียบร้อยแล้ว'); }} className="btn-d py-1 px-3 text-[10px]">
-                                <i className="fas fa-copy"></i> ก๊อปปี้โค้ด LaTeX
-                            </button>
-                        )}
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pb-2">
-                        {Object.entries(btnGroups).map(([group, btns]) => (
-                            <div key={group} className="bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
-                                <div className="text-[9px] text-slate-400 font-bold mb-1.5 text-center">{group}</div>
-                                <div className="flex flex-wrap gap-1 justify-center">
-                                    {btns.map((btn, i) => (
-                                        <button key={i} onClick={() => insertSymbol(btn.v)} className="px-2 py-1 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded border border-slate-600 transition-colors font-mono text-[10px] shadow-sm">
-                                            {btn.l}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div>
-                        <label className="text-slate-400 font-bold mb-1 block">โค้ดสมการ (พิมพ์แก้ที่นี่ได้เลย)</label>
-                        <textarea 
-                            rows="3" 
-                            value={expression} 
-                            onChange={(e) => setExpression(e.target.value)} 
-                            placeholder="พิมพ์สมการ หรือคลิกปุ่มด้านบนเพื่อแทรก..." 
-                            className="w-full inp font-mono text-sky-200 bg-[#050811] resize-none"
-                        ></textarea>
-                    </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-[#050811] to-[#0a101f] p-6 rounded-2xl border border-dashed border-sky-500/50 shadow-2xl flex flex-col items-center justify-center min-h-[150px] relative">
-                    <div className="absolute top-3 left-4 text-[10px] text-sky-400 font-bold tracking-widest uppercase">Live Preview (พรีวิวภาพสมการ)</div>
-                    
-                    {previewUrl ? (
-                        <div className="mt-4 p-4">
-                            <img src={previewUrl} alt="Math Equation" className="max-w-full h-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] filter drop-shadow" />
-                        </div>
-                    ) : (
-                        <div className="text-slate-500 mt-4"><i className="fas fa-laptop-code text-2xl mb-2 block text-center opacity-50"></i>ระบบจะเรนเดอร์ภาพสมการที่นี่</div>
-                    )}
-                    
-                    <div className="absolute bottom-3 right-4 text-[9px] text-slate-500">คุณสามารถคลิกขวาที่ภาพแล้วกด Copy Image ไปวางใน Word/PowerPoint ได้เลย</div>
-                </div>
-            </div>
-        );
-    };
-
-    
     const MatrixSolver = () => {
-        const [mainMode, setMainMode] = useState('equation'); // 'equation', 'matrix_ops'
+        const [mode, setMode] = useState('2x2'); // '2x2', '3x3', 'quad'
+        const [inputFmt, setInputFmt] = useState('eq'); // 'eq', 'matrix'
         
-        // --- States for Equation Solver ---
-        const [eqMode, setEqMode] = useState('2x2'); // '2x2', '3x3', 'quad'
-        const [mat, setMat] = useState([['', '', '', ''], ['', '', '', ''], ['', '', '', '']]);
+        // เมทริกซ์เก็บค่า 3 แถว 4 คอลัมน์ (เผื่อ 3x3)
+        const [mat, setMat] = useState([
+            ['', '', '', ''],
+            ['', '', '', ''],
+            ['', '', '', '']
+        ]);
+        
+        // สำหรับสมการกำลังสอง ax^2 + bx + c = 0
         const [quad, setQuad] = useState({a: '', b: '', c: ''});
-        const [eqResult, setEqResult] = useState(null);
-        const [showSteps, setShowSteps] = useState(false);
+        const [result, setResult] = useState(null);
 
-        // --- States for Matrix Operations ---
-        const [matSize, setMatSize] = useState(2);
-        const [matA, setMatA] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
-        const [matB, setMatB] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
-        const [matOp, setMatOp] = useState('add');
-        const [opResult, setOpResult] = useState(null);
-
-        // --- Logic: Equation Solver ---
         const handleMat = (r, c, val) => {
             const newMat = [...mat];
             newMat[r][c] = val;
             setMat(newMat);
-            setEqResult(null);
+            setResult(null);
         };
 
         const solve2x2 = () => {
             const a1=parseFloat(mat[0][0]), b1=parseFloat(mat[0][1]), c1=parseFloat(mat[0][2]);
             const a2=parseFloat(mat[1][0]), b2=parseFloat(mat[1][1]), c2=parseFloat(mat[1][2]);
-            if([a1,b1,c1,a2,b2,c2].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if([a1,b1,c1,a2,b2,c2].some(isNaN)) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
 
             const det = a1*b2 - a2*b1;
             const detX = c1*b2 - c2*b1;
             const detY = a1*c2 - a2*c1;
 
             if (det === 0) {
-                if (detX === 0 && detY === 0) return setEqResult({ err: 'สมการมีคำตอบนับไม่ถ้วน (เส้นทับกัน)', det: 0 });
-                return setEqResult({ err: 'สมการไม่มีคำตอบ (เส้นขนานกัน)', det: 0 });
+                if (detX === 0 && detY === 0) return setResult({ err: 'สมการมีคำตอบนับไม่ถ้วน (เส้นทับกัน)', det: 0 });
+                return setResult({ err: 'สมการไม่มีคำตอบ (เส้นขนานกัน)', det: 0 });
             }
-            setEqResult({ type: '2x2', x: detX/det, y: detY/det, det, detX, detY, eq: {a1,b1,c1,a2,b2,c2} });
+
+            const x = detX / det;
+            const y = detY / det;
+            setResult({ type: '2x2', x, y, det, detX, detY, eq: {a1,b1,c1,a2,b2,c2} });
         };
 
         const solve3x3 = () => {
             const m = mat.map(row => row.map(v => parseFloat(v)));
-            if(m.some(row => row.some(isNaN))) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if(m.some(row => row.some(isNaN))) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
 
             const getDet3 = (a,b,c, d,e,f, g,h,i) => a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
             
@@ -4330,227 +3624,235 @@
             const detY = getDet3(m[0][0], m[0][3], m[0][2], m[1][0], m[1][3], m[1][2], m[2][0], m[2][3], m[2][2]);
             const detZ = getDet3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3]);
 
-            if (det === 0) return setEqResult({ err: 'หาค่าไม่ได้ (Determinant = 0)', det: 0 });
-            setEqResult({ type: '3x3', x: detX/det, y: detY/det, z: detZ/det, det, detX, detY, detZ });
+            if (det === 0) return setResult({ err: 'หาค่าไม่ได้ (Determinant = 0)', det: 0 });
+
+            setResult({ type: '3x3', x: detX/det, y: detY/det, z: detZ/det, det, detX, detY, detZ });
         };
 
         const solveQuad = () => {
             const a=parseFloat(quad.a), b=parseFloat(quad.b), c=parseFloat(quad.c);
-            if([a,b,c].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
-            if(a === 0) return setEqResult({ err: 'ค่า a ต้องไม่เป็น 0 (ไม่ใช่สมการกำลังสอง)' });
+            if([a,b,c].some(isNaN)) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if(a === 0) return setResult({ err: 'ค่า a ต้องไม่เป็น 0 (ไม่ใช่สมการกำลังสอง)' });
 
             const D = b*b - 4*a*c;
             if (D > 0) {
-                setEqResult({ type: 'quad', roots: 2, x1: (-b + Math.sqrt(D))/(2*a), x2: (-b - Math.sqrt(D))/(2*a), D, a, b, c });
+                const x1 = (-b + Math.sqrt(D)) / (2*a);
+                const x2 = (-b - Math.sqrt(D)) / (2*a);
+                setResult({ type: 'quad', roots: 2, x1, x2, D, a, b, c });
             } else if (D === 0) {
-                setEqResult({ type: 'quad', roots: 1, x: -b/(2*a), D, a, b, c });
+                const x = -b / (2*a);
+                setResult({ type: 'quad', roots: 1, x, D, a, b, c });
             } else {
-                setEqResult({ type: 'quad', roots: 0, real: -b/(2*a), img: Math.sqrt(-D)/(2*Math.abs(a)), D, a, b, c, isComplex: true });
+                // แก้ไขกรณี D < 0 ให้รองรับจำนวนจินตภาพ
+                const real = (-b / (2*a));
+                const img = (Math.sqrt(-D) / (2*Math.abs(a))); 
+                setResult({ type: 'quad', roots: 0, real, img, D, a, b, c, isComplex: true });
             }
         };
 
-        const handleSolveEq = () => {
-            setShowSteps(false);
-            if(eqMode === '2x2') solve2x2();
-            else if(eqMode === '3x3') solve3x3();
+        const handleSolve = () => {
+            if(mode === '2x2') solve2x2();
+            else if(mode === '3x3') solve3x3();
             else solveQuad();
         };
 
-        // --- Logic: Matrix Operations ---
-        const handleMatOpUpdate = (matType, r, c, val) => {
-            if (matType === 'A') {
-                const newA = [...matA]; newA[r][c] = val; setMatA(newA);
-            } else {
-                const newB = [...matB]; newB[r][c] = val; setMatB(newB);
-            }
-            setOpResult(null);
-        };
+        // ฟังก์ชันวาดกราฟสำหรับ 2x2
+        const renderGraph2D = (eq) => {
+            const getPts = (a,b,c) => {
+                if(b===0) return {x1:c/a, y1:-20, x2:c/a, y2:20};
+                return {x1:-20, y1:(c-a*-20)/b, x2:20, y2:(c-a*20)/b};
+            };
+            const l1 = getPts(eq.a1, eq.b1, eq.c1);
+            const l2 = getPts(eq.a2, eq.b2, eq.c2);
+            
+            // Transform (scale & translate) สำหรับ SVG
+            const scale = 5;
+            const tf = (x, y) => ({ cx: 150 + x*scale, cy: 100 - y*scale });
+            const p1A = tf(l1.x1, l1.y1); const p1B = tf(l1.x2, l1.y2);
+            const p2A = tf(l2.x1, l2.y1); const p2B = tf(l2.x2, l2.y2);
 
-        const calculateMatrixOp = () => {
-            const A = matA.slice(0, matSize).map(r => r.slice(0, matSize).map(v => parseFloat(v)||0));
-            const B = matB.slice(0, matSize).map(r => r.slice(0, matSize).map(v => parseFloat(v)||0));
-            const res = Array(matSize).fill(0).map(() => Array(matSize).fill(0));
-
-            if (matOp === 'add') {
-                for(let i=0; i<matSize; i++) for(let j=0; j<matSize; j++) res[i][j] = A[i][j] + B[i][j];
-            } else if (matOp === 'sub') {
-                for(let i=0; i<matSize; i++) for(let j=0; j<matSize; j++) res[i][j] = A[i][j] - B[i][j];
-            } else if (matOp === 'mul') {
-                for(let i=0; i<matSize; i++) {
-                    for(let j=0; j<matSize; j++) {
-                        for(let k=0; k<matSize; k++) res[i][j] += A[i][k] * B[k][j];
-                    }
-                }
-            }
-            setOpResult(res);
+            return (
+                <div className="w-full h-48 bg-[#0a101f] border border-slate-700 rounded-lg relative overflow-hidden mt-4 shadow-inner">
+                    <div className="absolute top-2 left-2 text-[9px] font-bold text-slate-500">2D Intersection Graph</div>
+                    <svg viewBox="0 0 300 200" className="w-full h-full">
+                        {/* Grid */}
+                        <line x1="0" y1="100" x2="300" y2="100" stroke="#334155" strokeWidth="1" />
+                        <line x1="150" y1="0" x2="150" y2="200" stroke="#334155" strokeWidth="1" />
+                        
+                        {/* Lines */}
+                        <line x1={p1A.cx} y1={p1A.cy} x2={p1B.cx} y2={p1B.cy} stroke="#38BDF8" strokeWidth="2" />
+                        <line x1={p2A.cx} y1={p2A.cy} x2={p2B.cx} y2={p2B.cy} stroke="#F472B6" strokeWidth="2" />
+                        
+                        {/* Intersection Point */}
+                        {result.x !== undefined && (
+                            <circle cx={150 + result.x*scale} cy={100 - result.y*scale} r="4" fill="#FBBF24" />
+                        )}
+                    </svg>
+                </div>
+            );
         };
 
         return (
-          <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto">
+          <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
             
-            {/* Top Tabs */}
-            <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
-                <button onClick={()=>setMainMode('equation')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode==='equation'?'bg-sky-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-equals mr-1"></i> Equation Solver</button>
-                <button onClick={()=>setMainMode('matrix_ops')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode==='matrix_ops'?'bg-fuchsia-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-border-all mr-1"></i> Matrix Operations</button>
+            <div className="bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F] flex gap-1">
+                <button onClick={()=>{setMode('2x2'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='2x2'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>2 Variables</button>
+                <button onClick={()=>{setMode('3x3'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='3x3'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>3 Variables</button>
+                <button onClick={()=>{setMode('quad'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='quad'?'bg-amber-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>Quadratic</button>
             </div>
 
-            {mainMode === 'equation' && (
-                <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg">
-                    <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 mb-6 max-w-sm mx-auto">
-                        <button onClick={()=>{setEqMode('2x2'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='2x2'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>2 Variables</button>
-                        <button onClick={()=>{setEqMode('3x3'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='3x3'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>3 Variables</button>
-                        <button onClick={()=>{setEqMode('quad'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='quad'?'bg-amber-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>Quadratic</button>
+            <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg">
+                {(mode === '2x2' || mode === '3x3') && (
+                    <div className="flex justify-end mb-4">
+                        <div className="bg-[#0B1325] rounded border border-[#1E3A5F] flex text-[10px] overflow-hidden">
+                            <button onClick={()=>setInputFmt('eq')} className={`px-3 py-1 font-bold ${inputFmt==='eq'?'bg-white text-black':'text-slate-400 hover:text-white'}`}>รูปแบบสมการ</button>
+                            <button onClick={()=>setInputFmt('matrix')} className={`px-3 py-1 font-bold ${inputFmt==='matrix'?'bg-white text-black':'text-slate-400 hover:text-white'}`}>รูปแบบ Matrix</button>
+                        </div>
                     </div>
+                )}
 
-                    <div className="flex flex-col gap-3 items-center justify-center min-h-[120px]">
-                        {eqMode === '2x2' && (
-                            <div className="space-y-3 font-mono text-sm sm:text-base text-slate-300 w-full max-w-sm">
-                                <div className="flex items-center gap-2"><input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-16 text-center" placeholder="a1" /> <span>X +</span><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-16 text-center" placeholder="b1" /> <span>Y =</span><input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c1" /></div>
-                                <div className="flex items-center gap-2"><input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-16 text-center" placeholder="a2" /> <span>X +</span><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-16 text-center" placeholder="b2" /> <span>Y =</span><input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c2" /></div>
+                {/* --- INPUT FORMS --- */}
+                <div className="flex flex-col gap-3 items-center justify-center min-h-[120px]">
+                    {mode === '2x2' && inputFmt === 'eq' && (
+                        <div className="space-y-3 font-mono text-sm sm:text-base text-slate-300 w-full max-w-sm">
+                            <div className="flex items-center gap-2"><input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-16 text-center" placeholder="a1" /> <span>X +</span><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-16 text-center" placeholder="b1" /> <span>Y =</span><input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-20 text-center text-sky-200" placeholder="c1" /></div>
+                            <div className="flex items-center gap-2"><input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-16 text-center" placeholder="a2" /> <span>X +</span><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-16 text-center" placeholder="b2" /> <span>Y =</span><input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-20 text-center text-sky-200" placeholder="c2" /></div>
+                        </div>
+                    )}
+
+                    {mode === '2x2' && inputFmt === 'matrix' && (
+                        <div className="flex items-center gap-4 font-mono text-sm">
+                            <div className="border-l-2 border-r-2 border-slate-500 rounded-[8px] p-2 grid grid-cols-2 gap-2">
+                                <input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-14 text-center" /><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-14 text-center" />
+                                <input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-14 text-center" /><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-14 text-center" />
                             </div>
-                        )}
-                        {eqMode === '3x3' && (
-                            <div className="space-y-3 font-mono text-xs sm:text-sm text-slate-300 w-full max-w-md">
+                            <div className="text-xl">×</div>
+                            <div className="border-l-2 border-r-2 border-sky-600 rounded-[8px] p-2 flex flex-col gap-2 bg-sky-950/20 text-sky-300 font-bold"><div>X</div><div>Y</div></div>
+                            <div className="text-xl">=</div>
+                            <div className="border-l-2 border-r-2 border-emerald-600 rounded-[8px] p-2 flex flex-col gap-2">
+                                <input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-16 text-center text-emerald-300 border-emerald-900" />
+                                <input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-16 text-center text-emerald-300 border-emerald-900" />
+                            </div>
+                        </div>
+                    )}
+
+                    {mode === '3x3' && inputFmt === 'eq' && (
+                        <div className="space-y-3 font-mono text-xs sm:text-sm text-slate-300 w-full max-w-md">
+                            {[0,1,2].map(r => (
+                                <div key={r} className="flex items-center justify-center gap-1.5 w-full">
+                                    <input type="number" value={mat[r][0]} onChange={e=>handleMat(r,0,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="a" /> <span>X +</span>
+                                    <input type="number" value={mat[r][1]} onChange={e=>handleMat(r,1,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="b" /> <span>Y +</span>
+                                    <input type="number" value={mat[r][2]} onChange={e=>handleMat(r,2,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="c" /> <span>Z =</span>
+                                    <input type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-16 sm:w-20 text-center text-sky-200" placeholder="d" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {mode === '3x3' && inputFmt === 'matrix' && (
+                        <div className="flex items-center justify-center gap-2 sm:gap-4 font-mono text-xs sm:text-sm overflow-x-auto w-full no-scrollbar">
+                            <div className="border-l-2 border-r-2 border-slate-500 rounded-[8px] p-2 grid grid-cols-3 gap-1 sm:gap-2">
+                                {[0,1,2].map(r => [0,1,2].map(c => (
+                                    <input key={`${r}${c}`} type="number" value={mat[r][c]} onChange={e=>handleMat(r,c,e.target.value)} className="inp w-12 sm:w-14 text-center px-1" />
+                                )))}
+                            </div>
+                            <div className="text-lg sm:text-xl shrink-0">×</div>
+                            <div className="border-l-2 border-r-2 border-sky-600 rounded-[8px] p-2 flex flex-col gap-1 sm:gap-2 bg-sky-950/20 text-sky-300 font-bold shrink-0"><div className="h-7 sm:h-[34px] flex items-center">X</div><div className="h-7 sm:h-[34px] flex items-center">Y</div><div className="h-7 sm:h-[34px] flex items-center">Z</div></div>
+                            <div className="text-lg sm:text-xl shrink-0">=</div>
+                            <div className="border-l-2 border-r-2 border-emerald-600 rounded-[8px] p-2 flex flex-col gap-1 sm:gap-2 shrink-0">
                                 {[0,1,2].map(r => (
-                                    <div key={r} className="flex items-center justify-center gap-1.5 w-full">
-                                        <input type="number" value={mat[r][0]} onChange={e=>handleMat(r,0,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="a" /> <span>X +</span>
-                                        <input type="number" value={mat[r][1]} onChange={e=>handleMat(r,1,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="b" /> <span>Y +</span>
-                                        <input type="number" value={mat[r][2]} onChange={e=>handleMat(r,2,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="c" /> <span>Z =</span>
-                                        <input type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-16 sm:w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="d" />
-                                    </div>
+                                    <input key={r} type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-14 sm:w-16 text-center text-emerald-300 border-emerald-900 px-1" />
                                 ))}
                             </div>
-                        )}
-                        {eqMode === 'quad' && (
-                            <div className="flex items-center gap-2 font-mono text-sm sm:text-base text-amber-400 justify-center">
-                                <input type="number" value={quad.a} onChange={e=>{setQuad({...quad, a:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="a" /> <span>X² +</span>
-                                <input type="number" value={quad.b} onChange={e=>{setQuad({...quad, b:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="b" /> <span>X +</span>
-                                <input type="number" value={quad.c} onChange={e=>{setQuad({...quad, c:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="c" /> <span>= 0</span>
+                        </div>
+                    )}
+
+                    {mode === 'quad' && (
+                        <div className="flex items-center gap-2 font-mono text-sm sm:text-base text-amber-400 justify-center">
+                            <input type="number" value={quad.a} onChange={e=>{setQuad({...quad, a:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="a" /> <span>X² +</span>
+                            <input type="number" value={quad.b} onChange={e=>{setQuad({...quad, b:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="b" /> <span>X +</span>
+                            <input type="number" value={quad.c} onChange={e=>{setQuad({...quad, c:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="c" /> <span>= 0</span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-6 flex justify-center border-t border-[#1E3A5F] pt-6">
+                    <button onClick={handleSolve} className="btn-w py-2.5 px-10 text-sm shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform">🚀 ประมวลผลสมการ (Solve)</button>
+                </div>
+            </div>
+            
+            {/* --- RESULTS --- */}
+            {result && (
+                <div className="bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
+                    <div className="absolute top-0 right-0 px-3 py-1 bg-sky-900/50 text-sky-200 text-[10px] rounded-bl-lg rounded-tr-xl border-l border-b border-sky-500/30 font-bold">SOLUTION</div>
+                    
+                    {result.err && !result.isComplex ? (
+                        <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{result.err}</div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="text-sky-300 font-bold text-sm border-b border-[#1E3A5F] pb-2">🎯 คำตอบ (Final Answers)</div>
+                            <div className="flex flex-wrap gap-4 justify-center font-mono text-xl sm:text-2xl font-bold text-white">
+                                {result.type === '2x2' && (
+                                    <>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">X = <span className="text-sky-400">{result.x.toFixed(4)}</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">Y = <span className="text-sky-400">{result.y.toFixed(4)}</span></div>
+                                    </>
+                                )}
+                                {result.type === '3x3' && (
+                                    <>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">X = <span className="text-sky-400">{result.x.toFixed(4)}</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Y = <span className="text-sky-400">{result.y.toFixed(4)}</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Z = <span className="text-sky-400">{result.z.toFixed(4)}</span></div>
+                                    </>
+                                )}
+                                {result.type === 'quad' && result.roots === 2 && (
+                                    <>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₁ = <span className="text-amber-400">{result.x1.toFixed(4)}</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₂ = <span className="text-amber-400">{result.x2.toFixed(4)}</span></div>
+                                    </>
+                                )}
+                                {result.type === 'quad' && result.roots === 1 && (
+                                    <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{result.x.toFixed(4)}</span></div>
+                                )}
+                                {/* ส่วนแสดงผลแบบ Complex Roots (i) */}
+                                {result.type === 'quad' && result.isComplex && (
+                                    <>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{result.real.toFixed(4)} + {result.img.toFixed(4)}i</span></div>
+                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{result.real.toFixed(4)} - {result.img.toFixed(4)}i</span></div>
+                                    </>
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    <div className="mt-6 flex justify-center border-t border-[#1E3A5F] pt-6">
-                        <button onClick={handleSolveEq} className="btn-w py-2.5 px-10 text-sm shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform"><i className="fas fa-rocket mr-1"></i> ประมวลผลสมการ</button>
-                    </div>
-
-                    {eqResult && (
-                        <div className="mt-6 bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
-                            {eqResult.err && !eqResult.isComplex ? (
-                                <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{eqResult.err}</div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="text-sky-300 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
-                                        <span>🎯 คำตอบ (Final Answers)</span>
-                                        <button onClick={() => setShowSteps(!showSteps)} className="bg-sky-900/50 text-sky-200 px-3 py-1 rounded-lg text-[10px] border border-sky-500/30 hover:bg-sky-600 transition-colors">
-                                            {showSteps ? 'ซ่อนวิธีทำ' : '👁️ ดูวิธีทำ (Show Steps)'}
-                                        </button>
-                                    </div>
-                                    
-                                    <div className="flex flex-wrap gap-4 justify-center font-mono text-xl sm:text-2xl font-bold text-white">
-                                        {eqResult.type === '2x2' && (
-                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div></>
-                                        )}
-                                        {eqResult.type === '3x3' && (
-                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Z = <span className="text-sky-400">{eqResult.z.toFixed(4)}</span></div></>
-                                        )}
-                                        {eqResult.type === 'quad' && eqResult.roots === 2 && (
-                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₁ = <span className="text-amber-400">{eqResult.x1.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₂ = <span className="text-amber-400">{eqResult.x2.toFixed(4)}</span></div></>
-                                        )}
-                                        {eqResult.type === 'quad' && eqResult.roots === 1 && (
-                                            <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{eqResult.x.toFixed(4)}</span></div>
-                                        )}
-                                        {eqResult.type === 'quad' && eqResult.isComplex && (
-                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{eqResult.real.toFixed(4)} + {eqResult.img.toFixed(4)}i</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{eqResult.real.toFixed(4)} - {eqResult.img.toFixed(4)}i</span></div></>
-                                        )}
-                                    </div>
-
-                                    {showSteps && (
-                                        <div className="mt-4 p-4 bg-[#050811] rounded-xl border border-dashed border-sky-500/50 text-xs text-slate-300 font-mono animate-fade-in space-y-3">
-                                            <div className="text-sky-400 font-bold mb-2 uppercase">📝 Step-by-Step Solution</div>
-                                            {eqResult.type === '2x2' && (
-                                                <>
-                                                    <div><span className="text-slate-400">1. คำนวณ Determinant หลัก (Δ):</span><br/>Δ = (a1)(b2) - (a2)(b1)<br/>Δ = ({eqResult.eq.a1})({eqResult.eq.b2}) - ({eqResult.eq.a2})({eqResult.eq.b1}) = <span className="text-amber-300">{eqResult.det}</span></div>
-                                                    <div><span className="text-slate-400">2. คำนวณ Δx:</span><br/>Δx = (c1)(b2) - (c2)(b1) = <span className="text-amber-300">{eqResult.detX}</span></div>
-                                                    <div><span className="text-slate-400">3. คำนวณ Δy:</span><br/>Δy = (a1)(c2) - (a2)(c1) = <span className="text-amber-300">{eqResult.detY}</span></div>
-                                                    <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">X = Δx / Δ = {eqResult.detX} / {eqResult.det} = <b>{eqResult.x.toFixed(4)}</b><br/>Y = Δy / Δ = {eqResult.detY} / {eqResult.det} = <b>{eqResult.y.toFixed(4)}</b></div>
-                                                </>
-                                            )}
-                                            {eqResult.type === 'quad' && (
-                                                <>
-                                                    <div><span className="text-slate-400">1. จัดรูปสมการ:</span><br/>{eqResult.a}x² + {eqResult.b}x + {eqResult.c} = 0</div>
-                                                    <div><span className="text-slate-400">2. หาค่า Discriminant (D):</span><br/>D = b² - 4ac<br/>D = ({eqResult.b})² - 4({eqResult.a})({eqResult.c}) = <span className="text-amber-300">{eqResult.D}</span></div>
-                                                    <div><span className="text-slate-400">3. แทนค่าในสูตร Quadratic:</span><br/>x = (-b ± √D) / 2a</div>
-                                                    {eqResult.D >= 0 ? (
-                                                        <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">x = (-{eqResult.b} ± √{eqResult.D}) / {2*eqResult.a}<br/>x₁ = <b>{eqResult.x1?.toFixed(4) || eqResult.x?.toFixed(4)}</b>, x₂ = <b>{eqResult.x2?.toFixed(4) || '-'}</b></div>
-                                                    ) : (
-                                                        <div className="pt-2 border-t border-[#1E3A5F] text-red-300">D น้อยกว่า 0 ทำให้ได้รากเป็นจำนวนเชิงซ้อน (Complex Number)</div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
+                            {result.isComplex && (
+                                <div className="text-[10px] text-red-300 text-center font-bold">⚠️ ไม่มีคำตอบเป็นจำนวนจริง (Complex Roots)</div>
                             )}
+
+                            <div className="mt-6 pt-4 border-t border-[#1E3A5F] text-xs text-slate-400">
+                                <div className="font-bold text-slate-300 mb-2">📝 วิธีทำ (Step-by-Step Cramer's Rule)</div>
+                                {(result.type === '2x2' || result.type === '3x3') && (
+                                    <div className="grid grid-cols-2 gap-3 font-mono">
+                                        <div className="bg-[#050811] p-2 rounded">Δ (Det) = {result.det.toFixed(4)}</div>
+                                        <div className="bg-[#050811] p-2 rounded">Δx (Det X) = {result.detX.toFixed(4)}</div>
+                                        <div className="bg-[#050811] p-2 rounded">Δy (Det Y) = {result.detY.toFixed(4)}</div>
+                                        {result.type === '3x3' && <div className="bg-[#050811] p-2 rounded">Δz (Det Z) = {result.detZ.toFixed(4)}</div>}
+                                    </div>
+                                )}
+                                {result.type === 'quad' && (
+                                    <div className="space-y-1.5 font-mono">
+                                        <div>Discriminant (D) = b² - 4ac = ({result.b})² - 4({result.a})({result.c})</div>
+                                        <div className="text-amber-300">D = {result.D.toFixed(4)}</div>
+                                        <div>x = (-b ± √D) / 2a</div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* แสดงผลกราฟเฉพาะโหมด 2x2 */}
+                            {result.type === '2x2' && renderGraph2D(result.eq)}
                         </div>
                     )}
                 </div>
             )}
 
-            {mainMode === 'matrix_ops' && (
-                <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg animate-fade-in">
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 text-[11px]">
-                            <button onClick={()=>setMatSize(2)} className={`px-3 py-1 rounded font-bold ${matSize===2?'bg-fuchsia-600 text-white':'text-slate-400 hover:text-white'}`}>2x2</button>
-                            <button onClick={()=>setMatSize(3)} className={`px-3 py-1 rounded font-bold ${matSize===3?'bg-fuchsia-600 text-white':'text-slate-400 hover:text-white'}`}>3x3</button>
-                        </div>
-                        <select value={matOp} onChange={e=>setMatOp(e.target.value)} className="inp py-1.5 bg-[#0B1325] text-fuchsia-300 font-bold border-fuchsia-900/50">
-                            <option value="add">A + B (บวก)</option>
-                            <option value="sub">A - B (ลบ)</option>
-                            <option value="mul">A × B (คูณ)</option>
-                        </select>
-                    </div>
-
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 font-mono text-sm overflow-x-auto no-scrollbar pb-4">
-                        {/* Matrix A */}
-                        <div className="relative">
-                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-fuchsia-400 font-bold font-sans">Matrix A</div>
-                            <div className="border-l-2 border-r-2 border-fuchsia-500/50 rounded-[8px] p-2 grid gap-1.5 bg-fuchsia-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
-                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
-                                    <input key={`a${r}${c}`} type="number" value={matA[r][c]} onChange={e=>handleMatOpUpdate('A', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-fuchsia-900/50 focus:border-fuchsia-500" placeholder="0" />
-                                )))}
-                            </div>
-                        </div>
-
-                        <div className="text-xl sm:text-2xl font-bold text-slate-400">{matOp === 'add' ? '+' : matOp === 'sub' ? '-' : '×'}</div>
-
-                        {/* Matrix B */}
-                        <div className="relative">
-                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-sky-400 font-bold font-sans">Matrix B</div>
-                            <div className="border-l-2 border-r-2 border-sky-500/50 rounded-[8px] p-2 grid gap-1.5 bg-sky-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
-                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
-                                    <input key={`b${r}${c}`} type="number" value={matB[r][c]} onChange={e=>handleMatOpUpdate('B', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-sky-900/50 focus:border-sky-500" placeholder="0" />
-                                )))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 flex justify-center border-t border-[#1E3A5F] pt-6">
-                        <button onClick={calculateMatrixOp} className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-2.5 px-10 rounded-xl text-sm shadow-[0_0_15px_rgba(192,38,211,0.3)] hover:scale-105 transition-transform"><i className="fas fa-calculator mr-1"></i> คำนวณ (Calculate)</button>
-                    </div>
-
-                    {opResult && (
-                        <div className="mt-6 bg-[#0B1325] border border-emerald-500/30 rounded-xl p-5 shadow-2xl flex flex-col items-center animate-fade-in relative">
-                            <div className="text-emerald-400 font-bold text-sm mb-4">✨ ผลลัพธ์ (Result Matrix)</div>
-                            <div className="border-l-4 border-r-4 border-emerald-500/50 rounded-[12px] p-4 grid gap-3 bg-[#050811] shadow-[0_0_20px_rgba(16,185,129,0.1)] font-mono text-lg sm:text-xl font-bold" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
-                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
-                                    <div key={`res${r}${c}`} className="w-16 sm:w-20 text-center text-white">{opResult[r][c]}</div>
-                                )))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
           </div>
         );
     };
@@ -5835,35 +5137,28 @@
                 const interval = setInterval(() => { 
                     setResult(list[Math.floor(Math.random() * list.length)]); 
                     count++; 
-                    if(count > 20) { 
+                    if(count > 15) { 
                         clearInterval(interval); 
                         setSpinning(false); 
+                        setResult(list[Math.floor(Math.random() * list.length)]); 
                     } 
-                }, 80); // สุ่มเปลี่ยนชื่อไวๆ ให้ลุ้น
+                }, 100);
             } else {
                 // Wheel Logic
                 const winIdx = Math.floor(Math.random() * list.length);
                 const sliceDeg = 360 / list.length;
                 const centerDeg = (winIdx * sliceDeg) + (sliceDeg / 2);
-                const targetRot = 270 - centerDeg; 
+                const targetRot = 270 - centerDeg; // Align with top pointer (270deg)
                 
                 const currentBase = rotation - (rotation % 360);
-                const newRot = currentBase + (360 * 5) + targetRot + 360; 
+                const newRot = currentBase + (360 * 5) + targetRot + 360; // Spin 5 times
                 
                 setRotation(newRot);
                 setTimeout(() => {
                     setSpinning(false);
                     setResult(list[winIdx]);
-                }, 4000); 
+                }, 4000); // Wait for CSS transition
             }
-        };
-
-        const removeResult = () => {
-            if (!result) return;
-            const list = names.split('\n').map(n => n.trim()).filter(Boolean);
-            const newList = list.filter(n => n !== result).join('\n');
-            setNames(newList);
-            setResult(null);
         };
 
         const list = names.split('\n').map(n => n.trim()).filter(Boolean);
@@ -5872,100 +5167,60 @@
 
         return (
             <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mx-auto items-center md:items-start text-xs">
-                
-                {/* กล่องใส่ตัวเลือก (ฝั่งซ้าย) */}
                 <div className="w-full md:w-1/3 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4 shrink-0">
                     <div className="flex justify-between items-center border-b border-[#1E3A5F] pb-2">
-                        <label className="text-amber-400 font-bold text-sm"><i className="fas fa-list-ul"></i> ตัวเลือก</label>
-                        <select value={mode} onChange={e => {setMode(e.target.value); setResult(null);}} className="bg-[#050811] text-sky-200 border border-[#1E3A5F] rounded p-1 outline-none font-bold">
+                        <label className="text-amber-400 font-bold"><i className="fas fa-list-ul"></i> ตัวเลือก</label>
+                        <select value={mode} onChange={e => setMode(e.target.value)} className="bg-[#050811] text-sky-200 border border-[#1E3A5F] rounded p-1 outline-none">
                             <option value="wheel">วงล้อ (Wheel)</option>
                             <option value="text">ข้อความ (Text)</option>
                         </select>
                     </div>
-                    <textarea rows="10" value={names} onChange={e=>setNames(e.target.value)} className="w-full inp resize-none text-sm leading-relaxed custom-scrollbar" placeholder="ใส่ชื่อหรือตัวเลือก บรรทัดละ 1 ข้อความ..."></textarea>
-                    <button onClick={handleSpin} disabled={spinning} className="w-full btn-w py-3 shadow-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">
-                        {spinning ? <><i className="fas fa-spinner fa-spin"></i> กำลังสุ่ม...</> : <><i className="fas fa-dice"></i> สุ่มเลย!</>}
+                    <textarea rows="8" value={names} onChange={e=>setNames(e.target.value)} className="w-full inp resize-none text-sm leading-relaxed custom-scrollbar" placeholder="ใส่ชื่อหรือตัวเลือก บรรทัดละ 1 ข้อความ..."></textarea>
+                    <button onClick={handleSpin} disabled={spinning} className="w-full btn-w py-3 shadow-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50">
+                        {spinning ? 'กำลังสุ่ม...' : '🎲 สุ่มเลย!'}
                     </button>
-                    <div className="text-[10px] text-slate-400 mt-2">มีตัวเลือกทั้งหมด: {list.length} รายการ</div>
-                </div>
-
-                {/* กล่องแสดงผล (ฝั่งขวา) */}
-                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#050811] to-[#0a101f] rounded-2xl border border-[#1E3A5F] shadow-2xl relative w-full min-h-[400px]">
-                    
-                    {/* โหมดข้อความ (Text Mode) */}
-                    {mode === 'text' && (
-                        <div className="flex flex-col items-center justify-center w-full">
-                            <div className="text-sky-400 font-bold uppercase tracking-widest mb-6">Text Randomizer</div>
-                            
-                            {spinning || result ? (
-                                <div className={`w-full max-w-sm p-8 text-center rounded-2xl border-4 transition-all duration-300 ${spinning ? 'bg-[#0F2547] border-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.3)]' : 'bg-amber-500/20 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.5)] animate-bounce'}`}>
-                                    <div className="text-sm text-slate-400 mb-2">{spinning ? 'กำลังค้นหาผู้โชคดี...' : 'ผู้ที่ถูกเลือกคือ!'}</div>
-                                    <div className={`text-3xl sm:text-4xl font-bold truncate ${spinning ? 'text-sky-300' : 'text-amber-400'}`}>
-                                        {result}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-slate-500 text-center border-2 border-dashed border-[#1E3A5F] rounded-xl p-10 w-full max-w-sm">
-                                    <i className="fas fa-random text-4xl mb-3 block"></i>
-                                    คลิก "สุ่มเลย!" ทางซ้ายเพื่อเริ่ม
-                                </div>
-                            )}
-
-                            {result && !spinning && (
-                                <div className="mt-8 flex gap-3 animate-fade-in">
-                                    <button onClick={handleSpin} className="btn-w py-2 px-6 font-bold shadow hover:scale-105"><i className="fas fa-redo-alt mr-1"></i> สุ่มอีกครั้ง</button>
-                                    <button onClick={removeResult} className="btn-d py-2 px-4 text-red-300 border-red-900/50 hover:bg-red-950 font-bold"><i className="fas fa-trash-alt mr-1"></i> ลบตัวเลือกนี้ออก</button>
-                                </div>
-                            )}
+                    {mode === 'text' && result && !spinning && (
+                        <div className="p-4 text-center rounded-xl bg-amber-500/20 border border-amber-500 animate-bounce mt-4">
+                            <div className="text-[10px] text-slate-300 mb-1">ผลลัพธ์:</div>
+                            <div className="text-xl font-bold text-amber-400">{result}</div>
                         </div>
                     )}
+                </div>
 
-                    {/* โหมดวงล้อ (Wheel Mode) */}
-                    {mode === 'wheel' && (
-                        <div className="flex flex-col items-center justify-center w-full relative">
-                            {/* Wheel Pointer */}
-                            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-white z-20 drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]"></div>
-                            
-                            {/* Wheel */}
-                            <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-full border-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.6)] overflow-hidden"
-                                 style={{ background: `conic-gradient(${conicGradient})`, transform: `rotate(${rotation}deg)`, transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' }}>
-                                
-                                {list.map((name, i) => {
-                                    const angle = (i * sliceAngle) + (sliceAngle / 2);
-                                    return (
-                                        <div key={i} className="absolute top-1/2 left-1/2 w-[50%] h-[2px] origin-left -translate-y-1/2 flex items-center justify-end pr-4 sm:pr-6"
-                                             style={{ transform: `rotate(${angle}deg)` }}>
-                                            {/* จัดตำแหน่งข้อความให้อยู่ตรงกลางของซีกวงล้อ */}
-                                            <span className="text-white font-bold drop-shadow-md text-sm sm:text-base absolute right-4 sm:right-6 w-24 sm:w-28 text-right truncate" style={{ transform: 'rotate(180deg) scale(-1, -1)' }}>
-                                                {name}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                                
-                                {/* จุดหมุนตรงกลาง */}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[#0B1325] rounded-full border-4 border-slate-600 shadow-[0_0_10px_rgba(0,0,0,0.8)] flex items-center justify-center z-10">
-                                    <Logo s={28} />
+                {mode === 'wheel' && (
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#050811] rounded-2xl border border-[#1E3A5F] shadow-2xl relative w-full h-[400px]">
+                        {/* Wheel Pointer */}
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-white z-20 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                        
+                        {/* Wheel */}
+                        <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full border-4 border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden"
+                             style={{ background: `conic-gradient(${conicGradient})`, transform: `rotate(${rotation}deg)`, transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' }}>
+                            {list.map((name, i) => {
+                                const angle = (i * sliceAngle) + (sliceAngle / 2);
+                                return (
+                                    <div key={i} className="absolute top-1/2 left-1/2 w-[50%] h-[20px] origin-left -translate-y-1/2 flex items-center pl-4 sm:pl-6"
+                                         style={{ transform: `rotate(${angle}deg)` }}>
+                                        <span className="text-white font-bold drop-shadow-md truncate w-full text-left" style={{ transform: 'rotate(180deg) scale(-1, -1)' }}>{name}</span>
+                                    </div>
+                                );
+                            })}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-slate-800 rounded-full border-4 border-slate-600 shadow-inner flex items-center justify-center">
+                                <Logo s={24} />
+                            </div>
+                        </div>
+
+                        {/* Result Popup for Wheel */}
+                        {result && !spinning && (
+                            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-30 flex items-center justify-center animate-fade-in rounded-2xl">
+                                <div className="bg-[#0B1325] border-2 border-amber-400 p-8 rounded-2xl text-center shadow-[0_0_40px_rgba(251,191,36,0.6)] animate-bounce">
+                                    <div className="text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ</div>
+                                    <div className="text-3xl sm:text-4xl font-bold text-amber-400">{result}</div>
+                                    <button onClick={() => setResult(null)} className="mt-6 px-6 py-2 bg-slate-800 text-slate-300 rounded-full hover:bg-slate-700 transition-colors">ปิด</button>
                                 </div>
                             </div>
-
-                            {/* Result Popup for Wheel */}
-                            {result && !spinning && (
-                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex items-center justify-center animate-fade-in rounded-2xl">
-                                    <div className="bg-[#0B1325] border-2 border-amber-400 p-8 rounded-2xl text-center shadow-[0_0_40px_rgba(251,191,36,0.6)] animate-bounce min-w-[250px]">
-                                        <div className="text-slate-300 mb-2 text-sm"><i className="fas fa-trophy text-amber-400 mr-1"></i> ผู้ที่ถูกเลือกคือ</div>
-                                        <div className="text-3xl sm:text-4xl font-bold text-amber-400 truncate max-w-[300px] mx-auto">{result}</div>
-                                        
-                                        <div className="mt-6 flex flex-col gap-2">
-                                            <button onClick={() => setResult(null)} className="w-full px-6 py-2.5 bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 transition-colors shadow">ตกลง / ปิด</button>
-                                            <button onClick={removeResult} className="w-full px-6 py-2.5 bg-red-950/50 text-red-300 font-bold border border-red-900/50 rounded-lg hover:bg-red-900 hover:text-white transition-colors"><i className="fas fa-trash-alt mr-1"></i> ลบชื่อนี้ออกจากตัวเลือก</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -6057,19 +5312,15 @@
                             <div className="animate-fade-in space-y-3">
                                 <div>
                                     <label className="text-slate-400 font-bold mb-1 block">ระยะเวลา</label>
-                                    <div className="flex flex-wrap sm:flex-nowrap gap-2">
-                                        <div className="flex gap-2 shrink-0">
-                                            <button onClick={()=>setIsSub(false)} className={`w-10 sm:w-12 py-1.5 rounded border font-bold text-[14px] flex items-center justify-center ${!isSub ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>+</button>
-                                            <button onClick={()=>setIsSub(true)} className={`w-10 sm:w-12 py-1.5 rounded border font-bold text-[14px] flex items-center justify-center ${isSub ? 'bg-red-900/50 text-red-400 border-red-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>-</button>
-                                        </div>
-                                        <div className="flex gap-2 flex-1 min-w-[150px]">
-                                            <input type="number" value={addAmt} onChange={e=>setAddAmt(parseInt(e.target.value)||0)} className="w-16 flex-1 inp font-mono text-center px-1" />
-                                            <select value={addUnit} onChange={e=>setAddUnit(e.target.value)} className="flex-1 inp bg-[#050811] px-1 sm:px-2 text-[11px] sm:text-xs text-center">
-                                                <option value="days">วัน (Days)</option>
-                                                <option value="months">เดือน (Months)</option>
-                                                <option value="years">ปี (Years)</option>
-                                            </select>
-                                        </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={()=>setIsSub(false)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${!isSub ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>+</button>
+                                        <button onClick={()=>setIsSub(true)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${isSub ? 'bg-red-900/50 text-red-400 border-red-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>-</button>
+                                        <input type="number" value={addAmt} onChange={e=>setAddAmt(parseInt(e.target.value)||0)} className="flex-1 inp font-mono text-center" />
+                                        <select value={addUnit} onChange={e=>setAddUnit(e.target.value)} className="inp bg-[#050811]">
+                                            <option value="days">วัน (Days)</option>
+                                            <option value="months">เดือน (Months)</option>
+                                            <option value="years">ปี (Years)</option>
+                                        </select>
                                     </div>
                                 </div>
                                 {addUnit === 'days' && (
@@ -7409,309 +6660,170 @@
       postMenu, setPostMenu, db, handleEditPostReq, setCurrentView, setActiveGameTab, GAMES, fmtTime,
       toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment
     }) {
-      
-      // State สำหรับจัดการการแสดงความคิดเห็น
-      const [showComments, setShowComments] = useState({});
-      const [visibleCommCount, setVisibleCommCount] = useState({});
-      
-      // 🌟 New State: สำหรับมุมมองบอร์ด (Standard, Compact, Grid)
-      const [boardView, setBoardView] = useState('standard');
       return (
         <>
-          {/* ส่วนค้นหาและฟิลเตอร์ */}
+      {/* ส่วนค้นหาและฟิลเตอร์ */}
           <div className="card p-3.5 space-y-2.5">
             <div className="flex gap-2">
               <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
               {currentUser && <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap">+ เขียนโพสต์ / โพลล์</button>}
             </div>
-            
-            <div className="flex justify-between items-center gap-2">
-              {/* 🌟 New Feature: View Toggle */}
-              <div className="hidden sm:flex bg-[#050811] p-1 rounded-full border border-[#1E3A5F] text-slate-400">
-                <button onClick={() => setBoardView('standard')} className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='standard'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองมาตรฐาน"><i className="fas fa-list"></i></button>
-                <button onClick={() => setBoardView('grid')} className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='grid'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองตาราง (Grid)"><i className="fas fa-th-large"></i></button>
-                <button onClick={() => setBoardView('compact')} className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='compact'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองย่อ (Compact)"><i className="fas fa-bars"></i></button>
-              </div>
-
-              <div className="relative ml-auto">
-                <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
-                  <span><i className="fas fa-cog mr-1"></i>ตัวกรอง</span>
-                  {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
-                </button>
-            
-                {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
-            
-                {filterMenuOpen && (
-                  <div className="absolute top-full mt-2 right-0 w-64 card p-3 z-30 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
-                    <div>
-                      <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-tag mr-1"></i> หมวดหมู่สมาชิก</div>
-                      <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                        <option value="ALL">ทั้งหมด</option>
-                        {allTags.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-filter mr-1"></i> ประเภทโพสต์</div>
-                      <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                        <option value="ALL">ทั้งหมด</option>
-                        <option value="NORMAL">โพสต์ทั่วไป</option>
-                        <option value="GAME">🎮 ผล Daily Games</option>
-                        <option value="MEDIA">🖼️ มีสื่อประกอบ</option>
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
-                      <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
-                      <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
-                    </label>
-
-                    {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
-                      <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
-                        ✕ ล้างตัวกรองทั้งหมด
-                      </button>
-                    )}
+            <div className="relative">
+              <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
+                <span><i className="fas fa-cog"></i>เลือกดู</span>
+                {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+              </button>
+          
+              {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
+          
+              {filterMenuOpen && (
+                <div className="absolute top-full mt-2 left-0 w-64 card p-3 z-30 shadow-2xl border-white/20 text-xs flex flex-col gap-3">
+                  <div>
+                    <div className="font-bold text-sky-300 mb-1.5">🏷️ หมวดหมู่สมาชิก</div>
+                    <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                      <option value="ALL">ทั้งหมด</option>
+                      {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   </div>
-                )}
-              </div>
+
+                  <div>
+                    <div className="font-bold text-sky-300 mb-1.5">📝 ประเภทโพสต์</div>
+                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                      <option value="ALL">ทั้งหมด</option>
+                      <option value="NORMAL">โพสต์ทั่วไป</option>
+                      <option value="GAME">🎮 ผล Daily Games</option>
+                      <option value="MEDIA">🖼️ มีสื่อ</option>
+                    </select>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
+                    <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
+                    <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
+                  </label>
+
+                  {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
+                    <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
+                      ✕ ล้างฟิลเตอร์ทั้งหมด
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
 
-          {/* รายการโพสต์ */}
-          <div className={boardView === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4 items-start" : "space-y-4"}>
-            {filteredPosts.slice(0, visiblePosts).map((post) => {
-              const author = getAuthor(post.authorId);
-              const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
-              const isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
-              const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt;
-              const totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
-              const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
-              const allComm = post.comments || [];
-              const rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
+      {/* รายการโพสต์ */}
+          {filteredPosts.slice(0, visiblePosts).map((post) => {
+            const author = getAuthor(post.authorId);
+            const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
+            const isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
+            const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt;
+            const totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
+            const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
+            const allComm = post.comments || [];
+            const rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
 
-              // 🌟 New Feature: Official & Role-based Glowing Borders
-              let borderStyle = 'border-[#1E3A5F] bg-[#0B1325]';
-              let shadowStyle = 'shadow-xl';
-              let headerRoleBadge = null;
-
-              if (author.id === 'SYSTEM') {
-                  borderStyle = 'border-red-500/50 bg-red-950/20';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(239,68,68,0.15)]';
-                  headerRoleBadge = <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-bullhorn mr-1"></i> System</span>;
-              } else if (author.role === 'admin') {
-                  borderStyle = 'border-amber-500/50 bg-amber-950/10';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(251,191,36,0.1)]';
-                  headerRoleBadge = <span className="bg-amber-500 text-[#050811] text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-crown mr-1"></i> Owner</span>;
-              } else if (author.role === 'mod') {
-                  borderStyle = 'border-sky-400/50 bg-sky-950/10';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(56,189,248,0.1)]';
-                  headerRoleBadge = <span className="bg-sky-500 text-[#050811] text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-shield-alt mr-1"></i> Vice</span>;
-              }
-
-              const isCompact = boardView === 'compact';
-
-              return (
-                <article id={'post-' + post.id} key={post.id} onMouseEnter={() => setTimeout(() => markPostAsRead(post.id, post.readBy), 1000)} className={`rounded-[1rem] p-4 sm:p-5 flex flex-col gap-3.5 transition-all duration-300 border ${borderStyle} ${shadowStyle}`}>
-                    {post.isPinned && <div className="text-amber-300 text-[11px] font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2"><i className="fas fa-thumbtack mr-1"></i> โพสต์ปักหมุด</div>}
-                    
-                    {/* Header โพสต์ */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer">
-                        {!isCompact && <Avatar user={author} size="md" showStatus={true} />}
-                        <div>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {isCompact && <Avatar user={author} size="xs" showStatus={true} />}
-                            <span className="font-bold text-sm hover:underline">{author.displayName}</span>
-                            <span className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold ${author.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{author.id}</span>
-                            {!isCompact && <TagBadges user={author} />}
-                            {headerRoleBadge}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">@{author.username} • {post.createdAt}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 relative shrink-0">
-                        {!canManage(post.authorId) && !isCompact && <span className="px-2 py-0.5 rounded-full bg-[#050811] border border-[#1E3A5F] text-[9px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
-                        {canManage(post.authorId) && (
-                          <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold"><i className="fas fa-ellipsis-v"></i></button>
-                        )}
-                        {postMenu === post.id && (
-                          <div className="absolute top-6 right-0 w-48 card border border-white/20 shadow-2xl py-1 z-30 flex flex-col text-left text-xs">
-                            <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
-                              <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
-                            </button>
-                            <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300"><i className="fas fa-pen mr-1"></i> แก้ไขโพสต์</button>
-                            <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) { db.collection('bma_posts').doc(post.id).delete(); window.history.replaceState({}, document.title, window.location.pathname); setCurrentView('home'); } }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400"><i className="fas fa-trash-alt mr-1"></i> ลบโพสต์</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {post.title && <h3 className={`font-bold text-sky-50 ${isCompact ? 'text-sm' : 'text-base'}`}>{post.title}</h3>}
-                    
-                   {/* เนื้อหา จะถูกซ่อนถ้าเป็นโหมด Compact */}
-                    {!isCompact && (
-                        <div className={`transition-all duration-500 relative ${post.isSpoiler && !isSpoilerRevealed ? 'filter blur-md cursor-pointer select-none' : ''}`} onClick={() => { if(post.isSpoiler) setIsSpoilerRevealed(true); }}>
-                            {post.isSpoiler && !isSpoilerRevealed && (
-                                <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                                    <div className="bg-red-950/80 text-red-200 border border-red-500/50 px-4 py-2 rounded-full font-bold text-xs shadow-2xl backdrop-blur">
-                                        <i className="fas fa-eye-slash mr-1"></i> มีเนื้อหาสปอยล์ (คลิกเพื่อดู)
-                                    </div>
+            return (
+              <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 shadow-2xl border border-sky-900/50'}>
+                          {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
+                          <div className="flex justify-between items-start gap-2">
+                            <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${author.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
+                            <div className="flex items-center gap-2 relative">
+                              {!canManage(post.authorId) && <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
+                              {canManage(post.authorId) && (
+                                <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold">⋮</button>
+                              )}
+                              {postMenu === post.id && (
+                                <div className="absolute top-6 right-0 w-48 card border border-white/20 shadow-2xl py-1 z-30 flex flex-col text-left">
+                                  <button onClick={() => { setPostMenu(null); db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed }); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] flex justify-between items-center">
+                                    <span>{post.isGuestAllowed ? '🔒 เปลี่ยนเป็นเฉพาะสมาชิก' : '🌐 ให้ Guest อ่านได้'}</span>
+                                  </button>
+                                  <button onClick={() => { setPostMenu(null); handleEditPostReq(post); }} className="w-full px-4 py-2 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไขโพสต์</button>
+                                  <button onClick={() => { setPostMenu(null); if(confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) { db.collection('bma_posts').doc(post.id).delete(); window.history.replaceState({}, document.title, window.location.pathname); setCurrentView('home'); } }} className="w-full px-4 py-2 text-left hover:bg-red-950 text-red-400">🗑️ ลบโพสต์</button>
                                 </div>
-                            )}
-                            
-                            {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
-                            
-                            {post.tags?.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-1 relative z-10">
-                                    {post.tags.map(t => (
-                                        <button key={t} onClick={(e) => { e.stopPropagation(); setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[9px] border border-sky-800 transition-colors shadow-sm">
-                                            #{t}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {post.dailyGameShare && (
-                              <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50 mt-1">
-                                <div className="text-amber-300 font-bold text-sm">🎯 {GAMES[post.dailyGameShare.gameIndex]?.name || 'Daily Game'}</div>
-                                <div className="text-xs">ผู้โพสต์ทำสถิติได้: <span className="font-mono text-white font-bold bg-black/40 px-2 py-0.5 rounded">
-                                  {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
-                                </span></div>
-                                <button onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-[10px] self-start mt-1 hover:scale-105 transition-transform"><i className="fas fa-gamepad mr-1"></i> ตามไปเล่นเกมนี้เลย</button>
+                              )}
+                            </div>
+                          </div>
+                          {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
+                          {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
+                          {post.tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {post.tags.map(t => (
+                                      <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2 py-0.5 bg-sky-900/30 text-sky-300 hover:bg-sky-700/50 rounded text-[10px] border border-sky-800 transition-colors shadow-sm">
+                                          #{t}
+                                      </button>
+                                  ))}
                               </div>
-                            )}
+                          )}
 
+                          {post.dailyGameShare && (
+                            <div className="p-3.5 card border-amber-400/50 flex flex-col gap-2 shadow-lg bg-[#0F2547]/50">
+                              <div className="text-amber-300 font-bold">🎯 {GAMES[post.dailyGameShare.gameIndex]?.name || 'Daily Game'}</div>
+                              <div className="text-sm">ผู้โพสต์ทำสถิติได้: <span className="font-mono text-white font-bold bg-black/40 px-2 py-0.5 rounded">
+                                {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
+                              </span></div>
+                              <button onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start mt-1 hover:scale-105 transition-transform">🎮 ตามไปเล่นเกมนี้เลย</button>
+                            </div>
+                          )}
+
+                          {post.poll && (
+                            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                              <div className="flex justify-between text-xs"><span className="font-bold">📊 {post.poll.question}</span><span className="text-slate-400">{post.poll.isAnonymous ? '🕵️ ไม่ระบุชื่อ' : '👁️ แสดงชื่อในคอมเมนต์'}</span></div>
+                              {(post.poll.options || []).map((opt) => {
+                                const voted = currentUser && (opt.votes || []).includes(currentUser.id);
+                                return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อนโหวต!'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-xs' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-xs'}><span>{voted ? '✓ ' + opt.text : opt.text}</span><span>โหวต</span></button>;
+                              })}
+                            </div>
+                          )}
+
+                          {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
+
+                          <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
+                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => { if(!currentUser) return; db.collection('bma_posts').doc(post.id).update({ likes: (post.likes||[]).includes(currentUser.id) ? post.likes.filter((i) => i !== currentUser.id) : [...(post.likes || []), currentUser.id] }); }} />
+                            <div className="flex gap-2">
+                               <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">🔗 คัดลอกลิงก์แชร์</button>
+                               <button onClick={async () => { if (!currentUser) return alert('เข้าสู่ระบบก่อนบันทึกโพสต์'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
+                            </div>
+                          </div>
+
+                          <div className="pt-2.5 border-t border-[#1E3A5F]/60 space-y-2">
                             {post.poll && (
-                              <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2 mt-2">
-                                <div className="flex justify-between text-xs"><span className="font-bold">📊 {post.poll.question}</span><span className="text-slate-400 text-[10px]">{post.poll.isAnonymous ? '🕵️ ไม่ระบุชื่อ' : '👁️ แสดงชื่อ'}</span></div>
-                                {(post.poll.options || []).map((opt) => {
-                                  const voted = currentUser && (opt.votes || []).includes(currentUser.id);
-                                  return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อนโหวต!'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-[11px]' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-[11px] hover:bg-[#0F2547]'}><span className="text-left line-clamp-1 pr-2">{voted ? '✓ ' + opt.text : opt.text}</span><span className="shrink-0">โหวต</span></button>;
+                              <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-1.5 text-xs">
+                                <div className="font-bold text-sky-300">📊 ผลโพลล์ในคอมเมนต์ (รวม {totalVotes} โหวต)</div>
+                                {(post.poll.options || []).map((o) => {
+                                  const c = o.votes?.length || 0, pct = totalVotes ? Math.round((c / totalVotes) * 100) : 0;
+                                  return <div key={o.id}><div className="flex justify-between"><span>{o.text}</span><span className="font-mono">{c} โหวต ({pct}%)</span></div>{!post.poll.isAnonymous && c > 0 && <div className="text-[10px] text-slate-400">ผู้โหวต: {o.votes.map((u) => getAuthor(u).displayName).join(', ')}</div>}</div>;
                                 })}
                               </div>
                             )}
 
-                            {post.attachments?.length > 0 && <div className="space-y-2 mt-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
-                        </div>
-                    )}
+                            <div className="space-y-2">
+                              {rootComm.map((c, idx) => (
+                                <PantipThread key={c.id} c={c} all={allComm} lbl={'ความเห็นที่ ' + (idx + 1)} postId={post.id} me={currentUser} getAuthor={getAuthor} canManage={canManage} onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} onCtx={setCommMenu} />
+                              ))}
+                            </div>
 
-                    {isCompact && (post.content || post.attachments?.length > 0 || post.poll) && (
-                        <button onClick={() => setBoardView('standard')} className="text-[10px] text-sky-400 text-left hover:underline">
-                            ดูเนื้อหาเพิ่มเติม ({post.attachments?.length ? post.attachments.length + ' ไฟล์, ' : ''}{post.poll ? '1 โพลล์' : 'อ่านต่อ...'})
-                        </button>
-                    )}
-
-                    <div className={`flex justify-between items-center pt-2.5 border-t text-[10px] mt-auto ${author.role === 'admin' ? 'border-amber-900/50' : author.role === 'mod' ? 'border-emerald-900/50' : 'border-[#1E3A5F]'}`}>
-                      <div className="flex items-center gap-3">
-                          <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} postId={post.id} db={db} />
-                          {/* 🌟 New Feature: ยอดคนดู (Read Receipts) */}
-                          <div className="flex items-center gap-1.5 text-slate-500 font-bold" title="จำนวนสมาชิกที่เข้าชมโพสต์นี้">
-                              <i className="fas fa-eye"></i> {post.readBy?.length || 0}
-                          </div>
-                      </div>
-                      <div className="flex gap-2">
-                         <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="px-2.5 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] hover:bg-white hover:text-black transition-colors"><i className="fas fa-share-alt"></i> แชร์</button>
-                         <button onClick={async () => { if (!currentUser) return alert('เข้าสู่ระบบก่อนบันทึกโพสต์'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-2.5 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1 px-2.5'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
-                      </div>
-                    </div>
-
-                    {!isCompact && (
-                        <div className={`pt-2 border-t space-y-2 ${author.role === 'admin' ? 'border-amber-900/50' : author.role === 'mod' ? 'border-emerald-900/50' : 'border-[#1E3A5F]/60'}`}>
-                              {post.poll && (
-                                <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-1.5 text-xs">
-                                  <div className="font-bold text-sky-300"><i className="fas fa-chart-pie mr-1"></i> ผลโพลล์ในคอมเมนต์ (รวม {totalVotes} โหวต)</div>
-                                  {(post.poll.options || []).map((o) => {
-                                    const c = o.votes?.length || 0, pct = totalVotes ? Math.round((c / totalVotes) * 100) : 0;
-                                    return <div key={o.id}><div className="flex justify-between"><span>{o.text}</span><span className="font-mono">{c} โหวต ({pct}%)</span></div>{!post.poll.isAnonymous && c > 0 && <div className="text-[9px] text-slate-400">ผู้โหวต: {o.votes.map((u) => getAuthor(u).displayName).join(', ')}</div>}</div>;
-                                  })}
+                            {currentUser && (
+                              <div className="space-y-1.5 pt-1">
+                                {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span>↩️ ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}>✕</button></div>}
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex gap-2 items-end">
+                                        <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24" />
+                                        <button onClick={() => handleAddComment(post.id, null)} className="btn-b text-xs">ส่ง</button>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
+                                      <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[10px]"><UpIcon />แนบไฟล์</button>
+                                      <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[10px]">🔗 แนบลิงก์</button>
+                                    </div>
                                 </div>
-                              )}
-
-                              {/* ส่วนเปิด-ปิดความคิดเห็น */}
-                              <div className="pt-1">
-                                  <button 
-                                      onClick={() => {
-                                          const isShowing = showComments[post.id];
-                                          setShowComments(prev => ({ ...prev, [post.id]: !isShowing }));
-                                          if (!isShowing && !visibleCommCount[post.id]) {
-                                              setVisibleCommCount(prev => ({ ...prev, [post.id]: 8 }));
-                                          }
-                                      }} 
-                                      className={`w-full py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors border shadow-sm ${showComments[post.id] ? 'bg-sky-950/40 text-sky-300 border-sky-900/50 hover:bg-sky-900/60' : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:bg-[#0F2547] hover:text-white'}`}
-                                  >
-                                      <i className={`fas ${showComments[post.id] ? 'fa-chevron-up' : 'fa-comment-alt'}`}></i>
-                                      {showComments[post.id] ? 'ซ่อนความคิดเห็น' : `แสดงความคิดเห็น (${allComm.length})`}
-                                  </button>
                               </div>
-
-                              {/* แสดงคอมเมนต์เมื่อถูกเปิด */}
-                              {showComments[post.id] && (
-                                  <div className="space-y-3 pt-3 animate-fade-in border-t border-sky-900/30 mt-3">
-                                      {rootComm.length === 0 ? (
-                                          <div className="text-center text-slate-500 text-[10px] py-4 bg-[#050811] rounded-xl border border-dashed border-[#1E3A5F]">ยังไม่มีความคิดเห็น มาร่วมเป็นคนแรกสิ!</div>
-                                      ) : (
-                                          <div className="space-y-2">
-                                              {rootComm.slice(0, visibleCommCount[post.id] || 8).map((c, idx) => {
-                                                const isBestAnswer = post.isQA && post.bestAnswerId === c.id;
-                                                return (
-                                                    <div key={c.id} className="relative">
-                                                        {isBestAnswer && <div className="absolute -top-3 left-4 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-md border-2 border-[#0B1325]">👑 คำตอบที่ดีที่สุด (Best Answer)</div>}
-                                                        <div className={isBestAnswer ? 'ring-2 ring-emerald-500 rounded-xl bg-emerald-950/20 pt-2' : ''}>
-                                                            <PantipThread 
-                                                                c={c} all={allComm} lbl={'ความเห็นที่ ' + (idx + 1)} postId={post.id} 
-                                                                me={currentUser} getAuthor={getAuthor} canManage={canManage} 
-                                                                onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} 
-                                                                onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} 
-                                                                onCtx={setCommMenu}
-                                                                // สิ่งที่เพิ่มเข้ามา:
-                                                                isQA={post.isQA}
-                                                                isOwner={currentUser && currentUser.id === post.authorId}
-                                                                onMarkBestAnswer={async (cid) => {
-                                                                    await db.collection('bma_posts').doc(post.id).update({ bestAnswerId: post.bestAnswerId === cid ? null : cid });
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                          </div>
-                                      )}
-
-                                      {/* ปุ่มแสดงความคิดเห็นเพิ่มเติม */}
-                                      {(visibleCommCount[post.id] || 8) < rootComm.length && (
-                                          <button 
-                                              onClick={() => setVisibleCommCount(prev => ({ ...prev, [post.id]: (prev[post.id] || 8) + 8 }))} 
-                                              className="w-full py-2 bg-transparent text-sky-400 text-[10px] font-bold hover:underline hover:text-sky-300 transition-colors flex items-center justify-center gap-1.5"
-                                          >
-                                              <i className="fas fa-level-down-alt"></i> ดูความคิดเห็นเพิ่มเติม (เหลืออีก {rootComm.length - (visibleCommCount[post.id] || 8)} รายการ)
-                                          </button>
-                                      )}
-                                  </div>
-                              )}
-
-                              {currentUser && showComments[post.id] && (
-                                <div className="space-y-1.5 pt-2 border-t border-[#1E3A5F]/50 mt-2">
-                                  {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[10px] text-sky-200"><span><i className="fas fa-reply mr-1"></i> ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}><i className="fas fa-times"></i></button></div>}
-                                  <div className="flex flex-col gap-2">
-                                      <div className="flex gap-2 items-end">
-                                          <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24 py-2" />
-                                          <button onClick={() => handleAddComment(post.id, null)} className="w-8 h-8 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center shadow-md"><i className="fas fa-paper-plane text-[10px] -ml-0.5"></i></button>
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
-                                        <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[9px]"><i className="fas fa-image mr-1"></i>แนบไฟล์</button>
-                                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[9px]"><i className="fas fa-link mr-1"></i>แนบลิงก์</button>
-                                      </div>
-                                  </div>
-                                </div>
-                              )}
-                        </div>
-                    )}
-                  </article>
-              );
-            })}
-          </div>
-          
+                            )}
+                          </div>
+                        </article>
+            );
+          })}
+      
+          {/* ส่วนโหลดโพสต์เพิ่มเติม */}
           {visiblePosts < filteredPosts.length && (
             <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
               <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดโพสต์เพิ่มเติม...
@@ -8003,45 +7115,7 @@
       const allPostTags = Array.from(new Set(posts.flatMap(p => p.tags || [])));
       const [cInputs, setCInputs] = useState({}); const [repComm, setRepComm] = useState({}); const [commMenu, setCommMenu] = useState(null);
       const [hasPoll, setHasPoll] = useState(false); const [pollQ, setPollQ] = useState(''); const [pollOpts, setPollOpts] = useState(['', '']); const [pollClose, setPollClose] = useState(''); const [pollAnon, setPollAnon] = useState(false);
-      const [isQA, setIsQA] = useState(false); // โหมดถาม-ตอบ
-      const [isSpoiler, setIsSpoiler] = useState(false); // โหมดสปอยล์
-      
-      // 🌟 New Feature: ฟังก์ชันจัดการฉบับร่าง (Save Draft)
-      const saveDraft = () => {
-          const draft = { pTitle, pCont, pTags, isQA, isSpoiler, pGuest, pPinned };
-          localStorage.setItem('tbma_post_draft', JSON.stringify(draft));
-          alert('💾 บันทึกฉบับร่างเรียบร้อยแล้ว! (เนื้อหาจะยังอยู่เมื่อคุณปิดหน้าต่างไป)');
-      };
 
-      // โหลดฉบับร่างอัตโนมัติเมื่อกดสร้างโพสต์
-      useEffect(() => {
-          if (createPost && !editPostData) {
-              const saved = localStorage.getItem('tbma_post_draft');
-              if (saved) {
-                  try {
-                      const draft = JSON.parse(saved);
-                      if (draft.pTitle || draft.pCont) {
-                          if (confirm('คุณมีโพสต์ที่เขียนค้างไว้ ต้องการโหลดกลับมาหรือไม่?')) {
-                              setPTitle(draft.pTitle || ''); setPCont(draft.pCont || '');
-                              setPTags(draft.pTags || []); setIsQA(draft.isQA || false);
-                              setIsSpoiler(draft.isSpoiler || false); setPGuest(draft.pGuest || false);
-                              setPPinned(draft.pPinned || false);
-                          }
-                      }
-                  } catch (e) {}
-              }
-          }
-      }, [createPost, editPostData]);
-
-      // 🌟 New Feature: นับยอดคนดู (Read Receipts)
-      const markPostAsRead = (postId, postReadBy) => {
-          if (!currentUser) return;
-          if (!(postReadBy || []).includes(currentUser.id)) {
-              db.collection('bma_posts').doc(postId).update({
-                  readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.id)
-              }).catch(()=>{});
-          }
-      };
       // Admin States
       const [newMId, setNewMId] = useState('M001'); const [newMTags, setNewMTags] = useState(['LCs & Pal']); const [cTag, setCTag] = useState(''); const [copiedId, setCopiedId] = useState(null);
       const [actSuccessMsg, setActSuccessMsg] = useState('');
@@ -9096,9 +8170,7 @@
 
       const handleEditPostReq = (post) => {
         setPTitle(post.title || ''); setPCont(post.content || ''); setPGuest(post.isGuestAllowed); setPAtts(post.attachments || []); setPTags(post.tags || []);
-        setPPinned(post.isPinned || false); 
-        setIsQA(post.isQA || false); setIsSpoiler(post.isSpoiler || false);
-        if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
+        setPPinned(post.isPinned || false); if(post.poll) { setHasPoll(true); setPollQ(post.poll.question); setPollOpts(post.poll.options.map(o=>o.text)); setPollAnon(post.poll.isAnonymous); setPollClose(''); } 
         else { setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setPollClose(''); }
         setEditPostData(post.id); setCreatePost(true);
       };
@@ -9113,12 +8185,12 @@
         }
         if (!pCont.trim() && !pTitle.trim() && !pAtts.length && !poll) return;
         if(editPostData) {
-          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, isPinned: pPinned, tags: pTags, isQA, isSpoiler });
-          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setIsQA(false); setIsSpoiler(false); setCreatePost(false); setEditPostData(null);
+          await db.collection('bma_posts').doc(editPostData).update({ title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, isPinned: pPinned, tags: pTags });
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false); setEditPostData(null);
         } else {
           const now = Date.now(), postId = 'post-' + now;
-          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, tags: pTags, poll, mutedBy: [], isPinned: pPinned, isQA, isSpoiler, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
-          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setIsQA(false); setIsSpoiler(false); setCreatePost(false);
+          const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, tags: pTags, poll, mutedBy: [], isPinned: pPinned, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
+          setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setCreatePost(false);
           await db.collection('bma_posts').doc(postId).set(postObj);
           await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
           await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
@@ -11002,7 +10074,7 @@
                   const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt, totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
                   const canManage = (uid) => currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === uid;
                   const allComm = post.comments || [], rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
-		  const [isSpoilerRevealed, setIsSpoilerRevealed] = useState(!post.isSpoiler);
+
                   return (
                         <article id={'post-' + post.id} key={post.id} className={'card p-5 space-y-3.5 shadow-2xl border border-sky-900/50'}>
                           {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
@@ -11024,7 +10096,6 @@
                               )}
                             </div>
                           </div>
-			  {post.isQA && <span className="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider ml-1"><i className="fas fa-question-circle mr-1"></i> Q&A</span>}
                           {post.title && <h3 className="text-base font-bold">{post.title}</h3>}
                           {post.content && <FormattedText text={post.content} currentUser={currentUser} />}
                           {post.tags?.length > 0 && (
@@ -11060,7 +10131,7 @@
                           {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
 
                           <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
-                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} postId={post.id} db={db} />
+                            <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} onLike={() => { if(!currentUser) return; db.collection('bma_posts').doc(post.id).update({ likes: (post.likes||[]).includes(currentUser.id) ? post.likes.filter((i) => i !== currentUser.id) : [...(post.likes || []), currentUser.id] }); }} />
                             <div className="flex gap-2">
                                <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="px-2 py-0.5 rounded-full bg-[#0B1325] border border-[#1E3A5F] text-[10px]">🔗 คัดลอกลิงก์แชร์</button>
                                <button onClick={async () => { if (!currentUser) return alert('เข้าสู่ระบบก่อนบันทึกโพสต์'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-3 py-1 rounded-lg font-bold bg-white text-[#050811]' : 'btn-d py-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
@@ -11141,11 +10212,6 @@
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
-		  { id: 'grade_crisis', category: 'Calculate & Academic', name: 'Grade Crisis Manager', icon: '🚨', desc: 'วางแผนกู้ชีพเกรด คำนวณคะแนนไฟนอลที่ต้องทำพร้อมมาตรวัดความตื่นตระหนก' },
-                  { id: 'gacha', category: 'Calculate & Academic', name: 'Gacha Drop Reality', icon: '🎰', desc: 'คำนวณโอกาสเกลือ (Binomial) พร้อมอนิเมชันจำลองตู้กาชาปอง' },
-                  { id: 'projectile', category: 'Calculate & Academic', name: 'Projectile Motion', icon: '🚀', desc: 'แอนิเมชันจำลองการเคลื่อนที่แบบวิถีโค้ง พร้อมคำนวณระยะและจุดสูงสุด' },
-                  { id: 'finance', category: 'Calculate & Academic', name: 'Financial Reality', icon: '💸', desc: 'กราฟภาพคำนวณผ่อนบ้านลดต้นลดดอก และพลังของดอกเบี้ยทบต้น' },
-                  { id: 'math_latex', category: 'Calculate & Academic', name: 'Math / LaTeX Builder', icon: '∛', desc: 'พิมพ์และต่อบล็อกสมการยากๆ พร้อมเรนเดอร์เป็นรูปภาพเอาไปแปะรายงานได้เลย' },
                   { id: 'splitter', category: 'Community Utilities', name: 'Group Bill Splitter', icon: '💸', desc: 'คำนวณเคลียร์หนี้ทริปกลุ่มที่ซับซ้อน สรุปใครต้องโอนให้ใครแบบเข้าใจง่าย' },
                   { id: 'smartdate', category: 'Community Utilities', name: 'Smart Date Calculator', icon: '🗓️', desc: 'หาระยะห่างของวัน และคำนวณวันหน้า/ย้อนหลังแบบข้ามวันหยุดสุดสัปดาห์ได้' },
                   { id: 'cipher', category: 'Community Utilities', name: 'Secret Cipher', icon: '🕵️', desc: 'เข้ารหัสข้อความลับ (Base64, Caesar, ฯลฯ) เอาไว้ส่งความลับให้เพื่อนในแชต' },
@@ -11265,11 +10331,6 @@
                                   {activeTool === 'converter' && <AdvancedUnitConverter />}
                                   {activeTool === 'solver' && <MatrixSolver />}
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
-				  {activeTool === 'grade_crisis' && <GradeCrisisManager />}
-                                  {activeTool === 'gacha' && <GachaSimulator />}
-                                  {activeTool === 'projectile' && <InteractiveProjectile />}
-                                  {activeTool === 'finance' && <FinancialReality />}
-                                  {activeTool === 'math_latex' && <MathSymbolBuilder />}
                                   {activeTool === 'splitter' && <LunarSplitter />}
                                   {activeTool === 'smartdate' && <SmartDateCalc />}
                                   {activeTool === 'cipher' && <SecretCipher />}
@@ -11342,32 +10403,6 @@
                     </>
                   )}
                 </div>
-		{/* 🌟 New Feature: Trending Tags */}
-                {currentView === 'feed' && (
-                  <div className="card p-4 text-xs animate-fade-in border-[#1E3A5F]">
-                    <div className="font-bold text-sky-400 mb-3 border-b border-[#1E3A5F] pb-2">
-                        <i className="fas fa-fire-alt text-red-500 mr-1"></i> แท็กมาแรง (Trending)
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {(() => {
-                            // คำนวณความนิยมจากจำนวนโพสต์ ไลก์ และคอมเมนต์
-                            const counts = {};
-                            posts.forEach(p => {
-                                (p.tags || []).forEach(t => { 
-                                    counts[t] = (counts[t] || 0) + 1 + (p.likes?.length || 0) + (p.comments?.length || 0); 
-                                });
-                            });
-                            const topTags = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 7);
-                            if(topTags.length === 0) return <div className="text-slate-500 text-[10px]">ยังไม่มีแท็ก</div>;
-                            return topTags.map(([t, c]) => (
-                                <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); }} className="px-2.5 py-1 bg-[#050811] hover:bg-sky-900/50 text-slate-300 hover:text-sky-200 border border-[#1E3A5F] hover:border-sky-500 rounded-full transition-colors shadow-sm">
-                                    #{t}
-                                </button>
-                            ));
-                        })()}
-                    </div>
-                  </div>
-                )}
               </aside>
 
               <main 
@@ -11651,114 +10686,67 @@
               </Modal>
           )}
 
-          {/* 🌟 หน้าต่างสร้างโพสต์โฉมใหม่ (Modern Create Post UI) */}
           {createPost && (
-            <Modal title={editPostData ? '📝 แก้ไขโพสต์' : '✨ สร้างโพสต์ใหม่'} maxW="max-w-2xl" onClose={() => { setCreatePost(false); setEditPostData(null); }}>
-              <form onSubmit={handleCreatePost} className="flex flex-col h-full space-y-4 animate-fade-in">
-                
-                {/* Title (ไร้ขอบตัวใหญ่) */}
-                <input 
-                    type="text" 
-                    value={pTitle} 
-                    onChange={e => setPTitle(e.target.value)} 
-                    placeholder="หัวข้อโพสต์ (Title)..." 
-                    className="w-full bg-transparent border-none text-xl sm:text-2xl font-bold text-white outline-none placeholder-slate-500 px-1 focus:ring-0" 
-                />
-                
-                {/* Content (Auto-resize สไตล์) */}
-                <textarea 
-                    rows="6" 
-                    value={pCont} 
-                    onChange={e => setPCont(e.target.value)} 
-                    placeholder="เขียนสิ่งที่คุณคิด รองรับ Markdown เช่น **ตัวหนา**, > โควทข้อความ, - ลิสต์จุด..." 
-                    className="w-full bg-[#050811] rounded-xl p-4 text-sm outline-none resize-none border border-[#1E3A5F] focus:border-sky-500 transition-colors custom-scrollbar" 
-                />
-
-                {/* Toolbar เครื่องมือพิเศษ */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
-                    <div className="flex gap-1">
-                        <input type="file" multiple ref={pFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); setPAtts(p => [...p, a]); } catch (err) { alert(err.message); } } }} className="hidden" />
-                        
-                        <button type="button" onClick={() => pFileRef.current?.click()} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="อัปโหลดไฟล์รูปภาพ/วิดีโอ"><i className="fas fa-image text-lg"></i></button>
-                        
-                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ หรือ YouTube"); if (u) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }]); } }} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="แนบลิงก์ URL"><i className="fas fa-link text-lg"></i></button>
-                        
-                        <button type="button" onClick={() => setHasPoll(!hasPoll)} className={`p-2 rounded-lg transition-colors ${hasPoll ? 'bg-sky-900/50 text-sky-400' : 'text-slate-400 hover:bg-[#0F2547] hover:text-sky-300'}`} title="สร้างโพลล์สำรวจ"><i className="fas fa-poll text-lg"></i></button>
-                    </div>
-
-                    {/* ปุ่ม Save Draft */}
-                    {!editPostData && (
-                        <button type="button" onClick={saveDraft} className="text-[10px] text-slate-400 font-bold px-3 py-1.5 rounded-full border border-slate-600 hover:bg-slate-700 hover:text-white transition-colors">
-                            💾 บันทึกฉบับร่าง
-                        </button>
-                    )}
-                </div>
-
-                {/* กล่องตั้งค่าสวิตช์ต่างๆ */}
-                <div className="flex flex-wrap gap-2 text-[10px] font-bold">
-                    <button type="button" onClick={() => setIsQA(!isQA)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isQA ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-question-circle"></i> โหมดคำถาม Q&A
-                    </button>
-                    <button type="button" onClick={() => setIsSpoiler(!isSpoiler)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isSpoiler ? 'bg-red-950/80 text-red-400 border-red-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-eye-slash"></i> ซ่อนสปอยล์
-                    </button>
-                    <button type="button" onClick={() => setPGuest(!pGuest)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pGuest ? 'bg-sky-950/80 text-sky-400 border-sky-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-globe"></i> ให้ Guest อ่านได้
-                    </button>
-                    {currentUser?.role !== 'member' && (
-                        <button type="button" onClick={() => setPPinned(!pPinned)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pPinned ? 'bg-amber-950/80 text-amber-400 border-amber-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                            <i className="fas fa-thumbtack"></i> ปักหมุด
-                        </button>
-                    )}
-                </div>
-
-                {/* โพลล์และแท็ก... (คงโค้ดส่วนนี้ไว้เหมือนเดิม แต่ปรับให้เข้ากับ UI ใหม่) */}
-                {hasPoll && (
-                  <div className="bg-[#050811] p-4 rounded-xl border border-sky-500/30 shadow-inner space-y-3 animate-fade-in mt-2">
-                    <input type="text" value={pollQ} onChange={e => setPollQ(e.target.value)} placeholder="คำถามของโพลล์..." className="w-full inp text-sm font-bold text-sky-200 border-sky-900/50" />
-                    {pollOpts.map((opt, i) => (
-                      <div key={i} className="flex gap-2">
-                        <input type="text" value={opt} onChange={(e) => { const n = [...pollOpts]; n[i] = e.target.value; setPollOpts(n); }} placeholder={'ตัวเลือกที่ ' + (i + 1)} className="flex-1 inp text-xs" />
-                        {pollOpts.length > 2 && <button type="button" onClick={() => setPollOpts(pollOpts.filter((_, idx) => idx !== i))} className="btn-d text-red-400 border-red-900/50">✕</button>}
+            <Modal title={editPostData ? "✎ แก้ไขโพสต์" : "เขียนโพสต์ใหม่ / สร้างโพลล์"} onClose={() => { setCreatePost(false); setEditPostData(null); }} maxW="max-w-xl">
+              <form onSubmit={handleCreatePost} className="space-y-3 text-xs text-left">
+                <input type="text" value={pTitle} onChange={(e) => setPTitle(e.target.value)} placeholder="หัวข้อเรื่อง (ไม่บังคับ)..." className="w-full inp text-sm" />
+                <textarea rows={3} value={pCont} onChange={(e) => setPCont(e.target.value)} placeholder="เนื้อหาโพสต์..." className="w-full inp text-sm" />
+                <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] cursor-pointer">
+                  <span>🌐 อนุญาตให้ผู้มาเยือน (Guest) มองเห็นโพสต์นี้ได้ (ค่าเริ่มต้นเป็นความลับเฉพาะสมาชิก)</span>
+                  <input type="checkbox" checked={pGuest} onChange={(e) => setPGuest(e.target.checked)} />
+                </label>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'mod') && (
+                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] cursor-pointer mt-2">
+                    <span className="font-bold text-amber-300"><i className="fas fa-thumbtack mr-1"></i> ปักหมุดโพสต์ไว้บนสุด</span>
+                    <input type="checkbox" checked={pPinned} onChange={(e) => setPPinned(e.target.checked)} />
+                  </label>
+                )}
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2 relative">
+                  <div className="font-bold">🏷️ เพิ่มแท็กให้โพสต์</div>
+                  <div className="flex gap-2">
+                      <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (tagInput.trim() && !pTags.includes(tagInput.trim())) { setPTags([...pTags, tagInput.trim()]); setTagInput(''); } } }} placeholder="พิมพ์ชื่อแท็ก (เช่น ข่าวสาร, อัปเดต)..." className="flex-1 inp text-xs" />
+                      <button type="button" onClick={() => { if(tagInput.trim() && !pTags.includes(tagInput.trim())) { setPTags([...pTags, tagInput.trim()]); setTagInput(''); } }} className="btn-b text-xs px-4 font-bold">+ เพิ่ม</button>
+                  </div>
+                  {tagInput.trim() && allPostTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !pTags.includes(t)).length > 0 && (
+                      <div className="absolute top-16 left-3 right-3 bg-[#0B1325] border border-sky-500/50 rounded-lg p-2 z-50 flex flex-wrap gap-1.5 shadow-2xl max-h-32 overflow-y-auto">
+                          <div className="w-full text-[10px] text-slate-400 mb-1">แท็กที่มีคนใช้แล้ว (คลิกเพื่อเลือก):</div>
+                          {allPostTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !pTags.includes(t)).map(t => (
+                              <button key={t} type="button" onClick={() => { setPTags([...pTags, t]); setTagInput(''); }} className="px-2 py-1 bg-sky-900/50 hover:bg-sky-600 text-sky-200 rounded text-xs transition-colors border border-sky-800/50">#{t}</button>
+                          ))}
                       </div>
-                    ))}
-                    <button type="button" onClick={() => setPollOpts([...pollOpts, ''])} className="btn-b text-[10px] w-full border-dashed">+ เพิ่มตัวเลือก</button>
-                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                       <label className="flex items-center gap-2 cursor-pointer text-xs bg-[#0B1325] px-3 py-1.5 rounded-lg flex-1 border border-[#1E3A5F]"><input type="checkbox" checked={pollAnon} onChange={e => setPollAnon(e.target.checked)} className="accent-sky-500" /> โหวตแบบไม่ระบุชื่อ (Anonymous)</label>
-                       <input type="datetime-local" value={pollClose} onChange={e => setPollClose(e.target.value)} className="inp text-xs flex-1" title="เวลาปิดโหวต (ไม่บังคับ)" />
-                    </div>
-                  </div>
-                )}
-
-                {/* แถบจัดแท็ก (Suggested Tags) */}
-                <div className="pt-2 border-t border-[#1E3A5F]">
-                    <div className="flex gap-2 mb-2">
-                        <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); } }} placeholder="ใส่ Tag (กด Enter)..." className="w-48 inp text-xs" />
-                        <button type="button" onClick={() => { if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); }} className="btn-b text-xs px-4">เพิ่ม</button>
-                    </div>
-                    {/* Suggested Tags เล็กๆ ให้กดได้เลย */}
-                    <div className="flex flex-wrap gap-1 mb-2">
-                        {allPostTags.slice(0, 8).map(t => (
-                            <button key={'sug'+t} type="button" onClick={() => !pTags.includes(t) && setPTags([...pTags, t])} className="text-[9px] text-slate-400 hover:text-sky-300 hover:underline">#{t}</button>
-                        ))}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {pTags.map(t => <span key={t} className="px-2.5 py-1 bg-sky-900/30 text-sky-200 rounded-full text-[10px] border border-sky-800 shadow-sm flex items-center gap-1.5">#{t} <button type="button" onClick={() => setPTags(pTags.filter((x) => x !== t))} className="text-sky-400 hover:text-red-400 font-bold">✕</button></span>)}
-                    </div>
+                  )}
+                  {pTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[#1E3A5F]/50">
+                          {pTags.map(t => (
+                              <span key={t} className="px-2 py-1 bg-[#1E3A5F] text-white rounded-md text-xs flex items-center gap-1.5 shadow-sm">
+                                  #{t} <button type="button" onClick={() => setPTags(pTags.filter(x => x !== t))} className="text-red-400 hover:text-red-300 font-bold bg-black/20 rounded-full w-4 h-4 flex items-center justify-center">✕</button>
+                              </span>
+                          ))}
+                      </div>
+                  )}
                 </div>
-
-                {pAtts.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {pAtts.map(a => <span key={a.id} className="px-2 py-1 bg-slate-800 text-xs rounded border border-slate-600 flex items-center gap-2">{a.name} <button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">✕</button></span>)}
-                  </div>
-                )}
-                
-                {/* ปุ่มโพสต์ (ปรับให้ลอยเด่น) */}
-                <div className="flex justify-end pt-4 mt-auto">
-                    <button type="submit" className="bg-sky-500 hover:bg-sky-400 text-white font-bold py-2.5 px-8 rounded-full shadow-[0_0_15px_rgba(14,165,233,0.4)] hover:scale-105 transition-all text-sm flex items-center gap-2">
-                        <i className="fas fa-paper-plane"></i> {editPostData ? 'อัปเดตโพสต์' : 'โพสต์ลงกระดาน'}
-                    </button>
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                  <div className="flex justify-between items-center"><span className="font-bold">📊 โพลล์สำรวจความคิดเห็น</span><button type="button" onClick={() => setHasPoll(!hasPoll)} className="btn-b py-1">{hasPoll ? '✓ เปิดโพลล์แล้ว' : '+ เพิ่มโพลล์'}</button></div>
+                  {hasPoll && (
+                    <div className="space-y-1.5 pt-1.5 border-t border-[#1E3A5F]">
+                      <input type="text" value={pollQ} onChange={(e) => setPollQ(e.target.value)} placeholder="คำถามโพลล์ *" className="w-full inp py-1.5" />
+                      {pollOpts.map((o, i) => <input key={i} type="text" value={o} onChange={(e) => { const n = [...pollOpts]; n[i] = e.target.value; setPollOpts(n); }} placeholder={'ตัวเลือกที่ ' + (i + 1)} className="w-full inp py-1" />)}
+                      <button type="button" onClick={() => setPollOpts([...pollOpts, ''])} className="btn-b py-0.5">+ เพิ่มตัวเลือก</button>
+                      <div className="flex justify-between items-center pt-1"><input type="datetime-local" value={pollClose} onChange={(e) => setPollClose(e.target.value)} className="inp py-1" /><label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={pollAnon} onChange={(e) => setPollAnon(e.target.checked)} /> 🕵️ โหวตไม่แสดงชื่อ</label></div>
+                    </div>
+                  )}
                 </div>
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span>อัปโหลดไฟล์ (สูงสุด 10MB) หรือแนบลิงก์</span>
+                    <input type="file" multiple ref={pFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; setUploading(true); for (const f of fl) { try { const a = await uploadChunked(f); setPAtts((p) => [...p, a]); } catch (err) { alert(err.message); } } setUploading(false); }} className="hidden" />
+                    <button type="button" onClick={() => pFileRef.current?.click()} className="btn-b py-1 font-bold"><UpIcon />อัปโหลดไฟล์</button>
+                  </div>
+                  {uploading && <div className="text-sky-300 animate-pulse">⏳ กำลังอัปโหลด...</div>}
+                  <div className="flex gap-1.5"><select value={aType} onChange={(e) => setAType(e.target.value)} className="inp py-1"><option value="image">รูปภาพ/GIF</option><option value="video">วิดีโอ (Drive/YouTube)</option><option value="audio">เสียง (Audio)</option><option value="file">ไฟล์</option></select><input type="text" value={aUrl} onChange={(e) => setAUrl(e.target.value)} placeholder="วางลิงก์เว็บ, .gif, .mp4..." className="flex-1 inp py-1" /><button type="button" onClick={() => { if (aUrl.trim()) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: aType, url: aUrl.trim(), size: 'URL' }]); setAUrl(''); } }} className="btn-w py-1">🔗 แนบลิงก์</button></div>
+                  {pAtts.map((a) => <div key={a.id} className="flex justify-between px-2 py-1 rounded bg-[#0B1325]"><span>{a.name}</span><button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">ลบ</button></div>)}
+                </div>
+                <button type="submit" className="w-full btn-w py-2.5">{editPostData ? 'บันทึกการแก้ไข' : 'เผยแพร่โพสต์'}</button>
               </form>
             </Modal>
           )}
