@@ -7410,15 +7410,13 @@
       toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment
     }) {
       
-      // State สำหรับจัดการการแสดงความคิดเห็น
       const [showComments, setShowComments] = useState({});
       const [visibleCommCount, setVisibleCommCount] = useState({});
-      
-      // 🌟 New State: สำหรับมุมมองบอร์ด (Standard, Compact, Grid)
       const [boardView, setBoardView] = useState('standard');
+      const [spoilerRevealed, setSpoilerRevealed] = useState({}); 
+      
       return (
         <>
-          {/* ส่วนค้นหาและฟิลเตอร์ */}
           <div className="card p-3.5 space-y-2.5">
             <div className="flex gap-2">
               <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, โพลล์, ชื่อสมาชิก..." className="flex-1 inp text-xs" />
@@ -7426,7 +7424,6 @@
             </div>
             
             <div className="flex justify-between items-center gap-2">
-              {/* 🌟 New Feature: View Toggle */}
               <div className="hidden sm:flex bg-[#050811] p-1 rounded-full border border-[#1E3A5F] text-slate-400">
                 <button onClick={() => setBoardView('standard')} className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='standard'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองมาตรฐาน"><i className="fas fa-list"></i></button>
                 <button onClick={() => setBoardView('grid')} className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='grid'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองตาราง (Grid)"><i className="fas fa-th-large"></i></button>
@@ -7475,12 +7472,11 @@
                 )}
               </div>
             </div>
+          </div> {/* 🟢 เพิ่มแท็กปิด div ที่ตกหล่นไปตรงนี้ 🟢 */}
 
-          {/* รายการโพสต์ */}
           <div className={boardView === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4 items-start" : "space-y-4"}>
             {filteredPosts.slice(0, visiblePosts).map((post) => {
               const author = getAuthor(post.authorId);
-              const isLiked = currentUser && (post.likes || []).includes(currentUser.id);
               const isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
               const isClosed = post.poll?.closesAt && Date.now() > post.poll.closesAt;
               const totalVotes = post.poll ? (post.poll.options || []).reduce((s, o) => s + (o.votes?.length || 0), 0) : 0;
@@ -7488,32 +7484,28 @@
               const allComm = post.comments || [];
               const rootComm = allComm.filter((c) => { const pid = c.parentId || c.replyTo?.id; return !pid || !allComm.some((x) => x.id === pid); });
 
-              // 🌟 New Feature: Official & Role-based Glowing Borders
               let borderStyle = 'border-[#1E3A5F] bg-[#0B1325]';
               let shadowStyle = 'shadow-xl';
               let headerRoleBadge = null;
 
               if (author.id === 'SYSTEM') {
-                  borderStyle = 'border-red-500/50 bg-red-950/20';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(239,68,68,0.15)]';
+                  borderStyle = 'border-red-500/50 bg-red-950/20'; shadowStyle = 'shadow-[0_0_15px_rgba(239,68,68,0.15)]';
                   headerRoleBadge = <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-bullhorn mr-1"></i> System</span>;
               } else if (author.role === 'admin') {
-                  borderStyle = 'border-amber-500/50 bg-amber-950/10';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(251,191,36,0.1)]';
+                  borderStyle = 'border-amber-500/50 bg-amber-950/10'; shadowStyle = 'shadow-[0_0_15px_rgba(251,191,36,0.1)]';
                   headerRoleBadge = <span className="bg-amber-500 text-[#050811] text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-crown mr-1"></i> Owner</span>;
               } else if (author.role === 'mod') {
-                  borderStyle = 'border-sky-400/50 bg-sky-950/10';
-                  shadowStyle = 'shadow-[0_0_15px_rgba(56,189,248,0.1)]';
+                  borderStyle = 'border-sky-400/50 bg-sky-950/10'; shadowStyle = 'shadow-[0_0_15px_rgba(56,189,248,0.1)]';
                   headerRoleBadge = <span className="bg-sky-500 text-[#050811] text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-shield-alt mr-1"></i> Vice</span>;
               }
 
               const isCompact = boardView === 'compact';
+              const markPostAsRead = (postId, postReadBy) => { if (currentUser && !(postReadBy || []).includes(currentUser.id)) db.collection('bma_posts').doc(postId).update({ readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.id) }).catch(()=>{}); };
 
               return (
                 <article id={'post-' + post.id} key={post.id} onMouseEnter={() => setTimeout(() => markPostAsRead(post.id, post.readBy), 1000)} className={`rounded-[1rem] p-4 sm:p-5 flex flex-col gap-3.5 transition-all duration-300 border ${borderStyle} ${shadowStyle}`}>
                     {post.isPinned && <div className="text-amber-300 text-[11px] font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2"><i className="fas fa-thumbtack mr-1"></i> โพสต์ปักหมุด</div>}
                     
-                    {/* Header โพสต์ */}
                     <div className="flex justify-between items-start gap-2">
                       <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer">
                         {!isCompact && <Avatar user={author} size="md" showStatus={true} />}
@@ -7546,12 +7538,14 @@
                       </div>
                     </div>
 
-                    {post.title && <h3 className={`font-bold text-sky-50 ${isCompact ? 'text-sm' : 'text-base'}`}>{post.title}</h3>}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {post.isQA && <span className="bg-emerald-500 text-white text-[9px] px-2 py-0.5 rounded-full uppercase font-bold tracking-wider"><i className="fas fa-question-circle mr-1"></i> Q&A</span>}
+                        {post.title && <h3 className={`font-bold text-sky-50 ${isCompact ? 'text-sm' : 'text-base'}`}>{post.title}</h3>}
+                    </div>
                     
-                   {/* เนื้อหา จะถูกซ่อนถ้าเป็นโหมด Compact */}
                     {!isCompact && (
-                        <div className={`transition-all duration-500 relative ${post.isSpoiler && !isSpoilerRevealed ? 'filter blur-md cursor-pointer select-none' : ''}`} onClick={() => { if(post.isSpoiler) setIsSpoilerRevealed(true); }}>
-                            {post.isSpoiler && !isSpoilerRevealed && (
+                        <div className={`transition-all duration-500 relative ${post.isSpoiler && !spoilerRevealed[post.id] ? 'filter blur-md cursor-pointer select-none' : ''}`} onClick={() => { if(post.isSpoiler) setSpoilerRevealed(p => ({...p, [post.id]: true})); }}>
+                            {post.isSpoiler && !spoilerRevealed[post.id] && (
                                 <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
                                     <div className="bg-red-950/80 text-red-200 border border-red-500/50 px-4 py-2 rounded-full font-bold text-xs shadow-2xl backdrop-blur">
                                         <i className="fas fa-eye-slash mr-1"></i> มีเนื้อหาสปอยล์ (คลิกเพื่อดู)
@@ -7604,7 +7598,6 @@
                     <div className={`flex justify-between items-center pt-2.5 border-t text-[10px] mt-auto ${author.role === 'admin' ? 'border-amber-900/50' : author.role === 'mod' ? 'border-emerald-900/50' : 'border-[#1E3A5F]'}`}>
                       <div className="flex items-center gap-3">
                           <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} postId={post.id} db={db} />
-                          {/* 🌟 New Feature: ยอดคนดู (Read Receipts) */}
                           <div className="flex items-center gap-1.5 text-slate-500 font-bold" title="จำนวนสมาชิกที่เข้าชมโพสต์นี้">
                               <i className="fas fa-eye"></i> {post.readBy?.length || 0}
                           </div>
@@ -7663,7 +7656,6 @@
                                                                 onDel={async (pid, cid) => { const p = posts.find((x) => x.id === pid); if (p) await db.collection('bma_posts').doc(pid).update({ comments: (p.comments || []).filter((x) => x.id !== cid) }); }} 
                                                                 onLike={toggleCommLike} onReply={(pid, comm, lbl) => setRepComm({ ...repComm, [pid]: { ...comm, labelNum: lbl } })} 
                                                                 onCtx={setCommMenu}
-                                                                // สิ่งที่เพิ่มเข้ามา:
                                                                 isQA={post.isQA}
                                                                 isOwner={currentUser && currentUser.id === post.authorId}
                                                                 onMarkBestAnswer={async (cid) => {
@@ -7691,7 +7683,7 @@
 
                               {currentUser && showComments[post.id] && (
                                 <div className="space-y-1.5 pt-2 border-t border-[#1E3A5F]/50 mt-2">
-                                  {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[10px] text-sky-200"><span><i className="fas fa-reply mr-1"></i> ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}><i className="fas fa-times"></i></button></div>}
+                                  {repComm[post.id] && <div className="flex justify-between px-3 py-1 rounded bg-sky-950/60 text-[11px] text-sky-200"><span><i className="fas fa-reply mr-1"></i> ตอบกลับ {repComm[post.id].labelNum || getAuthor(repComm[post.id].authorId).displayName}</span><button onClick={() => setRepComm({ ...repComm, [post.id]: null })}><i className="fas fa-times"></i></button></div>}
                                   <div className="flex flex-col gap-2">
                                       <div className="flex gap-2 items-end">
                                           <textarea rows={1} value={cInputs[post.id] || ''} onChange={(e) => setCInputs({ ...cInputs, [post.id]: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddComment(post.id, null); } }} placeholder="แสดงความคิดเห็น..." className="flex-1 inp text-xs resize-none max-h-24 py-2" />
@@ -11652,118 +11644,6 @@
               </Modal>
           )}
 
-          {/* 🌟 หน้าต่างสร้างโพสต์โฉมใหม่ (Modern Create Post UI) */}
-          {createPost && (
-            <Modal title={editPostData ? '📝 แก้ไขโพสต์' : '✨ สร้างโพสต์ใหม่'} maxW="max-w-2xl" onClose={() => { setCreatePost(false); setEditPostData(null); }}>
-              <form onSubmit={handleCreatePost} className="flex flex-col h-full space-y-4 animate-fade-in">
-                
-                {/* Title (ไร้ขอบตัวใหญ่) */}
-                <input 
-                    type="text" 
-                    value={pTitle} 
-                    onChange={e => setPTitle(e.target.value)} 
-                    placeholder="หัวข้อโพสต์ (Title)..." 
-                    className="w-full bg-transparent border-none text-xl sm:text-2xl font-bold text-white outline-none placeholder-slate-500 px-1 focus:ring-0" 
-                />
-                
-                {/* Content (Auto-resize สไตล์) */}
-                <textarea 
-                    rows="6" 
-                    value={pCont} 
-                    onChange={e => setPCont(e.target.value)} 
-                    placeholder="เขียนสิ่งที่คุณคิด รองรับ Markdown เช่น **ตัวหนา**, > โควทข้อความ, - ลิสต์จุด..." 
-                    className="w-full bg-[#050811] rounded-xl p-4 text-sm outline-none resize-none border border-[#1E3A5F] focus:border-sky-500 transition-colors custom-scrollbar" 
-                />
-
-                {/* Toolbar เครื่องมือพิเศษ */}
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
-                    <div className="flex gap-1">
-                        <input type="file" multiple ref={pFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); setPAtts(p => [...p, a]); } catch (err) { alert(err.message); } } }} className="hidden" />
-                        
-                        <button type="button" onClick={() => pFileRef.current?.click()} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="อัปโหลดไฟล์รูปภาพ/วิดีโอ"><i className="fas fa-image text-lg"></i></button>
-                        
-                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ หรือ YouTube"); if (u) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }]); } }} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="แนบลิงก์ URL"><i className="fas fa-link text-lg"></i></button>
-                        
-                        <button type="button" onClick={() => setHasPoll(!hasPoll)} className={`p-2 rounded-lg transition-colors ${hasPoll ? 'bg-sky-900/50 text-sky-400' : 'text-slate-400 hover:bg-[#0F2547] hover:text-sky-300'}`} title="สร้างโพลล์สำรวจ"><i className="fas fa-poll text-lg"></i></button>
-                    </div>
-
-                    {/* ปุ่ม Save Draft */}
-                    {!editPostData && (
-                        <button type="button" onClick={saveDraft} className="text-[10px] text-slate-400 font-bold px-3 py-1.5 rounded-full border border-slate-600 hover:bg-slate-700 hover:text-white transition-colors">
-                            💾 บันทึกฉบับร่าง
-                        </button>
-                    )}
-                </div>
-
-                {/* กล่องตั้งค่าสวิตช์ต่างๆ */}
-                <div className="flex flex-wrap gap-2 text-[10px] font-bold">
-                    <button type="button" onClick={() => setIsQA(!isQA)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isQA ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-question-circle"></i> โหมดคำถาม Q&A
-                    </button>
-                    <button type="button" onClick={() => setIsSpoiler(!isSpoiler)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isSpoiler ? 'bg-red-950/80 text-red-400 border-red-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-eye-slash"></i> ซ่อนสปอยล์
-                    </button>
-                    <button type="button" onClick={() => setPGuest(!pGuest)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pGuest ? 'bg-sky-950/80 text-sky-400 border-sky-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                        <i className="fas fa-globe"></i> ให้ Guest อ่านได้
-                    </button>
-                    {currentUser?.role !== 'member' && (
-                        <button type="button" onClick={() => setPPinned(!pPinned)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pPinned ? 'bg-amber-950/80 text-amber-400 border-amber-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
-                            <i className="fas fa-thumbtack"></i> ปักหมุด
-                        </button>
-                    )}
-                </div>
-
-                {/* โพลล์และแท็ก... (คงโค้ดส่วนนี้ไว้เหมือนเดิม แต่ปรับให้เข้ากับ UI ใหม่) */}
-                {hasPoll && (
-                  <div className="bg-[#050811] p-4 rounded-xl border border-sky-500/30 shadow-inner space-y-3 animate-fade-in mt-2">
-                    <input type="text" value={pollQ} onChange={e => setPollQ(e.target.value)} placeholder="คำถามของโพลล์..." className="w-full inp text-sm font-bold text-sky-200 border-sky-900/50" />
-                    {pollOpts.map((opt, i) => (
-                      <div key={i} className="flex gap-2">
-                        <input type="text" value={opt} onChange={(e) => { const n = [...pollOpts]; n[i] = e.target.value; setPollOpts(n); }} placeholder={'ตัวเลือกที่ ' + (i + 1)} className="flex-1 inp text-xs" />
-                        {pollOpts.length > 2 && <button type="button" onClick={() => setPollOpts(pollOpts.filter((_, idx) => idx !== i))} className="btn-d text-red-400 border-red-900/50">✕</button>}
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => setPollOpts([...pollOpts, ''])} className="btn-b text-[10px] w-full border-dashed">+ เพิ่มตัวเลือก</button>
-                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                       <label className="flex items-center gap-2 cursor-pointer text-xs bg-[#0B1325] px-3 py-1.5 rounded-lg flex-1 border border-[#1E3A5F]"><input type="checkbox" checked={pollAnon} onChange={e => setPollAnon(e.target.checked)} className="accent-sky-500" /> โหวตแบบไม่ระบุชื่อ (Anonymous)</label>
-                       <input type="datetime-local" value={pollClose} onChange={e => setPollClose(e.target.value)} className="inp text-xs flex-1" title="เวลาปิดโหวต (ไม่บังคับ)" />
-                    </div>
-                  </div>
-                )}
-
-                {/* แถบจัดแท็ก (Suggested Tags) */}
-                <div className="pt-2 border-t border-[#1E3A5F]">
-                    <div className="flex gap-2 mb-2">
-                        <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); } }} placeholder="ใส่ Tag (กด Enter)..." className="w-48 inp text-xs" />
-                        <button type="button" onClick={() => { if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); }} className="btn-b text-xs px-4">เพิ่ม</button>
-                    </div>
-                    {/* Suggested Tags เล็กๆ ให้กดได้เลย */}
-                    <div className="flex flex-wrap gap-1 mb-2">
-                        {allPostTags.slice(0, 8).map(t => (
-                            <button key={'sug'+t} type="button" onClick={() => !pTags.includes(t) && setPTags([...pTags, t])} className="text-[9px] text-slate-400 hover:text-sky-300 hover:underline">#{t}</button>
-                        ))}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {pTags.map(t => <span key={t} className="px-2.5 py-1 bg-sky-900/30 text-sky-200 rounded-full text-[10px] border border-sky-800 shadow-sm flex items-center gap-1.5">#{t} <button type="button" onClick={() => setPTags(pTags.filter((x) => x !== t))} className="text-sky-400 hover:text-red-400 font-bold">✕</button></span>)}
-                    </div>
-                </div>
-
-                {pAtts.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {pAtts.map(a => <span key={a.id} className="px-2 py-1 bg-slate-800 text-xs rounded border border-slate-600 flex items-center gap-2">{a.name} <button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">✕</button></span>)}
-                  </div>
-                )}
-                
-                {/* ปุ่มโพสต์ (ปรับให้ลอยเด่น) */}
-                <div className="flex justify-end pt-4 mt-auto">
-                    <button type="submit" className="bg-sky-500 hover:bg-sky-400 text-white font-bold py-2.5 px-8 rounded-full shadow-[0_0_15px_rgba(14,165,233,0.4)] hover:scale-105 transition-all text-sm flex items-center gap-2">
-                        <i className="fas fa-paper-plane"></i> {editPostData ? 'อัปเดตโพสต์' : 'โพสต์ลงกระดาน'}
-                    </button>
-                </div>
-              </form>
-            </Modal>
-          )}
-
           {/* HALLOWEEN OVERLAYS */}
           {IS_HALLOWEEN && ghosts.map(g => (
              <div key={g.id} onClick={() => catchGhost(g.id)} className="ghost-hunt" style={{ left: g.x + 'vw', top: g.y + 'vh' }} title="จับผี!">👻</div>
@@ -11830,9 +11710,117 @@
             </Modal>
           )}
 
+        {/* 🌟 หน้าต่างสร้างโพสต์โฉมใหม่ (Modern Create Post UI) */}
+          {createPost && (
+            <Modal title={editPostData ? '📝 แก้ไขโพสต์' : '✨ สร้างโพสต์ใหม่'} maxW="max-w-2xl" onClose={() => { setCreatePost(false); setEditPostData(null); }}>
+              <form onSubmit={handleCreatePost} className="flex flex-col h-full space-y-4 animate-fade-in">
+                
+                {/* Title (ไร้ขอบตัวใหญ่) */}
+                <input 
+                    type="text" 
+                    value={pTitle} 
+                    onChange={e => setPTitle(e.target.value)} 
+                    placeholder="หัวข้อโพสต์ (Title)..." 
+                    className="w-full bg-transparent border-none text-xl sm:text-2xl font-bold text-white outline-none placeholder-slate-500 px-1 focus:ring-0" 
+                />
+                
+                {/* Content (Auto-resize สไตล์) */}
+                <textarea 
+                    rows="6" 
+                    value={pCont} 
+                    onChange={e => setPCont(e.target.value)} 
+                    placeholder="เขียนสิ่งที่คุณคิด รองรับ Markdown เช่น **ตัวหนา**, > โควทข้อความ, - ลิสต์จุด..." 
+                    className="w-full bg-[#050811] rounded-xl p-4 text-sm outline-none resize-none border border-[#1E3A5F] focus:border-sky-500 transition-colors custom-scrollbar" 
+                />
+
+                {/* Toolbar เครื่องมือพิเศษ */}
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F]">
+                    <div className="flex gap-1">
+                        <input type="file" multiple ref={pFileRef} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); setPAtts(p => [...p, a]); } catch (err) { alert(err.message); } } }} className="hidden" />
+                        
+                        <button type="button" onClick={() => pFileRef.current?.click()} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="อัปโหลดไฟล์รูปภาพ/วิดีโอ"><i className="fas fa-image text-lg"></i></button>
+                        
+                        <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ หรือ YouTube"); if (u) { setPAtts([...pAtts, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }]); } }} className="p-2 rounded-lg text-slate-400 hover:bg-[#0F2547] hover:text-sky-300 transition-colors" title="แนบลิงก์ URL"><i className="fas fa-link text-lg"></i></button>
+                        
+                        <button type="button" onClick={() => setHasPoll(!hasPoll)} className={`p-2 rounded-lg transition-colors ${hasPoll ? 'bg-sky-900/50 text-sky-400' : 'text-slate-400 hover:bg-[#0F2547] hover:text-sky-300'}`} title="สร้างโพลล์สำรวจ"><i className="fas fa-poll text-lg"></i></button>
+                    </div>
+
+                    {/* ปุ่ม Save Draft */}
+                    {!editPostData && (
+                        <button type="button" onClick={saveDraft} className="text-[10px] text-slate-400 font-bold px-3 py-1.5 rounded-full border border-slate-600 hover:bg-slate-700 hover:text-white transition-colors">
+                            💾 บันทึกฉบับร่าง
+                        </button>
+                    )}
+                </div>
+
+                {/* กล่องตั้งค่าสวิตช์ต่างๆ */}
+                <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                    <button type="button" onClick={() => setIsQA(!isQA)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isQA ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                        <i className="fas fa-question-circle"></i> โหมดคำถาม Q&A
+                    </button>
+                    <button type="button" onClick={() => setIsSpoiler(!isSpoiler)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${isSpoiler ? 'bg-red-950/80 text-red-400 border-red-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                        <i className="fas fa-eye-slash"></i> ซ่อนสปอยล์
+                    </button>
+                    <button type="button" onClick={() => setPGuest(!pGuest)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pGuest ? 'bg-sky-950/80 text-sky-400 border-sky-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                        <i className="fas fa-globe"></i> ให้ Guest อ่านได้
+                    </button>
+                    {currentUser?.role !== 'member' && (
+                        <button type="button" onClick={() => setPPinned(!pPinned)} className={`px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${pPinned ? 'bg-amber-950/80 text-amber-400 border-amber-500/50 shadow-md' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                            <i className="fas fa-thumbtack"></i> ปักหมุด
+                        </button>
+                    )}
+                </div>
+
+                {hasPoll && (
+                  <div className="bg-[#050811] p-4 rounded-xl border border-sky-500/30 shadow-inner space-y-3 animate-fade-in mt-2">
+                    <input type="text" value={pollQ} onChange={e => setPollQ(e.target.value)} placeholder="คำถามของโพลล์..." className="w-full inp text-sm font-bold text-sky-200 border-sky-900/50" />
+                    {pollOpts.map((opt, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input type="text" value={opt} onChange={(e) => { const n = [...pollOpts]; n[i] = e.target.value; setPollOpts(n); }} placeholder={'ตัวเลือกที่ ' + (i + 1)} className="flex-1 inp text-xs" />
+                        {pollOpts.length > 2 && <button type="button" onClick={() => setPollOpts(pollOpts.filter((_, idx) => idx !== i))} className="btn-d text-red-400 border-red-900/50">✕</button>}
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setPollOpts([...pollOpts, ''])} className="btn-b text-[10px] w-full border-dashed">+ เพิ่มตัวเลือก</button>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                       <label className="flex items-center gap-2 cursor-pointer text-xs bg-[#0B1325] px-3 py-1.5 rounded-lg flex-1 border border-[#1E3A5F]"><input type="checkbox" checked={pollAnon} onChange={e => setPollAnon(e.target.checked)} className="accent-sky-500" /> โหวตแบบไม่ระบุชื่อ (Anonymous)</label>
+                       <input type="datetime-local" value={pollClose} onChange={e => setPollClose(e.target.value)} className="inp text-xs flex-1" title="เวลาปิดโหวต (ไม่บังคับ)" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-[#1E3A5F]">
+                    <div className="flex gap-2 mb-2">
+                        <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); } }} placeholder="ใส่ Tag (กด Enter)..." className="w-48 inp text-xs" />
+                        <button type="button" onClick={() => { if (tagInput.trim() && !pTags.includes(tagInput.trim())) setPTags([...pTags, tagInput.trim()]); setTagInput(''); }} className="btn-b text-xs px-4">เพิ่ม</button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                        {allPostTags.slice(0, 8).map(t => (
+                            <button key={'sug'+t} type="button" onClick={() => !pTags.includes(t) && setPTags([...pTags, t])} className="text-[9px] text-slate-400 hover:text-sky-300 hover:underline">#{t}</button>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {pTags.map(t => <span key={t} className="px-2.5 py-1 bg-sky-900/30 text-sky-200 rounded-full text-[10px] border border-sky-800 shadow-sm flex items-center gap-1.5">#{t} <button type="button" onClick={() => setPTags(pTags.filter((x) => x !== t))} className="text-sky-400 hover:text-red-400 font-bold">✕</button></span>)}
+                    </div>
+                </div>
+
+                {pAtts.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {pAtts.map(a => <span key={a.id} className="px-2 py-1 bg-slate-800 text-xs rounded border border-slate-600 flex items-center gap-2">{a.name} <button type="button" onClick={() => setPAtts(pAtts.filter((x) => x.id !== a.id))} className="text-red-400">✕</button></span>)}
+                  </div>
+                )}
+                
+                <div className="flex justify-end pt-4 mt-auto">
+                    <button type="submit" className="bg-sky-500 hover:bg-sky-400 text-white font-bold py-2.5 px-8 rounded-full shadow-[0_0_15px_rgba(14,165,233,0.4)] hover:scale-105 transition-all text-sm flex items-center gap-2">
+                        <i className="fas fa-paper-plane"></i> {editPostData ? 'อัปเดตโพสต์' : 'โพสต์ลงกระดาน'}
+                    </button>
+                </div>
+              </form>
+            </Modal>
+          )}
+
         </div>
       );
-    } // End of App()
+    }
 
     // ==========================================
     // RENDER APPLICATION
