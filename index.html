@@ -2942,42 +2942,122 @@
 
     const AdvancedChordStudio = () => {
         const CIRCLE = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
-        const MINORS = ['Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'Bbm', 'Fm', 'Cm', 'Gm', 'Dm'];
-        const DIMS = ['Bdim','F#dim','C#dim','G#dim','D#dim','A#dim','E#dim','Cdim','Gdim','Ddim','Adim','Edim'];
-        
-        const [selIdx, setSelIdx] = useState(0); // 0 = C Major
+        const [selIdx, setSelIdx] = useState(0); 
+        const [scaleMode, setScaleMode] = useState('major'); // 'major' | 'minor'
         const [mood, setMood] = useState('pop');
+        const [activeChord, setActiveChord] = useState(null);
 
-        // คำนวณหา Diatonic Chords ของคีย์ที่เลือก
-        const getDiatonic = (idx) => {
-            const IV = (idx + 11) % 12; // ย้อนกลับ 1 ขั้นใน Circle of 5ths
-            const V = (idx + 1) % 12;   // เดินหน้า 1 ขั้นใน Circle of 5ths
-            return {
-                I: CIRCLE[idx], ii: MINORS[IV], iii: MINORS[V],
-                IV: CIRCLE[IV], V: CIRCLE[V], vi: MINORS[idx], vii: DIMS[idx]
-            };
+        // ระบบสร้างเสียงคอร์ด (Web Audio API)
+        const playChordSound = (chordName) => {
+            if (!chordName) return;
+            setActiveChord(chordName);
+            setTimeout(() => setActiveChord(null), 250); 
+
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const gainNode = audioCtx.createGain();
+            gainNode.connect(audioCtx.destination);
+            gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.8);
+
+            const notesFreq = {'C':261.63, 'C#':277.18, 'Db':277.18, 'D':293.66, 'D#':311.13, 'Eb':311.13, 'E':329.63, 'F':349.23, 'F#':369.99, 'Gb':369.99, 'G':392.00, 'G#':415.30, 'Ab':415.30, 'A':440.00, 'A#':466.16, 'Bb':466.16, 'B':493.88};
+            
+            // ถอดรูปแบบคอร์ดเพื่อหา Root Note
+            const cleanChord = chordName.replace(/7|maj7|m7b5/g, '');
+            const match = cleanChord.match(/^[A-G][#b]?/);
+            if(!match) return;
+            const root = match[0];
+            const baseFreq = notesFreq[root];
+            if(!baseFreq) return;
+
+            // คำนวณช่วงห่างของโน้ต (Intervals)
+            let intervals = [0, 4, 7]; // Major Default
+            if (chordName.includes('m') && !chordName.includes('maj')) intervals = [0, 3, 7]; // Minor
+            if (chordName.includes('dim') || chordName.includes('m7b5')) intervals = [0, 3, 6]; // Diminished
+            
+            // เพิ่มโน้ตตัวที่ 7 (7ths) ถ้ามีระบุ
+            if (chordName.includes('maj7')) intervals.push(11);
+            else if (chordName.includes('7') || chordName.includes('m7b5')) intervals.push(10); 
+
+            // สร้างเสียง (Oscillator) ตามจำนวนโน้ตในคอร์ด
+            intervals.forEach(interval => {
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine'; // ใช้คลื่น Sine ให้เสียงนุ่มนวลเหมือนคีย์บอร์ด
+                osc.frequency.value = baseFreq * Math.pow(2, interval / 12);
+                osc.connect(gainNode);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 1.8);
+            });
         };
 
-        const d = getDiatonic(selIdx);
+        // คำนวณ Diatonic Chords รองรับทั้ง Major และ Minor Scale
+        const getDiatonic = (rootIdx, mode) => {
+            const rootName = CIRCLE[rootIdx]; 
+            const circleToChromatic = { 'C':0, 'G':7, 'D':2, 'A':9, 'E':4, 'B':11, 'F#':6, 'Db':1, 'Ab':8, 'Eb':3, 'Bb':10, 'F':5 };
+            const chromaIdx = circleToChromatic[rootName];
+            
+            // กำหนดการใช้ # หรือ b ให้ตรงตามคีย์
+            const useFlats = ['F', 'Bb', 'Eb', 'Ab', 'Db'].includes(rootName) || (mode==='minor' && ['C', 'F', 'Bb', 'Eb', 'Ab', 'G', 'D'].includes(rootName));
+            const noteNames = useFlats ? ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] : ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const getNote = (semitones) => noteNames[(chromaIdx + semitones) % 12];
+
+            if (mode === 'major') {
+                return {
+                    I: getNote(0), ii: getNote(2)+'m', iii: getNote(4)+'m',
+                    IV: getNote(5), V: getNote(7), vi: getNote(9)+'m', vii: getNote(11)+'dim',
+                    secDom3: getNote(4)+'7' // Secondary dominant (V/vi) สำหรับสร้างมู้ด Nostalgic
+                };
+            } else { 
+                return {
+                    i: getNote(0)+'m', ii: getNote(2)+'dim', III: getNote(3),
+                    iv: getNote(5)+'m', v: getNote(7)+'m', VI: getNote(8), VII: getNote(10),
+                    secDom3: getNote(7)+'7' // Harmonic minor dominant (V7)
+                };
+            }
+        };
+
+        const d = getDiatonic(selIdx, scaleMode);
         
+        // ชุดคอร์ดตามอารมณ์ที่หลากหลายขึ้น
         const MOODS = {
-            pop: { name: 'Pop (สดใส/ติดหู)', prog: [d.I, d.V, d.vi, d.IV], desc: 'สูตรสำเร็จเพลงฮิตพันล้านวิว ฟังง่าย ร้องตามได้สบาย' },
-            rb: { name: 'R&B / Lofi (เท่ๆ/ลอยๆ)', prog: [`${d.ii}7`, `${d.V}7`, `${d.I}maj7`, `${d.vi}7`], desc: 'เพิ่มความ Jazzy และนุ่มนวลด้วยคอร์ดทบเจ็ด (7th chords)' },
-            sad: { name: 'Melancholic (เศร้า/หม่นหมอง)', prog: [d.vi, d.IV, d.I, d.V], desc: 'เริ่มด้วยคอร์ดไมเนอร์ ให้ความรู้สึกหม่นและสิ้นหวัง' },
-            epic: { name: 'Epic (ยิ่งใหญ่/ฮึกเหิม)', prog: [d.vi, d.V, d.IV, d.V], desc: 'สร้างความรู้สึกทรงพลัง เหมาะกับเพลงร็อคหรือเพลงประกอบภาพยนตร์' }
+            pop: { name: 'Pop (สดใส/ติดหู)', prog: scaleMode==='major' ? [d.I, d.V, d.vi, d.IV] : [d.i, d.VI, d.III, d.VII], desc: 'สูตรสำเร็จเพลงฮิตพันล้านวิว ฟังง่าย ร้องตามได้สบาย' },
+            rb: { name: 'R&B / Lofi (ชิลๆ)', prog: scaleMode==='major' ? [`${d.ii}7`, `${d.V}7`, `${d.I}maj7`, `${d.vi}7`] : [`${d.iv}7`, `${d.VII}7`, `${d.III}maj7`, `${d.VI}maj7`], desc: 'เพิ่มความ Jazzy และนุ่มนวลด้วยคอร์ดทบเจ็ด (7th chords)' },
+            sad: { name: 'Melancholic (เศร้า)', prog: scaleMode==='major' ? [d.vi, d.IV, d.I, d.V] : [d.i, d.iv, d.v, d.i], desc: 'ให้ความรู้สึกหม่นหมอง สิ้นหวัง เหมือนยืนกลางฝน' },
+            epic: { name: 'Epic (ฮึกเหิม)', prog: scaleMode==='major' ? [d.vi, d.V, d.IV, d.V] : [d.i, d.VII, d.VI, d.VII], desc: 'สร้างความรู้สึกทรงพลัง เหมาะกับเพลงร็อคหรือตอนสู้บอส' },
+            jpop: { name: 'J-Pop (อนิเมะ)', prog: scaleMode==='major' ? [d.IV, d.V, d.iii, d.vi] : [d.VI, d.VII, d.v, d.i], desc: 'Royal Road Progression (王道) คอร์ดฮิตฝั่งญี่ปุ่น ฟังแล้วมีกำลังใจ' },
+            jazz: { name: 'Jazz (2-5-1)', prog: scaleMode==='major' ? [`${d.ii}7`, `${d.V}7`, `${d.I}maj7`, `${d.I}maj7`] : [`${d.ii.replace('dim','m7b5')}`, `${d.secDom3}`, `${d.i.replace('m','m7')}`, `${d.i.replace('m','m7')}`], desc: 'ทางคอร์ดพื้นฐานสุดคลาสสิกของการเล่นแจ๊ส' },
+            nostalgic: { name: 'Nostalgic (คิดถึง)', prog: scaleMode==='major' ? [d.I, d.secDom3, d.vi, d.IV] : [d.i, d.secDom3, d.VI, d.iv], desc: 'ใช้คอร์ดนอกคีย์ (Secondary Dominant) ดึงอารมณ์ให้รู้สึกถวิลหาอดีต' }
         };
 
         const currentMood = MOODS[mood];
 
+        // คอมโพเนนต์กล่องคอร์ดที่กดเพื่อเล่นเสียงได้
+        const ChordBox = ({ label, chord, colorClass }) => (
+            <button 
+                type="button"
+                onClick={() => playChordSound(chord)}
+                className={`relative p-2 rounded text-center border transition-all hover:scale-105 cursor-pointer shadow-md w-full ${colorClass} ${activeChord === chord ? 'ring-2 ring-white scale-110 brightness-125 z-10' : ''}`}
+                title="คลิกเพื่อฟังเสียงคอร์ด"
+            >
+                <div className="text-[9px] text-slate-400 font-mono opacity-80 leading-none">{label}</div>
+                <div className="text-lg font-bold mt-1 leading-none">{chord}</div>
+                <div className="absolute top-1 right-1 opacity-0 hover:opacity-100 text-[10px] text-slate-400"><i className="fas fa-volume-up"></i></div>
+            </button>
+        );
+
         return (
-            <div className="flex flex-col gap-5 py-2 w-full max-w-3xl mx-auto">
+            <div className="flex flex-col gap-5 py-2 w-full max-w-3xl mx-auto text-xs">
                 
                 <div className="flex flex-col md:flex-row gap-6">
                     {/* Circle of Fifths Graphic */}
-                    <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#0B1325] rounded-xl border border-[#1E3A5F] p-4 shadow-lg">
-                        <div className="text-xs font-bold text-sky-400 uppercase tracking-widest mb-4">Circle of Fifths</div>
+                    <div className="w-full md:w-1/2 flex flex-col items-center justify-center bg-[#0B1325] rounded-xl border border-[#1E3A5F] p-4 shadow-lg relative">
+                        {/* 🟢 ปุ่มสลับ Major / Minor */}
+                        <div className="absolute top-3 left-3 bg-[#050811] p-1 rounded-lg border border-[#1E3A5F] flex text-[9px] font-bold z-30 shadow-md">
+                            <button onClick={() => setScaleMode('major')} className={`px-2 py-1 rounded transition-colors ${scaleMode === 'major' ? 'bg-amber-500 text-[#050811]' : 'text-slate-400 hover:text-white'}`}>Major</button>
+                            <button onClick={() => setScaleMode('minor')} className={`px-2 py-1 rounded transition-colors ${scaleMode === 'minor' ? 'bg-sky-500 text-[#050811]' : 'text-slate-400 hover:text-white'}`}>Minor</button>
+                        </div>
+                        
+                        <div className="text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-4 ml-auto">Circle of Fifths</div>
                         <div className="relative w-56 h-56 rounded-full border-4 border-[#1E3A5F] bg-[#050811] shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-                            {/* แกนเชื่อมโยงคีย์ */}
                             <div className="absolute inset-0 m-auto w-40 h-40 rounded-full border border-slate-700/50"></div>
                             
                             {CIRCLE.map((key, i) => {
@@ -2986,55 +3066,59 @@
                                 const y = 50 + 40 * Math.sin(angle);
                                 const isSelected = selIdx === i;
                                 const isDiatonic = (i === selIdx || i === (selIdx + 1)%12 || i === (selIdx + 11)%12);
+                                
+                                // ปรับสีปุ่มตามโหมด
+                                const selColor = scaleMode === 'major' ? 'bg-amber-400 text-amber-950 border-white' : 'bg-sky-400 text-sky-950 border-white';
 
                                 return (
                                     <button 
                                         key={i} onClick={() => setSelIdx(i)}
-                                        className={`absolute w-10 h-10 -ml-5 -mt-5 rounded-full flex flex-col items-center justify-center font-bold transition-all shadow-md ${isSelected ? 'bg-amber-400 text-amber-950 scale-125 z-20 border-2 border-white' : isDiatonic ? 'bg-sky-700 text-white z-10' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F] hover:bg-sky-900 hover:text-white'}`}
+                                        className={`absolute w-10 h-10 -ml-5 -mt-5 rounded-full flex flex-col items-center justify-center font-bold transition-all shadow-md ${isSelected ? `${selColor} scale-125 z-20 border-2` : isDiatonic ? 'bg-slate-700 text-white z-10' : 'bg-[#0F2547] text-slate-400 border border-[#1E3A5F] hover:bg-sky-900 hover:text-white'}`}
                                         style={{ left: `${x}%`, top: `${y}%` }}
                                     >
                                         <span className="text-[11px] leading-none">{key}</span>
-                                        {isSelected && <span className="text-[7px] leading-none mt-0.5 opacity-70">Major</span>}
                                     </button>
                                 );
                             })}
                         </div>
-                        <div className="text-[10px] text-slate-400 mt-6 text-center">💡 กดเลือกคีย์ที่ต้องการบนวงล้อ เพื่อดูคอร์ดในคีย์</div>
+                        <div className="text-[10px] text-slate-400 mt-6 text-center">💡 เลือกคีย์ที่ต้องการบนวงล้อ เพื่อดูคอร์ดในคีย์</div>
                     </div>
 
                     {/* Diatonic Chords */}
                     <div className="w-full md:w-1/2 flex flex-col gap-3">
-                        <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] p-4 shadow-lg h-full">
-                            <div className="text-xs font-bold text-amber-400 mb-3 border-b border-[#1E3A5F] pb-2">คอร์ดในคีย์ (Diatonic Chords) - {CIRCLE[selIdx]} Major</div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <div className="bg-sky-900/30 border border-sky-700 p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">I (Tonic)</div>
-                                    <div className="text-lg font-bold text-sky-300">{d.I}</div>
-                                </div>
-                                <div className="bg-[#0B1325] border border-[#1E3A5F] p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">ii</div>
-                                    <div className="text-lg font-bold text-slate-200">{d.ii}</div>
-                                </div>
-                                <div className="bg-[#0B1325] border border-[#1E3A5F] p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">iii</div>
-                                    <div className="text-lg font-bold text-slate-200">{d.iii}</div>
-                                </div>
-                                <div className="bg-emerald-900/30 border border-emerald-700 p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">IV (Subdom)</div>
-                                    <div className="text-lg font-bold text-emerald-300">{d.IV}</div>
-                                </div>
-                                <div className="bg-amber-900/30 border border-amber-700 p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">V (Dominant)</div>
-                                    <div className="text-lg font-bold text-amber-300">{d.V}</div>
-                                </div>
-                                <div className="bg-fuchsia-900/30 border border-fuchsia-700 p-2 rounded text-center">
-                                    <div className="text-[9px] text-slate-400 font-mono">vi (Rel. Minor)</div>
-                                    <div className="text-lg font-bold text-fuchsia-300">{d.vi}</div>
-                                </div>
+                        <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] p-4 shadow-lg h-full flex flex-col">
+                            <div className="text-xs font-bold text-amber-400 mb-3 border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+                                <span>คอร์ดในคีย์ (Diatonic)</span>
+                                <span className="text-white bg-slate-800 px-2 py-0.5 rounded text-[10px]">{CIRCLE[selIdx]} {scaleMode.charAt(0).toUpperCase() + scaleMode.slice(1)}</span>
                             </div>
-                            <div className="mt-2 bg-red-950/30 border border-red-900/50 p-1.5 rounded text-center flex justify-between px-4 items-center">
-                                <div className="text-[9px] text-slate-400 font-mono">vii° (Diminished)</div>
-                                <div className="text-sm font-bold text-red-300">{d.vii}</div>
+                            
+                            <div className="grid grid-cols-3 gap-2 flex-1 content-start">
+                                {scaleMode === 'major' ? (
+                                    <>
+                                        <ChordBox label="I (Tonic)" chord={d.I} colorClass="bg-sky-900/30 border-sky-700 text-sky-300" />
+                                        <ChordBox label="ii" chord={d.ii} colorClass="bg-[#0B1325] border-[#1E3A5F] text-slate-200" />
+                                        <ChordBox label="iii" chord={d.iii} colorClass="bg-[#0B1325] border-[#1E3A5F] text-slate-200" />
+                                        <ChordBox label="IV (Subdom)" chord={d.IV} colorClass="bg-emerald-900/30 border-emerald-700 text-emerald-300" />
+                                        <ChordBox label="V (Dominant)" chord={d.V} colorClass="bg-amber-900/30 border-amber-700 text-amber-300" />
+                                        <ChordBox label="vi (Rel. Minor)" chord={d.vi} colorClass="bg-fuchsia-900/30 border-fuchsia-700 text-fuchsia-300" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChordBox label="i (Tonic)" chord={d.i} colorClass="bg-sky-900/30 border-sky-700 text-sky-300" />
+                                        <ChordBox label="ii°" chord={d.ii} colorClass="bg-[#0B1325] border-[#1E3A5F] text-slate-200" />
+                                        <ChordBox label="III (Rel. Major)" chord={d.III} colorClass="bg-fuchsia-900/30 border-fuchsia-700 text-fuchsia-300" />
+                                        <ChordBox label="iv (Subdom)" chord={d.iv} colorClass="bg-emerald-900/30 border-emerald-700 text-emerald-300" />
+                                        <ChordBox label="v (Dominant)" chord={d.v} colorClass="bg-amber-900/30 border-amber-700 text-amber-300" />
+                                        <ChordBox label="VI" chord={d.VI} colorClass="bg-[#0B1325] border-[#1E3A5F] text-slate-200" />
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="mt-3 bg-[#0a101f] border border-[#1E3A5F]/50 p-2 rounded-lg flex justify-between px-4 items-center shadow-inner">
+                                <div className="text-[9px] text-slate-400 font-mono w-1/2 text-left">{scaleMode === 'major' ? 'vii° (Diminished)' : 'VII (Subtonic)'}</div>
+                                <div className="w-1/2">
+                                    <ChordBox label="" chord={scaleMode === 'major' ? d.vii : d.VII} colorClass="bg-red-950/30 border-red-900/50 text-red-300 w-full" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3044,23 +3128,29 @@
                 <div className="bg-gradient-to-br from-[#0B1325] to-[#050811] p-5 rounded-xl border border-[#1E3A5F] shadow-2xl mt-2">
                     <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                         <div className="text-sm font-bold text-white flex items-center gap-2">✨ สร้างทางคอร์ดตามอารมณ์เพลง</div>
-                        <select value={mood} onChange={e=>setMood(e.target.value)} className="inp py-1 bg-[#0F2547] text-xs font-bold text-sky-200">
+                        <select value={mood} onChange={e=>setMood(e.target.value)} className="inp py-1.5 bg-[#0F2547] text-[11px] font-bold text-sky-200 border-sky-900/50">
                             {Object.entries(MOODS).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
                         </select>
                     </div>
                     
-                    <div className="text-xs text-slate-400 mb-4">{currentMood.desc}</div>
+                    <div className="text-[11px] text-slate-400 mb-4 bg-[#0a101f] p-2 rounded-lg border border-[#1E3A5F]">{currentMood.desc}</div>
                     
-                    <div className="flex gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
+                    <div className="grid grid-cols-4 gap-2 sm:gap-4">
                         {currentMood.prog.map((chord, idx) => (
-                            <div key={idx} className="flex-1 min-w-[70px] bg-[#0a101f] border-2 border-slate-600 rounded-xl p-4 flex items-center justify-center shadow-inner relative group hover:border-amber-400 transition-colors">
-                                <span className="text-2xl sm:text-3xl font-bold font-mono text-white group-hover:text-amber-300 transition-colors">{chord}</span>
-                            </div>
+                            <button 
+                                key={idx} 
+                                onClick={() => playChordSound(chord)}
+                                className={`bg-[#0a101f] border-2 rounded-xl p-4 flex flex-col items-center justify-center shadow-inner relative group transition-all hover:scale-105 active:scale-95 ${activeChord === chord ? 'border-sky-400 bg-sky-900/20' : 'border-slate-600 hover:border-amber-400'}`}
+                                title="กดเพื่อฟังเสียง"
+                            >
+                                <span className={`text-xl sm:text-3xl font-bold font-mono transition-colors ${activeChord === chord ? 'text-sky-300' : 'text-white group-hover:text-amber-300'}`}>{chord}</span>
+                                <span className="absolute top-1 right-2 text-[10px] opacity-0 group-hover:opacity-50"><i className="fas fa-volume-up"></i></span>
+                            </button>
                         ))}
                     </div>
                     
                     <div className="mt-4 flex gap-2">
-                        <div className="text-[10px] text-slate-500 bg-[#070C18] p-2 rounded border border-[#1E3A5F] w-full text-center">ลองนำคอร์ดชุดนี้ไปเกากีตาร์หรือกดเปียโนดูสิครับ! (ลูปไปเรื่อยๆ)</div>
+                        <div className="text-[10px] text-slate-500 bg-[#070C18] p-2 rounded border border-[#1E3A5F] w-full text-center">ลองกดที่กล่องคอร์ดเพื่อฟังเสียง หรือนำชุดนี้ไปเกากีตาร์/กดเปียโนตามได้เลยครับ</div>
                     </div>
                 </div>
 
@@ -3079,68 +3169,82 @@
         const [dbRhymes, setDbRhymes] = useState({});
         const [showAdd, setShowAdd] = useState(false);
         const [newWord, setNewWord] = useState('');
-        const [newGroup, setNewGroup] = useState('ไอ');
+        const [newVowel, setNewVowel] = useState('อา'); // สระเริ่มต้น
+        const [isLiveSyllable, setIsLiveSyllable] = useState(true); // true = คำเป็น, false = คำตาย
         const [addMsg, setAddMsg] = useState('');
 
-        // ฐานข้อมูลเริ่มต้น (Hardcoded Base)
+        const THAI_VOWELS = [
+            'อะ', 'อา', 'อิ', 'อี', 'อึ', 'อื', 'อุ', 'อู',
+            'เอะ', 'เอ', 'แอะ', 'แอ', 'โอะ', 'โอ', 'เอาะ', 'ออ',
+            'เออะ', 'เออ', 'เอียะ', 'เอีย', 'เอือะ', 'เอือ', 'อัวะ', 'อัว',
+            'อำ', 'ไอ', 'ใอ', 'เอา'
+        ];
+
+        // ฐานข้อมูลเริ่มต้น
         const THAI_RHYMES_BASE = {
-            'ไอ (แม่ก กา)': ['ใจ', 'ไป', 'ใคร', 'ไกล', 'ให้', 'ไว้', 'ใหม่', 'ใหญ่', 'ไหน', 'ไฟ', 'วัย', 'ชัย', 'ไทย', 'ไร', 'ใกล้'],
-            'อัก (แม่กก)': ['รัก', 'ทัก', 'พัก', 'หนัก', 'มัก', 'หัก', 'ศักดิ์', 'ผลัก', 'สลัก', 'หลัก', 'ภักดิ์', 'ถัก'],
-            'อาว (แม่เกอว)': ['ดาว', 'ขาว', 'ยาว', 'หนาว', 'คราว', 'สาว', 'ก้าว', 'ข้าว', 'พราว', 'ราว', 'กล่าว', 'ร้าว'],
-            'อน (แม่กน)': ['คน', 'จน', 'ทน', 'ชน', 'ฝน', 'หล่น', 'บ่น', 'ตน', 'วน', 'ถนน', 'ผล', 'ดล', 'มนตร์', 'ค้น'],
-            'อาน (แม่กน)': ['งาน', 'นาน', 'ผ่าน', 'บ้าน', 'ร้าน', 'ล้าน', 'หวาน', 'พาน', 'จาน', 'หลาน', 'กาล', 'การ', 'มาร', 'ด้าน'],
-            'เออ (แม่ก กา)': ['เธอ', 'เจอ', 'เผลอ', 'เพ้อ', 'เสมอ', 'เบลอ', 'เก้อ', 'ละเมอ', 'อำเภอ'],
-            'อี (แม่ก กา)': ['ดี', 'มี', 'ปี', 'สี', 'หนี', 'ฟรี', 'ที', 'พี่', 'ชี้', 'หนี้', 'ผี', 'ชี', 'ตี', 'ที่', 'นี่'],
-            'อาย (แม่เกย)': ['ตาย', 'ชาย', 'หมาย', 'สาย', 'ปลาย', 'กาย', 'ขาย', 'คลาย', 'ลาย', 'อาย', 'ทราย', 'ซ้าย', 'ท้าย'],
-            'อง (แม่กง)': ['คง', 'ลง', 'ตรง', 'วง', 'งง', 'ผง', 'ส่ง', 'หลง', 'ทรง', 'ธง', 'ปลง', 'โค้ง', 'โล่ง'],
-            'อาม (แม่กม)': ['งาม', 'ความ', 'ถาม', 'ตาม', 'ยาม', 'ข้าม', 'ห้าม', 'สาม', 'ชาม', 'นาม', 'ขาม'],
-            'อู (แม่ก กา)': ['ดู', 'รู้', 'อยู่', 'คู่', 'สู้', 'หมู', 'หู', 'งู', 'ประตู', 'ครู', 'ปู่', 'หนู', 'กู้'],
-            'เอย (แม่เกย)': ['เลย', 'เคย', 'เผย', 'เฉย', 'เสย', 'เนย', 'เชย', 'เงย', 'เปรย', 'เย้ย', 'เอ่ย'],
-            'ออ (แม่ก กา)': ['รอ', 'ขอ', 'พอ', 'ต่อ', 'ท้อ', 'ล้อ', 'หมอ', 'คอ', 'หอ', 'จอ', 'ข้อ', 'พ้อ', 'ง้อ'],
-            'อาง (แม่กง)': ['บาง', 'ทาง', 'วาง', 'ต่าง', 'ข้าง', 'กว้าง', 'สร้าง', 'ล้าง', 'ร่าง', 'กลาง', 'นาง', 'ยาง', 'จาง'],
-            'อิง (แม่กง)': ['จริง', 'สิ่ง', 'ยิ่ง', 'หญิง', 'ทิ้ง', 'นิ่ง', 'วิ่ง', 'พิง', 'ชิง', 'ปิ้ง', 'ลิง', 'กลิ้ง']
+            'ไอ_เป็น': ['ใจ', 'ไป', 'ใคร', 'ไกล', 'ให้', 'ไว้', 'ใหม่', 'ใหญ่', 'ไหน', 'ไฟ', 'วัย', 'ชัย', 'ไทย', 'ไร', 'ใกล้'],
+            'อา_เป็น': ['ดาว', 'ขาว', 'ยาว', 'หนาว', 'คราว', 'สาว', 'ก้าว', 'ข้าว', 'พราว', 'ราว', 'กล่าว', 'ร้าว', 'งาน', 'นาน', 'ผ่าน', 'บ้าน', 'ร้าน', 'ล้าน', 'หวาน', 'พาน', 'จาน', 'หลาน', 'กาล', 'การ', 'มาร', 'ด้าน', 'ตาย', 'ชาย', 'หมาย', 'สาย', 'ปลาย', 'กาย', 'ขาย', 'คลาย', 'ลาย', 'อาย', 'ทราย', 'ซ้าย', 'ท้าย'],
+            'อะ_ตาย': ['รัก', 'ทัก', 'พัก', 'หนัก', 'มัก', 'หัก', 'ศักดิ์', 'ผลัก', 'สลัก', 'หลัก', 'ภักดิ์', 'ถัก'],
+            'โอ_เป็น': ['คน', 'จน', 'ทน', 'ชน', 'ฝน', 'หล่น', 'บ่น', 'ตน', 'วน', 'ถนน', 'ผล', 'ดล', 'มนตร์', 'ค้น', 'คง', 'ลง', 'ตรง', 'วง', 'งง', 'ผง', 'ส่ง', 'หลง', 'ทรง', 'ธง', 'ปลง', 'โค้ง', 'โล่ง'],
+            'เออ_เป็น': ['เธอ', 'เจอ', 'เผลอ', 'เพ้อ', 'เสมอ', 'เบลอ', 'เก้อ', 'ละเมอ', 'อำเภอ', 'เลย', 'เคย', 'เผย', 'เฉย', 'เสย', 'เนย', 'เชย', 'เงย', 'เปรย', 'เย้ย', 'เอ่ย'],
+            'อี_เป็น': ['ดี', 'มี', 'ปี', 'สี', 'หนี', 'ฟรี', 'ที', 'พี่', 'ชี้', 'หนี้', 'ผี', 'ชี', 'ตี', 'ที่', 'นี่'],
+            'อี_ตาย': ['รีบ', 'บีบ', 'จีบ', 'ถีบ', 'หีบ', 'ตีบ', 'หลีก', 'ฉีก', 'ปีก', 'ซีก'],
+            'อู_เป็น': ['ดู', 'รู้', 'อยู่', 'คู่', 'สู้', 'หมู', 'หู', 'งู', 'ประตู', 'ครู', 'ปู่', 'หนู', 'กู้'],
+            'ออ_เป็น': ['รอ', 'ขอ', 'พอ', 'ต่อ', 'ท้อ', 'ล้อ', 'หมอ', 'คอ', 'หอ', 'จอ', 'ข้อ', 'พ้อ', 'ง้อ'],
+            'อิ_เป็น': ['จริง', 'สิ่ง', 'ยิ่ง', 'หญิง', 'ทิ้ง', 'นิ่ง', 'วิ่ง', 'พิง', 'ชิง', 'ปิ้ง', 'ลิง', 'กลิ้ง']
         };
 
         // โหลดข้อมูลที่สมาชิกเพิ่มเข้ามาจาก Firebase
         useEffect(() => {
+            if (!db) return;
             const unsub = db.collection('bma_system').doc('rhyme_dict').onSnapshot(doc => {
                 if (doc.exists) setDbRhymes(doc.data().groups || {});
             });
             return () => unsub();
-        }, []);
+        }, [db]);
 
         // ผสมฐานข้อมูลพื้นฐาน เข้ากับฐานข้อมูลของสมาคม
         const mergedRhymes = { ...THAI_RHYMES_BASE };
-        Object.keys(dbRhymes).forEach(group => {
-            if (!mergedRhymes[group]) mergedRhymes[group] = [];
-            mergedRhymes[group] = [...new Set([...mergedRhymes[group], ...dbRhymes[group]])];
+        Object.keys(dbRhymes).forEach(groupKey => {
+            if (!mergedRhymes[groupKey]) mergedRhymes[groupKey] = [];
+            mergedRhymes[groupKey] = [...new Set([...mergedRhymes[groupKey], ...dbRhymes[groupKey]])];
         });
 
         const findRhyme = async () => {
-            if(!word.trim()) return;
+            const searchWord = word.trim();
+            if(!searchWord) return;
             setLoading(true); setError(''); setResults([]); setShowAdd(false);
             
             if(lang === 'en') {
                 try {
-                    const res = await fetch(`https://api.datamuse.com/words?rel_rhy=${word.trim()}`);
+                    // แก้ไขการเชื่อมต่อ API ภาษาอังกฤษ ให้เข้ารหัส URL ป้องกันช่องว่างหรืออักขระพิเศษ
+                    const encodedWord = encodeURIComponent(searchWord);
+                    const res = await fetch(`https://api.datamuse.com/words?rel_rhy=${encodedWord}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) throw new Error('API Response not OK');
+                    
                     const data = await res.json();
                     if(data.length > 0) setResults(data.slice(0, 40).map(d => d.word));
                     else setError('❌ ไม่พบคำคล้องจองสำหรับคำนี้');
-                } catch(e) { setError('⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ'); }
+                } catch(e) { 
+                    console.error('Datamuse API Error:', e);
+                    setError('⚠️ เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'); 
+                }
             } else {
                 let foundGroup = null;
                 for(const [group, words] of Object.entries(mergedRhymes)) {
-                    if(words.includes(word.trim())) {
+                    if(words.includes(searchWord)) {
                         foundGroup = group; break;
                     }
                 }
                 
                 if(foundGroup) {
-                    setResults(mergedRhymes[foundGroup].filter(w => w !== word.trim()));
+                    setResults(mergedRhymes[foundGroup].filter(w => w !== searchWord));
                 } else {
-                    setError(`❌ ยังไม่มีคำว่า "${word}" ในฐานข้อมูลของสมาคม`);
+                    setError(`❌ ยังไม่มีคำว่า "${searchWord}" ในฐานข้อมูลของสมาคม`);
                     setShowAdd(true);
-                    setNewWord(word.trim());
+                    setNewWord(searchWord);
                 }
             }
             setLoading(false);
@@ -3148,7 +3252,10 @@
 
         const handleAddWordToDict = async () => {
             if(!newWord.trim()) return;
-            const currentGroupData = dbRhymes[newGroup] || (THAI_RHYMES_BASE[newGroup] || []);
+            
+            // สร้าง Key เป็นรูปแบบ "สระ_เป็น" หรือ "สระ_ตาย"
+            const groupKey = `${newVowel}_${isLiveSyllable ? 'เป็น' : 'ตาย'}`;
+            const currentGroupData = dbRhymes[groupKey] || (THAI_RHYMES_BASE[groupKey] || []);
             
             if (currentGroupData.includes(newWord.trim())) {
                 setAddMsg('⚠️ คำนี้มีอยู่ในหมวดนี้แล้วครับ'); return;
@@ -3158,10 +3265,10 @@
                 await db.collection('bma_system').doc('rhyme_dict').set({
                     groups: {
                         ...dbRhymes,
-                        [newGroup]: [...new Set([...(dbRhymes[newGroup] || []), newWord.trim()])]
+                        [groupKey]: [...new Set([...(dbRhymes[groupKey] || []), newWord.trim()])]
                     }
                 }, { merge: true });
-                setAddMsg('✅ เพิ่มคำศัพท์สำเร็จ! (ทุกคนจะสามารถใช้คำนี้ได้ทันที)');
+                setAddMsg('✅ เพิ่มคำศัพท์สำเร็จ!');
                 setTimeout(() => { setShowAdd(false); setAddMsg(''); setWord(newWord.trim()); findRhyme(); }, 1500);
             } catch(e) {
                 setAddMsg('❌ เกิดข้อผิดพลาดในการบันทึก');
@@ -3169,71 +3276,104 @@
         };
 
         return (
-            <div className="flex flex-col gap-4 py-2 w-full max-w-lg mx-auto">
-                <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl">
-                    <div className="flex justify-between items-center mb-4">
-                        <label className="text-sm text-sky-400 font-bold uppercase tracking-widest">Rhyme Finder ✍️</label>
-                        <div className="flex bg-[#050811] rounded-lg border border-[#1E3A5F] overflow-hidden text-[10px] font-bold">
-                            <button onClick={() => { setLang('th'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'th' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ไทย</button>
-                            <button onClick={() => { setLang('en'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'en' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>EN</button>
-                        </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                        <input 
-                            type="text" 
-                            value={word} 
-                            onChange={(e) => setWord(e.target.value)} 
-                            onKeyDown={(e) => { if(e.key === 'Enter') findRhyme(); }}
-                            placeholder={lang === 'th' ? "พิมพ์คำที่ต้องการ (เช่น รัก, ใจ, ดาว)..." : "Type a word (e.g. love, night)..."} 
-                            className="flex-1 inp font-bold text-sm"
-                        />
-                        <button onClick={findRhyme} disabled={loading} className="btn-b text-xs px-4 font-bold shadow-lg">
-                            {loading ? '🔍...' : 'ค้นหา'}
-                        </button>
-                    </div>
-                    {lang === 'th' && (
-                        <div className="text-[9px] text-slate-400 mt-2 flex justify-between items-center">
-                            <span>💡 ฐานข้อมูล Community Dictionary อัปเดตคำศัพท์โดยสมาชิก</span>
-                            <span className="text-emerald-400 font-bold">({Object.values(mergedRhymes).flat().length} คำศัพท์)</span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="bg-gradient-to-b from-[#050811] to-[#0a101f] p-5 rounded-xl border border-[#1E3A5F] shadow-lg min-h-[150px]">
-                    <div className="text-[10px] text-slate-400 font-bold mb-3 border-b border-[#1E3A5F] pb-2 flex justify-between">
-                        <span>ผลลัพธ์คำคล้องจอง (Rhymes)</span>
-                        {results.length > 0 && lang === 'th' && <button onClick={() => setShowAdd(!showAdd)} className="text-sky-300 hover:text-sky-200 underline">+ เพิ่มคำศัพท์เข้าหมวดหมู่นี้</button>}
-                    </div>
-
-                    {showAdd && lang === 'th' && (
-                        <div className="mb-4 bg-[#0F2547] p-3 rounded-lg border border-sky-500/50 shadow-inner text-xs animate-fade-in">
-                            <div className="font-bold text-amber-300 mb-2">ช่วยกันเพิ่มคำศัพท์ใหม่ให้สมาคม! 🧠</div>
-                            <div className="flex gap-2 mb-2">
-                                <input type="text" value={newWord} onChange={e=>setNewWord(e.target.value)} placeholder="คำศัพท์ใหม่..." className="w-1/3 inp py-1 px-2" />
-                                <select value={newGroup} onChange={e=>setNewGroup(e.target.value)} className="flex-1 inp py-1 px-2 bg-[#050811]">
-                                    {Object.keys(mergedRhymes).map(g => <option key={g} value={g}>หมวด: สระ{g}</option>)}
-                                </select>
-                                <button onClick={handleAddWordToDict} className="btn-b py-1 px-3 text-sky-200">บันทึก</button>
+            <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl h-fit">
+                        <div className="flex justify-between items-center mb-4">
+                            <label className="text-sm text-sky-400 font-bold uppercase tracking-widest"><i className="fas fa-pen-nib"></i> Rhyme Finder</label>
+                            <div className="flex bg-[#050811] rounded-lg border border-[#1E3A5F] overflow-hidden text-[10px] font-bold">
+                                <button onClick={() => { setLang('th'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'th' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>ไทย</button>
+                                <button onClick={() => { setLang('en'); setResults([]); setError(''); setShowAdd(false); }} className={`px-3 py-1.5 ${lang === 'en' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}>EN</button>
                             </div>
-                            {addMsg && <div className={`font-bold ${addMsg.includes('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{addMsg}</div>}
                         </div>
-                    )}
+                        
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={word} 
+                                onChange={(e) => setWord(e.target.value)} 
+                                onKeyDown={(e) => { if(e.key === 'Enter') findRhyme(); }}
+                                placeholder={lang === 'th' ? "พิมพ์คำที่ต้องการ (เช่น รัก, ใจ, ดาว)..." : "Type a word (e.g. love, night)..."} 
+                                className="flex-1 inp font-bold text-sm"
+                            />
+                            <button onClick={findRhyme} disabled={loading} className="btn-b text-xs px-4 font-bold shadow-lg">
+                                {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-search"></i>}
+                            </button>
+                        </div>
+                        {lang === 'th' && (
+                            <div className="text-[9px] text-slate-400 mt-2 flex justify-between items-center">
+                                <span>💡 ฐานข้อมูลพจนานุกรมอัปเดตโดยสมาชิกสมาคม</span>
+                                <span className="text-emerald-400 font-bold">({Object.values(mergedRhymes).flat().length} คำศัพท์)</span>
+                            </div>
+                        )}
+                    </div>
 
-                    {error && !showAdd ? (
-                        <div className="text-red-400 text-xs font-bold text-center py-4 bg-red-950/30 rounded border border-red-900/50">{error}</div>
-                    ) : results.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {results.map((r, i) => (
-                                <span key={i} className="px-3 py-1.5 bg-[#0F2547] text-sky-200 text-sm font-bold rounded-lg border border-sky-900/50 hover:bg-sky-700 hover:text-white transition-colors cursor-pointer shadow-sm">
-                                    {r}
-                                </span>
-                            ))}
+                    <div className="bg-gradient-to-b from-[#050811] to-[#0a101f] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg min-h-[150px]">
+                        <div className="text-[10px] text-slate-400 font-bold mb-3 border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+                            <span>ผลลัพธ์คำคล้องจอง (Rhymes)</span>
+                            {results.length > 0 && lang === 'th' && <button onClick={() => setShowAdd(!showAdd)} className="text-sky-300 hover:text-sky-200 underline">+ เพิ่มคำศัพท์เอง</button>}
                         </div>
-                    ) : (
-                        !showAdd && <div className="text-slate-500 text-xs text-center py-8 opacity-50">พิมพ์คำเพื่อค้นหาคำคล้องจองสำหรับเขียนเนื้อเพลง</div>
-                    )}
+
+                        {showAdd && lang === 'th' && (
+                            <div className="mb-4 bg-[#0F2547] p-4 rounded-xl border border-sky-500/50 shadow-inner text-xs animate-fade-in space-y-3">
+                                <div className="font-bold text-amber-300 mb-2"><i className="fas fa-plus-circle"></i> ช่วยกันเพิ่มคำศัพท์ใหม่ให้สมาคม!</div>
+                                <div className="flex gap-2">
+                                    <input type="text" value={newWord} onChange={e=>setNewWord(e.target.value)} placeholder="คำศัพท์ใหม่..." className="flex-1 inp py-1.5 px-2" />
+                                    <button onClick={handleAddWordToDict} className="btn-b py-1.5 px-4 font-bold text-sky-200">บันทึก</button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <select value={newVowel} onChange={e=>setNewVowel(e.target.value)} className="flex-1 inp py-1.5 px-2 bg-[#050811]">
+                                        {THAI_VOWELS.map(v => <option key={v} value={v}>สระ: {v}</option>)}
+                                    </select>
+                                    <select value={isLiveSyllable ? 'live' : 'dead'} onChange={e=>setIsLiveSyllable(e.target.value === 'live')} className="flex-1 inp py-1.5 px-2 bg-[#050811]">
+                                        <option value="live">🟢 คำเป็น</option>
+                                        <option value="dead">🔴 คำตาย</option>
+                                    </select>
+                                </div>
+                                {addMsg && <div className={`font-bold text-[10px] text-center ${addMsg.includes('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{addMsg}</div>}
+                            </div>
+                        )}
+
+                        {error && !showAdd ? (
+                            <div className="text-red-400 text-xs font-bold text-center py-4 bg-red-950/30 rounded-lg border border-red-900/50">{error}</div>
+                        ) : results.length > 0 ? (
+                            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                {results.map((r, i) => (
+                                    <span key={i} className="px-3 py-1.5 bg-[#0F2547] text-sky-200 text-sm font-bold rounded-lg border border-sky-900/50 hover:bg-sky-700 hover:text-white transition-colors cursor-pointer shadow-sm">
+                                        {r}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            !showAdd && <div className="text-slate-500 text-xs text-center py-8 opacity-50"><i className="fas fa-search block text-2xl mb-2"></i>พิมพ์คำเพื่อค้นหาคำคล้องจอง</div>
+                        )}
+                    </div>
                 </div>
+
+                {/* กล่องอธิบาย คำเป็น-คำตาย */}
+                {lang === 'th' && (
+                    <div className="bg-[#0B1325] border-l-4 border-amber-500 p-4 rounded-xl shadow-inner mt-2 text-xs">
+                        <div className="font-bold text-amber-400 mb-2 flex items-center gap-2"><i className="fas fa-book"></i> หลักการจำแนก คำเป็น - คำตาย</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-slate-300">
+                            <div className="bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-emerald-400 font-bold mb-1 border-b border-[#1E3A5F] pb-1">🟢 คำเป็น (Live Syllable)</div>
+                                <ul className="list-disc pl-4 space-y-1 mt-2">
+                                    <li>ประสมสระเสียงยาวในแม่ ก กา <span className="text-slate-500">(เช่น มา, ดู, เวลา)</span></li>
+                                    <li>ตัวสะกดแม่ กง, กน, กม, เกย, เกอว (นมยวง) <span className="text-slate-500">(เช่น คน, สาว)</span></li>
+                                    <li>ประสมด้วยสระ อำ, ไอ, ใอ, เอา</li>
+                                </ul>
+                            </div>
+                            <div className="bg-[#050811] p-3 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-red-400 font-bold mb-1 border-b border-[#1E3A5F] pb-1">🔴 คำตาย (Dead Syllable)</div>
+                                <ul className="list-disc pl-4 space-y-1 mt-2">
+                                    <li>ประสมสระเสียงสั้นในแม่ ก กา <span className="text-slate-500">(เช่น จะ, ปะ, ทะลุ)</span></li>
+                                    <li>ตัวสะกดในแม่ กก, กด, กบ (กบด) <span className="text-slate-500">(เช่น นก, ตัด, รับ)</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-3 text-center bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50">💡 การแต่งกลอนหรือเพลง มักจะจับคู่สัมผัสระหว่าง <b>"สระเดียวกัน + คำประเภทเดียวกัน"</b> (คำเป็นคู่คำเป็น คำตายคู่คำตาย)</div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -3274,6 +3414,7 @@
         const [useSciNotation, setUseSciNotation] = useState(false);
         const [precision, setPrecision] = useState(6);
         const [copied, setCopied] = useState(false);
+        const [visualContext, setVisualContext] = useState(null);
 
         useEffect(() => {
           if (category === 'Temperature (อุณหภูมิ)') { setFromUnit('C'); setToUnit('F'); }
@@ -3282,6 +3423,7 @@
               setFromUnit(units[0]); setToUnit(units[1] || units[0]); 
           }
           setInputValue('');
+          setVisualContext(null);
         }, [category]);
 
         const parseCompoundUnit = (unitStr) => {
@@ -3301,9 +3443,50 @@
             }
         };
 
+        const generateVisualContext = (val, baseValStr, catStr) => {
+            if (!val || val <= 0) return null;
+            let ctx = null;
+            const bVal = parseFloat(baseValStr);
+
+            if (catStr === 'Length (ความยาว)') {
+                // แปลงค่าที่กรอกให้เป็นเมตร (m) ก่อนเพื่อนำไปเปรียบเทียบ
+                const meters = bVal / CATEGORIES[catStr][fromUnit];
+                if (meters > 1000) ctx = { txt: `เทียบเท่าความยาวสนามฟุตบอล ${(meters/105).toFixed(1)} สนาม ⚽`, bg: 'bg-emerald-950/40', textCol: 'text-emerald-300' };
+                else if (meters > 10) ctx = { txt: `ความยาวพอๆ กับตึก ${(meters/3).toFixed(1)} ชั้น 🏢`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+                else if (meters > 0.1) ctx = { txt: `ยาวประมาณไม้บรรทัด ${(meters/0.3).toFixed(1)} อันต่อกัน 📏`, bg: 'bg-amber-950/40', textCol: 'text-amber-300' };
+            } 
+            else if (catStr === 'Mass (น้ำหนัก)') {
+                // แปลงเป็น kg
+                const kg = bVal / CATEGORIES[catStr][fromUnit];
+                if (kg > 1000) ctx = { txt: `น้ำหนักเทียบเท่าช้างเอเชีย ${(kg/3000).toFixed(2)} ตัว 🐘`, bg: 'bg-slate-800', textCol: 'text-slate-300' };
+                else if (kg > 50) ctx = { txt: `น้ำหนักพอๆ กับผู้ใหญ่ ${(kg/65).toFixed(1)} คน 🧑`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+                else if (kg > 1) ctx = { txt: `หนักเท่าแตงโม ${(kg/3).toFixed(1)} ลูก 🍉`, bg: 'bg-red-950/40', textCol: 'text-red-300' };
+            }
+            else if (catStr === 'Volume (ปริมาตร)') {
+                // แปลงเป็นลิตร
+                const liters = bVal / CATEGORIES[catStr][fromUnit];
+                if (liters > 1000) ctx = { txt: `ใส่น้ำเต็มสระว่ายน้ำโอลิมปิกได้ ${(liters/2500000).toExponential(2)} สระ 🏊‍♂️`, bg: 'bg-blue-950/40', textCol: 'text-blue-300' };
+                else if (liters > 10) ctx = { txt: `เทียบเท่าน้ำขวดใหญ่ (1.5L) จำนวน ${(liters/1.5).toFixed(0)} ขวด 💧`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+            }
+            else if (catStr === 'Temperature (อุณหภูมิ)') {
+                let celsius = 0;
+                if (fromUnit === 'C') celsius = bVal;
+                else if (fromUnit === 'F') celsius = (bVal - 32) * 5/9;
+                else if (fromUnit === 'K') celsius = bVal - 273.15;
+                
+                if (celsius > 100) ctx = { txt: `อุณหภูมินี้ น้ำจะเดือดจนระเหยเป็นไอ ♨️`, bg: 'bg-red-950/40', textCol: 'text-red-400' };
+                else if (celsius > 35) ctx = { txt: `อุณหภูมิประมาณแดดประเทศไทยตอนเที่ยง 🥵`, bg: 'bg-amber-950/40', textCol: 'text-amber-400' };
+                else if (celsius > 20) ctx = { txt: `อากาศห้องแอร์กำลังเย็นสบาย ❄️`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+                else if (celsius < 0) ctx = { txt: `จุดเยือกแข็ง น้ำกลายเป็นน้ำแข็งแล้ว 🧊`, bg: 'bg-blue-950/40', textCol: 'text-blue-200' };
+            }
+
+            setVisualContext(ctx);
+        };
+
         const calculateResult = () => {
-          if (inputValue === '') return '';
-          const val = parseFloat(inputValue); if (isNaN(val)) return 'Invalid Input';
+          if (inputValue === '') { setVisualContext(null); return ''; }
+          const val = parseFloat(inputValue); 
+          if (isNaN(val)) { setVisualContext(null); return 'Invalid Input'; }
           let resultNum = 0;
                     
           if (category === 'Temperature (อุณหภูมิ)') {
@@ -3322,6 +3505,9 @@
           } else {
             resultNum = (val / CATEGORIES[category][fromUnit]) * CATEGORIES[category][toUnit];
           }
+
+          // สร้างคำอธิบายประกอบ
+          generateVisualContext(val, inputValue, category);
 
           if (useSciNotation) return resultNum.toExponential(precision > 0 ? precision - 1 : 2);
                     
@@ -3417,65 +3603,639 @@
                 </button>
               </div>
             </div>
-                      
-            {category === 'Temperature (อุณหภูมิ)' && (
-                <div className="text-[10px] text-slate-500 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50 shadow-inner">
-                   สูตร: K = °C + 273.15 | °F = (°C × 9/5) + 32
+            
+            {/* Visual Context Box */}
+            {visualContext && (
+                <div className={`mt-2 p-3 rounded-lg ${visualContext.bg} border border-[#1E3A5F]/50 text-center animate-fade-in shadow-inner z-10`}>
+                    <div className={`text-xs font-bold ${visualContext.textCol}`}>{visualContext.txt}</div>
                 </div>
             )}
-            {category === 'Custom (พิมพ์หน่วยเอง)' && (
-                <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed">
+                      
+            {/* แสดงสูตรการแปลงสำหรับทุกหมวดหมู่ */}
+            {category === 'Temperature (อุณหภูมิ)' ? (
+                <div className="text-[10px] text-slate-500 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50 shadow-inner z-10">
+                   สูตร: {
+                       (fromUnit === 'C' && toUnit === 'F') ? '°F = (°C × 9/5) + 32' :
+                       (fromUnit === 'F' && toUnit === 'C') ? '°C = (°F - 32) × 5/9' :
+                       (fromUnit === 'C' && toUnit === 'K') ? 'K = °C + 273.15' :
+                       (fromUnit === 'K' && toUnit === 'C') ? '°C = K - 273.15' :
+                       (fromUnit === 'F' && toUnit === 'K') ? 'K = (°F - 32) × 5/9 + 273.15' :
+                       (fromUnit === 'K' && toUnit === 'F') ? '°F = (K - 273.15) × 9/5 + 32' :
+                       'K = °C + 273.15 | °F = (°C × 9/5) + 32'
+                   }
+                </div>
+            ) : category === 'Custom (พิมพ์หน่วยเอง)' ? (
+                <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed z-10">
                    💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br/>(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h, L, mL) <br/>ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
+                </div>
+            ) : (
+                <div className="text-[10px] text-slate-400 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-sky-900/50 shadow-inner z-10">
+                   <i className="fas fa-info-circle text-sky-400 mr-1"></i>
+                   สูตรแปลงหน่วย: 1 {fromUnit} = {
+                       (() => {
+                           const rate = CATEGORIES[category][toUnit] / CATEGORIES[category][fromUnit];
+                           return (rate >= 10000 || rate <= 0.0001) 
+                               ? rate.toExponential(4) 
+                               : rate.toLocaleString(undefined, { maximumFractionDigits: 6 });
+                       })()
+                   } {toUnit}
                 </div>
             )}
           </div>
         );
     };
 
-    const MatrixSolver = () => {
-        const [mode, setMode] = useState('2x2'); // '2x2', '3x3', 'quad'
-        const [inputFmt, setInputFmt] = useState('eq'); // 'eq', 'matrix'
+    const GradeCrisisManager = () => {
+        const [midtermFull, setMidtermFull] = useState(30);
+        const [midtermScore, setMidtermScore] = useState(15);
+        const [projectFull, setProjectFull] = useState(30);
+        const [projectScore, setProjectScore] = useState(25);
+        const [finalFull, setFinalFull] = useState(40);
         
-        // เมทริกซ์เก็บค่า 3 แถว 4 คอลัมน์ (เผื่อ 3x3)
-        const [mat, setMat] = useState([
-            ['', '', '', ''],
-            ['', '', '', ''],
-            ['', '', '', '']
-        ]);
-        
-        // สำหรับสมการกำลังสอง ax^2 + bx + c = 0
-        const [quad, setQuad] = useState({a: '', b: '', c: ''});
-        const [result, setResult] = useState(null);
+        const [targetGrade, setTargetGrade] = useState(80); // A=80, B+=75, B=70, C+=65, C=60, D+=55, D=50
 
+        const currentScore = midtermScore + projectScore;
+        const totalFullSoFar = midtermFull + projectFull;
+        const needScore = targetGrade - currentScore;
+
+        let status = 'safe';
+        let msg = 'สบายๆ ชิลๆ';
+        let colorClass = 'text-emerald-400';
+        let bgClass = 'bg-emerald-950/30 border-emerald-500/50';
+
+        if (needScore > finalFull) {
+            status = 'impossible';
+            msg = 'ปาฏิหาริย์เท่านั้นที่ช่วยคุณได้ (ต้องการคะแนนมากกว่าคะแนนเต็ม)';
+            colorClass = 'text-red-500 font-bold animate-pulse';
+            bgClass = 'bg-red-950/50 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]';
+        } else if (needScore > finalFull * 0.85) {
+            status = 'danger';
+            msg = 'วิกฤตหนัก! ต้องอ่านหนังสือแบบไม่ได้นอน';
+            colorClass = 'text-red-400';
+            bgClass = 'bg-red-950/30 border-red-500/50';
+        } else if (needScore > finalFull * 0.6) {
+            status = 'warning';
+            msg = 'ต้องตั้งใจอ่านหนังสือแล้วนะ ประมาทไม่ได้';
+            colorClass = 'text-amber-400';
+            bgClass = 'bg-amber-950/30 border-amber-500/50';
+        } else if (needScore <= 0) {
+            status = 'passed';
+            msg = 'ถึงไม่ไปสอบก็ผ่านเป้าหมายแล้ว นอนตีพุงอยู่บ้านได้เลย!';
+            colorClass = 'text-sky-400 font-bold';
+            bgClass = 'bg-sky-950/30 border-sky-500/50';
+        }
+
+        const gaugeWidth = Math.max(0, Math.min(100, (needScore / finalFull) * 100));
+
+        return (
+            <div className="flex flex-col gap-6 py-4 w-full max-w-2xl mx-auto text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-edit"></i> ใส่คะแนนที่มีปัจจุบัน</div>
+                        
+                        <div className="flex items-center gap-3">
+                            <span className="w-20 text-slate-400 font-bold">มิดเทอม (Mid)</span>
+                            <input type="number" value={midtermScore} onChange={e=>setMidtermScore(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
+                            <span className="text-slate-500">/</span>
+                            <input type="number" value={midtermFull} onChange={e=>setMidtermFull(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="w-20 text-slate-400 font-bold">เก็บ/โปรเจกต์</span>
+                            <input type="number" value={projectScore} onChange={e=>setProjectScore(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
+                            <span className="text-slate-500">/</span>
+                            <input type="number" value={projectFull} onChange={e=>setProjectFull(parseFloat(e.target.value)||0)} className="w-16 inp font-mono text-center" />
+                        </div>
+                        
+                        <div className="pt-2 border-t border-[#1E3A5F] flex justify-between items-center bg-[#050811] p-3 rounded-xl mt-2">
+                            <span className="text-slate-300 font-bold">คะแนนเก็บรวมตอนนี้</span>
+                            <span className="text-xl font-mono font-bold text-white">{currentScore} <span className="text-[10px] text-slate-500">/ {totalFullSoFar}</span></span>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col justify-between">
+                        <div>
+                            <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-4"><i className="fas fa-bullseye"></i> กำหนดเป้าหมาย</div>
+                            
+                            <div className="flex items-center gap-3 mb-4">
+                                <span className="text-slate-400 font-bold">เป้าหมายเกรดที่อยากได้:</span>
+                                <select value={targetGrade} onChange={e=>setTargetGrade(parseInt(e.target.value))} className="flex-1 inp bg-[#050811] font-bold text-amber-300 text-center">
+                                    <option value="80">A (80 คะแนน)</option>
+                                    <option value="75">B+ (75 คะแนน)</option>
+                                    <option value="70">B (70 คะแนน)</option>
+                                    <option value="65">C+ (65 คะแนน)</option>
+                                    <option value="60">C (60 คะแนน)</option>
+                                    <option value="55">D+ (55 คะแนน)</option>
+                                    <option value="50">D (50 คะแนน - แค่ผ่าน)</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-slate-400 font-bold">คะแนนเต็มไฟนอล (Final):</span>
+                                <input type="number" value={finalFull} onChange={e=>setFinalFull(parseFloat(e.target.value)||0)} className="w-20 inp font-mono text-center" />
+                            </div>
+                        </div>
+                        <div className="text-[10px] text-slate-500 text-center mt-4">⚠️ ตรวจสอบให้แน่ใจว่าผลรวมคะแนนเต็ม 3 ช่อง = 100 พอดี</div>
+                    </div>
+                </div>
+
+                {/* Panic Result Box */}
+                <div className={`p-6 rounded-2xl border ${bgClass} shadow-2xl relative overflow-hidden transition-colors duration-500 text-center flex flex-col items-center justify-center min-h-[200px]`}>
+                    <div className="text-slate-300 font-bold mb-2">เพื่อให้ได้เกรดเป้าหมาย คุณต้องทำคะแนนสอบไฟนอลให้ได้:</div>
+                    
+                    <div className={`text-5xl md:text-6xl font-mono font-bold my-4 ${colorClass}`}>
+                        {needScore > 0 ? needScore : 0} <span className="text-xl sm:text-2xl text-slate-400 font-sans">/ {finalFull}</span>
+                    </div>
+                    
+                    <div className={`text-sm md:text-base font-bold mb-6 ${colorClass}`}>"{msg}"</div>
+
+                    {/* Panic Meter Gauge */}
+                    <div className="w-full max-w-sm">
+                        <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
+                            <span className="text-emerald-400">ชิลๆ</span>
+                            <span className="text-amber-400">เริ่มเครียด</span>
+                            <span className="text-red-400">วิกฤต</span>
+                        </div>
+                        <div className="h-3 w-full bg-[#050811] rounded-full overflow-hidden border border-slate-700/50">
+                            <div className={`h-full transition-all duration-700 ease-out ${status === 'impossible' ? 'bg-red-500' : status === 'danger' ? 'bg-red-400' : status === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${gaugeWidth}%` }}></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const FinancialReality = () => {
+        const [mode, setMode] = useState('loan'); // loan, invest
+        const [principal, setPrincipal] = useState(3000000); // 3 ล้านบาท
+        const [rate, setRate] = useState(3.5); // % ต่อปี
+        const [years, setYears] = useState(30);
+
+        // Calculate Home Loan (ลดต้นลดดอก)
+        const r = (rate / 100) / 12;
+        const n = years * 12;
+        const monthlyPay = (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+        const totalPaid = monthlyPay * n;
+        const totalInterest = totalPaid - principal;
+        const interestPct = (totalInterest / totalPaid) * 100;
+
+        // Calculate Compound Invest
+        const investTotal = principal * Math.pow(1 + (rate/100), years);
+        const investProfit = investTotal - principal;
+        const profitPct = (investProfit / investTotal) * 100;
+
+        return (
+            <div className="flex flex-col gap-6 py-4 w-full max-w-3xl mx-auto text-xs">
+                <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
+                    <button onClick={()=>setMode('loan')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode==='loan'?'bg-red-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-home mr-1"></i> ผ่อนบ้าน (ลดต้นลดดอก)</button>
+                    <button onClick={()=>setMode('invest')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode==='invest'?'bg-emerald-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-chart-line mr-1"></i> เงินลงทุน (ดอกเบี้ยทบต้น)</button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-sliders-h"></i> กรอกข้อมูลตัวเลข</div>
+                        
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">{mode === 'loan' ? 'ยอดกู้ (เงินต้น) / บาท' : 'เงินต้นสำหรับลงทุน (บาท)'}</label>
+                            <input type="number" value={principal} onChange={e=>setPrincipal(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-lg py-2" />
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex-1">
+                                <label className="text-slate-400 font-bold mb-1 block">ดอกเบี้ยต่อปี (%)</label>
+                                <input type="number" step="0.1" value={rate} onChange={e=>setRate(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-center py-2" />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-slate-400 font-bold mb-1 block">ระยะเวลา (ปี)</label>
+                                <input type="number" min="1" value={years} onChange={e=>setYears(parseInt(e.target.value)||0)} className="w-full inp font-mono text-center py-2" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={`p-6 rounded-2xl border shadow-2xl flex flex-col justify-center min-h-[220px] ${mode === 'loan' ? 'bg-gradient-to-br from-[#1a0b0b] to-[#050811] border-red-900/50' : 'bg-gradient-to-br from-[#0b1a11] to-[#050811] border-emerald-900/50'}`}>
+                        {mode === 'loan' ? (
+                            <>
+                                <div className="text-red-400 font-bold text-sm uppercase tracking-widest text-center mb-4">ความจริงของการผ่อนบ้าน</div>
+                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
+                                    <span className="text-slate-400">เงินต้นทั้งหมด:</span>
+                                    <span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span>
+                                </div>
+                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
+                                    <span className="text-slate-400">ดอกเบี้ยที่แบงก์ได้:</span>
+                                    <span className="font-mono text-red-400 text-lg font-bold">{totalInterest.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
+                                </div>
+                                <div className="flex justify-between items-end pb-2 mb-4 bg-red-950/30 p-2 rounded">
+                                    <span className="text-white font-bold">รวมที่ต้องจ่ายจริง:</span>
+                                    <span className="font-mono text-white text-2xl font-bold">{totalPaid.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
+                                </div>
+                                <div className="text-center font-bold text-amber-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
+                                    ผ่อนเดือนละ: {monthlyPay.toLocaleString(undefined, {maximumFractionDigits:0})} ฿ ตลอด {years} ปี
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-emerald-400 font-bold text-sm uppercase tracking-widest text-center mb-4">พลังของดอกเบี้ยทบต้น</div>
+                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
+                                    <span className="text-slate-400">เงินต้นทั้งหมด:</span>
+                                    <span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span>
+                                </div>
+                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
+                                    <span className="text-slate-400">ผลกำไรที่งอกเงย:</span>
+                                    <span className="font-mono text-emerald-400 text-lg font-bold">+{investProfit.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
+                                </div>
+                                <div className="flex justify-between items-end pb-2 mb-4 bg-emerald-950/30 p-2 rounded">
+                                    <span className="text-white font-bold">รวมเงินสุทธิในปีที่ {years}:</span>
+                                    <span className="font-mono text-white text-2xl font-bold">{investTotal.toLocaleString(undefined, {maximumFractionDigits:0})} ฿</span>
+                                </div>
+                                <div className="text-center font-bold text-emerald-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
+                                    กำไรโตขึ้นจากเงินต้นถึง {(profitPct * (investTotal/principal)).toLocaleString(undefined, {maximumFractionDigits:0})}%
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Graph Area */}
+                <div className="bg-[#050811] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg mt-2">
+                    <div className="text-center text-slate-400 font-bold mb-4 text-[10px]">กราฟแสดงสัดส่วน {mode === 'loan' ? '(เงินต้น vs ดอกเบี้ย)' : '(เงินต้น vs กำไร)'}</div>
+                    
+                    <div className="w-full h-8 flex rounded-xl overflow-hidden shadow-inner font-mono text-[10px] font-bold text-[#050811] relative">
+                        {mode === 'loan' ? (
+                            <>
+                                <div className="bg-sky-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - interestPct}%` }}>
+                                    {(100 - interestPct) > 10 ? 'เงินต้น ' + (100 - interestPct).toFixed(1) + '%' : ''}
+                                </div>
+                                <div className="bg-red-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${interestPct}%` }}>
+                                    {interestPct > 10 ? 'ดอกเบี้ยแบงก์ ' + interestPct.toFixed(1) + '%' : ''}
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="bg-slate-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - profitPct}%` }}>
+                                    {(100 - profitPct) > 10 ? 'เงินต้น ' + (100 - profitPct).toFixed(1) + '%' : ''}
+                                </div>
+                                <div className="bg-emerald-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${profitPct}%` }}>
+                                    {profitPct > 10 ? 'กำไร ' + profitPct.toFixed(1) + '%' : ''}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                    {mode === 'loan' && interestPct > 40 && (
+                        <div className="text-center mt-3 text-[10px] text-red-300 font-bold">⚠️ จ่ายดอกเบี้ยเยอะมาก! ควรวางแผนรีไฟแนนซ์ (Refinance) ทุก 3 ปีเพื่อลดดอกเบี้ยครับ</div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const GachaSimulator = () => {
+        const [rate, setRate] = useState(1.0); // % โอกาสออกหน้าตู้
+        const [pulls, setPulls] = useState(10); // จำนวนครั้งที่สุ่ม
+        
+        const calcChance = () => {
+            if(rate <= 0 || pulls <= 0) return 0;
+            const failRate = 1 - (rate / 100);
+            const totalFailChance = Math.pow(failRate, pulls);
+            return (1 - totalFailChance) * 100;
+        };
+
+        const resultChance = calcChance();
+        
+        // กราฟิกสุ่มลูกแก้ว (Visuals)
+        const [balls, setBalls] = useState([]);
+        const triggerAnim = () => {
+            setBalls([]); // reset
+            setTimeout(() => {
+                const newBalls = Array.from({length: Math.min(pulls, 50)}).map((_, i) => ({
+                    id: i,
+                    isWin: Math.random() * 100 < rate,
+                    delay: Math.random() * 1.5,
+                    left: Math.random() * 80 + 10
+                }));
+                setBalls(newBalls);
+            }, 100);
+        };
+
+        return (
+            <div className="flex flex-col md:flex-row gap-6 py-4 w-full max-w-4xl mx-auto text-xs items-center">
+                
+                <div className="w-full md:w-1/2 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                    <div className="text-purple-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-dice"></i> Gacha Rate Reality Check</div>
+                    
+                    <div>
+                        <label className="text-slate-400 font-bold mb-1 block">เรตออกหน้าตู้ (Drop Rate %)</label>
+                        <div className="flex items-center gap-2">
+                            <input type="number" step="0.01" min="0" max="100" value={rate} onChange={e=>setRate(parseFloat(e.target.value)||0)} className="w-full inp font-mono text-lg" />
+                            <span className="text-xl">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-slate-400 font-bold mb-1 block">จำนวนครั้งที่กดสุ่ม (Pulls/Rolls)</label>
+                        <div className="flex items-center gap-2">
+                            <input type="number" min="1" max="1000" value={pulls} onChange={e=>setPulls(parseInt(e.target.value)||0)} className="w-full inp font-mono text-lg" />
+                            <span className="text-xl whitespace-nowrap">ครั้ง</span>
+                        </div>
+                    </div>
+                    
+                    <button onClick={triggerAnim} className="w-full btn-b py-3 font-bold bg-purple-900/40 border-purple-500/50 hover:bg-purple-600 hover:text-white transition-colors text-sm shadow">
+                        🎰 กดสุ่มตู้กาชาจำลอง
+                    </button>
+                    
+                    <div className="text-[10px] text-slate-500 bg-[#050811] p-3 rounded-lg border border-[#1E3A5F] mt-4 leading-relaxed">
+                        <span className="font-bold text-sky-400">💡 ความจริงของความน่าจะเป็น (Binomial Distribution):</span><br/>
+                        ต่อให้เรตออกคือ 1% การสุ่ม 100 ครั้ง โอกาสที่จะได้ก็ไม่ใช่ 100% แต่เป็นแค่ 63.4% เท่านั้น เพราะแต่ละครั้งของการสุ่ม (Independent Events) มันคือการคำนวณใหม่เสมอ เครื่องมือนี้คำนวณจากโอกาสที่ "คุณจะไม่ออกของเลยสักครั้งเดียว" มาหักลบออก
+                    </div>
+                </div>
+
+                <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#12071a] to-[#050811] rounded-2xl border border-purple-900/50 shadow-2xl relative min-h-[350px]">
+                    <div className="text-slate-400 font-bold text-sm uppercase tracking-widest mb-4 z-10 text-center">โอกาสที่คุณจะได้ของชิ้นนี้<br/>อย่างน้อย 1 ชิ้น คือ...</div>
+                    
+                    <div className="relative z-10 text-5xl sm:text-6xl font-mono font-bold my-2 text-purple-400 drop-shadow-[0_0_20px_rgba(168,85,247,0.5)] bg-[#050811]/50 px-4 py-2 rounded-2xl backdrop-blur-sm border border-purple-900/30">
+                        {resultChance.toFixed(2)}<span className="text-3xl text-slate-400">%</span>
+                    </div>
+
+                    <div className={`mt-6 text-sm font-bold z-10 px-4 py-1.5 rounded-full border ${resultChance > 90 ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900' : resultChance > 50 ? 'bg-amber-950/50 text-amber-400 border-amber-900' : 'bg-red-950/50 text-red-400 border-red-900'}`}>
+                        {resultChance > 90 ? 'ออกแน่นอน (เกือบการันตี) 🎉' : resultChance > 50 ? 'มีโอกาสได้สูง ลุยเลย! 🤔' : 'เตรียมตัวเกลือได้เลย 🧂'}
+                    </div>
+
+                    {/* อนิเมชันจำลองการดรอปลูกแก้วกาชา */}
+                    <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0 opacity-50">
+                        {balls.map((b) => (
+                            <div key={b.id} 
+                                 className={`absolute top-[-30px] rounded-full shadow-[0_0_15px_currentColor]`}
+                                 style={{ 
+                                     left: `${b.left}%`, 
+                                     width: b.isWin ? '24px' : '12px',
+                                     height: b.isWin ? '24px' : '12px',
+                                     backgroundColor: b.isWin ? '#eab308' : '#64748b',
+                                     color: b.isWin ? '#eab308' : '#64748b',
+                                     animation: `fallDown 2s ease-in forwards ${b.delay}s`,
+                                     zIndex: b.isWin ? 20 : 10
+                                 }}>
+                            </div>
+                        ))}
+                    </div>
+                    <style dangerouslySetInnerHTML={{__html: `
+                        @keyframes fallDown {
+                            0% { transform: translateY(-30px) rotate(0deg); opacity: 1; }
+                            80% { opacity: 1; }
+                            100% { transform: translateY(400px) rotate(360deg); opacity: 0; }
+                        }
+                    `}} />
+                </div>
+            </div>
+        );
+    };
+
+    const InteractiveProjectile = () => {
+        const [v0, setV0] = useState(50); // m/s
+        const [angle, setAngle] = useState(45); // degree
+        const [isFlying, setIsFlying] = useState(false);
+
+        const g = 9.81;
+        const rad = angle * (Math.PI / 180);
+        
+        // Calculate physics
+        const tTotal = (2 * v0 * Math.sin(rad)) / g;
+        const sMax = (v0 * v0 * Math.sin(2 * rad)) / g;
+        const hMax = (v0 * v0 * Math.sin(rad) * Math.sin(rad)) / (2 * g);
+
+        // Drawing properties
+        const canvasRef = useRef(null);
+        const animRef = useRef(null);
+
+        const drawTrajectory = () => {
+            if(v0 <= 0 || angle <= 0 || angle >= 90) return;
+            const canvas = canvasRef.current;
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width; const h = canvas.height;
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            // Draw Grid
+            ctx.strokeStyle = '#1E3A5F'; ctx.lineWidth = 1;
+            for(let i=0; i<w; i+=40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
+            for(let i=0; i<h; i+=40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
+            
+            // Ground
+            ctx.strokeStyle = '#34D399'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, h-5); ctx.lineTo(w, h-5); ctx.stroke();
+
+            // Transform Scale (Fitting inside canvas)
+            const scaleX = (w - 20) / Math.max(10, sMax);
+            const scaleY = (h - 20) / Math.max(10, hMax);
+            const scale = Math.min(scaleX, scaleY);
+
+            // Animate
+            let t = 0;
+            setIsFlying(true);
+            
+            const animate = () => {
+                if (t > tTotal) { setIsFlying(false); return; }
+                
+                const x = (v0 * Math.cos(rad) * t) * scale + 10;
+                const y = (h - 5) - ((v0 * Math.sin(rad) * t - 0.5 * g * t * t) * scale);
+                
+                // Draw dot trail
+                ctx.fillStyle = '#38BDF8';
+                ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI*2); ctx.fill();
+                
+                t += tTotal / 100; // 100 frames
+                animRef.current = requestAnimationFrame(animate);
+            };
+            
+            if(animRef.current) cancelAnimationFrame(animRef.current);
+            animate();
+        };
+
+        useEffect(() => {
+            return () => { if(animRef.current) cancelAnimationFrame(animRef.current); };
+        }, []);
+
+        return (
+            <div className="flex flex-col gap-5 py-4 w-full max-w-3xl mx-auto text-xs">
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="col-span-1 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+                        <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-rocket"></i> พารามิเตอร์เริ่มต้น</div>
+                        
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">ความเร็วต้น (v₀) - m/s</label>
+                            <input type="number" min="1" max="500" value={v0} onChange={e=>setV0(parseFloat(e.target.value)||0)} className="w-full inp font-mono" />
+                        </div>
+                        <div>
+                            <label className="text-slate-400 font-bold mb-1 block">มุมยิง (θ) - องศา</label>
+                            <input type="range" min="1" max="89" value={angle} onChange={e=>setAngle(parseInt(e.target.value))} className="w-full accent-sky-500 mt-2" />
+                            <div className="text-center font-bold text-sky-300 mt-1">{angle}°</div>
+                        </div>
+                        
+                        <button onClick={drawTrajectory} disabled={isFlying} className="w-full btn-b py-2.5 font-bold shadow-lg mt-2 border-sky-500/50 hover:bg-sky-600 disabled:opacity-50">
+                            {isFlying ? '🚀 กำลังลอย...' : '🚀 ยิงจรวดจำลอง'}
+                        </button>
+                    </div>
+
+                    <div className="col-span-2 bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F] shadow-inner relative flex flex-col justify-between">
+                        <canvas ref={canvasRef} width="500" height="220" className="w-full h-48 bg-[#0a101f] border border-slate-700 rounded-xl shadow-inner mb-4"></canvas>
+                        
+                        <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-[9px] text-slate-400 font-sans font-bold">ระยะไกลสุด (Sx)</div>
+                                <div className="text-base sm:text-lg text-emerald-400 font-bold mt-0.5">{sMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div>
+                            </div>
+                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-[9px] text-slate-400 font-sans font-bold">จุดสูงสุด (Sy)</div>
+                                <div className="text-base sm:text-lg text-sky-400 font-bold mt-0.5">{hMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div>
+                            </div>
+                            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-[9px] text-slate-400 font-sans font-bold">เวลาตกพื้น (t)</div>
+                                <div className="text-base sm:text-lg text-amber-400 font-bold mt-0.5">{tTotal.toFixed(2)} <span className="text-[10px] font-sans">s</span></div>
+                            </div>
+                        </div>
+                        <div className="absolute top-6 left-6 text-[10px] text-slate-500 font-bold">g = 9.81 m/s² (ไม่มีแรงต้านอากาศ)</div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const MathSymbolBuilder = () => {
+        const [expression, setExpression] = useState('');
+        
+        // ชุดปุ่มคำสั่ง LaTeX ที่ใช้บ่อย
+        const btnGroups = {
+            'เศษส่วน & รูท': [
+                { l: 'a/b', v: '\\frac{x}{y}' }, 
+                { l: '√x', v: '\\sqrt{x}' }, 
+                { l: 'ⁿ√x', v: '\\sqrt[n]{x}' }
+            ],
+            'เลขยกกำลัง & ห้อย': [
+                { l: 'x²', v: 'x^2' }, 
+                { l: 'xⁿ', v: 'x^n' }, 
+                { l: 'xᵢ', v: 'x_i' }
+            ],
+            'แคลคูลัส': [
+                { l: '∫', v: '\\int' }, 
+                { l: '∫ limits', v: '\\int_{a}^{b}' }, 
+                { l: 'lim', v: '\\lim_{x \\to \\infty}' }, 
+                { l: '∑', v: '\\sum_{i=1}^{n}' }
+            ],
+            'กรีก & สัญลักษณ์': [
+                { l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, 
+                { l: 'θ', v: '\\theta' }, { l: 'π', v: '\\pi' }, 
+                { l: '±', v: '\\pm' }, { l: '∞', v: '\\infty' }, 
+                { l: '≈', v: '\\approx' }, { l: '≠', v: '\\neq' }
+            ]
+        };
+
+        const insertSymbol = (val) => {
+            setExpression(prev => prev + ' ' + val + ' ');
+        };
+
+        // ใช้ API CodeCogs สำหรับเรนเดอร์ภาพ LaTeX แบบเรียลไทม์
+        const previewUrl = expression.trim() 
+            ? `https://latex.codecogs.com/svg.image?\\color{white}\\large ${encodeURIComponent(expression)}` 
+            : null;
+
+        return (
+            <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+                
+                <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col gap-4">
+                    <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+                        <span><i className="fas fa-square-root-alt"></i> เครื่องมือสร้างสมการ (LaTeX Builder)</span>
+                        {previewUrl && (
+                            <button onClick={() => { navigator.clipboard.writeText(expression); alert('คัดลอกโค้ด LaTeX เรียบร้อยแล้ว'); }} className="btn-d py-1 px-3 text-[10px]">
+                                <i className="fas fa-copy"></i> ก๊อปปี้โค้ด LaTeX
+                            </button>
+                        )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pb-2">
+                        {Object.entries(btnGroups).map(([group, btns]) => (
+                            <div key={group} className="bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
+                                <div className="text-[9px] text-slate-400 font-bold mb-1.5 text-center">{group}</div>
+                                <div className="flex flex-wrap gap-1 justify-center">
+                                    {btns.map((btn, i) => (
+                                        <button key={i} onClick={() => insertSymbol(btn.v)} className="px-2 py-1 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded border border-slate-600 transition-colors font-mono text-[10px] shadow-sm">
+                                            {btn.l}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div>
+                        <label className="text-slate-400 font-bold mb-1 block">โค้ดสมการ (พิมพ์แก้ที่นี่ได้เลย)</label>
+                        <textarea 
+                            rows="3" 
+                            value={expression} 
+                            onChange={(e) => setExpression(e.target.value)} 
+                            placeholder="พิมพ์สมการ หรือคลิกปุ่มด้านบนเพื่อแทรก..." 
+                            className="w-full inp font-mono text-sky-200 bg-[#050811] resize-none"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#050811] to-[#0a101f] p-6 rounded-2xl border border-dashed border-sky-500/50 shadow-2xl flex flex-col items-center justify-center min-h-[150px] relative">
+                    <div className="absolute top-3 left-4 text-[10px] text-sky-400 font-bold tracking-widest uppercase">Live Preview (พรีวิวภาพสมการ)</div>
+                    
+                    {previewUrl ? (
+                        <div className="mt-4 p-4">
+                            <img src={previewUrl} alt="Math Equation" className="max-w-full h-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] filter drop-shadow" />
+                        </div>
+                    ) : (
+                        <div className="text-slate-500 mt-4"><i className="fas fa-laptop-code text-2xl mb-2 block text-center opacity-50"></i>ระบบจะเรนเดอร์ภาพสมการที่นี่</div>
+                    )}
+                    
+                    <div className="absolute bottom-3 right-4 text-[9px] text-slate-500">คุณสามารถคลิกขวาที่ภาพแล้วกด Copy Image ไปวางใน Word/PowerPoint ได้เลย</div>
+                </div>
+            </div>
+        );
+    };
+
+    
+    const MatrixSolver = () => {
+        const [mainMode, setMainMode] = useState('equation'); // 'equation', 'matrix_ops'
+        
+        // --- States for Equation Solver ---
+        const [eqMode, setEqMode] = useState('2x2'); // '2x2', '3x3', 'quad'
+        const [mat, setMat] = useState([['', '', '', ''], ['', '', '', ''], ['', '', '', '']]);
+        const [quad, setQuad] = useState({a: '', b: '', c: ''});
+        const [eqResult, setEqResult] = useState(null);
+        const [showSteps, setShowSteps] = useState(false);
+
+        // --- States for Matrix Operations ---
+        const [matSize, setMatSize] = useState(2);
+        const [matA, setMatA] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
+        const [matB, setMatB] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
+        const [matOp, setMatOp] = useState('add');
+        const [opResult, setOpResult] = useState(null);
+
+        // --- Logic: Equation Solver ---
         const handleMat = (r, c, val) => {
             const newMat = [...mat];
             newMat[r][c] = val;
             setMat(newMat);
-            setResult(null);
+            setEqResult(null);
         };
 
         const solve2x2 = () => {
             const a1=parseFloat(mat[0][0]), b1=parseFloat(mat[0][1]), c1=parseFloat(mat[0][2]);
             const a2=parseFloat(mat[1][0]), b2=parseFloat(mat[1][1]), c2=parseFloat(mat[1][2]);
-            if([a1,b1,c1,a2,b2,c2].some(isNaN)) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if([a1,b1,c1,a2,b2,c2].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
 
             const det = a1*b2 - a2*b1;
             const detX = c1*b2 - c2*b1;
             const detY = a1*c2 - a2*c1;
 
             if (det === 0) {
-                if (detX === 0 && detY === 0) return setResult({ err: 'สมการมีคำตอบนับไม่ถ้วน (เส้นทับกัน)', det: 0 });
-                return setResult({ err: 'สมการไม่มีคำตอบ (เส้นขนานกัน)', det: 0 });
+                if (detX === 0 && detY === 0) return setEqResult({ err: 'สมการมีคำตอบนับไม่ถ้วน (เส้นทับกัน)', det: 0 });
+                return setEqResult({ err: 'สมการไม่มีคำตอบ (เส้นขนานกัน)', det: 0 });
             }
-
-            const x = detX / det;
-            const y = detY / det;
-            setResult({ type: '2x2', x, y, det, detX, detY, eq: {a1,b1,c1,a2,b2,c2} });
+            setEqResult({ type: '2x2', x: detX/det, y: detY/det, det, detX, detY, eq: {a1,b1,c1,a2,b2,c2} });
         };
 
         const solve3x3 = () => {
             const m = mat.map(row => row.map(v => parseFloat(v)));
-            if(m.some(row => row.some(isNaN))) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if(m.some(row => row.some(isNaN))) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
 
             const getDet3 = (a,b,c, d,e,f, g,h,i) => a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
             
@@ -3484,235 +4244,227 @@
             const detY = getDet3(m[0][0], m[0][3], m[0][2], m[1][0], m[1][3], m[1][2], m[2][0], m[2][3], m[2][2]);
             const detZ = getDet3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3]);
 
-            if (det === 0) return setResult({ err: 'หาค่าไม่ได้ (Determinant = 0)', det: 0 });
-
-            setResult({ type: '3x3', x: detX/det, y: detY/det, z: detZ/det, det, detX, detY, detZ });
+            if (det === 0) return setEqResult({ err: 'หาค่าไม่ได้ (Determinant = 0)', det: 0 });
+            setEqResult({ type: '3x3', x: detX/det, y: detY/det, z: detZ/det, det, detX, detY, detZ });
         };
 
         const solveQuad = () => {
             const a=parseFloat(quad.a), b=parseFloat(quad.b), c=parseFloat(quad.c);
-            if([a,b,c].some(isNaN)) return setResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
-            if(a === 0) return setResult({ err: 'ค่า a ต้องไม่เป็น 0 (ไม่ใช่สมการกำลังสอง)' });
+            if([a,b,c].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+            if(a === 0) return setEqResult({ err: 'ค่า a ต้องไม่เป็น 0 (ไม่ใช่สมการกำลังสอง)' });
 
             const D = b*b - 4*a*c;
             if (D > 0) {
-                const x1 = (-b + Math.sqrt(D)) / (2*a);
-                const x2 = (-b - Math.sqrt(D)) / (2*a);
-                setResult({ type: 'quad', roots: 2, x1, x2, D, a, b, c });
+                setEqResult({ type: 'quad', roots: 2, x1: (-b + Math.sqrt(D))/(2*a), x2: (-b - Math.sqrt(D))/(2*a), D, a, b, c });
             } else if (D === 0) {
-                const x = -b / (2*a);
-                setResult({ type: 'quad', roots: 1, x, D, a, b, c });
+                setEqResult({ type: 'quad', roots: 1, x: -b/(2*a), D, a, b, c });
             } else {
-                // แก้ไขกรณี D < 0 ให้รองรับจำนวนจินตภาพ
-                const real = (-b / (2*a));
-                const img = (Math.sqrt(-D) / (2*Math.abs(a))); 
-                setResult({ type: 'quad', roots: 0, real, img, D, a, b, c, isComplex: true });
+                setEqResult({ type: 'quad', roots: 0, real: -b/(2*a), img: Math.sqrt(-D)/(2*Math.abs(a)), D, a, b, c, isComplex: true });
             }
         };
 
-        const handleSolve = () => {
-            if(mode === '2x2') solve2x2();
-            else if(mode === '3x3') solve3x3();
+        const handleSolveEq = () => {
+            setShowSteps(false);
+            if(eqMode === '2x2') solve2x2();
+            else if(eqMode === '3x3') solve3x3();
             else solveQuad();
         };
 
-        // ฟังก์ชันวาดกราฟสำหรับ 2x2
-        const renderGraph2D = (eq) => {
-            const getPts = (a,b,c) => {
-                if(b===0) return {x1:c/a, y1:-20, x2:c/a, y2:20};
-                return {x1:-20, y1:(c-a*-20)/b, x2:20, y2:(c-a*20)/b};
-            };
-            const l1 = getPts(eq.a1, eq.b1, eq.c1);
-            const l2 = getPts(eq.a2, eq.b2, eq.c2);
-            
-            // Transform (scale & translate) สำหรับ SVG
-            const scale = 5;
-            const tf = (x, y) => ({ cx: 150 + x*scale, cy: 100 - y*scale });
-            const p1A = tf(l1.x1, l1.y1); const p1B = tf(l1.x2, l1.y2);
-            const p2A = tf(l2.x1, l2.y1); const p2B = tf(l2.x2, l2.y2);
+        // --- Logic: Matrix Operations ---
+        const handleMatOpUpdate = (matType, r, c, val) => {
+            if (matType === 'A') {
+                const newA = [...matA]; newA[r][c] = val; setMatA(newA);
+            } else {
+                const newB = [...matB]; newB[r][c] = val; setMatB(newB);
+            }
+            setOpResult(null);
+        };
 
-            return (
-                <div className="w-full h-48 bg-[#0a101f] border border-slate-700 rounded-lg relative overflow-hidden mt-4 shadow-inner">
-                    <div className="absolute top-2 left-2 text-[9px] font-bold text-slate-500">2D Intersection Graph</div>
-                    <svg viewBox="0 0 300 200" className="w-full h-full">
-                        {/* Grid */}
-                        <line x1="0" y1="100" x2="300" y2="100" stroke="#334155" strokeWidth="1" />
-                        <line x1="150" y1="0" x2="150" y2="200" stroke="#334155" strokeWidth="1" />
-                        
-                        {/* Lines */}
-                        <line x1={p1A.cx} y1={p1A.cy} x2={p1B.cx} y2={p1B.cy} stroke="#38BDF8" strokeWidth="2" />
-                        <line x1={p2A.cx} y1={p2A.cy} x2={p2B.cx} y2={p2B.cy} stroke="#F472B6" strokeWidth="2" />
-                        
-                        {/* Intersection Point */}
-                        {result.x !== undefined && (
-                            <circle cx={150 + result.x*scale} cy={100 - result.y*scale} r="4" fill="#FBBF24" />
-                        )}
-                    </svg>
-                </div>
-            );
+        const calculateMatrixOp = () => {
+            const A = matA.slice(0, matSize).map(r => r.slice(0, matSize).map(v => parseFloat(v)||0));
+            const B = matB.slice(0, matSize).map(r => r.slice(0, matSize).map(v => parseFloat(v)||0));
+            const res = Array(matSize).fill(0).map(() => Array(matSize).fill(0));
+
+            if (matOp === 'add') {
+                for(let i=0; i<matSize; i++) for(let j=0; j<matSize; j++) res[i][j] = A[i][j] + B[i][j];
+            } else if (matOp === 'sub') {
+                for(let i=0; i<matSize; i++) for(let j=0; j<matSize; j++) res[i][j] = A[i][j] - B[i][j];
+            } else if (matOp === 'mul') {
+                for(let i=0; i<matSize; i++) {
+                    for(let j=0; j<matSize; j++) {
+                        for(let k=0; k<matSize; k++) res[i][j] += A[i][k] * B[k][j];
+                    }
+                }
+            }
+            setOpResult(res);
         };
 
         return (
-          <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
+          <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto">
             
-            <div className="bg-[#0B1325] p-2 rounded-xl border border-[#1E3A5F] flex gap-1">
-                <button onClick={()=>{setMode('2x2'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='2x2'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>2 Variables</button>
-                <button onClick={()=>{setMode('3x3'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='3x3'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>3 Variables</button>
-                <button onClick={()=>{setMode('quad'); setResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${mode==='quad'?'bg-amber-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>Quadratic</button>
+            {/* Top Tabs */}
+            <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
+                <button onClick={()=>setMainMode('equation')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode==='equation'?'bg-sky-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-equals mr-1"></i> Equation Solver</button>
+                <button onClick={()=>setMainMode('matrix_ops')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode==='matrix_ops'?'bg-fuchsia-600 text-white shadow-md':'text-slate-400 hover:text-white'}`}><i className="fas fa-border-all mr-1"></i> Matrix Operations</button>
             </div>
 
-            <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg">
-                {(mode === '2x2' || mode === '3x3') && (
-                    <div className="flex justify-end mb-4">
-                        <div className="bg-[#0B1325] rounded border border-[#1E3A5F] flex text-[10px] overflow-hidden">
-                            <button onClick={()=>setInputFmt('eq')} className={`px-3 py-1 font-bold ${inputFmt==='eq'?'bg-white text-black':'text-slate-400 hover:text-white'}`}>รูปแบบสมการ</button>
-                            <button onClick={()=>setInputFmt('matrix')} className={`px-3 py-1 font-bold ${inputFmt==='matrix'?'bg-white text-black':'text-slate-400 hover:text-white'}`}>รูปแบบ Matrix</button>
-                        </div>
+            {mainMode === 'equation' && (
+                <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg">
+                    <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 mb-6 max-w-sm mx-auto">
+                        <button onClick={()=>{setEqMode('2x2'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='2x2'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>2 Variables</button>
+                        <button onClick={()=>{setEqMode('3x3'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='3x3'?'bg-sky-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>3 Variables</button>
+                        <button onClick={()=>{setEqMode('quad'); setEqResult(null);}} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode==='quad'?'bg-amber-600 text-white':'text-slate-400 hover:bg-[#0F2547]'}`}>Quadratic</button>
                     </div>
-                )}
 
-                {/* --- INPUT FORMS --- */}
-                <div className="flex flex-col gap-3 items-center justify-center min-h-[120px]">
-                    {mode === '2x2' && inputFmt === 'eq' && (
-                        <div className="space-y-3 font-mono text-sm sm:text-base text-slate-300 w-full max-w-sm">
-                            <div className="flex items-center gap-2"><input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-16 text-center" placeholder="a1" /> <span>X +</span><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-16 text-center" placeholder="b1" /> <span>Y =</span><input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-20 text-center text-sky-200" placeholder="c1" /></div>
-                            <div className="flex items-center gap-2"><input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-16 text-center" placeholder="a2" /> <span>X +</span><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-16 text-center" placeholder="b2" /> <span>Y =</span><input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-20 text-center text-sky-200" placeholder="c2" /></div>
-                        </div>
-                    )}
-
-                    {mode === '2x2' && inputFmt === 'matrix' && (
-                        <div className="flex items-center gap-4 font-mono text-sm">
-                            <div className="border-l-2 border-r-2 border-slate-500 rounded-[8px] p-2 grid grid-cols-2 gap-2">
-                                <input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-14 text-center" /><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-14 text-center" />
-                                <input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-14 text-center" /><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-14 text-center" />
+                    <div className="flex flex-col gap-3 items-center justify-center min-h-[120px]">
+                        {eqMode === '2x2' && (
+                            <div className="space-y-3 font-mono text-sm sm:text-base text-slate-300 w-full max-w-sm">
+                                <div className="flex items-center gap-2"><input type="number" value={mat[0][0]} onChange={e=>handleMat(0,0,e.target.value)} className="inp w-16 text-center" placeholder="a1" /> <span>X +</span><input type="number" value={mat[0][1]} onChange={e=>handleMat(0,1,e.target.value)} className="inp w-16 text-center" placeholder="b1" /> <span>Y =</span><input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c1" /></div>
+                                <div className="flex items-center gap-2"><input type="number" value={mat[1][0]} onChange={e=>handleMat(1,0,e.target.value)} className="inp w-16 text-center" placeholder="a2" /> <span>X +</span><input type="number" value={mat[1][1]} onChange={e=>handleMat(1,1,e.target.value)} className="inp w-16 text-center" placeholder="b2" /> <span>Y =</span><input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c2" /></div>
                             </div>
-                            <div className="text-xl">×</div>
-                            <div className="border-l-2 border-r-2 border-sky-600 rounded-[8px] p-2 flex flex-col gap-2 bg-sky-950/20 text-sky-300 font-bold"><div>X</div><div>Y</div></div>
-                            <div className="text-xl">=</div>
-                            <div className="border-l-2 border-r-2 border-emerald-600 rounded-[8px] p-2 flex flex-col gap-2">
-                                <input type="number" value={mat[0][2]} onChange={e=>handleMat(0,2,e.target.value)} className="inp w-16 text-center text-emerald-300 border-emerald-900" />
-                                <input type="number" value={mat[1][2]} onChange={e=>handleMat(1,2,e.target.value)} className="inp w-16 text-center text-emerald-300 border-emerald-900" />
-                            </div>
-                        </div>
-                    )}
-
-                    {mode === '3x3' && inputFmt === 'eq' && (
-                        <div className="space-y-3 font-mono text-xs sm:text-sm text-slate-300 w-full max-w-md">
-                            {[0,1,2].map(r => (
-                                <div key={r} className="flex items-center justify-center gap-1.5 w-full">
-                                    <input type="number" value={mat[r][0]} onChange={e=>handleMat(r,0,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="a" /> <span>X +</span>
-                                    <input type="number" value={mat[r][1]} onChange={e=>handleMat(r,1,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="b" /> <span>Y +</span>
-                                    <input type="number" value={mat[r][2]} onChange={e=>handleMat(r,2,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="c" /> <span>Z =</span>
-                                    <input type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-16 sm:w-20 text-center text-sky-200" placeholder="d" />
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {mode === '3x3' && inputFmt === 'matrix' && (
-                        <div className="flex items-center justify-center gap-2 sm:gap-4 font-mono text-xs sm:text-sm overflow-x-auto w-full no-scrollbar">
-                            <div className="border-l-2 border-r-2 border-slate-500 rounded-[8px] p-2 grid grid-cols-3 gap-1 sm:gap-2">
-                                {[0,1,2].map(r => [0,1,2].map(c => (
-                                    <input key={`${r}${c}`} type="number" value={mat[r][c]} onChange={e=>handleMat(r,c,e.target.value)} className="inp w-12 sm:w-14 text-center px-1" />
-                                )))}
-                            </div>
-                            <div className="text-lg sm:text-xl shrink-0">×</div>
-                            <div className="border-l-2 border-r-2 border-sky-600 rounded-[8px] p-2 flex flex-col gap-1 sm:gap-2 bg-sky-950/20 text-sky-300 font-bold shrink-0"><div className="h-7 sm:h-[34px] flex items-center">X</div><div className="h-7 sm:h-[34px] flex items-center">Y</div><div className="h-7 sm:h-[34px] flex items-center">Z</div></div>
-                            <div className="text-lg sm:text-xl shrink-0">=</div>
-                            <div className="border-l-2 border-r-2 border-emerald-600 rounded-[8px] p-2 flex flex-col gap-1 sm:gap-2 shrink-0">
+                        )}
+                        {eqMode === '3x3' && (
+                            <div className="space-y-3 font-mono text-xs sm:text-sm text-slate-300 w-full max-w-md">
                                 {[0,1,2].map(r => (
-                                    <input key={r} type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-14 sm:w-16 text-center text-emerald-300 border-emerald-900 px-1" />
+                                    <div key={r} className="flex items-center justify-center gap-1.5 w-full">
+                                        <input type="number" value={mat[r][0]} onChange={e=>handleMat(r,0,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="a" /> <span>X +</span>
+                                        <input type="number" value={mat[r][1]} onChange={e=>handleMat(r,1,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="b" /> <span>Y +</span>
+                                        <input type="number" value={mat[r][2]} onChange={e=>handleMat(r,2,e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="c" /> <span>Z =</span>
+                                        <input type="number" value={mat[r][3]} onChange={e=>handleMat(r,3,e.target.value)} className="inp w-16 sm:w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="d" />
+                                    </div>
                                 ))}
                             </div>
-                        </div>
-                    )}
-
-                    {mode === 'quad' && (
-                        <div className="flex items-center gap-2 font-mono text-sm sm:text-base text-amber-400 justify-center">
-                            <input type="number" value={quad.a} onChange={e=>{setQuad({...quad, a:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="a" /> <span>X² +</span>
-                            <input type="number" value={quad.b} onChange={e=>{setQuad({...quad, b:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="b" /> <span>X +</span>
-                            <input type="number" value={quad.c} onChange={e=>{setQuad({...quad, c:e.target.value}); setResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="c" /> <span>= 0</span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="mt-6 flex justify-center border-t border-[#1E3A5F] pt-6">
-                    <button onClick={handleSolve} className="btn-w py-2.5 px-10 text-sm shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform">🚀 ประมวลผลสมการ (Solve)</button>
-                </div>
-            </div>
-            
-            {/* --- RESULTS --- */}
-            {result && (
-                <div className="bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
-                    <div className="absolute top-0 right-0 px-3 py-1 bg-sky-900/50 text-sky-200 text-[10px] rounded-bl-lg rounded-tr-xl border-l border-b border-sky-500/30 font-bold">SOLUTION</div>
-                    
-                    {result.err && !result.isComplex ? (
-                        <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{result.err}</div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="text-sky-300 font-bold text-sm border-b border-[#1E3A5F] pb-2">🎯 คำตอบ (Final Answers)</div>
-                            <div className="flex flex-wrap gap-4 justify-center font-mono text-xl sm:text-2xl font-bold text-white">
-                                {result.type === '2x2' && (
-                                    <>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">X = <span className="text-sky-400">{result.x.toFixed(4)}</span></div>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">Y = <span className="text-sky-400">{result.y.toFixed(4)}</span></div>
-                                    </>
-                                )}
-                                {result.type === '3x3' && (
-                                    <>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">X = <span className="text-sky-400">{result.x.toFixed(4)}</span></div>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Y = <span className="text-sky-400">{result.y.toFixed(4)}</span></div>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Z = <span className="text-sky-400">{result.z.toFixed(4)}</span></div>
-                                    </>
-                                )}
-                                {result.type === 'quad' && result.roots === 2 && (
-                                    <>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₁ = <span className="text-amber-400">{result.x1.toFixed(4)}</span></div>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₂ = <span className="text-amber-400">{result.x2.toFixed(4)}</span></div>
-                                    </>
-                                )}
-                                {result.type === 'quad' && result.roots === 1 && (
-                                    <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{result.x.toFixed(4)}</span></div>
-                                )}
-                                {/* ส่วนแสดงผลแบบ Complex Roots (i) */}
-                                {result.type === 'quad' && result.isComplex && (
-                                    <>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{result.real.toFixed(4)} + {result.img.toFixed(4)}i</span></div>
-                                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{result.real.toFixed(4)} - {result.img.toFixed(4)}i</span></div>
-                                    </>
-                                )}
+                        )}
+                        {eqMode === 'quad' && (
+                            <div className="flex items-center gap-2 font-mono text-sm sm:text-base text-amber-400 justify-center">
+                                <input type="number" value={quad.a} onChange={e=>{setQuad({...quad, a:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="a" /> <span>X² +</span>
+                                <input type="number" value={quad.b} onChange={e=>{setQuad({...quad, b:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="b" /> <span>X +</span>
+                                <input type="number" value={quad.c} onChange={e=>{setQuad({...quad, c:e.target.value}); setEqResult(null);}} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="c" /> <span>= 0</span>
                             </div>
+                        )}
+                    </div>
 
-                            {result.isComplex && (
-                                <div className="text-[10px] text-red-300 text-center font-bold">⚠️ ไม่มีคำตอบเป็นจำนวนจริง (Complex Roots)</div>
+                    <div className="mt-6 flex justify-center border-t border-[#1E3A5F] pt-6">
+                        <button onClick={handleSolveEq} className="btn-w py-2.5 px-10 text-sm shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform"><i className="fas fa-rocket mr-1"></i> ประมวลผลสมการ</button>
+                    </div>
+
+                    {eqResult && (
+                        <div className="mt-6 bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
+                            {eqResult.err && !eqResult.isComplex ? (
+                                <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{eqResult.err}</div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="text-sky-300 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+                                        <span>🎯 คำตอบ (Final Answers)</span>
+                                        <button onClick={() => setShowSteps(!showSteps)} className="bg-sky-900/50 text-sky-200 px-3 py-1 rounded-lg text-[10px] border border-sky-500/30 hover:bg-sky-600 transition-colors">
+                                            {showSteps ? 'ซ่อนวิธีทำ' : '👁️ ดูวิธีทำ (Show Steps)'}
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-4 justify-center font-mono text-xl sm:text-2xl font-bold text-white">
+                                        {eqResult.type === '2x2' && (
+                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div></>
+                                        )}
+                                        {eqResult.type === '3x3' && (
+                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Z = <span className="text-sky-400">{eqResult.z.toFixed(4)}</span></div></>
+                                        )}
+                                        {eqResult.type === 'quad' && eqResult.roots === 2 && (
+                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₁ = <span className="text-amber-400">{eqResult.x1.toFixed(4)}</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₂ = <span className="text-amber-400">{eqResult.x2.toFixed(4)}</span></div></>
+                                        )}
+                                        {eqResult.type === 'quad' && eqResult.roots === 1 && (
+                                            <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{eqResult.x.toFixed(4)}</span></div>
+                                        )}
+                                        {eqResult.type === 'quad' && eqResult.isComplex && (
+                                            <><div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{eqResult.real.toFixed(4)} + {eqResult.img.toFixed(4)}i</span></div><div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{eqResult.real.toFixed(4)} - {eqResult.img.toFixed(4)}i</span></div></>
+                                        )}
+                                    </div>
+
+                                    {showSteps && (
+                                        <div className="mt-4 p-4 bg-[#050811] rounded-xl border border-dashed border-sky-500/50 text-xs text-slate-300 font-mono animate-fade-in space-y-3">
+                                            <div className="text-sky-400 font-bold mb-2 uppercase">📝 Step-by-Step Solution</div>
+                                            {eqResult.type === '2x2' && (
+                                                <>
+                                                    <div><span className="text-slate-400">1. คำนวณ Determinant หลัก (Δ):</span><br/>Δ = (a1)(b2) - (a2)(b1)<br/>Δ = ({eqResult.eq.a1})({eqResult.eq.b2}) - ({eqResult.eq.a2})({eqResult.eq.b1}) = <span className="text-amber-300">{eqResult.det}</span></div>
+                                                    <div><span className="text-slate-400">2. คำนวณ Δx:</span><br/>Δx = (c1)(b2) - (c2)(b1) = <span className="text-amber-300">{eqResult.detX}</span></div>
+                                                    <div><span className="text-slate-400">3. คำนวณ Δy:</span><br/>Δy = (a1)(c2) - (a2)(c1) = <span className="text-amber-300">{eqResult.detY}</span></div>
+                                                    <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">X = Δx / Δ = {eqResult.detX} / {eqResult.det} = <b>{eqResult.x.toFixed(4)}</b><br/>Y = Δy / Δ = {eqResult.detY} / {eqResult.det} = <b>{eqResult.y.toFixed(4)}</b></div>
+                                                </>
+                                            )}
+                                            {eqResult.type === 'quad' && (
+                                                <>
+                                                    <div><span className="text-slate-400">1. จัดรูปสมการ:</span><br/>{eqResult.a}x² + {eqResult.b}x + {eqResult.c} = 0</div>
+                                                    <div><span className="text-slate-400">2. หาค่า Discriminant (D):</span><br/>D = b² - 4ac<br/>D = ({eqResult.b})² - 4({eqResult.a})({eqResult.c}) = <span className="text-amber-300">{eqResult.D}</span></div>
+                                                    <div><span className="text-slate-400">3. แทนค่าในสูตร Quadratic:</span><br/>x = (-b ± √D) / 2a</div>
+                                                    {eqResult.D >= 0 ? (
+                                                        <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">x = (-{eqResult.b} ± √{eqResult.D}) / {2*eqResult.a}<br/>x₁ = <b>{eqResult.x1?.toFixed(4) || eqResult.x?.toFixed(4)}</b>, x₂ = <b>{eqResult.x2?.toFixed(4) || '-'}</b></div>
+                                                    ) : (
+                                                        <div className="pt-2 border-t border-[#1E3A5F] text-red-300">D น้อยกว่า 0 ทำให้ได้รากเป็นจำนวนเชิงซ้อน (Complex Number)</div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             )}
-
-                            <div className="mt-6 pt-4 border-t border-[#1E3A5F] text-xs text-slate-400">
-                                <div className="font-bold text-slate-300 mb-2">📝 วิธีทำ (Step-by-Step Cramer's Rule)</div>
-                                {(result.type === '2x2' || result.type === '3x3') && (
-                                    <div className="grid grid-cols-2 gap-3 font-mono">
-                                        <div className="bg-[#050811] p-2 rounded">Δ (Det) = {result.det.toFixed(4)}</div>
-                                        <div className="bg-[#050811] p-2 rounded">Δx (Det X) = {result.detX.toFixed(4)}</div>
-                                        <div className="bg-[#050811] p-2 rounded">Δy (Det Y) = {result.detY.toFixed(4)}</div>
-                                        {result.type === '3x3' && <div className="bg-[#050811] p-2 rounded">Δz (Det Z) = {result.detZ.toFixed(4)}</div>}
-                                    </div>
-                                )}
-                                {result.type === 'quad' && (
-                                    <div className="space-y-1.5 font-mono">
-                                        <div>Discriminant (D) = b² - 4ac = ({result.b})² - 4({result.a})({result.c})</div>
-                                        <div className="text-amber-300">D = {result.D.toFixed(4)}</div>
-                                        <div>x = (-b ± √D) / 2a</div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* แสดงผลกราฟเฉพาะโหมด 2x2 */}
-                            {result.type === '2x2' && renderGraph2D(result.eq)}
                         </div>
                     )}
                 </div>
             )}
 
+            {mainMode === 'matrix_ops' && (
+                <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg animate-fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 text-[11px]">
+                            <button onClick={()=>setMatSize(2)} className={`px-3 py-1 rounded font-bold ${matSize===2?'bg-fuchsia-600 text-white':'text-slate-400 hover:text-white'}`}>2x2</button>
+                            <button onClick={()=>setMatSize(3)} className={`px-3 py-1 rounded font-bold ${matSize===3?'bg-fuchsia-600 text-white':'text-slate-400 hover:text-white'}`}>3x3</button>
+                        </div>
+                        <select value={matOp} onChange={e=>setMatOp(e.target.value)} className="inp py-1.5 bg-[#0B1325] text-fuchsia-300 font-bold border-fuchsia-900/50">
+                            <option value="add">A + B (บวก)</option>
+                            <option value="sub">A - B (ลบ)</option>
+                            <option value="mul">A × B (คูณ)</option>
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 font-mono text-sm overflow-x-auto no-scrollbar pb-4">
+                        {/* Matrix A */}
+                        <div className="relative">
+                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-fuchsia-400 font-bold font-sans">Matrix A</div>
+                            <div className="border-l-2 border-r-2 border-fuchsia-500/50 rounded-[8px] p-2 grid gap-1.5 bg-fuchsia-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                                    <input key={`a${r}${c}`} type="number" value={matA[r][c]} onChange={e=>handleMatOpUpdate('A', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-fuchsia-900/50 focus:border-fuchsia-500" placeholder="0" />
+                                )))}
+                            </div>
+                        </div>
+
+                        <div className="text-xl sm:text-2xl font-bold text-slate-400">{matOp === 'add' ? '+' : matOp === 'sub' ? '-' : '×'}</div>
+
+                        {/* Matrix B */}
+                        <div className="relative">
+                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-sky-400 font-bold font-sans">Matrix B</div>
+                            <div className="border-l-2 border-r-2 border-sky-500/50 rounded-[8px] p-2 grid gap-1.5 bg-sky-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                                    <input key={`b${r}${c}`} type="number" value={matB[r][c]} onChange={e=>handleMatOpUpdate('B', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-sky-900/50 focus:border-sky-500" placeholder="0" />
+                                )))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-center border-t border-[#1E3A5F] pt-6">
+                        <button onClick={calculateMatrixOp} className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-2.5 px-10 rounded-xl text-sm shadow-[0_0_15px_rgba(192,38,211,0.3)] hover:scale-105 transition-transform"><i className="fas fa-calculator mr-1"></i> คำนวณ (Calculate)</button>
+                    </div>
+
+                    {opResult && (
+                        <div className="mt-6 bg-[#0B1325] border border-emerald-500/30 rounded-xl p-5 shadow-2xl flex flex-col items-center animate-fade-in relative">
+                            <div className="text-emerald-400 font-bold text-sm mb-4">✨ ผลลัพธ์ (Result Matrix)</div>
+                            <div className="border-l-4 border-r-4 border-emerald-500/50 rounded-[12px] p-4 grid gap-3 bg-[#050811] shadow-[0_0_20px_rgba(16,185,129,0.1)] font-mono text-lg sm:text-xl font-bold" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                                    <div key={`res${r}${c}`} className="w-16 sm:w-20 text-center text-white">{opResult[r][c]}</div>
+                                )))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
         );
     };
@@ -4997,28 +5749,35 @@
                 const interval = setInterval(() => { 
                     setResult(list[Math.floor(Math.random() * list.length)]); 
                     count++; 
-                    if(count > 15) { 
+                    if(count > 20) { 
                         clearInterval(interval); 
                         setSpinning(false); 
-                        setResult(list[Math.floor(Math.random() * list.length)]); 
                     } 
-                }, 100);
+                }, 80); // สุ่มเปลี่ยนชื่อไวๆ ให้ลุ้น
             } else {
                 // Wheel Logic
                 const winIdx = Math.floor(Math.random() * list.length);
                 const sliceDeg = 360 / list.length;
                 const centerDeg = (winIdx * sliceDeg) + (sliceDeg / 2);
-                const targetRot = 270 - centerDeg; // Align with top pointer (270deg)
+                const targetRot = 270 - centerDeg; 
                 
                 const currentBase = rotation - (rotation % 360);
-                const newRot = currentBase + (360 * 5) + targetRot + 360; // Spin 5 times
+                const newRot = currentBase + (360 * 5) + targetRot + 360; 
                 
                 setRotation(newRot);
                 setTimeout(() => {
                     setSpinning(false);
                     setResult(list[winIdx]);
-                }, 4000); // Wait for CSS transition
+                }, 4000); 
             }
+        };
+
+        const removeResult = () => {
+            if (!result) return;
+            const list = names.split('\n').map(n => n.trim()).filter(Boolean);
+            const newList = list.filter(n => n !== result).join('\n');
+            setNames(newList);
+            setResult(null);
         };
 
         const list = names.split('\n').map(n => n.trim()).filter(Boolean);
@@ -5027,60 +5786,100 @@
 
         return (
             <div className="flex flex-col md:flex-row gap-6 w-full max-w-4xl mx-auto items-center md:items-start text-xs">
+                
+                {/* กล่องใส่ตัวเลือก (ฝั่งซ้าย) */}
                 <div className="w-full md:w-1/3 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4 shrink-0">
                     <div className="flex justify-between items-center border-b border-[#1E3A5F] pb-2">
-                        <label className="text-amber-400 font-bold"><i className="fas fa-list-ul"></i> ตัวเลือก</label>
-                        <select value={mode} onChange={e => setMode(e.target.value)} className="bg-[#050811] text-sky-200 border border-[#1E3A5F] rounded p-1 outline-none">
+                        <label className="text-amber-400 font-bold text-sm"><i className="fas fa-list-ul"></i> ตัวเลือก</label>
+                        <select value={mode} onChange={e => {setMode(e.target.value); setResult(null);}} className="bg-[#050811] text-sky-200 border border-[#1E3A5F] rounded p-1 outline-none font-bold">
                             <option value="wheel">วงล้อ (Wheel)</option>
                             <option value="text">ข้อความ (Text)</option>
                         </select>
                     </div>
-                    <textarea rows="8" value={names} onChange={e=>setNames(e.target.value)} className="w-full inp resize-none text-sm leading-relaxed custom-scrollbar" placeholder="ใส่ชื่อหรือตัวเลือก บรรทัดละ 1 ข้อความ..."></textarea>
-                    <button onClick={handleSpin} disabled={spinning} className="w-full btn-w py-3 shadow-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50">
-                        {spinning ? 'กำลังสุ่ม...' : '🎲 สุ่มเลย!'}
+                    <textarea rows="10" value={names} onChange={e=>setNames(e.target.value)} className="w-full inp resize-none text-sm leading-relaxed custom-scrollbar" placeholder="ใส่ชื่อหรือตัวเลือก บรรทัดละ 1 ข้อความ..."></textarea>
+                    <button onClick={handleSpin} disabled={spinning} className="w-full btn-w py-3 shadow-lg font-bold text-sm hover:scale-105 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">
+                        {spinning ? <><i className="fas fa-spinner fa-spin"></i> กำลังสุ่ม...</> : <><i className="fas fa-dice"></i> สุ่มเลย!</>}
                     </button>
-                    {mode === 'text' && result && !spinning && (
-                        <div className="p-4 text-center rounded-xl bg-amber-500/20 border border-amber-500 animate-bounce mt-4">
-                            <div className="text-[10px] text-slate-300 mb-1">ผลลัพธ์:</div>
-                            <div className="text-xl font-bold text-amber-400">{result}</div>
+                    <div className="text-[10px] text-slate-400 mt-2">มีตัวเลือกทั้งหมด: {list.length} รายการ</div>
+                </div>
+
+                {/* กล่องแสดงผล (ฝั่งขวา) */}
+                <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#050811] to-[#0a101f] rounded-2xl border border-[#1E3A5F] shadow-2xl relative w-full min-h-[400px]">
+                    
+                    {/* โหมดข้อความ (Text Mode) */}
+                    {mode === 'text' && (
+                        <div className="flex flex-col items-center justify-center w-full">
+                            <div className="text-sky-400 font-bold uppercase tracking-widest mb-6">Text Randomizer</div>
+                            
+                            {spinning || result ? (
+                                <div className={`w-full max-w-sm p-8 text-center rounded-2xl border-4 transition-all duration-300 ${spinning ? 'bg-[#0F2547] border-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.3)]' : 'bg-amber-500/20 border-amber-400 shadow-[0_0_40px_rgba(251,191,36,0.5)] animate-bounce'}`}>
+                                    <div className="text-sm text-slate-400 mb-2">{spinning ? 'กำลังค้นหาผู้โชคดี...' : 'ผู้ที่ถูกเลือกคือ!'}</div>
+                                    <div className={`text-3xl sm:text-4xl font-bold truncate ${spinning ? 'text-sky-300' : 'text-amber-400'}`}>
+                                        {result}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-slate-500 text-center border-2 border-dashed border-[#1E3A5F] rounded-xl p-10 w-full max-w-sm">
+                                    <i className="fas fa-random text-4xl mb-3 block"></i>
+                                    คลิก "สุ่มเลย!" ทางซ้ายเพื่อเริ่ม
+                                </div>
+                            )}
+
+                            {result && !spinning && (
+                                <div className="mt-8 flex gap-3 animate-fade-in">
+                                    <button onClick={handleSpin} className="btn-w py-2 px-6 font-bold shadow hover:scale-105"><i className="fas fa-redo-alt mr-1"></i> สุ่มอีกครั้ง</button>
+                                    <button onClick={removeResult} className="btn-d py-2 px-4 text-red-300 border-red-900/50 hover:bg-red-950 font-bold"><i className="fas fa-trash-alt mr-1"></i> ลบตัวเลือกนี้ออก</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* โหมดวงล้อ (Wheel Mode) */}
+                    {mode === 'wheel' && (
+                        <div className="flex flex-col items-center justify-center w-full relative">
+                            {/* Wheel Pointer */}
+                            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-t-white z-20 drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]"></div>
+                            
+                            {/* Wheel */}
+                            <div className="relative w-64 h-64 sm:w-80 sm:h-80 rounded-full border-4 border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.6)] overflow-hidden"
+                                 style={{ background: `conic-gradient(${conicGradient})`, transform: `rotate(${rotation}deg)`, transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' }}>
+                                
+                                {list.map((name, i) => {
+                                    const angle = (i * sliceAngle) + (sliceAngle / 2);
+                                    return (
+                                        <div key={i} className="absolute top-1/2 left-1/2 w-[50%] h-[2px] origin-left -translate-y-1/2 flex items-center justify-end pr-4 sm:pr-6"
+                                             style={{ transform: `rotate(${angle}deg)` }}>
+                                            {/* จัดตำแหน่งข้อความให้อยู่ตรงกลางของซีกวงล้อ */}
+                                            <span className="text-white font-bold drop-shadow-md text-sm sm:text-base absolute right-4 sm:right-6 w-24 sm:w-28 text-right truncate" style={{ transform: 'rotate(180deg) scale(-1, -1)' }}>
+                                                {name}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                                
+                                {/* จุดหมุนตรงกลาง */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-[#0B1325] rounded-full border-4 border-slate-600 shadow-[0_0_10px_rgba(0,0,0,0.8)] flex items-center justify-center z-10">
+                                    <Logo s={28} />
+                                </div>
+                            </div>
+
+                            {/* Result Popup for Wheel */}
+                            {result && !spinning && (
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex items-center justify-center animate-fade-in rounded-2xl">
+                                    <div className="bg-[#0B1325] border-2 border-amber-400 p-8 rounded-2xl text-center shadow-[0_0_40px_rgba(251,191,36,0.6)] animate-bounce min-w-[250px]">
+                                        <div className="text-slate-300 mb-2 text-sm"><i className="fas fa-trophy text-amber-400 mr-1"></i> ผู้ที่ถูกเลือกคือ</div>
+                                        <div className="text-3xl sm:text-4xl font-bold text-amber-400 truncate max-w-[300px] mx-auto">{result}</div>
+                                        
+                                        <div className="mt-6 flex flex-col gap-2">
+                                            <button onClick={() => setResult(null)} className="w-full px-6 py-2.5 bg-sky-600 text-white font-bold rounded-lg hover:bg-sky-500 transition-colors shadow">ตกลง / ปิด</button>
+                                            <button onClick={removeResult} className="w-full px-6 py-2.5 bg-red-950/50 text-red-300 font-bold border border-red-900/50 rounded-lg hover:bg-red-900 hover:text-white transition-colors"><i className="fas fa-trash-alt mr-1"></i> ลบชื่อนี้ออกจากตัวเลือก</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
-
-                {mode === 'wheel' && (
-                    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#050811] rounded-2xl border border-[#1E3A5F] shadow-2xl relative w-full h-[400px]">
-                        {/* Wheel Pointer */}
-                        <div className="absolute top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-white z-20 drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
-                        
-                        {/* Wheel */}
-                        <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full border-4 border-slate-700 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden"
-                             style={{ background: `conic-gradient(${conicGradient})`, transform: `rotate(${rotation}deg)`, transition: 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)' }}>
-                            {list.map((name, i) => {
-                                const angle = (i * sliceAngle) + (sliceAngle / 2);
-                                return (
-                                    <div key={i} className="absolute top-1/2 left-1/2 w-[50%] h-[20px] origin-left -translate-y-1/2 flex items-center pl-4 sm:pl-6"
-                                         style={{ transform: `rotate(${angle}deg)` }}>
-                                        <span className="text-white font-bold drop-shadow-md truncate w-full text-left" style={{ transform: 'rotate(180deg) scale(-1, -1)' }}>{name}</span>
-                                    </div>
-                                );
-                            })}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-slate-800 rounded-full border-4 border-slate-600 shadow-inner flex items-center justify-center">
-                                <Logo s={24} />
-                            </div>
-                        </div>
-
-                        {/* Result Popup for Wheel */}
-                        {result && !spinning && (
-                            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-30 flex items-center justify-center animate-fade-in rounded-2xl">
-                                <div className="bg-[#0B1325] border-2 border-amber-400 p-8 rounded-2xl text-center shadow-[0_0_40px_rgba(251,191,36,0.6)] animate-bounce">
-                                    <div className="text-slate-300 mb-2">ผู้ที่ถูกเลือกคือ</div>
-                                    <div className="text-3xl sm:text-4xl font-bold text-amber-400">{result}</div>
-                                    <button onClick={() => setResult(null)} className="mt-6 px-6 py-2 bg-slate-800 text-slate-300 rounded-full hover:bg-slate-700 transition-colors">ปิด</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
         );
     };
@@ -5172,15 +5971,19 @@
                             <div className="animate-fade-in space-y-3">
                                 <div>
                                     <label className="text-slate-400 font-bold mb-1 block">ระยะเวลา</label>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>setIsSub(false)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${!isSub ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>+</button>
-                                        <button onClick={()=>setIsSub(true)} className={`px-3 py-1.5 rounded border font-bold text-[14px] ${isSub ? 'bg-red-900/50 text-red-400 border-red-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>-</button>
-                                        <input type="number" value={addAmt} onChange={e=>setAddAmt(parseInt(e.target.value)||0)} className="flex-1 inp font-mono text-center" />
-                                        <select value={addUnit} onChange={e=>setAddUnit(e.target.value)} className="inp bg-[#050811]">
-                                            <option value="days">วัน (Days)</option>
-                                            <option value="months">เดือน (Months)</option>
-                                            <option value="years">ปี (Years)</option>
-                                        </select>
+                                    <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={()=>setIsSub(false)} className={`w-10 sm:w-12 py-1.5 rounded border font-bold text-[14px] flex items-center justify-center ${!isSub ? 'bg-emerald-900/50 text-emerald-400 border-emerald-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>+</button>
+                                            <button onClick={()=>setIsSub(true)} className={`w-10 sm:w-12 py-1.5 rounded border font-bold text-[14px] flex items-center justify-center ${isSub ? 'bg-red-900/50 text-red-400 border-red-500/50' : 'bg-[#050811] text-slate-500 border-[#1E3A5F]'}`}>-</button>
+                                        </div>
+                                        <div className="flex gap-2 flex-1 min-w-[150px]">
+                                            <input type="number" value={addAmt} onChange={e=>setAddAmt(parseInt(e.target.value)||0)} className="w-16 flex-1 inp font-mono text-center px-1" />
+                                            <select value={addUnit} onChange={e=>setAddUnit(e.target.value)} className="flex-1 inp bg-[#050811] px-1 sm:px-2 text-[11px] sm:text-xs text-center">
+                                                <option value="days">วัน (Days)</option>
+                                                <option value="months">เดือน (Months)</option>
+                                                <option value="years">ปี (Years)</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                                 {addUnit === 'days' && (
@@ -7476,7 +8279,14 @@
 
             if (deckKey === 'A' && e.data === 0 && !st.deckA?.id && !st.deckB?.id && !paused) {
               const targetTime = (Date.now() % 163000) / 1000;
-              try { e.target.seekTo(targetTime, true); e.target.playVideo(); } catch (err) {}
+              try { 
+                  e.target.seekTo(targetTime, true); 
+                  e.target.unMute();
+                  if (e.target.setVolume && typeof localVolumeRef !== 'undefined') {
+                      e.target.setVolume(localVolumeRef.current);
+                  }
+                  e.target.playVideo(); 
+              } catch (err) {}
               return;
             }
 
@@ -7652,7 +8462,10 @@
                          if (ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
                          if (ytA.current.playVideo) {
                              ytA.current.unMute();
-                             if (ytA.current.setVolume) ytA.current.setVolume(localVolume);
+                             // แก้ไขให้ใช้ Ref ป้องกันการดึงค่าระดับเสียงเก่ามาใช้
+                             if (ytA.current.setVolume && typeof localVolumeRef !== 'undefined') {
+                                 ytA.current.setVolume(localVolumeRef.current);
+                             }
                              ytA.current.playVideo();
                          }
                      }
@@ -7679,8 +8492,13 @@
                  const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
                  const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
-                 const isEndedA = (stateA === 0 || (durA > 0 && durA - curA <= 0.5)) && djState.deckA?.id;
-                 const isEndedB = (stateB === 0 || (durB > 0 && durB - curB <= 0.5)) && djState.deckB?.id;
+                 // คำนวณเวลาที่ผ่านไปจริงตามนาฬิกาโลก
+                 const globalExpA = djState.playA?.startedAt ? ((Date.now() - djState.playA.startedAt) / 1000) * currentSpeed : 0;
+                 const globalExpB = djState.playB?.startedAt ? ((Date.now() - djState.playB.startedAt) / 1000) * currentSpeed : 0;
+                 
+                 // ตรวจสอบทั้งกรณีที่เพลงจบ หรือเวลาเลยระยะเวลาของเพลงไปแล้ว
+                 const isEndedA = (stateA === 0 || (durA > 0 && durA - curA <= 0.5) || (durA > 0 && globalExpA >= durA + 1)) && djState.deckA?.id;
+                 const isEndedB = (stateB === 0 || (durB > 0 && durB - curB <= 0.5) || (durB > 0 && globalExpB >= durB + 1)) && djState.deckB?.id;
                  const activeIsEnded = isDeckA ? isEndedA : isEndedB;
 
                  if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeIsEnded) {
@@ -7759,7 +8577,6 @@
                  
                  const dur = player.getDuration ? player.getDuration() : 0;
                  if (dur > 0 && dur - cur < 2) return;
-                 if (dur > 0 && exp >= dur) return;
                  
                  if (Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
                      if (expRaw < 0 && cur < 15) return; 
@@ -10057,6 +10874,11 @@
                   { id: 'converter', category: 'Calculate & Academic', name: 'Unit Converter', icon: '⚖️', desc: 'แปลงหน่วยทางวิศวกรรม (แรง, ความดัน, อุณหภูมิ)' },
                   { id: 'solver', category: 'Calculate & Academic', name: 'Equation Solver', icon: '🧮', desc: 'เครื่องมือแก้ระบบสมการ 2 ตัวแปร' },
                   { id: 'resistor', category: 'Calculate & Academic', name: 'Resistor Calc', icon: '🔌', desc: 'คำนวณค่าความต้านทานจาก 4 แถบสี' },
+		  { id: 'grade_crisis', category: 'Calculate & Academic', name: 'Grade Crisis Manager', icon: '🚨', desc: 'วางแผนกู้ชีพเกรด คำนวณคะแนนไฟนอลที่ต้องทำพร้อมมาตรวัดความตื่นตระหนก' },
+                  { id: 'gacha', category: 'Calculate & Academic', name: 'Gacha Drop Reality', icon: '🎰', desc: 'คำนวณโอกาสเกลือ (Binomial) พร้อมอนิเมชันจำลองตู้กาชาปอง' },
+                  { id: 'projectile', category: 'Calculate & Academic', name: 'Projectile Motion', icon: '🚀', desc: 'แอนิเมชันจำลองการเคลื่อนที่แบบวิถีโค้ง พร้อมคำนวณระยะและจุดสูงสุด' },
+                  { id: 'finance', category: 'Calculate & Academic', name: 'Financial Reality', icon: '💸', desc: 'กราฟภาพคำนวณผ่อนบ้านลดต้นลดดอก และพลังของดอกเบี้ยทบต้น' },
+                  { id: 'math_latex', category: 'Calculate & Academic', name: 'Math / LaTeX Builder', icon: '∛', desc: 'พิมพ์และต่อบล็อกสมการยากๆ พร้อมเรนเดอร์เป็นรูปภาพเอาไปแปะรายงานได้เลย' },
                   { id: 'splitter', category: 'Community Utilities', name: 'Group Bill Splitter', icon: '💸', desc: 'คำนวณเคลียร์หนี้ทริปกลุ่มที่ซับซ้อน สรุปใครต้องโอนให้ใครแบบเข้าใจง่าย' },
                   { id: 'smartdate', category: 'Community Utilities', name: 'Smart Date Calculator', icon: '🗓️', desc: 'หาระยะห่างของวัน และคำนวณวันหน้า/ย้อนหลังแบบข้ามวันหยุดสุดสัปดาห์ได้' },
                   { id: 'cipher', category: 'Community Utilities', name: 'Secret Cipher', icon: '🕵️', desc: 'เข้ารหัสข้อความลับ (Base64, Caesar, ฯลฯ) เอาไว้ส่งความลับให้เพื่อนในแชต' },
@@ -10176,6 +10998,11 @@
                                   {activeTool === 'converter' && <AdvancedUnitConverter />}
                                   {activeTool === 'solver' && <MatrixSolver />}
                                   {activeTool === 'resistor' && <ResistorCalcReal />}
+				  {activeTool === 'grade_crisis' && <GradeCrisisManager />}
+                                  {activeTool === 'gacha' && <GachaSimulator />}
+                                  {activeTool === 'projectile' && <InteractiveProjectile />}
+                                  {activeTool === 'finance' && <FinancialReality />}
+                                  {activeTool === 'math_latex' && <MathSymbolBuilder />}
                                   {activeTool === 'splitter' && <LunarSplitter />}
                                   {activeTool === 'smartdate' && <SmartDateCalc />}
                                   {activeTool === 'cipher' && <SecretCipher />}
