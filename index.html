@@ -7405,168 +7405,95 @@
       currentUser, searchQ, setSearchQ, setVisiblePosts, setCreatePost, 
       filterMenuOpen, setFilterMenuOpen, tagFilter, setTagFilter, allTags, 
       filterType, setFilterType, filterLatestOnly, setFilterLatestOnly, 
-      filteredPosts, posts, visiblePosts, hiPostId, getAuthor, setMemberModal,  // 🟢 เพิ่ม posts เข้าไปตรงนี้
+      filteredPosts, posts, visiblePosts, hiPostId, getAuthor, setMemberModal, 
       postMenu, setPostMenu, db, handleEditPostReq, setCurrentView, setActiveGameTab, GAMES, fmtTime,
-      toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment
+      toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment,
+      setBoardMenuOpen
     }) {
       
       const [showComments, setShowComments] = useState({});
       const [visibleCommCount, setVisibleCommCount] = useState({});
       const [boardView, setBoardView] = useState('standard');
       const [spoilerRevealed, setSpoilerRevealed] = useState({}); 
-      const [isMobileBoardMenuOpen, setIsMobileBoardMenuOpen] = useState(false);
 
       return (
-        <div className="flex-1 flex overflow-hidden min-h-0 relative">
-          
-          {/* 🌟 Overlay พื้นหลังดำเมื่อเปิด Drawer บนมือถือ */}
-          <div 
-            className={`fixed inset-0 bg-black/60 z-30 transition-opacity duration-300 lg:hidden ${isMobileBoardMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
-            onClick={() => setIsMobileBoardMenuOpen(false)}
-          ></div>
+        <div className="space-y-4">
+          {/* ส่วนค้นหาและฟิลเตอร์ */}
+          <div className="card p-3.5 space-y-2.5 shadow-lg border-sky-900/30">
+            <div className="flex gap-2">
+              {/* ปุ่มเปิดแถบด้านซ้าย (แสดงเฉพาะบนมือถือ/iPad) */}
+              <button 
+                type="button"
+                onClick={() => setBoardMenuOpen && setBoardMenuOpen(true)} 
+                className="lg:hidden w-10 h-10 rounded-xl bg-[#0F2547] text-sky-400 flex items-center justify-center border border-[#1E3A5F] shrink-0 shadow-sm" 
+                title="เมนูบอร์ด"
+              >
+                <i className="fas fa-bars"></i>
+              </button>
 
-          {/* 🌟 LEFT SIDEBAR (Profile & Trending Tags) */}
-          <aside className={`absolute z-40 w-64 lg:w-72 bg-[#070C18] lg:bg-transparent border-r lg:border-r-0 border-[#1E3A5F] flex flex-col shrink-0 h-full overflow-y-auto custom-scrollbar text-xs transition-transform duration-300 lg:relative lg:translate-x-0 ${isMobileBoardMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full absolute'} lg:p-4 lg:pl-0`}>
-              {/* แถบด้านบนสำหรับมือถือ */}
-              <div className="p-3 border-b border-[#1E3A5F] flex justify-between items-center bg-[#050811] lg:hidden sticky top-0 z-10">
-                  <span className="font-bold text-slate-200">เมนูบอร์ด (Board Menu)</span>
-                  <button onClick={() => setIsMobileBoardMenuOpen(false)} className="w-7 h-7 rounded bg-[#0F2547] text-slate-400 hover:text-white flex items-center justify-center"><i className="fas fa-times"></i></button>
+              <div className="relative flex-1 flex items-center">
+                <i className="fas fa-search absolute left-3 text-slate-500 text-xs"></i>
+                <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, แท็ก..." className="w-full inp text-xs pl-8 py-2.5 rounded-xl border-[#1E3A5F] bg-[#050811] focus:border-sky-500 transition-colors" />
               </div>
               
-              <div className="p-4 lg:p-0 space-y-4">
-                  {currentUser ? (
-                    <div className="card p-4 space-y-4 flex flex-col shrink-0 shadow-lg border-sky-900/30 bg-[#050811]">
-                        <div className="flex items-center gap-3">
-                            <Avatar user={currentUser} size="md" showStatus={true} />
-                            <div className="flex-1 min-w-0">
-                                <div className="font-bold text-sky-100 truncate">{currentUser.displayName}</div>
-                                <div className="text-[10px] text-slate-400 truncate">@{currentUser.username}</div>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <button onClick={() => { setSearchQ(''); setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setCurrentView('feed'); if(window.innerWidth < 1024) setIsMobileBoardMenuOpen(false); }} className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold bg-[#0F2547] text-white hover:bg-sky-600 transition-colors shadow-sm">
-                                <span><i className="fas fa-stream w-5 text-center"></i> ฟีดทั้งหมด</span>
-                                <span className="text-[9px] bg-[#050811] px-1.5 py-0.5 rounded text-sky-400">{posts.length}</span>
-                            </button>
-                            <button onClick={() => { setSearchQ(''); setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setCurrentView('bookmarks'); if(window.innerWidth < 1024) setIsMobileBoardMenuOpen(false); }} className="w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold border border-[#1E3A5F] text-slate-300 hover:text-white hover:bg-[#0F2547] transition-colors shadow-sm">
-                                <span><i className="fas fa-bookmark w-5 text-center"></i> โพสต์ที่บันทึกไว้</span>
-                                <span className="text-[9px] bg-[#050811] px-1.5 py-0.5 rounded border border-[#1E3A5F]">{currentUser.bookmarks?.length || 0}</span>
-                            </button>
-                            <button onClick={() => { setShowCalendar(true); if(window.innerWidth < 1024) setIsMobileBoardMenuOpen(false); }} className="w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm mt-1">
-                                <i className="fas fa-calendar-alt w-5 text-center"></i> ปฏิทินสมาคม
-                            </button>
-                        </div>
-                    </div>
-                  ) : (
-                    <div className="card p-4 space-y-4 flex flex-col shrink-0 shadow-lg border-sky-900/30 bg-[#050811]">
-                        <div className="text-center font-bold text-sky-400 mb-2">เข้าสู่ระบบเพื่อใช้งานเต็มรูปแบบ</div>
-                        <button onClick={() => setCurrentView('login')} className="w-full flex justify-center items-center px-4 py-2.5 rounded-xl font-bold bg-white text-[#050811] hover:bg-sky-200 transition-colors shadow-sm">
-                            <i className="fas fa-sign-in-alt mr-2"></i> ไปหน้าเข้าสู่ระบบ
-                        </button>
-                    </div>
-                  )}
-
-                  {/* Trending Tags */}
-                  <div className="card p-4 text-xs animate-fade-in border-[#1E3A5F] bg-[#050811] shadow-lg">
-                      <div className="font-bold text-sky-400 mb-3 border-b border-[#1E3A5F] pb-2">
-                          <i className="fas fa-fire-alt text-red-500 mr-1"></i> แท็กมาแรง (Trending)
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                          {(() => {
-                              const counts = {};
-                              posts.forEach(p => {
-                                  (p.tags || []).forEach(t => { 
-                                      counts[t] = (counts[t] || 0) + 1 + (p.likes?.length || 0) + (p.comments?.length || 0); 
-                                  });
-                              });
-                              const topTags = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 10);
-                              if(topTags.length === 0) return <div className="text-slate-500 text-[10px]">ยังไม่มีแท็ก</div>;
-                              return topTags.map(([t, c]) => (
-                                  <button key={t} onClick={() => { setSearchQ(t); setCurrentView('feed'); if(window.innerWidth < 1024) setIsMobileBoardMenuOpen(false); }} className="px-2.5 py-1 bg-[#0B1325] hover:bg-sky-900/50 text-slate-300 hover:text-sky-200 border border-[#1E3A5F] hover:border-sky-500 rounded-full transition-colors shadow-sm">
-                                      #{t}
-                                  </button>
-                              ));
-                          })()}
-                      </div>
-                  </div>
+              {currentUser && (
+                <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap px-4 rounded-xl shadow-md hover:scale-105 transition-transform flex items-center gap-1.5 shrink-0">
+                  <i className="fas fa-pen"></i><span className="hidden sm:inline">เขียนโพสต์</span>
+                </button>
+              )}
+            </div>
+            
+            <div className="flex justify-between items-center gap-2 pt-1 border-t border-[#1E3A5F]/50">
+              {/* View Toggle */}
+              <div className="flex bg-[#050811] p-1 rounded-full border border-[#1E3A5F] text-slate-400">
+                <button onClick={() => setBoardView('standard')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='standard'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองมาตรฐาน"><i className="fas fa-list"></i></button>
+                <button onClick={() => setBoardView('grid')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='grid'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองตาราง (Grid)"><i className="fas fa-th-large"></i></button>
+                <button onClick={() => setBoardView('compact')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='compact'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองย่อ (Compact)"><i className="fas fa-bars"></i></button>
               </div>
-          </aside>
 
-          {/* 🌟 CENTER MAIN BOARD */}
-          <main className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto custom-scrollbar p-3 sm:p-4 bg-gradient-to-b from-[#050811] to-[#030509]">
-              <div className="max-w-3xl mx-auto w-full flex flex-col gap-4 pb-10">
-                  
-                  {/* ส่วนค้นหาและฟิลเตอร์ */}
-                  <div className="card p-3.5 space-y-2.5 shrink-0 z-10 sticky top-0 shadow-lg border-sky-900/30">
-                    <div className="flex gap-2">
-                      {/* 🌟 ปุ่มเปิดเมนูบนมือถือ */}
-                      <button onClick={() => setIsMobileBoardMenuOpen(true)} className="lg:hidden w-10 h-10 rounded-xl bg-[#0F2547] text-sky-400 flex items-center justify-center border border-[#1E3A5F] shrink-0 shadow-sm" title="เมนูบอร์ด">
-                          <i className="fas fa-bars"></i>
+              <div className="relative ml-auto">
+                <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
+                  <span><i className="fas fa-cog mr-1"></i>ตัวกรอง</span>
+                  {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+                </button>
+            
+                {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
+            
+                {filterMenuOpen && (
+                  <div className="absolute top-full mt-2 right-0 w-64 card p-4 z-30 shadow-2xl border-sky-500/30 text-xs flex flex-col gap-3">
+                    <div>
+                      <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-tag mr-1"></i> หมวดหมู่สมาชิก</div>
+                      <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                        <option value="ALL">ทั้งหมด</option>
+                        {allTags.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-filter mr-1"></i> ประเภทโพสต์</div>
+                      <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
+                        <option value="ALL">ทั้งหมด</option>
+                        <option value="NORMAL">โพสต์ทั่วไป</option>
+                        <option value="GAME">🎮 ผล Daily Games</option>
+                        <option value="MEDIA">🖼️ มีสื่อประกอบ</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
+                      <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
+                      <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
+                    </label>
+
+                    {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
+                      <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
+                        ✕ ล้างตัวกรองทั้งหมด
                       </button>
-
-                      <div className="relative flex-1 flex items-center">
-                          <i className="fas fa-search absolute left-3 text-slate-500 text-xs"></i>
-                          <input type="text" value={searchQ} onChange={(e) => { setSearchQ(e.target.value); setVisiblePosts(10); }} placeholder="ค้นหาโพสต์, แท็ก..." className="w-full inp text-xs pl-8 py-2.5 rounded-xl border-[#1E3A5F] bg-[#050811] focus:border-sky-500 transition-colors" />
-                      </div>
-                      
-                      {currentUser && (
-                        <button onClick={() => setCreatePost(true)} className="btn-w text-xs whitespace-nowrap px-4 rounded-xl shadow-md hover:scale-105 transition-transform flex items-center gap-1.5 shrink-0">
-                            <i className="fas fa-pen"></i><span className="hidden sm:inline">เขียนโพสต์</span>
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="flex justify-between items-center gap-2 pt-1 border-t border-[#1E3A5F]/50">
-                      {/* View Toggle */}
-                      <div className="flex bg-[#050811] p-1 rounded-full border border-[#1E3A5F] text-slate-400">
-                        <button onClick={() => setBoardView('standard')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='standard'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองมาตรฐาน"><i className="fas fa-list"></i></button>
-                        <button onClick={() => setBoardView('grid')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='grid'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองตาราง (Grid)"><i className="fas fa-th-large"></i></button>
-                        <button onClick={() => setBoardView('compact')} className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full transition-colors ${boardView==='compact'?'bg-sky-600 text-white shadow-md':'hover:bg-[#0F2547] hover:text-white'}`} title="มุมมองย่อ (Compact)"><i className="fas fa-bars"></i></button>
-                      </div>
-
-                      <div className="relative ml-auto">
-                        <button onClick={() => setFilterMenuOpen(!filterMenuOpen)} className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs font-bold flex items-center gap-2 border transition-colors ${tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly ? 'bg-sky-900/50 border-sky-500 text-sky-100' : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:text-white'}`}>
-                          <span><i className="fas fa-cog mr-1"></i>ตัวกรอง</span>
-                          {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
-                        </button>
-                    
-                        {filterMenuOpen && <div className="fixed inset-0 z-20" onClick={() => setFilterMenuOpen(false)}></div>}
-                    
-                        {filterMenuOpen && (
-                          <div className="absolute top-full mt-2 right-0 w-64 card p-4 z-30 shadow-2xl border-sky-500/30 text-xs flex flex-col gap-3">
-                            <div>
-                              <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-tag mr-1"></i> หมวดหมู่สมาชิก</div>
-                              <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                                <option value="ALL">ทั้งหมด</option>
-                                {allTags.map(t => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-
-                            <div>
-                              <div className="font-bold text-sky-300 mb-1.5"><i className="fas fa-filter mr-1"></i> ประเภทโพสต์</div>
-                              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full inp py-1.5 text-xs text-white">
-                                <option value="ALL">ทั้งหมด</option>
-                                <option value="NORMAL">โพสต์ทั่วไป</option>
-                                <option value="GAME">🎮 ผล Daily Games</option>
-                                <option value="MEDIA">🖼️ มีสื่อประกอบ</option>
-                              </select>
-                            </div>
-
-                            <label className="flex items-center gap-2 cursor-pointer border-t border-[#1E3A5F] pt-3 mt-1">
-                              <input type="checkbox" checked={filterLatestOnly} onChange={e => setFilterLatestOnly(e.target.checked)} className="rounded bg-[#0B1325] border-[#1E3A5F] w-4 h-4 accent-sky-500" />
-                              <span className="font-bold text-slate-200">📌 ดูเฉพาะโพสต์ล่าสุดของทุกคน</span>
-                            </label>
-
-                            {(tagFilter !== 'ALL' || filterType !== 'ALL' || filterLatestOnly) && (
-                              <button onClick={() => { setTagFilter('ALL'); setFilterType('ALL'); setFilterLatestOnly(false); setFilterMenuOpen(false); }} className="mt-1 btn-d py-1.5 w-full text-red-300 hover:text-white hover:bg-red-950 font-bold border-red-900/50">
-                                ✕ ล้างตัวกรองทั้งหมด
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div> 
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
                   {/* รายการโพสต์ */}
                   <div className={boardView === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 gap-4 items-start" : "space-y-4"}>
@@ -7800,13 +7727,11 @@
                 </div>
                 
                 {/* ส่วนโหลดโพสต์เพิ่มเติม */}
-                {visiblePosts < filteredPosts.length && (
-                  <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
-                    <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดโพสต์เพิ่มเติม...
-                  </div>
-                )}
-              </div>
-          </main>
+          {visiblePosts < filteredPosts.length && (
+            <div className="text-center pt-4 pb-6 text-sky-400 text-xs font-bold animate-pulse">
+              <i className="fas fa-spinner fa-spin mr-2"></i>กำลังโหลดโพสต์เพิ่มเติม...
+            </div>
+          )}
         </div>
       );
     }
@@ -8060,6 +7985,7 @@
       const [filterType, setFilterType] = useState('ALL');
       const [filterLatestOnly, setFilterLatestOnly] = useState(false);
       const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+      const [boardMenuOpen, setBoardMenuOpen] = useState(false);
       const [rightFilterMenuOpen, setRightFilterMenuOpen] = useState(false);
       const [rightOnlineOnly, setRightOnlineOnly] = useState(false);
 
@@ -11376,7 +11302,25 @@
           {(currentView === 'feed' || currentView === 'bookmarks' || currentView === 'admin') && (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
     
-              <aside className="lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto h-full pr-2">
+              {boardMenuOpen && (
+	        <div 
+	          className="fixed inset-0 bg-black/60 z-40 lg:hidden" 
+	          onClick={() => setBoardMenuOpen(false)} 
+	        />
+	      )}
+
+	      <aside 
+	        onClick={(e) => { if (e.target.closest('button')) setBoardMenuOpen(false); }}
+	        className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#070C18] border-r border-[#1E3A5F] p-4 overflow-y-auto custom-scrollbar space-y-4 transition-transform duration-300 ${boardMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} lg:static lg:z-auto lg:w-auto lg:bg-transparent lg:border-0 lg:p-0 lg:overflow-visible lg:translate-x-0 lg:shadow-none lg:col-span-4 xl:col-span-3`}
+	      >
+	        {/* ปุ่มปิดเมนูบนมือถือ/iPad */}
+	        <div className="flex justify-between items-center pb-3 mb-2 border-b border-[#1E3A5F] lg:hidden">
+	          <span className="font-bold text-sm text-sky-400">เมนูบอร์ด</span>
+	          <button type="button" onClick={() => setBoardMenuOpen(false)} className="w-8 h-8 rounded-lg bg-[#0F2547] text-slate-300 hover:text-white flex items-center justify-center">
+	            <i className="fas fa-times"></i>
+	          </button>
+	        </div>
+
                 {!currentUser ? (
                   <div className="card p-4 text-xs text-slate-300 bg-[#0B1325] border-[#1E3A5F]">
                     <div className="font-bold text-white mb-1">👁️ โหมดผู้มาเยือน (Guest)</div>
@@ -11484,6 +11428,7 @@
 		  />
 		) : (
 		  <BoardPage 
+		    setBoardMenuOpen={setBoardMenuOpen}
                     currentUser={currentUser} searchQ={searchQ} setSearchQ={setSearchQ} 
 		    posts={posts}
                     setVisiblePosts={setVisiblePosts} setCreatePost={setCreatePost}
