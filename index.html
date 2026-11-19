@@ -268,11 +268,15 @@
       { id: 'happy-birthday-dear', name: 'happy-birthday-dear', icon: '🎂', desc: 'ห้องสำหรับส่งคำอวยพรวันเกิดให้สมาชิก', createdBy: 'SYSTEM', isProtected: true, isSystemReadOnly: false, timestamp: 3000 }
     ];
     const GAMES = [
-      { id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢" }, { id: 'minesweeper', name: "Minesweeper", icon: "💣" }, 
-      { id: 'flag', name: "Flag Guesser", icon: "🏳️" }, { id: 'solitaire', name: "Solitaire", icon: "🃏" }, 
-      { id: 'wordle', name: "Wordle", icon: "🔤" }, { id: 'snake', name: "Snake", icon: "🐍" }, 
-      { id: '2048', name: "2048 (100 Moves)", icon: "🟨" }, { id: '24game', name: "Daily 24", icon: "➗" }, 
-      { id: 'resistor', name: "Resistor Code", icon: "🔌" }
+      { id: 'sudoku', name: "Sudoku (9x9)", icon: "🔢", faIcon: "fas fa-th", desc: "เติมตัวเลข 1-9 ให้ครบทุกแถว คอลัมน์ และตารางย่อย", iconCls: "bg-sky-500/15 text-sky-400 border-sky-500/40", hoverCls: "hover:border-sky-400/70 hover:shadow-[0_0_20px_rgba(56,189,248,0.18)]", barCls: "bg-sky-400" },
+      { id: 'minesweeper', name: "Minesweeper", icon: "💣", faIcon: "fas fa-bomb", desc: "กู้ระเบิดบนกระดาน 9x9 ให้ครบทุกช่องโดยไม่พลาด", iconCls: "bg-red-500/15 text-red-400 border-red-500/40", hoverCls: "hover:border-red-400/70 hover:shadow-[0_0_20px_rgba(248,113,113,0.18)]", barCls: "bg-red-400" },
+      { id: 'flag', name: "Flag Guesser", icon: "🏳️", faIcon: "fas fa-flag", desc: "ทายธงชาติให้ถูกต่อเนื่อง 3 ประเทศ ผิดครั้งเดียวจบ", iconCls: "bg-amber-500/15 text-amber-400 border-amber-500/40", hoverCls: "hover:border-amber-400/70 hover:shadow-[0_0_20px_rgba(251,191,36,0.18)]", barCls: "bg-amber-400" },
+      { id: 'solitaire', name: "Solitaire", icon: "🃏", faIcon: "fas fa-clone", desc: "เรียงไพ่ทั้ง 4 ดอกให้ครบสำรับในเวลาที่เร็วที่สุด", iconCls: "bg-indigo-500/15 text-indigo-400 border-indigo-500/40", hoverCls: "hover:border-indigo-400/70 hover:shadow-[0_0_20px_rgba(129,140,248,0.18)]", barCls: "bg-indigo-400" },
+      { id: 'wordle', name: "Wordle", icon: "🔤", faIcon: "fas fa-spell-check", desc: "ทายคำศัพท์ภาษาอังกฤษ 5 ตัวอักษรภายใน 6 ครั้ง", iconCls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/40", hoverCls: "hover:border-emerald-400/70 hover:shadow-[0_0_20px_rgba(52,211,153,0.18)]", barCls: "bg-emerald-400" },
+      { id: 'snake', name: "Snake", icon: "🐍", faIcon: "fas fa-dragon", desc: "บังคับงูเก็บแต้มให้ได้มากที่สุด ห้ามชนหางตัวเอง", iconCls: "bg-lime-500/15 text-lime-400 border-lime-500/40", hoverCls: "hover:border-lime-400/70 hover:shadow-[0_0_20px_rgba(163,230,53,0.18)]", barCls: "bg-lime-400" },
+      { id: '2048', name: "2048 (100 Moves)", icon: "🟨", faIcon: "fas fa-cubes", desc: "รวมตัวเลขทำคะแนนสูงสุดภายในโควตา 100 ครั้ง", iconCls: "bg-yellow-500/15 text-yellow-400 border-yellow-500/40", hoverCls: "hover:border-yellow-400/70 hover:shadow-[0_0_20px_rgba(250,204,21,0.18)]", barCls: "bg-yellow-400" },
+      { id: '24game', name: "Daily 24", icon: "➗", faIcon: "fas fa-calculator", desc: "นำเลขโดด 4 ตัวมาบวก ลบ คูณ หาร ให้ได้ 24 พอดี", iconCls: "bg-cyan-500/15 text-cyan-400 border-cyan-500/40", hoverCls: "hover:border-cyan-400/70 hover:shadow-[0_0_20px_rgba(34,211,238,0.18)]", barCls: "bg-cyan-400" },
+      { id: 'resistor', name: "Resistor Code", icon: "🔌", faIcon: "fas fa-microchip", desc: "เลือกแถบสีตัวต้านทาน 4 แถบให้ตรงค่า (โอกาส 3 ครั้ง)", iconCls: "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/40", hoverCls: "hover:border-fuchsia-400/70 hover:shadow-[0_0_20px_rgba(232,121,249,0.18)]", barCls: "bg-fuchsia-400" }
     ];
 
     // PRNG (Pseudo-Random Number Generator)
@@ -7736,6 +7740,290 @@
       );
     }
 
+    const GAME_RULES = {
+      sudoku: [
+        'เติมตัวเลข 1–9 ลงในช่องว่าง โดยห้ามซ้ำกันในแถวแนวนอน แนวตั้ง และตารางย่อย 3×3',
+        'สลับระหว่างโหมด "กรอกเลข" กับ "ทดเลข" เพื่อจดตัวเลือกที่เป็นไปได้',
+        'PC: ใช้แป้นพิมพ์เลข 1–9, ปุ่มลูกศร และ Backspace เพื่อเล่นได้เร็วขึ้น'
+      ],
+      minesweeper: [
+        'เปิดช่องที่ปลอดภัยทั้งหมดบนกระดาน 9×9 (มีระเบิดสุ่ม 10–16 ลูกต่อวัน)',
+        'ตัวเลขที่ปรากฏคือจำนวนระเบิดที่อยู่รอบช่องนั้นทั้ง 8 ทิศ',
+        'เวลาจะเริ่มเดินเมื่อขุดหรือปักธงครั้งแรก • PC: คลิกซ้ายขุด / คลิกขวาปักธง'
+      ],
+      flag: [
+        'ทายชื่อประเทศจากภาพธงชาติให้ถูกต้องต่อเนื่องครบ 3 ด่าน',
+        'ตอบผิดแม้แต่ครั้งเดียวเกมจะจบลงทันที',
+        'จัดอันดับจากจำนวนด่านที่ตอบถูก หากเท่ากันวัดกันที่เวลาเร็วที่สุด'
+      ],
+      solitaire: [
+        'เรียงไพ่จาก A → K แยกตามดอกทั้ง 4 ช่องด้านบนให้ครบสำรับ',
+        'ลากไพ่ไปวาง หรือแตะที่ไพ่ 1 ครั้งเพื่อให้ระบบย้ายให้อัตโนมัติ',
+        'มีปุ่ม Undo ย้อนตาเดิน และปุ่ม Reset เริ่มเรียงสำรับเดิมใหม่ (เวลายังเดินต่อ)'
+      ],
+      wordle: [
+        'ทายคำศัพท์ภาษาอังกฤษ 5 ตัวอักษรให้ถูกต้องภายใน 6 ครั้ง',
+        'สีเขียว = ถูกตัวและถูกตำแหน่ง • สีเหลือง = มีตัวนี้ในคำแต่ผิดตำแหน่ง • สีเทา = ไม่มีในคำ',
+        'PC: พิมพ์ตัวอักษร A–Z, Enter และ Backspace บนคีย์บอร์ดได้โดยตรง'
+      ],
+      snake: [
+        'บังคับงูเก็บแอปเปิลสีแดงเพื่อทำคะแนนสูงสุด ห้ามชนลำตัวงูเอง',
+        'งูสามารถเดินทะลุขอบกระดานไปโผล่อีกฝั่งได้',
+        'ใช้ปุ่มลูกศร / W A S D บนคีย์บอร์ด หรือกดปุ่มทิศทางบนหน้าจอ'
+      ],
+      '2048': [
+        'เลื่อนกระดานเพื่อรวมบล็อกตัวเลขเดียวกันให้ค่าเพิ่มขึ้นเรื่อยๆ',
+        'มีโควตาการขยับทั้งหมด 100 ครั้งต่อวัน เมื่อครบโควตาหรือเดินต่อไม่ได้จะสรุปคะแนนทันที',
+        'ปัดหน้าจอบนมือถือ หรือใช้ปุ่มลูกศร / W A S D บนคีย์บอร์ด'
+      ],
+      '24game': [
+        'นำตัวเลข 4 ตัวที่สุ่มได้ประจำวันมาคำนวณให้ได้ผลลัพธ์เท่ากับ 24 พอดี',
+        'ใช้ได้เฉพาะเครื่องหมาย +, -, *, /, ( ) และต้องใช้ตัวเลขให้ครบทั้ง 4 ตัว ตัวละ 1 ครั้ง',
+        'ทุกโจทย์ประจำวันผ่านการตรวจสอบแล้วว่ามีคำตอบที่ทำได้ 24 แน่นอน'
+      ],
+      resistor: [
+        'เลือกแถบสี 4 แถบ (หลักที่ 1 → หลักที่ 2 → ตัวคูณ → ความคลาดเคลื่อน) ให้ตรงค่าเป้าหมาย',
+        'มีโอกาสตอบทั้งหมด 3 ครั้ง หากตอบผิดครบ 3 ครั้งวงจรจะระเบิดทันที',
+        'ยิ่งตอบถูกในจำนวนครั้งน้อย ยิ่งได้คะแนนอันดับสูงขึ้น'
+      ]
+    };
+    function DailyArcadeLobby({
+      GAMES, gameAppSt, allTodayScores, currentUser, getAuthor,
+      sortScores, fmtTime, todayStr, onSelectGame, setMemberModal
+    }) {
+      const [lobbyFilter, setLobbyFilter] = useState('ALL'); // 'ALL' | 'TODO' | 'DONE'
+      const [countdown, setCountdown] = useState('--:--:--');
+
+      useEffect(() => {
+        const calcTimeToReset = () => {
+          const now = new Date();
+          const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const bkkNow = new Date(utcMs + (7 * 3600000));
+          const nextReset = new Date(bkkNow);
+          nextReset.setHours(6, 0, 0, 0);
+          if (bkkNow.getHours() >= 6) nextReset.setDate(nextReset.getDate() + 1);
+          const diffSec = Math.max(0, Math.floor((nextReset - bkkNow) / 1000));
+          const h = String(Math.floor(diffSec / 3600)).padStart(2, '0');
+          const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+          const s = String(diffSec % 60).padStart(2, '0');
+          return `${h}:${m}:${s}`;
+        };
+        setCountdown(calcTimeToReset());
+        const t = setInterval(() => setCountdown(calcTimeToReset()), 1000);
+        return () => clearInterval(t);
+      }, []);
+
+      const formatStat = (gIdx, rec) => {
+        if (!rec) return '-';
+        if (rec.status === 'lost_bomb' || rec.timeMs === Infinity) return 'Bomb';
+        if (rec.status === 'lost' && gIdx !== 2) return 'ไม่ผ่าน';
+        if (gIdx === 2) return `${rec.score || 0}/3 • ${fmtTime(rec.timeMs)}`;
+        if (gIdx === 4) return `${rec.score || 0} ครั้ง • ${fmtTime(rec.timeMs)}`;
+        if (gIdx === 5) return `${rec.score || 0} แต้ม`;
+        if (gIdx === 6) return `${rec.score || 0} pt (${rec.maxTile || 0})`;
+        return fmtTime(rec.timeMs);
+      };
+
+      // สรุปสถานะของผู้เล่นปัจจุบันทั้ง 9 เกม (เช็กทั้งจาก Firestore และ LocalStorage)
+      const gameCards = GAMES.map((g, idx) => {
+        const gScores = allTodayScores.filter(s => s.gameIndex === idx);
+        const myDbScore = currentUser ? gScores.find(s => s.userId === currentUser.id) : null;
+        const myLocal = gameAppSt[idx];
+
+        let stateType = 'todo'; // 'todo' | 'playing' | 'won' | 'lost'
+        let myStatText = '';
+
+        if (myDbScore) {
+          const isFailed = myDbScore.status === 'lost_bomb' || myDbScore.status === 'lost' || myDbScore.timeMs === Infinity;
+          stateType = isFailed ? 'lost' : 'won';
+          myStatText = formatStat(idx, myDbScore);
+        } else if (myLocal && myLocal.status !== 'pending') {
+          const isFailed = myLocal.status === 'lost_bomb' || myLocal.status === 'lost' || myLocal.time === Infinity;
+          stateType = isFailed ? 'lost' : 'won';
+          myStatText = formatStat(idx, { status: myLocal.status, score: myLocal.score, timeMs: myLocal.time, maxTile: myLocal.maxTile });
+        } else if (myLocal && (myLocal.isPlaying || myLocal.isPaused || (myLocal.time || 0) > 0)) {
+          stateType = 'playing';
+          myStatText = fmtTime(myLocal.time || 0);
+        }
+
+        // หาแชมป์อันดับ 1 ของวันนั้น (คัดคนแพ้/ระเบิดออกก่อนจัดอันดับ)
+        const validWinners = gScores.filter(s => s.status !== 'lost_bomb' && s.status !== 'lost' && s.timeMs !== Infinity);
+        const sortedWinners = sortScores([...validWinners], idx);
+        const leader = sortedWinners[0] || null;
+
+        return { g, idx, stateType, myStatText, leader, playerCount: gScores.length };
+      });
+
+      const completedCount = gameCards.filter(x => x.stateType === 'won' || x.stateType === 'lost').length;
+      const progressPct = Math.round((completedCount / GAMES.length) * 100);
+
+      const visibleCards = gameCards.filter(c => {
+        if (lobbyFilter === 'TODO') return c.stateType === 'todo' || c.stateType === 'playing';
+        if (lobbyFilter === 'DONE') return c.stateType === 'won' || c.stateType === 'lost';
+        return true;
+      });
+
+      return (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-gradient-to-b from-[#050811] to-[#030509]">
+          <div className="max-w-6xl mx-auto space-y-6 pb-10">
+
+            {/* Header Banner + Daily Progress + Countdown */}
+            <div className="card p-5 sm:p-6 bg-gradient-to-br from-[#0B1325] via-[#0A1428] to-[#050811] border-[#1E3A5F] shadow-2xl relative overflow-hidden">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-sky-950/60 border border-sky-500/30 text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-2">
+                    <i className="fas fa-gamepad"></i> Daily Arcade Hub • {todayStr}
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">The Blue Moon Daily Games</h2>
+                  <p className="text-xs text-slate-400 mt-1">ประลองความไวและความแม่นยำประจำวัน เล่นได้เกมละ 1 รอบต่อวัน</p>
+                </div>
+
+                {/* Reset Countdown Box */}
+                <div className="bg-[#050811]/90 border border-[#1E3A5F] rounded-2xl px-4 py-3 flex items-center gap-3 shrink-0 shadow-inner">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-400 flex items-center justify-center text-base">
+                    <i className="fas fa-hourglass-half"></i>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">รีเซ็ตกระดาน (06:00 น.)</div>
+                    <div className="text-xl font-mono font-bold text-amber-300 leading-tight">{countdown}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Daily Progress Bar */}
+              <div className="mt-5 pt-4 border-t border-[#1E3A5F]/70 relative z-10">
+                <div className="flex justify-between items-center text-xs mb-2">
+                  <span className="font-bold text-slate-200 flex items-center gap-2">
+                    <i className="fas fa-tasks text-sky-400"></i>
+                    ภารกิจวันนี้: <span className="font-mono text-sky-300">{completedCount} / {GAMES.length} เกม</span>
+                  </span>
+                  <span className="font-mono text-xs font-bold text-emerald-400">{progressPct}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-[#050811] rounded-full overflow-hidden border border-[#1E3A5F]">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${completedCount === GAMES.length ? 'bg-gradient-to-r from-emerald-400 to-sky-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]' : 'bg-gradient-to-r from-sky-500 to-blue-400'}`}
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex bg-[#0B1325] p-1 rounded-xl border border-[#1E3A5F] gap-1 text-xs font-bold">
+                <button onClick={() => setLobbyFilter('ALL')} className={`px-3.5 py-1.5 rounded-lg transition-all ${lobbyFilter === 'ALL' ? 'bg-white text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}>
+                  ทั้งหมด ({GAMES.length})
+                </button>
+                <button onClick={() => setLobbyFilter('TODO')} className={`px-3.5 py-1.5 rounded-lg transition-all ${lobbyFilter === 'TODO' ? 'bg-sky-500 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                  ยังไม่จบ ({GAMES.length - completedCount})
+                </button>
+                <button onClick={() => setLobbyFilter('DONE')} className={`px-3.5 py-1.5 rounded-lg transition-all ${lobbyFilter === 'DONE' ? 'bg-emerald-500 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}>
+                  เล่นแล้ว ({completedCount})
+                </button>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                <i className="fas fa-users text-sky-400 mr-1"></i>
+                สถิติที่บันทึกวันนี้รวม <span className="font-mono font-bold text-white">{allTodayScores.length}</span> รอบ
+              </div>
+            </div>
+
+            {/* Game Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visibleCards.map(({ g, idx, stateType, myStatText, leader, playerCount }) => {
+                const leaderUser = leader ? getAuthor(leader.userId) : null;
+
+                return (
+                  <div
+                    key={g.id}
+                    onClick={() => onSelectGame(idx)}
+                    className={`group card p-4 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-300 border-[#1E3A5F] bg-[#0B1325] hover:-translate-y-1 ${g.hoverCls}`}
+                  >
+                    {/* Card Top */}
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center text-xl shrink-0 transition-transform duration-300 group-hover:scale-110 ${g.iconCls}`}>
+                          <i className={g.faIcon || 'fas fa-gamepad'}></i>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="flex flex-col items-end gap-1">
+                          {stateType === 'won' && (
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold flex items-center gap-1">
+                              <i className="fas fa-check-circle"></i> เคลียร์แล้ว
+                            </span>
+                          )}
+                          {stateType === 'lost' && (
+                            <span className="px-2.5 py-1 rounded-full bg-red-950/80 border border-red-500/50 text-red-300 text-[10px] font-bold flex items-center gap-1">
+                              <i className="fas fa-times-circle"></i> จบเกมแล้ว
+                            </span>
+                          )}
+                          {stateType === 'playing' && (
+                            <span className="px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-amber-300 text-[10px] font-bold flex items-center gap-1 animate-pulse">
+                              <i className="fas fa-pause-circle"></i> ค้างไว้
+                            </span>
+                          )}
+                          {stateType === 'todo' && (
+                            <span className="px-2.5 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] text-slate-400 text-[10px] font-bold">
+                              ยังไม่เล่น
+                            </span>
+                          )}
+                          {myStatText && (
+                            <span className="text-[10px] font-mono font-bold text-slate-300">{myStatText}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <h3 className="text-base font-bold text-white group-hover:text-sky-300 transition-colors">{g.name}</h3>
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">{g.desc}</p>
+                    </div>
+
+                    {/* Card Bottom: #1 Champion + Play CTA */}
+                    <div className="space-y-3 pt-3 border-t border-[#1E3A5F]/70">
+                      <div className="bg-[#050811] rounded-xl p-2.5 border border-[#1E3A5F]/70 flex items-center justify-between gap-2">
+                        {leader && leaderUser ? (
+                          <>
+                            <div
+                              onClick={(e) => { e.stopPropagation(); setMemberModal && setMemberModal(leaderUser); }}
+                              className="flex items-center gap-2 min-w-0 hover:opacity-80"
+                            >
+                              <span className="text-amber-400 text-xs shrink-0"><i className="fas fa-crown"></i></span>
+                              <Avatar user={leaderUser} size="xs" />
+                              <span className="text-xs font-bold text-slate-200 truncate">{leaderUser.displayName}</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-lg shrink-0">
+                              {formatStat(idx, leader)}
+                            </span>
+                          </>
+                        ) : (
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 w-full">
+                            <i className="fas fa-trophy text-slate-600"></i>
+                            <span>ยังไม่มีแชมป์วันนี้ — เป็นคนแรกเลย!</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500 font-mono">
+                          <i className="fas fa-user-friends mr-1"></i> {playerCount} คนเล่นแล้ว
+                        </span>
+                        <span className="font-bold text-sky-400 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                          {stateType === 'playing' ? 'เล่นต่อ' : (stateType === 'won' || stateType === 'lost') ? 'ดูสถิติ / กระดาน' : 'เข้าเล่นเกม'}
+                          <i className="fas fa-arrow-right text-[10px]"></i>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
     // ==========================================
     // 8. MAIN APP COMPONENT (State & Logic)
     // ==========================================
@@ -8217,13 +8505,17 @@
         } catch (e) { console.warn("Cleanup failed", e); }
       }, [todayStr]);
 
-      const [activeGameTab, setActiveGameTab] = useState(0); 
+      const [activeGameTab, setActiveGameTab] = useState(null); // null = หน้า Daily Arcade Lobby
       const [gameAppSt, setGameAppSt] = useState(() => { try { return JSON.parse(localStorage.getItem('bma_gameSt_' + todayStr)) || {}; } catch { return {}; } });
       useEffect(() => { localStorage.setItem('bma_gameSt_' + todayStr, JSON.stringify(gameAppSt)); }, [gameAppSt, todayStr]);
-      const currGameSt = gameAppSt[activeGameTab] || { status: 'pending', time: 0, isPlaying: false, isPaused: false, score: 0, showModal: false };
+      const currGameSt = activeGameTab !== null ? (gameAppSt[activeGameTab] || { status: 'pending', time: 0, isPlaying: false, isPaused: false, score: 0, showModal: false }) : { status: 'pending', time: 0, isPlaying: false, isPaused: false, score: 0, showModal: false };
+      const [allTodayScores, setAllTodayScores] = useState([]);
       const [gameScores, setGameScores] = useState([]);
       const [lbTab, setLbTab] = useState('daily');
       const [monthlyScores, setMonthlyScores] = useState([]);
+      const [gameFocusMode, setGameFocusMode] = useState(false);
+      const [gameRulesOpen, setGameRulesOpen] = useState(false);
+      const [shareChatRoom, setShareChatRoom] = useState('global-lobby');
 
       // ==========================================
       // AUTOMATIC CHECKERS (Birthdays & Old Files)
@@ -9298,6 +9590,7 @@
       };
 
       const handleFirstMove = useCallback(() => {
+         if (activeGameTab === null) return;
          setGameAppSt(prev => {
             const c = prev[activeGameTab] || {};
             if (c.isPlaying && !c.hasStartedMove) {
@@ -9308,6 +9601,7 @@
       }, [activeGameTab]);
 
       useEffect(() => {
+        if (activeGameTab === null) return;
         let intv = setInterval(() => {
           setGameAppSt(prev => {
             const c = prev[activeGameTab] || {};
@@ -9320,16 +9614,22 @@
         return () => clearInterval(intv);
       }, [activeGameTab]);
 
+      // โหลดคะแนนของทุกเกมในวันนี้ครั้งเดียว (ใช้แสดงใน Lobby และหน้าเล่นเกม)
       useEffect(() => {
         if(!db) return;
         return db.collection('bma_daily_scores')
           .where('date', '==', todayStr)
-          .where('gameIndex', '==', activeGameTab)
-          .onSnapshot(s => setGameScores(sortScores(s.docs.map(d=>d.data()), activeGameTab)));
-      }, [todayStr, activeGameTab]);
+          .onSnapshot(s => setAllTodayScores(s.docs.map(d => d.data())));
+      }, [todayStr]);
 
       useEffect(() => {
-        if(!db || lbTab !== 'monthly') return;
+        if (activeGameTab === null) { setGameScores([]); return; }
+        const filtered = allTodayScores.filter(s => s.gameIndex === activeGameTab);
+        setGameScores(sortScores([...filtered], activeGameTab));
+      }, [allTodayScores, activeGameTab]);
+
+      useEffect(() => {
+        if(!db || lbTab !== 'monthly' || activeGameTab === null) return;
         const prefix = todayStr.substring(0, 7);
         db.collection('bma_daily_scores').where('gameIndex', '==', activeGameTab).get().then(s => {
           const docs = s.docs.map(d=>d.data()).filter(d => d.date.startsWith(prefix) && d.timeMs !== Infinity);
@@ -9408,7 +9708,58 @@
         setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab]||{}), showModal: false, status: 'viewing_board' } }));
         setCurrentView('feed');
       };
-	// วาง if ตรงนี้ (ก่อนคำว่า return)
+
+      const shareGameToChat = async (targetKey) => {
+        if (!currentUser || activeGameTab === null) return;
+        const myScore = gameScores.find(x => x.userId === currentUser.id);
+        const st = myScore ? myScore.status : currGameSt.status;
+        const sc = myScore ? (myScore.score || 0) : (currGameSt.score || 0);
+        const t = myScore ? myScore.timeMs : currGameSt.time;
+        const mTile = myScore ? myScore.maxTile : currGameSt.maxTile;
+
+        let msg = '';
+        if (st === 'lost_bomb' || t === Infinity) msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name} วันนี้! ใครรอดบ้างมาอวดหน่อย`;
+        else if (st === 'lost' && activeGameTab === 2) msg = `ทายธงได้ ${sc}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} ใครทำได้ครบมาท้าดวลกัน!`;
+        else if (st === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name} วันนี้ ใครทายออกช่วยด้วย!`;
+        else if (st === 'lost' && activeGameTab === 8) msg = `ต่อวงจรระเบิดใน ${GAMES[activeGameTab].name}! ใครแม่นแถบสีมาลองดู`;
+        else if (activeGameTab === 2) msg = `ทายธงถูก ${sc}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ใน ${GAMES[activeGameTab].name} มาท้าดวลกัน!`;
+        else if (activeGameTab === 4) msg = `ทายคำศัพท์ ${GAMES[activeGameTab].name} สำเร็จใน ${sc} ครั้ง (${fmtTime(t)}) ใครเร็วกว่านี้มาลอง!`;
+        else if (activeGameTab === 5) msg = `ทำคะแนน ${GAMES[activeGameTab].name} ไปได้ ${sc} แต้ม (${fmtTime(t)}) มาทำลายสถิติกัน!`;
+        else if (activeGameTab === 6) msg = `ทำคะแนน ${GAMES[activeGameTab].name} ได้ ${sc} pt (เลขสูงสุด ${mTile || 0}) มาลองสู้กัน!`;
+        else if (activeGameTab === 8) msg = `ต่อวงจร ${GAMES[activeGameTab].name} สำเร็จใน ${Math.max(1, 4 - Math.floor(sc / 100))} ครั้ง (${fmtTime(t)})!`;
+        else msg = `เคลียร์เกม ${GAMES[activeGameTab].name} ได้ในเวลา ${fmtTime(t)}! ใครทำได้เร็วกว่านี้มาท้าดวลกัน`;
+
+        const roomId = targetKey || shareChatRoom || 'global-lobby';
+        const isGrp = myGroups.some(g => g.id === roomId);
+        const now = Date.now();
+        const mid = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
+        const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        const fullTime = `${dStr} ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
+
+        await db.collection('bma_messages').doc(mid).set({
+          id: mid,
+          roomKey: roomId,
+          senderId: currentUser.id,
+          receiverId: null,
+          text: msg,
+          dailyGameShare: { gameIndex: activeGameTab, timeMs: t, score: sc, dateStr: todayStr },
+          attachments: [],
+          likes: [],
+          readBy: [currentUser.id],
+          isEdited: false,
+          isDeleted: false,
+          isSystemPostAlert: false,
+          time: fullTime,
+          timestamp: now,
+          serverCreatedAt: svrTs()
+        });
+
+        alert('ส่งคำท้าลงห้องแชตเรียบร้อยแล้ว!');
+        setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab] || {}), showModal: false, status: 'viewing_board' } }));
+        setActiveRoom({ type: isGrp ? 'group' : 'channel', id: roomId });
+        setCurrentView('chat');
+      };
+
       if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
@@ -10828,153 +11179,667 @@
           )}
 
           {/* DAILY GAMES VIEW */}
-          {currentView === 'daily_game' && (
+          {currentView === 'daily_game' && activeGameTab === null && (
+            <DailyArcadeLobby
+              GAMES={GAMES}
+              gameAppSt={gameAppSt}
+              allTodayScores={allTodayScores}
+              currentUser={currentUser}
+              getAuthor={getAuthor}
+              sortScores={sortScores}
+              fmtTime={fmtTime}
+              todayStr={todayStr}
+              onSelectGame={(idx) => setActiveGameTab(idx)}
+              setMemberModal={setMemberModal}
+            />
+          )}
+
+          {currentView === 'daily_game' && activeGameTab !== null && (
             <div className="flex-1 flex overflow-hidden relative">
-              <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${leftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
-                <div className="p-4 border-b border-[#1E3A5F] font-bold text-slate-300 uppercase tracking-wider text-[11px] flex justify-between items-center">
-                  <span>เลือกมินิเกมประจำวัน</span>
-                  <button onClick={() => setLeftOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
+              <aside className={`absolute md:relative z-40 w-56 h-full bg-[#070C18] border-r border-[#1E3A5F] flex flex-col transition-transform duration-300 ${!gameFocusMode && leftOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+                <div className="p-3 border-b border-[#1E3A5F] space-y-2">
+                  <button
+                    onClick={() => {
+                      if (currGameSt.isPlaying && !currGameSt.isPaused && currGameSt.status === 'pending') {
+                        setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab] || {}), isPaused: true } }));
+                      }
+                      setActiveGameTab(null);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-[#0F2547] hover:bg-sky-600 text-sky-200 hover:text-white border border-sky-500/30 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <i className="fas fa-th-large"></i> กลับหน้า Arcade Hub
+                  </button>
+                  <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex justify-between items-center px-1">
+                    <span>เลือกมินิเกมประจำวัน</span>
+                    <button onClick={() => setLeftOpen(false)} className="md:hidden text-base text-slate-400">✕</button>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 custom-scrollbar">
-                  {GAMES.map((g, idx) => (
-                    <button key={g.id} onClick={() => setActiveGameTab(idx)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeGameTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-400 hover:bg-[#0F2547]'}`}>
-                      <span className="text-lg">{g.icon}</span> <span>{g.name}</span>
-                    </button>
-                  ))}
+                  {GAMES.map((g, idx) => {
+                    const done = allTodayScores.some(s => s.gameIndex === idx && s.userId === currentUser?.id) || (gameAppSt[idx] && gameAppSt[idx].status !== 'pending');
+                    return (
+                      <button key={g.id} onClick={() => { setActiveGameTab(idx); if (window.innerWidth < 768) setLeftOpen(false); }} className={`w-full flex items-center justify-between gap-2 p-2.5 rounded-xl transition-all text-xs ${activeGameTab === idx ? 'bg-white text-[#050811] shadow font-bold border border-white/20' : 'text-slate-300 hover:bg-[#0F2547]'}`}>
+                        <span className="flex items-center gap-2.5 truncate">
+                          <i className={`${g.faIcon} w-4 text-center`}></i>
+                          <span className="truncate">{g.name}</span>
+                        </span>
+                        {done && <i className={`fas fa-check-circle text-[11px] shrink-0 ${activeGameTab === idx ? 'text-emerald-600' : 'text-emerald-400'}`}></i>}
+                      </button>
+                    );
+                  })}
                 </div>
               </aside>
 
               <main className="flex-1 flex flex-col h-full bg-[#050811] relative min-w-0">
-                {leftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setLeftOpen(false)}></div>}
-                {rightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setRightOpen(false)}></div>}
-                
-                <div className="h-14 px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0 text-xs z-20">
-                  <button onClick={() => setLeftOpen(!leftOpen)} className="btn-d font-semibold">{leftOpen ? '◀ ซ่อนเมนูเกม' : '☰ เมนูเกม ▶'}</button>
-                  <div className="font-bold text-sm text-amber-300 hidden sm:block">The Blue Moon Games</div>
-                  <button onClick={() => setRightOpen(!rightOpen)} className="btn-w">{rightOpen ? '🏆 ซ่อนกระดาน →' : '← 🏆 กระดานคะแนน'}</button>
-                </div>
+                {!gameFocusMode && leftOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setLeftOpen(false)}></div>}
+                {!gameFocusMode && rightOpen && <div className="absolute inset-0 bg-black/50 z-30 md:hidden" onClick={() => setRightOpen(false)}></div>}
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col relative custom-scrollbar">
-                  <div className="max-w-xl mx-auto w-full flex-1 flex flex-col">
-                    <div className="text-center mb-4">
-                      <h2 className="text-xl md:text-2xl font-bold text-white">{GAMES[activeGameTab].icon} {GAMES[activeGameTab].name}</h2>
-                      <p className="text-xs text-slate-400 mt-1">รีเซ็ตกระดานเวลา 6:00 AM (วันที่: {todayStr})</p>
-                    </div>
+                {/* Top Control Bar */}
+                <div className="h-12 px-3 sm:px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0 text-xs z-20">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <button
+                      onClick={() => {
+                        if (currGameSt.isPlaying && !currGameSt.isPaused && currGameSt.status === 'pending') {
+                          setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab] || {}), isPaused: true } }));
+                        }
+                        setGameFocusMode(false);
+                        setActiveGameTab(null);
+                      }}
+                      className="btn-d py-1.5 px-2.5 text-[11px] font-bold flex items-center gap-1.5 hover:bg-white hover:text-[#050811] transition-colors shrink-0"
+                      title="กลับหน้า Arcade Hub"
+                    >
+                      <i className="fas fa-arrow-left"></i>
+                      <span className="hidden sm:inline">Hub</span>
+                    </button>
 
-                    <div className="card flex-1 flex flex-col p-4 relative shadow-2xl min-h-[460px]">
-                      <div className="text-center font-mono text-3xl font-bold text-white mb-4 drop-shadow flex justify-center items-center gap-4">
-                        <span>{fmtTime(currGameSt.time)}</span>
-                        {currGameSt.isPlaying && !currGameSt.isPaused && currGameSt.status === 'pending' && (
-                           <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...(p[activeGameTab]||{}), isPaused: true}}))} className="text-sm bg-[#0F2547] border border-[#1E3A5F] px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors font-sans">⏸ Pause</button>
-                        )}
-                      </div>
-
-                    {!currGameSt.isPlaying && currGameSt.status === 'pending' ? (
-                      <div className="flex-1 flex flex-col items-center justify-center">
-                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0, hasStartedMove: activeGameTab !== 1}}))} className="btn-w text-lg px-10 py-4 animate-pulse shadow-[0_0_20px_rgba(255,255,255,0.2)]">▶ เริ่มเกม</button>
-                        <div className="mt-4 text-xs text-slate-400 bg-[#0F2547] px-4 py-2 rounded-lg">จำกัดสิทธิ์ 1 เกม เล่นได้แค่วันละ 1 ครั้งเท่านั้น</div>
-                      </div>
-                    ) : currGameSt.isPaused ? (
-                      <div className="flex-1 flex flex-col items-center justify-center bg-[#050811] rounded-xl border border-dashed border-[#1E3A5F]">
-                        <div className="text-2xl font-bold text-amber-300 mb-4">⏸ เกมหยุดพักชั่วคราว</div>
-                        <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...(p[activeGameTab]||{}), isPaused: false}}))} className="btn-w px-8 py-3">เล่นต่อ</button>
-                      </div>
-                    ) : (
-                      <>
-                          <div className={`flex-1 flex flex-col justify-center bg-[#050811] rounded-xl border border-[#1E3A5F] p-2 relative overflow-hidden ${currGameSt.status === 'viewing_board' || (currGameSt.status !== 'pending' && !currGameSt.isPlaying) ? 'opacity-80 pointer-events-none' : ''}`}>
-                            {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onFirstMove={handleFirstMove} />}
-                            {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} isPlaying={currGameSt.isPlaying} isPaused={currGameSt.isPaused} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 6 && <Game2048 dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 7 && <Game24 dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                            {activeGameTab === 8 && <ResistorGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
-                          </div>
-                          
-                          {(currGameSt.status === 'viewing_board' || (!currGameSt.isPlaying && currGameSt.status !== 'pending')) && (
-                              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur border border-sky-500 text-sky-300 px-4 py-2 rounded-full font-bold text-sm shadow-xl flex items-center gap-3">
-                                 <span>เกมวันนี้จบลงแล้ว 👏</span>
-                                 <button onClick={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: true}}))} className="btn-b text-xs py-1">ดูใบสรุปผล</button>
-                              </div>
-                          )}
-                      </>
+                    {!gameFocusMode && (
+                      <button onClick={() => setLeftOpen(!leftOpen)} className="btn-d py-1.5 px-2.5 text-[11px] font-semibold flex items-center gap-1.5 shrink-0" title={leftOpen ? 'ซ่อนเมนูเกม' : 'แสดงเมนูเกม'}>
+                        <i className={`fas ${leftOpen ? 'fa-chevron-left' : 'fa-bars'}`}></i>
+                        <span className="hidden sm:inline">{leftOpen ? 'ซ่อนเมนู' : 'เมนูเกม'}</span>
+                      </button>
                     )}
+                  </div>
 
-                    {currGameSt.showModal && (() => {
-                      const myScore = gameScores.find(x => x.userId === currentUser?.id);
-                      const finalStatus = myScore ? myScore.status : currGameSt.status;
-                      const finalScore = myScore ? myScore.score : currGameSt.score;
-                      const finalTime = myScore ? myScore.timeMs : currGameSt.time;
+                  <div className="text-[11px] font-mono text-slate-400 hidden md:flex items-center gap-2">
+                    <span className="text-sky-400 font-bold uppercase tracking-wider font-sans">Daily Challenge</span>
+                    <span>•</span>
+                    <span>{todayStr}</span>
+                    <span>•</span>
+                    <span>รีเซ็ต 06:00 น.</span>
+                  </div>
 
-                      return (
-                      <Modal title={finalStatus === 'won' || (finalStatus === 'ended' && finalScore > 0) ? '🎉 ยินดีด้วย!' : '💥 จบเกมแล้ว!'} onClose={() => setGameAppSt(p => ({...p, [activeGameTab]: {...p[activeGameTab], showModal: false, status: 'viewing_board'}}))}>
-                        <div className="space-y-4">
-                          <p className="text-slate-300 text-sm">
-                            {finalStatus === 'won' && activeGameTab === 2 ? `สุดยอด! คุณทายถูกทั้งหมด ${finalScore}/3 ประเทศ` : 
-                             finalStatus === 'won' && activeGameTab === 4 ? `ยินดีด้วย! คุณทายคำศัพท์สำเร็จใน ${finalScore} ครั้ง` : 
-                             finalStatus === 'won' || (finalStatus === 'ended' && activeGameTab < 4) ? `คุณเคลียร์เกม ${GAMES[activeGameTab].name} สำเร็จ` : 
-                             finalStatus === 'lost_bomb' ? `น่าเสียดาย! คุณพลาดเหยียบระเบิด พรุ่งนี้เอาใหม่นะ` : 
-                             finalStatus === 'lost' && activeGameTab === 2 ? `คุณตอบพลาด! ทายถูกไปแค่ ${finalScore}/3 ประเทศ` :
-                             finalStatus === 'lost' && activeGameTab === 4 ? `คุณทายคำศัพท์ไม่ถูกต้อง พรุ่งนี้ค่อยมาแก้มือนะ` :
-                             finalStatus === 'ended' && activeGameTab === 5 ? `เกมโอเวอร์! คุณกินแอปเปิลไปได้ ${finalScore} 🍎` :
-                             finalStatus === 'ended' && activeGameTab === 6 ? `จบเกม! คุณทำคะแนนรวมไปได้ ${finalScore} คะแนน` :
-                             `จบเกม! โควตาวันนี้ของคุณหมดแล้ว`}
-                          </p>
-                          <div className="text-3xl font-mono font-bold text-amber-300 my-2">
-                            {finalStatus === 'lost_bomb' || (finalStatus === 'lost' && activeGameTab !== 2 && activeGameTab !== 4) ? 'GAME OVER' : fmtTime(finalTime)}
-                          </div>
-                          {currGameSt.answer && activeGameTab === 4 && (
-                            <div className="text-lg font-bold text-sky-300 my-2 bg-[#0F2547] p-2 rounded-lg border border-[#1E3A5F]">
-                              คำที่ถูกต้อง: {currGameSt.answer}
-                            </div>
-                          )}
-                          <button onClick={shareGameResult} className="btn-b w-full py-3 shadow hover:scale-105 transition-transform">📤 แชร์สถิติลงกระดานโพสต์</button>
-                        </div>
-                      </Modal>
-                      );
-                    })()}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setGameFocusMode(!gameFocusMode)}
+                      className={`py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${gameFocusMode ? 'bg-sky-500 text-white border-sky-400 shadow-[0_0_12px_rgba(14,165,233,0.4)]' : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:text-white hover:border-sky-500/60'}`}
+                      title={gameFocusMode ? 'ออกจากโหมดโฟกัส' : 'ซ่อนแถบข้างเพื่อโฟกัสกระดานเกม'}
+                    >
+                      <i className={`fas ${gameFocusMode ? 'fa-compress-alt' : 'fa-expand-alt'}`}></i>
+                      <span className="hidden sm:inline">{gameFocusMode ? 'ออกโฟกัส' : 'โฟกัส'}</span>
+                    </button>
+
+                    {!gameFocusMode && (
+                      <button onClick={() => setRightOpen(!rightOpen)} className="btn-w py-1.5 px-2.5 text-[11px] flex items-center gap-1.5">
+                        <i className="fas fa-trophy text-amber-500"></i>
+                        <span className="hidden sm:inline">{rightOpen ? 'ซ่อนอันดับ' : 'อันดับ'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Main Game Area */}
+                <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 flex flex-col relative custom-scrollbar">
+                  {(() => {
+                    const activeGame = GAMES[activeGameTab];
+                    const isEndedView = currGameSt.status === 'viewing_board' || (!currGameSt.isPlaying && currGameSt.status !== 'pending');
+                    const isRunning = currGameSt.isPlaying && !currGameSt.isPaused && currGameSt.status === 'pending';
+
+                    return (
+                      <div className={`${gameFocusMode ? 'max-w-2xl' : 'max-w-xl'} mx-auto w-full flex-1 flex flex-col transition-all duration-300`}>
+                        <div className="card flex-1 flex flex-col overflow-hidden relative shadow-2xl min-h-[460px] border-[#1E3A5F]">
+
+                          {/* Game Accent Top Bar */}
+                          <div className={`h-1 w-full shrink-0 ${activeGame.barCls || 'bg-sky-400'}`}></div>
+
+                          {/* Compact Single-Row HUD */}
+                          <div className="px-3 py-2.5 bg-[#070C18] border-b border-[#1E3A5F] flex items-center justify-between gap-2 shrink-0">
+                            {/* Left: Icon + Name + Rules Button */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm shrink-0 ${activeGame.iconCls}`}>
+                                <i className={activeGame.faIcon || 'fas fa-gamepad'}></i>
+                              </div>
+                              <div className="min-w-0">
+                                <h2 className="text-xs sm:text-sm font-bold text-white truncate leading-tight">{activeGame.name}</h2>
+                                <div className="text-[10px] text-slate-400 md:hidden font-mono">{todayStr}</div>
+                              </div>
+                              <button
+                                onClick={() => setGameRulesOpen(true)}
+                                className="w-6 h-6 rounded-full bg-[#0F2547] border border-[#1E3A5F] text-sky-300 hover:bg-sky-500 hover:text-white text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ml-0.5"
+                                title="วิธีเล่นและกติกา"
+                              >
+                                ?
+                              </button>
+                            </div>
+
+                            {/* Center: Compact Timer */}
+                            <div className={`px-3 py-1 rounded-xl border font-mono text-base sm:text-lg font-bold flex items-center gap-2 shrink-0 ${isRunning ? 'bg-[#050811] border-sky-500/40 text-white shadow-[0_0_10px_rgba(56,189,248,0.15)]' : 'bg-[#050811] border-[#1E3A5F] text-slate-300'}`}>
+                              {isRunning && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>}
+                              <span>{fmtTime(currGameSt.time)}</span>
+                            </div>
+
+                            {/* Right: Pause / Summary Action */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isRunning && (
+                                <button
+                                  onClick={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab] || {}), isPaused: true } }))}
+                                  className="px-2.5 py-1.5 rounded-xl bg-[#0F2547] border border-[#1E3A5F] text-slate-200 hover:bg-amber-500 hover:text-[#050811] hover:border-amber-400 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                                  title="หยุดพักชั่วคราว"
+                                >
+                                  <i className="fas fa-pause text-[10px]"></i>
+                                  <span className="hidden sm:inline">พัก</span>
+                                </button>
+                              )}
+                              {isEndedView && (
+                                <button
+                                  onClick={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...p[activeGameTab], showModal: true } }))}
+                                  className="px-2.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow"
+                                >
+                                  <i className="fas fa-award text-[11px]"></i>
+                                  <span className="hidden sm:inline">สรุปผล</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Game Canvas / State Views */}
+                          <div className="flex-1 flex flex-col p-2.5 sm:p-4 bg-[#050811] relative">
+                            {!currGameSt.isPlaying && currGameSt.status === 'pending' ? (
+                              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-5">
+                                <div className={`w-20 h-20 rounded-3xl border-2 flex items-center justify-center text-4xl shadow-2xl ${activeGame.iconCls}`}>
+                                  <i className={activeGame.faIcon || 'fas fa-gamepad'}></i>
+                                </div>
+                                <div className="space-y-1.5 max-w-sm">
+                                  <h3 className="text-xl font-bold text-white">{activeGame.name}</h3>
+                                  <p className="text-xs text-slate-400 leading-relaxed">{activeGame.desc}</p>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full max-w-xs">
+                                  <button
+                                    onClick={() => {
+                                      setGameAppSt(p => ({ ...p, [activeGameTab]: { status: 'pending', time: 0, isPlaying: true, isPaused: false, score: 0, hasStartedMove: activeGameTab !== 1 } }));
+                                      if (window.innerWidth < 1024) { setLeftOpen(false); setRightOpen(false); }
+                                    }}
+                                    className="w-full btn-w text-sm py-3 px-6 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                                  >
+                                    <i className="fas fa-play"></i> เริ่มเล่นเกม
+                                  </button>
+                                  <button
+                                    onClick={() => setGameRulesOpen(true)}
+                                    className="w-full sm:w-auto btn-d text-xs py-3 px-4 whitespace-nowrap hover:text-white flex items-center justify-center gap-1.5"
+                                  >
+                                    <i className="fas fa-book-open"></i> กติกา
+                                  </button>
+                                </div>
+
+                                <div className="text-[11px] text-slate-400 bg-[#0B1325] border border-[#1E3A5F] px-3.5 py-2 rounded-xl flex items-center gap-2">
+                                  <i className="fas fa-clock text-amber-400"></i>
+                                  <span>จำกัดสิทธิ์วันละ 1 รอบ • รีเซ็ตกระดานใหม่เวลา 06:00 น.</span>
+                                </div>
+                              </div>
+                            ) : currGameSt.isPaused ? (
+                              <div className="flex-1 flex flex-col items-center justify-center bg-[#070C18] rounded-xl border border-dashed border-[#1E3A5F] p-6 text-center space-y-4">
+                                <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-400 flex items-center justify-center text-2xl">
+                                  <i className="fas fa-pause"></i>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-amber-300">หยุดพักชั่วคราว</div>
+                                  <div className="text-xs text-slate-400 mt-1">เวลาปัจจุบัน: <span className="font-mono text-white font-bold">{fmtTime(currGameSt.time)}</span></div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...(p[activeGameTab] || {}), isPaused: false } }))} className="btn-w px-6 py-2.5 text-xs flex items-center gap-1.5">
+                                    <i className="fas fa-play"></i> เล่นต่อ
+                                  </button>
+                                  <button onClick={() => { setGameFocusMode(false); setActiveGameTab(null); }} className="btn-d px-4 py-2.5 text-xs">
+                                    กลับ Hub
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className={`flex-1 flex flex-col justify-center relative overflow-hidden ${isEndedView ? 'opacity-80 pointer-events-none' : ''}`}>
+                                  {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onFirstMove={handleFirstMove} />}
+                                  {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} isPlaying={currGameSt.isPlaying} isPaused={currGameSt.isPaused} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 6 && <Game2048 dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 7 && <Game24 dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 8 && <ResistorGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                </div>
+
+                                {isEndedView && (
+                                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-[#070C18]/95 backdrop-blur border border-sky-500/60 text-sky-200 px-4 py-2 rounded-full font-bold text-xs shadow-2xl flex items-center gap-3 whitespace-nowrap">
+                                    <span><i className="fas fa-flag-checkered text-emerald-400 mr-1.5"></i>จบเกมวันนี้แล้ว</span>
+                                    <button onClick={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...p[activeGameTab], showModal: true } }))} className="btn-b text-[11px] py-1 px-2.5">ดูใบสรุปผล</button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+
+                          {/* Quick Rules Modal */}
+                          {gameRulesOpen && (
+                            <Modal title={`กติกา: ${activeGame.name}`} onClose={() => setGameRulesOpen(false)} maxW="max-w-md">
+                              <div className="space-y-4 text-xs">
+                                <div className="flex items-center gap-3 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${activeGame.iconCls}`}>
+                                    <i className={activeGame.faIcon || 'fas fa-gamepad'}></i>
+                                  </div>
+                                  <p className="text-slate-300 leading-relaxed">{activeGame.desc}</p>
+                                </div>
+                                <ul className="space-y-2.5 text-slate-200 pl-4 list-disc leading-relaxed">
+                                  {(GAME_RULES[activeGame.id] || []).map((line, idx) => <li key={idx}>{line}</li>)}
+                                </ul>
+                                <button onClick={() => setGameRulesOpen(false)} className="w-full btn-w py-2 text-xs">เข้าใจแล้ว</button>
+                              </div>
+                            </Modal>
+                          )}
+
+                          {/* Collectible Result Card Modal */}
+                          {currGameSt.showModal && (() => {
+                            const myScore = gameScores.find(x => x.userId === currentUser?.id);
+                            const finalStatus = myScore ? myScore.status : currGameSt.status;
+                            const finalScore = myScore ? (myScore.score || 0) : (currGameSt.score || 0);
+                            const finalTime = myScore ? myScore.timeMs : currGameSt.time;
+                            const finalMaxTile = myScore ? myScore.maxTile : currGameSt.maxTile;
+
+                            const isBomb = finalStatus === 'lost_bomb' || finalTime === Infinity;
+                            const isLost = finalStatus === 'lost';
+                            const isSuccess = finalStatus === 'won' || (finalStatus === 'ended' && finalScore > 0);
+
+                            const isFailedRec = (s) => s.status === 'lost_bomb' || s.timeMs === Infinity || (s.status === 'lost' && !(activeGameTab === 2 && (s.score || 0) > 0));
+                            const validToday = sortScores(gameScores.filter(s => !isFailedRec(s)), activeGameTab);
+                            const myRankIdx = currentUser ? validToday.findIndex(s => s.userId === currentUser.id) : -1;
+                            const myRank = myRankIdx !== -1 ? myRankIdx + 1 : null;
+
+                            const primaryStat = isBomb
+                              ? 'BOMB'
+                              : (isLost && activeGameTab !== 2)
+                                ? 'GAME OVER'
+                                : activeGameTab === 2 ? `${finalScore} / 3`
+                                : activeGameTab === 4 ? `${finalScore} ครั้ง`
+                                : activeGameTab === 5 ? `${finalScore} แต้ม`
+                                : activeGameTab === 6 ? `${finalScore} pt`
+                                : activeGameTab === 8 ? `${Math.max(1, 4 - Math.floor(finalScore / 100))} ครั้ง`
+                                : fmtTime(finalTime);
+
+                            const subStatLabel = isBomb || (isLost && activeGameTab !== 2)
+                              ? 'หมดโควตารอบวันนี้'
+                              : activeGameTab === 6 ? `เลขสูงสุด: ${finalMaxTile || 0} • เวลา ${fmtTime(finalTime)}`
+                              : [2, 4, 5, 8].includes(activeGameTab) ? `เวลาที่ใช้: ${fmtTime(finalTime)}`
+                              : `เคลียร์กระดานสำเร็จ`;
+
+                            const rankBadgeStyle = myRank === 1
+                              ? 'bg-amber-400 text-[#050811] border-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.5)]'
+                              : myRank === 2
+                                ? 'bg-slate-200 text-[#050811] border-white'
+                                : myRank === 3
+                                  ? 'bg-amber-700 text-amber-100 border-amber-500'
+                                  : 'bg-sky-950/80 text-sky-300 border-sky-500/40';
+
+                            const shareableRooms = [
+                              ...channels.filter(c => !c.isSystemReadOnly).map(c => ({ id: c.id, label: `# ${c.name}` })),
+                              ...myGroups.filter(g => !g.isArchived).map(g => ({ id: g.id, label: `[กลุ่ม] ${g.name}` }))
+                            ];
+
+                            return (
+                              <Modal
+                                title="สรุปผล Daily Challenge"
+                                onClose={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...p[activeGameTab], showModal: false, status: 'viewing_board' } }))}
+                                maxW="max-w-md"
+                              >
+                                <div className="space-y-4 text-xs">
+                                  {/* Collectible Stat Card */}
+                                  <div className="rounded-2xl border border-[#1E3A5F] bg-gradient-to-br from-[#0F2547] via-[#0B1325] to-[#050811] overflow-hidden shadow-2xl relative">
+                                    <div className={`h-1.5 w-full ${activeGame.barCls || 'bg-sky-400'}`}></div>
+
+                                    <div className="p-5 space-y-4">
+                                      {/* Card Header */}
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${activeGame.iconCls}`}>
+                                            <i className={activeGame.faIcon || 'fas fa-gamepad'}></i>
+                                          </div>
+                                          <div className="min-w-0">
+                                            <div className="font-bold text-sm text-white truncate">{activeGame.name}</div>
+                                            <div className="text-[10px] font-mono text-slate-400">{todayStr}</div>
+                                          </div>
+                                        </div>
+
+                                        {myRank ? (
+                                          <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 flex items-center gap-1 ${rankBadgeStyle}`}>
+                                            <i className={myRank === 1 ? 'fas fa-crown' : 'fas fa-medal'}></i>
+                                            Rank #{myRank}
+                                          </span>
+                                        ) : (
+                                          <span className="px-2.5 py-1 rounded-full bg-red-950/70 border border-red-500/40 text-red-300 text-[10px] font-bold shrink-0">
+                                            <i className={isBomb ? 'fas fa-bomb mr-1' : 'fas fa-times-circle mr-1'}></i>
+                                            {isBomb ? 'Bomb' : 'ไม่ผ่าน'}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Primary Stat Box */}
+                                      <div className="py-4 px-3 rounded-xl bg-[#050811]/90 border border-[#1E3A5F] text-center space-y-1 shadow-inner">
+                                        <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+                                          {isSuccess ? 'สถิติของคุณวันนี้' : 'ผลการแข่งขัน'}
+                                        </div>
+                                        <div className={`text-4xl font-mono font-bold tracking-tight ${isSuccess ? 'text-amber-300' : 'text-red-400'}`}>
+                                          {primaryStat}
+                                        </div>
+                                        <div className="text-[11px] text-slate-300">{subStatLabel}</div>
+                                      </div>
+
+                                      {/* Wordle Answer Reveal */}
+                                      {currGameSt.answer && activeGameTab === 4 && (
+                                        <div className="p-2.5 rounded-xl bg-[#070C18] border border-sky-500/40 flex items-center justify-between px-3.5">
+                                          <span className="text-slate-400">คำศัพท์ประจำวันนี้</span>
+                                          <span className="font-mono font-bold text-base tracking-widest text-sky-300">{currGameSt.answer}</span>
+                                        </div>
+                                      )}
+
+                                      {/* Player Signature Footer */}
+                                      {currentUser && (
+                                        <div className="flex items-center justify-between pt-2 border-t border-[#1E3A5F]/70">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <Avatar user={currentUser} size="xs" />
+                                            <span className="font-bold text-slate-200 truncate">{currentUser.displayName}</span>
+                                            <span className="font-mono text-[10px] text-slate-500">{currentUser.id}</span>
+                                          </div>
+                                          <span className="text-[10px] text-slate-400 font-mono">
+                                            ผู้เล่นวันนี้ {gameScores.length} คน
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Share Actions */}
+                                  <div className="space-y-2.5">
+                                    <button onClick={shareGameResult} className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] transition-transform">
+                                      <i className="fas fa-clipboard-list"></i> แชร์สถิติลงกระดานโพสต์ (Board)
+                                    </button>
+
+                                    <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                                      <div className="text-[10px] font-bold text-sky-300 flex items-center gap-1.5">
+                                        <i className="fas fa-comments"></i> ส่งท้าดวลเข้าห้องแชตโดยตรง
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <select
+                                          value={shareChatRoom}
+                                          onChange={(e) => setShareChatRoom(e.target.value)}
+                                          className="flex-1 inp py-1.5 text-xs bg-[#0B1325]"
+                                        >
+                                          {shareableRooms.map(r => (
+                                            <option key={r.id} value={r.id}>{r.label}</option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          onClick={() => shareGameToChat(shareChatRoom)}
+                                          className="btn-b py-1.5 px-3.5 text-xs whitespace-nowrap hover:bg-sky-600 transition-colors flex items-center gap-1.5"
+                                        >
+                                          <i className="fas fa-paper-plane"></i> ส่งแชต
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Modal>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </main>
 
-              <aside className={`absolute md:relative z-40 w-72 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${rightOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
-                <div className="p-2 border-b border-[#1E3A5F] flex">
-                  <button onClick={() => setLbTab('daily')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='daily'?'bg-white text-[#050811]':'text-slate-400'}`}>ประจำวัน</button>
-                  <button onClick={() => setLbTab('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${lbTab==='monthly'?'bg-amber-400 text-[#050811]':'text-slate-400'}`}>ยอดเยี่ยมประจำเดือน</button>
-                </div>
-                <div className="p-3 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between text-xs">
-                  <span>🏆 อันดับ {GAMES[activeGameTab].name}</span>
-                  <button onClick={() => setRightOpen(false)} className="md:hidden text-lg text-slate-400">✕</button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                  {(lbTab === 'daily' ? gameScores : monthlyScores).length === 0 ? <div className="text-center text-slate-500 text-xs py-8 border border-dashed border-[#1E3A5F] rounded-xl">ยังไม่มีคนมีสถิติ</div> : 
-                   (lbTab === 'daily' ? gameScores : monthlyScores).map((s, i) => {
-                    const isBomb = s.status === 'lost_bomb' || s.timeMs === Infinity;
-                    const isLost = s.status === 'lost';
-                    return (
-                      <div key={s.userId} className={`flex justify-between items-center p-3 rounded-xl border shadow-sm ${isBomb||isLost ? 'bg-red-950/20 border-red-900/30' : 'bg-[#050811] border-[#1E3A5F]'}`}>
-                        <div className="flex items-center gap-2.5">
-                          <span className={`font-bold w-6 text-center text-sm ${i===0&&!isBomb&&!isLost?'text-yellow-400':i===1&&!isBomb&&!isLost?'text-slate-300':i===2&&!isBomb&&!isLost?'text-amber-600':'text-slate-500'}`}>{i+1}</span>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-[13px] truncate w-20" title={s.displayName}>{s.displayName}</span>
-                            {activeGameTab === 2 && <span className="text-[10px] text-slate-400">ถูก {s.score||0}/3</span>}
-                            {activeGameTab === 4 && <span className="text-[10px] text-slate-400">ทาย {s.score||0} ครั้ง</span>}
-                            {activeGameTab === 5 && <span className="text-[10px] text-slate-400">ใช้เวลา {fmtTime(s.timeMs)}</span>}
-                            {activeGameTab === 6 && <span className="text-[10px] text-slate-400">สูงสุด [{s.maxTile||0}] 🟨</span>}
-                            {activeGameTab === 8 && <span className="text-[10px] text-slate-400">{s.score > 0 ? `ทายถูกใน ${4 - s.score/100} ครั้ง` : 'วงจรระเบิด'}</span>}
-                            {lbTab === 'monthly' && <span className="text-[9px] text-slate-500">{s.date}</span>}
-                          </div>
-                        </div>
-                        <span className={`font-mono font-bold text-[13px] px-2 py-1 rounded-lg ${isBomb||isLost ? 'bg-red-900/40 text-red-400' : 'bg-sky-900/30 text-sky-300'}`}>
-                          {isBomb ? '💥 Bomb' : isLost ? '❌ แพ้' : (activeGameTab === 6 ? `${s.score||0} pt` : activeGameTab === 5 ? `${s.score||0} 🍎` : fmtTime(s.timeMs))}
-                        </span>
+              <aside className={`absolute md:relative z-40 w-72 sm:w-80 h-full bg-[#070C18] border-l border-[#1E3A5F] flex flex-col transition-transform duration-300 right-0 ${!gameFocusMode && rightOpen ? 'translate-x-0 shadow-[-10px_0_25px_rgba(0,0,0,0.6)]' : 'translate-x-full md:translate-x-0 md:hidden md:w-0'}`}>
+                {(() => {
+                  const activeGame = GAMES[activeGameTab];
+                  const rawList = lbTab === 'daily' ? gameScores : monthlyScores;
+                  const isFailedRec = (s) => s.status === 'lost_bomb' || s.timeMs === Infinity || (s.status === 'lost' && !(activeGameTab === 2 && (s.score || 0) > 0));
+                  const validList = sortScores(rawList.filter(s => !isFailedRec(s)), activeGameTab);
+                  const failedList = rawList.filter(s => isFailedRec(s));
+
+                  const formatBadge = (s) => {
+                    if (s.status === 'lost_bomb' || s.timeMs === Infinity) return 'Bomb';
+                    if (s.status === 'lost' && activeGameTab !== 2) return 'ไม่ผ่าน';
+                    if (activeGameTab === 2) return `${s.score || 0}/3`;
+                    if (activeGameTab === 4) return `${s.score || 0} ครั้ง`;
+                    if (activeGameTab === 5) return `${s.score || 0} แต้ม`;
+                    if (activeGameTab === 6) return `${s.score || 0} pt`;
+                    return fmtTime(s.timeMs);
+                  };
+
+                  const formatSub = (s) => {
+                    if (activeGameTab === 2) return fmtTime(s.timeMs);
+                    if (activeGameTab === 4) return fmtTime(s.timeMs);
+                    if (activeGameTab === 5) return `เวลา ${fmtTime(s.timeMs)}`;
+                    if (activeGameTab === 6) return `สูงสุด ${s.maxTile || 0}`;
+                    if (activeGameTab === 8) return s.score > 0 ? `ตอบ ${Math.max(1, 4 - Math.floor(s.score / 100))} ครั้ง` : 'วงจรระเบิด';
+                    return lbTab === 'monthly' ? s.date : '';
+                  };
+
+                  // คำนวณระยะห่างจากอันดับก่อนหน้า สำหรับ My Rank Bar
+                  const myValidIdx = currentUser ? validList.findIndex(s => s.userId === currentUser.id) : -1;
+                  const myFailed = currentUser ? failedList.find(s => s.userId === currentUser.id) : null;
+
+                  const getGapText = () => {
+                    if (myValidIdx === 0) return 'คุณกำลังครองอันดับ 1!';
+                    const me = validList[myValidIdx];
+                    const above = validList[myValidIdx - 1];
+                    const targetRank = myValidIdx;
+
+                    if (activeGameTab === 2 && (above.score || 0) > (me.score || 0)) {
+                      return `ทายถูกเพิ่มอีก ${(above.score || 0) - (me.score || 0)} ด่าน เพื่อขึ้นอันดับ ${targetRank}`;
+                    }
+                    if (activeGameTab === 4 && (me.score || 0) > (above.score || 0)) {
+                      return `ทายน้อยลงอีก ${(me.score || 0) - (above.score || 0)} ครั้ง เพื่อขึ้นอันดับ ${targetRank}`;
+                    }
+                    if (activeGameTab === 5 && (above.score || 0) > (me.score || 0)) {
+                      return `เก็บเพิ่มอีก ${(above.score || 0) - (me.score || 0)} แต้ม เพื่อขึ้นอันดับ ${targetRank}`;
+                    }
+                    if (activeGameTab === 6 && (above.score || 0) > (me.score || 0)) {
+                      return `ทำเพิ่มอีก ${(above.score || 0) - (me.score || 0)} pt เพื่อขึ้นอันดับ ${targetRank}`;
+                    }
+                    if (activeGameTab === 8 && (above.score || 0) > (me.score || 0)) {
+                      return `ตอบพลาดน้อยลงอีก 1 ครั้ง เพื่อขึ้นอันดับ ${targetRank}`;
+                    }
+                    const diffSec = Math.max(1, Math.round((me.timeMs || 0) - (above.timeMs || 0)));
+                    return `เร็วกว่านี้อีก ${fmtTime(diffSec)} จะขึ้นอันดับ ${targetRank}`;
+                  };
+
+                  // แท่น Podium ลำดับ [อันดับ 2, อันดับ 1, อันดับ 3]
+                  const podiumSlots = [
+                    { rank: 2, rec: validList[1], heightCls: 'h-16', ringCls: 'ring-slate-300', barCls: 'from-slate-300/25 to-slate-800/40 border-slate-400/50 text-slate-200', crown: false },
+                    { rank: 1, rec: validList[0], heightCls: 'h-24', ringCls: 'ring-amber-400', barCls: 'from-amber-400/30 to-amber-950/40 border-amber-400/70 text-amber-300', crown: true },
+                    { rank: 3, rec: validList[2], heightCls: 'h-12', ringCls: 'ring-amber-700', barCls: 'from-amber-700/25 to-amber-950/30 border-amber-700/60 text-amber-500', crown: false }
+                  ];
+
+                  const restValid = validList.slice(3);
+
+                  return (
+                    <>
+                      {/* Tabs */}
+                      <div className="p-2 border-b border-[#1E3A5F] flex gap-1 bg-[#050811] shrink-0">
+                        <button onClick={() => setLbTab('daily')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${lbTab === 'daily' ? 'bg-white text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}>ประจำวัน</button>
+                        <button onClick={() => setLbTab('monthly')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${lbTab === 'monthly' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}>ยอดเยี่ยมประจำเดือน</button>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {/* Leaderboard Title */}
+                      <div className="px-3.5 py-2.5 border-b border-[#1E3A5F] font-bold text-amber-300 flex items-center justify-between text-xs shrink-0">
+                        <span className="flex items-center gap-2 truncate">
+                          <i className="fas fa-trophy"></i>
+                          <span className="truncate">{activeGame.name}</span>
+                        </span>
+                        <button onClick={() => setRightOpen(false)} className="md:hidden w-7 h-7 rounded-lg bg-[#0F2547] text-slate-300 hover:text-white flex items-center justify-center">
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+
+                      {/* Scrollable Content: Podium + Remaining List */}
+                      <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+                        {rawList.length === 0 ? (
+                          <div className="text-center text-slate-500 text-xs py-12 border border-dashed border-[#1E3A5F] rounded-2xl space-y-2">
+                            <i className="fas fa-trophy text-2xl opacity-30 block"></i>
+                            <div>ยังไม่มีสถิติในรอบนี้</div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Top 3 Podium */}
+                            {validList.length > 0 && (
+                              <div className="bg-[#050811] border border-[#1E3A5F] rounded-2xl p-3 pt-4">
+                                <div className="grid grid-cols-3 gap-2 items-end">
+                                  {podiumSlots.map(({ rank, rec, heightCls, ringCls, barCls, crown }) => {
+                                    const u = rec ? getAuthor(rec.userId) : null;
+                                    const isMe = rec && currentUser && rec.userId === currentUser.id;
+                                    return (
+                                      <div key={rank} className="flex flex-col items-center">
+                                        {rec && u ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => setMemberModal && setMemberModal(u)}
+                                            className="flex flex-col items-center group mb-2 w-full"
+                                          >
+                                            {crown && <i className="fas fa-crown text-amber-400 text-xs mb-1 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"></i>}
+                                            <div className={`rounded-full p-0.5 ring-2 ${ringCls} transition-transform group-hover:scale-110`}>
+                                              <Avatar user={u} size={rank === 1 ? 'md' : 'sm'} />
+                                            </div>
+                                            <span className={`text-[10px] font-bold truncate w-full text-center mt-1.5 ${isMe ? 'text-sky-300' : 'text-slate-100'}`}>
+                                              {u.displayName}
+                                            </span>
+                                            <span className="text-[10px] font-mono font-bold text-amber-300 leading-tight">
+                                              {formatBadge(rec)}
+                                            </span>
+                                          </button>
+                                        ) : (
+                                          <div className="flex flex-col items-center mb-2 opacity-30">
+                                            <div className="w-8 h-8 rounded-full border border-dashed border-slate-500 flex items-center justify-center text-[10px] text-slate-500">-</div>
+                                            <span className="text-[9px] text-slate-500 mt-1">ว่าง</span>
+                                          </div>
+                                        )}
+
+                                        <div className={`w-full ${heightCls} rounded-t-xl border-t border-x bg-gradient-to-b flex flex-col items-center justify-center font-mono font-bold ${barCls}`}>
+                                          <span className={rank === 1 ? 'text-xl' : 'text-base'}>#{rank}</span>
+                                          {rec && lbTab === 'monthly' && <span className="text-[8px] opacity-75">{rec.date?.slice(5)}</span>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Ranks #4+ */}
+                            {restValid.length > 0 && (
+                              <div className="space-y-1.5">
+                                {restValid.map((s, idx) => {
+                                  const rankNum = idx + 4;
+                                  const u = getAuthor(s.userId);
+                                  const isMe = currentUser && s.userId === currentUser.id;
+                                  const sub = formatSub(s);
+                                  return (
+                                    <div
+                                      key={s.userId}
+                                      onClick={() => setMemberModal && setMemberModal(u)}
+                                      className={`flex justify-between items-center p-2.5 rounded-xl border cursor-pointer transition-colors ${isMe ? 'bg-sky-950/40 border-sky-500/60' : 'bg-[#050811] border-[#1E3A5F] hover:border-slate-500'}`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="font-mono font-bold w-5 text-center text-xs text-slate-400 shrink-0">{rankNum}</span>
+                                        <Avatar user={u} size="xs" />
+                                        <div className="min-w-0">
+                                          <div className={`font-bold text-xs truncate ${isMe ? 'text-sky-300' : 'text-slate-100'}`}>{u.displayName}</div>
+                                          {sub && <div className="text-[9px] text-slate-400 truncate">{sub}</div>}
+                                        </div>
+                                      </div>
+                                      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-lg bg-sky-900/30 text-sky-300 shrink-0 ml-2">
+                                        {formatBadge(s)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* Failed / Bomb Entries */}
+                            {failedList.length > 0 && (
+                              <div className="space-y-1.5 pt-2 border-t border-[#1E3A5F]/60">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1">ไม่ผ่านรอบนี้ ({failedList.length})</div>
+                                {failedList.map((s) => {
+                                  const u = getAuthor(s.userId);
+                                  const isBomb = s.status === 'lost_bomb' || s.timeMs === Infinity;
+                                  return (
+                                    <div
+                                      key={s.userId}
+                                      onClick={() => setMemberModal && setMemberModal(u)}
+                                      className="flex justify-between items-center p-2 rounded-xl border bg-red-950/15 border-red-900/30 cursor-pointer hover:border-red-500/40 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <i className={`${isBomb ? 'fas fa-bomb' : 'fas fa-times'} text-red-400/80 w-5 text-center text-[11px] shrink-0`}></i>
+                                        <Avatar user={u} size="xs" />
+                                        <span className="font-bold text-xs text-slate-300 truncate">{u.displayName}</span>
+                                      </div>
+                                      <span className="font-mono font-bold text-[11px] px-2 py-0.5 rounded-lg bg-red-950/60 text-red-400 shrink-0 ml-2">
+                                        {formatBadge(s)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Pinned My Rank Bar */}
+                      {currentUser && (
+                        <div className="p-3 border-t border-[#1E3A5F] bg-[#050811] shrink-0">
+                          {myValidIdx !== -1 ? (
+                            <div className="p-2.5 rounded-xl bg-gradient-to-r from-[#0F2547] to-[#0B1325] border border-sky-500/40 space-y-1.5 shadow-inner">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold shrink-0 ${myValidIdx === 0 ? 'bg-amber-400 text-[#050811]' : 'bg-sky-500 text-white'}`}>
+                                    #{myValidIdx + 1}
+                                  </span>
+                                  <Avatar user={currentUser} size="xs" />
+                                  <span className="text-xs font-bold text-white truncate">อันดับของคุณ</span>
+                                </div>
+                                <span className="font-mono font-bold text-xs text-amber-300 shrink-0">
+                                  {formatBadge(validList[myValidIdx])}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-sky-200 flex items-center gap-1.5">
+                                <i className={myValidIdx === 0 ? 'fas fa-crown text-amber-400' : 'fas fa-bullseye text-sky-400'}></i>
+                                <span className="truncate">{getGapText()}</span>
+                              </div>
+                            </div>
+                          ) : myFailed ? (
+                            <div className="p-2.5 rounded-xl bg-red-950/25 border border-red-900/50 flex items-center justify-between text-[11px]">
+                              <span className="text-red-300 font-bold"><i className="fas fa-redo mr-1.5"></i>รอบนี้พลาดไปก่อน</span>
+                              <span className="text-slate-400 text-[10px]">พรุ่งนี้แก้มือใหม่!</span>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded-xl bg-[#0B1325] border border-dashed border-[#1E3A5F] text-[11px] text-slate-400 text-center">
+                              <i className="fas fa-play-circle text-sky-400 mr-1.5"></i>เคลียร์เกมนี้เพื่อขึ้นกระดานอันดับ
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </aside>
             </div>
           )}
