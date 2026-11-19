@@ -203,6 +203,7 @@
     const db = firebase.firestore(app);
     const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
     let openZoom = () => {};
+    let openGuestPrompt = () => {};
 
     // ==========================================
     // 2. CORE UTILITIES & CONSTANTS
@@ -516,7 +517,7 @@
       };
 
       const handleReaction = async (type) => {
-          if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อน');
+          if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อกดแสดงความรู้สึกให้โพสต์และคอมเมนต์');
           if (!postId || !db) {
               // กรณีที่เป็นคอมเมนต์ (เรียกใช้แบบเก่าที่ส่งแค่ onLike มา)
               if (onLike) onLike();
@@ -6817,10 +6818,15 @@
     // ==========================================
     function OwnerPage({ 
       users, posts, chatMessages, groups, bmaEvents, 
-      allTags, db, getTags, setMemberModal 
+      allTags, db, getTags, setMemberModal,
+      guestStats = { totalVisits: 0, uniqueVisitors: 0, daily: {}, lastVisitAt: 0 },
+      guestFeedbacks = []
     }) {
-      const [subTab, setSubTab] = useState('dashboard'); // 'dashboard' | 'members'
-  
+      const [subTab, setSubTab] = useState('dashboard'); // 'dashboard' | 'members' | 'guests'
+      const [fbSearch, setFbSearch] = useState('');
+      const [fbCatFilter, setFbCatFilter] = useState('ALL');
+      const [fbStatusFilter, setFbStatusFilter] = useState('ALL');
+
       // States สำหรับระบบออกรหัสใหม่
       const [idType, setIdType] = useState('M'); // 'M' | 'F'
       const [newMId, setNewMId] = useState('');
@@ -6879,6 +6885,54 @@
       const active24h = activeUsers.filter(u => (Date.now() - (u.lastActive || 0) < 86400000));
       const followersCount = users.filter(u => String(u.id).startsWith('F')).length;
       const totalComments = posts.reduce((sum, p) => sum + (p.comments?.length || 0), 0);
+	// คำนวณสถิติ Guest และ Feedback
+      const getBkkDateKey = (offsetDays = 0) => {
+        const now = new Date();
+        const bkk = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000));
+        bkk.setDate(bkk.getDate() + offsetDays);
+        return `${bkk.getFullYear()}-${String(bkk.getMonth() + 1).padStart(2, '0')}-${String(bkk.getDate()).padStart(2, '0')}`;
+      };
+
+      const dailyMap = guestStats?.daily || {};
+      const todayVisits = dailyMap[getBkkDateKey(0)] || 0;
+      const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const key = getBkkDateKey(i - 6);
+        return { key, label: key.slice(5), val: dailyMap[key] || 0 };
+      });
+      const maxDailyVisits = Math.max(1, ...last7Days.map(d => d.val));
+      const unreadFbCount = guestFeedbacks.filter(f => f.status === 'new').length;
+
+      const formatLastVisit = (ts) => {
+        if (!ts) return 'ยังไม่มีข้อมูล';
+        const diffMin = Math.floor((Date.now() - ts) / 60000);
+        if (diffMin < 1) return 'เมื่อสักครู่';
+        if (diffMin < 60) return `${diffMin} นาทีที่แล้ว`;
+        if (diffMin < 1440) return `${Math.floor(diffMin / 60)} ชม. ที่แล้ว`;
+        return new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      };
+
+      const FB_CATS = {
+        request_tool: { label: 'ขอเครื่องมือใหม่', icon: 'fas fa-tools', cls: 'bg-sky-950/70 text-sky-300 border-sky-500/40' },
+        bug: { label: 'แจ้งปัญหา / บั๊ก', icon: 'fas fa-bug', cls: 'bg-red-950/70 text-red-300 border-red-500/40' },
+        suggestion: { label: 'เสนอแนะทั่วไป', icon: 'fas fa-lightbulb', cls: 'bg-amber-950/70 text-amber-300 border-amber-500/40' },
+        other: { label: 'อื่นๆ / ทักทาย', icon: 'fas fa-comment', cls: 'bg-purple-950/70 text-purple-300 border-purple-500/40' }
+      };
+
+      const FB_STATUS = {
+        new: { label: 'มาใหม่', cls: 'bg-red-500/20 text-red-300 border-red-500/50' },
+        read: { label: 'อ่านแล้ว', cls: 'bg-sky-500/20 text-sky-300 border-sky-500/50' },
+        done: { label: 'ดำเนินการแล้ว', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' }
+      };
+
+      const filteredFeedbacks = guestFeedbacks.filter(f => {
+        if (fbCatFilter !== 'ALL' && f.category !== fbCatFilter) return false;
+        if (fbStatusFilter !== 'ALL' && (f.status || 'new') !== fbStatusFilter) return false;
+        if (fbSearch.trim()) {
+          const q = fbSearch.toLowerCase();
+          return (f.nickname || '').toLowerCase().includes(q) || (f.message || '').toLowerCase().includes(q) || (f.contact || '').toLowerCase().includes(q);
+        }
+        return true;
+      });
 
       // คัดลอกข้อความเชิญเข้าสมาคม
       const handleCopyInvite = (id) => {
@@ -6964,6 +7018,17 @@
                 <span><i className="fas fa-users mr-1"></i> จัดการสมาชิก</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${subTab === 'members' ? 'bg-[#050811] text-amber-400' : 'bg-[#0F2547] text-sky-300'}`}>{users.length}</span>
               </button>
+	      <button 
+                onClick={() => setSubTab('guests')} 
+                className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${subTab === 'guests' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                <span><i className="fas fa-user-astronaut mr-1"></i> Guest & Feedback</span>
+                {unreadFbCount > 0 ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-red-500 text-white animate-pulse">{unreadFbCount}</span>
+                ) : (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${subTab === 'guests' ? 'bg-[#050811] text-amber-400' : 'bg-[#0F2547] text-sky-300'}`}>{guestFeedbacks.length}</span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -6973,7 +7038,7 @@
           {subTab === 'dashboard' && (
             <div className="space-y-5 animate-fade-in">
               {/* การ์ดสรุปสถิติ 4 ช่อง */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F] relative overflow-hidden">
                   <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">สมาชิกที่เปิดใช้งาน</div>
                   <div className="text-2xl font-bold font-mono text-white mt-1">
@@ -7003,9 +7068,26 @@
                     ความคิดเห็นรวม: <strong className="text-amber-300">{totalComments} รายการ</strong>
                   </div>
                 </div>
-
+		<div
+                  onClick={() => setSubTab('guests')}
+                  className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-sky-500/40 hover:border-sky-400 cursor-pointer transition-colors col-span-2 sm:col-span-1"
+                  title="คลิกเพื่อดูสถิติ Guest และข้อเสนอแนะทั้งหมด"
+                >
+                  <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                    <span>ผู้เยี่ยมชม (Guest)</span>
+                    {unreadFbCount > 0 && <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-mono">{unreadFbCount} ใหม่</span>}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-white mt-1">
+                    {(guestStats?.totalVisits || 0).toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-2 flex justify-between">
+                    <span>วันนี้: <strong className="text-cyan-300">+{todayVisits}</strong></span>
+                    <span>Feedback: <strong className="text-amber-300">{guestFeedbacks.length}</strong></span>
+                  </div>
+                </div>
                 <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#070C18] border-[#1E3A5F]">
                   <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">ระบบแชต & กิจกรรม</div>
+
                   <div className="text-2xl font-bold font-mono text-white mt-1">{chatMessages.length}</div>
                   <div className="text-[10px] text-slate-400 mt-2 flex justify-between">
                     <span>กลุ่มแชต: <strong className="text-purple-300">{groups?.length || 0}</strong></span>
@@ -7258,7 +7340,7 @@
                     return (
                       <div key={u.id} className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] hover:border-white/30 transition-colors flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div onClick={() => u.isActivated && setMemberModal && setMemberModal(u)} className={u.isActivated ? "cursor-pointer" : ""}>
+                          <div onClick={() => u.isActivated && openMemberProfile(u)} className={u.isActivated ? "cursor-pointer" : ""}>
                             <Avatar user={u} size="md" showStatus={u.isActivated} />
                           </div>
                           <div className="min-w-0">
@@ -7334,6 +7416,183 @@
                   })
                 )}
               </div>
+            </div>
+          )}
+
+	  {/* ========================================== */}
+          {/* TAB 3: GUEST ANALYTICS & FEEDBACK          */}
+          {/* ========================================== */}
+          {subTab === 'guests' && (
+            <div className="space-y-5 animate-fade-in">
+
+              {/* แถวบน: สรุปตัวเลข + กราฟแท่ง 7 วันล่าสุด */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+                  <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#050811] border-[#1E3A5F]">
+                    <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">ยอดเข้าชมรวม (Visits)</div>
+                    <div className="text-2xl font-mono font-bold text-white mt-1">{(guestStats?.totalVisits || 0).toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-400 mt-1.5">วันนี้: <strong className="text-emerald-400">+{todayVisits} ครั้ง</strong></div>
+                  </div>
+
+                  <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#050811] border-[#1E3A5F]">
+                    <div className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">ไม่ซ้ำอุปกรณ์ (Unique)</div>
+                    <div className="text-2xl font-mono font-bold text-cyan-300 mt-1">{(guestStats?.uniqueVisitors || 0).toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-400 mt-1.5 truncate">ล่าสุด: <strong className="text-slate-200">{formatLastVisit(guestStats?.lastVisitAt)}</strong></div>
+                  </div>
+
+                  <div className="card p-4 bg-gradient-to-br from-[#0B1325] to-[#050811] border-[#1E3A5F] col-span-2 flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Guest Feedback ทั้งหมด</div>
+                      <div className="text-2xl font-mono font-bold text-white mt-0.5">
+                        {guestFeedbacks.length} <span className="text-xs font-normal text-slate-400">รายการ</span>
+                      </div>
+                    </div>
+                    <div className="text-right space-y-1 text-[10px]">
+                      <div>ยังไม่อ่าน: <strong className="text-red-400 font-mono">{unreadFbCount}</strong></div>
+                      <div>ดำเนินการแล้ว: <strong className="text-emerald-400 font-mono">{guestFeedbacks.filter(f => f.status === 'done').length}</strong></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* กราฟแท่งยอดเข้าชม Guest 7 วันล่าสุด */}
+                <div className="lg:col-span-7 card p-4 bg-[#0B1325] border-[#1E3A5F] flex flex-col justify-between">
+                  <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2 mb-3">
+                    <span className="font-bold text-sky-300"><i className="fas fa-chart-bar mr-1.5"></i>สถิติการเข้าชมของ Guest ย้อนหลัง 7 วัน</span>
+                    <span className="text-[10px] text-slate-400 font-mono">รวม 7 วัน: {last7Days.reduce((s, d) => s + d.val, 0)} ครั้ง</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-2 items-end h-36 pt-4 px-1">
+                    {last7Days.map((d, i) => {
+                      const pct = Math.round((d.val / maxDailyVisits) * 100);
+                      const isToday = i === 6;
+                      return (
+                        <div key={d.key} className="flex flex-col items-center h-full justify-end gap-1.5">
+                          <span className={`text-[10px] font-mono font-bold ${isToday ? 'text-amber-300' : 'text-slate-400'}`}>{d.val}</span>
+                          <div className="w-full max-w-[34px] flex-1 bg-[#050811] rounded-lg border border-[#1E3A5F]/70 flex items-end overflow-hidden p-0.5">
+                            <div
+                              className={`w-full rounded-md transition-all duration-500 ${isToday ? 'bg-gradient-to-t from-amber-500 to-amber-300' : 'bg-gradient-to-t from-sky-600 to-sky-400'}`}
+                              style={{ height: d.val > 0 ? `${Math.max(10, pct)}%` : '0%' }}
+                            />
+                          </div>
+                          <span className={`text-[9px] font-mono ${isToday ? 'text-white font-bold' : 'text-slate-500'}`}>{isToday ? 'วันนี้' : d.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* กล่องจัดการ Guest Feedback */}
+              <div className="card p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1E3A5F] pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <i className="fas fa-inbox text-sky-400"></i> กล่องข้อความ & ข้อเสนอแนะจาก Guest
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">ข้อความที่ส่งผ่านปุ่ม Guest Feedback ในแถบด้านซ้ายของหน้า Board</p>
+                  </div>
+                  {unreadFbCount > 0 && (
+                    <button
+                      onClick={async () => {
+                        const news = guestFeedbacks.filter(f => f.status === 'new');
+                        await Promise.all(news.map(f => db.collection('bma_guest_feedback').doc(f.id).update({ status: 'read' })));
+                      }}
+                      className="btn-b py-1.5 px-3 text-[11px] text-sky-200 border-sky-500/40 hover:bg-sky-600 hover:text-white"
+                    >
+                      <i className="fas fa-check-double mr-1"></i> อ่านแล้วทั้งหมด ({unreadFbCount})
+                    </button>
+                  )}
+                </div>
+
+                {/* แถบค้นหาและตัวกรอง */}
+                <div className="flex flex-col md:flex-row gap-2.5">
+                  <input
+                    type="text"
+                    value={fbSearch}
+                    onChange={(e) => setFbSearch(e.target.value)}
+                    placeholder="ค้นหาข้อความ, ชื่อเล่น หรือช่องทางติดต่อกลับ..."
+                    className="flex-1 inp text-xs"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <select value={fbCatFilter} onChange={(e) => setFbCatFilter(e.target.value)} className="inp py-1.5 text-xs bg-[#050811]">
+                      <option value="ALL">ทุกหัวข้อ</option>
+                      {Object.entries(FB_CATS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                    <select value={fbStatusFilter} onChange={(e) => setFbStatusFilter(e.target.value)} className="inp py-1.5 text-xs bg-[#050811]">
+                      <option value="ALL">ทุกสถานะ</option>
+                      <option value="new">มาใหม่ ({unreadFbCount})</option>
+                      <option value="read">อ่านแล้ว</option>
+                      <option value="done">ดำเนินการแล้ว</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* รายการ Feedback */}
+                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1 custom-scrollbar">
+                  {filteredFeedbacks.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 border border-dashed border-[#1E3A5F] rounded-xl space-y-2">
+                      <i className="fas fa-comment-slash text-2xl opacity-30 block"></i>
+                      <div>ยังไม่มีข้อความจาก Guest ในหมวดหมู่นี้</div>
+                    </div>
+                  ) : (
+                    filteredFeedbacks.map((fb) => {
+                      const cat = FB_CATS[fb.category] || FB_CATS.other;
+                      const stKey = fb.status || 'new';
+                      const st = FB_STATUS[stKey] || FB_STATUS.new;
+
+                      return (
+                        <div key={fb.id} className={`p-4 rounded-xl border transition-colors space-y-2.5 ${stKey === 'new' ? 'bg-[#081226] border-sky-500/50 shadow-md' : 'bg-[#050811] border-[#1E3A5F]'}`}>
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1E3A5F]/60">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold flex items-center gap-1 ${cat.cls}`}>
+                                <i className={cat.icon}></i> {cat.label}
+                              </span>
+                              <span className="font-bold text-white text-xs">{fb.nickname || 'Guest'}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">{fb.createdAt}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${st.cls}`}>{st.label}</span>
+                          </div>
+
+                          <p className="text-slate-100 text-xs whitespace-pre-line leading-relaxed break-words">{fb.message}</p>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#1E3A5F]/40">
+                            <div className="text-[11px] text-slate-400">
+                              {fb.contact ? (
+                                <span><i className="fas fa-address-card text-sky-400 mr-1.5"></i>ติดต่อกลับ: <strong className="text-sky-200 select-all">{fb.contact}</strong></span>
+                              ) : (
+                                <span className="text-slate-600 italic">ไม่ได้ระบุช่องทางติดต่อกลับ</span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {stKey !== 'read' && (
+                                <button onClick={() => db.collection('bma_guest_feedback').doc(fb.id).update({ status: 'read' })} className="btn-d py-1 px-2.5 text-[10px] text-sky-300 hover:bg-sky-950">
+                                  <i className="fas fa-eye mr-1"></i> อ่านแล้ว
+                                </button>
+                              )}
+                              {stKey !== 'done' ? (
+                                <button onClick={() => db.collection('bma_guest_feedback').doc(fb.id).update({ status: 'done' })} className="btn-b py-1 px-2.5 text-[10px] bg-emerald-950/60 border-emerald-500/40 text-emerald-300 hover:bg-emerald-600 hover:text-white">
+                                  <i className="fas fa-check mr-1"></i> เสร็จสิ้น
+                                </button>
+                              ) : (
+                                <button onClick={() => db.collection('bma_guest_feedback').doc(fb.id).update({ status: 'new' })} className="btn-d py-1 px-2.5 text-[10px] text-amber-300">
+                                  <i className="fas fa-undo mr-1"></i> เปิดใหม่
+                                </button>
+                              )}
+                              <button
+                                onClick={() => confirm('ยืนยันการลบข้อความ Feedback นี้?') && db.collection('bma_guest_feedback').doc(fb.id).delete()}
+                                className="px-2.5 py-1 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 font-bold border border-red-900/50 text-[10px]"
+                              >
+                                <i className="fas fa-trash-alt"></i>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -7606,7 +7865,7 @@
                                         <div className="flex justify-between text-xs"><span className="font-bold">📊 {post.poll.question}</span><span className="text-slate-400 text-[10px]">{post.poll.isAnonymous ? '🕵️ ไม่ระบุชื่อ' : '👁️ แสดงชื่อ'}</span></div>
                                         {(post.poll.options || []).map((opt) => {
                                           const voted = currentUser && (opt.votes || []).includes(currentUser.id);
-                                          return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return alert('กรุณาเข้าสู่ระบบก่อนโหวต!'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-[11px]' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-[11px] hover:bg-[#0F2547]'}><span className="text-left line-clamp-1 pr-2">{voted ? '✓ ' + opt.text : opt.text}</span><span className="shrink-0">โหวต</span></button>;
+                                          return <button key={opt.id} disabled={isClosed} onClick={async () => { if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อร่วมโหวตโพลล์'); const opts = post.poll.options.map((o) => ({ ...o, votes: (o.votes || []).filter((u) => u !== currentUser.id).concat(o.id === opt.id ? [currentUser.id] : []) })); await db.collection('bma_posts').doc(post.id).update({ poll: { ...post.poll, options: opts } }); }} className={voted ? 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-white text-[#050811] font-bold text-[11px]' : 'w-full flex justify-between px-3.5 py-2 rounded-xl bg-[#0B1325] border border-[#1E3A5F] text-[11px] hover:bg-[#0F2547]'}><span className="text-left line-clamp-1 pr-2">{voted ? '✓ ' + opt.text : opt.text}</span><span className="shrink-0">โหวต</span></button>;
                                         })}
                                       </div>
                                     )}
@@ -7630,7 +7889,7 @@
                               </div>
                               <div className="flex gap-2">
                                  <button onClick={() => { const u = window.location.origin + window.location.pathname + '?post=' + post.id; navigator.clipboard.writeText(u); alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u); }} className="w-7 h-7 sm:w-auto sm:px-2.5 sm:py-1 rounded-full bg-[#050811] border border-[#1E3A5F] hover:bg-white hover:text-black transition-colors flex items-center justify-center gap-1.5"><i className="fas fa-share-alt"></i> <span className="hidden sm:inline">แชร์</span></button>
-                                 <button onClick={async () => { if (!currentUser) return alert('เข้าสู่ระบบก่อนบันทึกโพสต์'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-2.5 py-1 rounded-lg font-bold bg-white text-[#050811] flex items-center gap-1' : 'btn-d py-1 px-2.5 flex items-center gap-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
+                                 <button onClick={async () => { if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อบันทึกโพสต์เก็บไว้อ่านภายหลัง'); const b = post.bookmarks || []; await db.collection('bma_posts').doc(post.id).update({ bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id] }); }} className={isBm ? 'px-2.5 py-1 rounded-lg font-bold bg-white text-[#050811] flex items-center gap-1' : 'btn-d py-1 px-2.5 flex items-center gap-1'}>{isBm ? '★ บันทึกแล้ว' : '☆ บันทึก'}</button>
                               </div>
                             </div>
 
@@ -7910,6 +8169,21 @@
               </div>
             </div>
 
+            {!currentUser && (
+              <div className="p-3.5 rounded-2xl bg-sky-950/35 border border-sky-500/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-sky-100">
+                  <i className="fas fa-flask text-sky-400 text-base"></i>
+                  <span><strong>โหมดทดลองเล่น (Guest Practice Mode):</strong> ลองเล่นได้ครบทั้ง 9 เกม และกดเล่นซ้ำได้อิสระ (สถิติจะไม่บันทึกขึ้น Leaderboard)</span>
+                </div>
+                <button
+                  onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อบันทึกสถิติขึ้นกระดานอันดับประจำวันและประจำเดือน')}
+                  className="btn-w py-1.5 px-3.5 text-[11px] shrink-0"
+                >
+                  เข้าสู่ระบบเพื่อเก็บสถิติ
+                </button>
+              </div>
+            )}
+
             {/* Filter Pills */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex bg-[#0B1325] p-1 rounded-xl border border-[#1E3A5F] gap-1 text-xs font-bold">
@@ -8040,8 +8314,41 @@
       
       const [zoomImg, setZoomImg] = useState(null);
       openZoom = setZoomImg;
+      const [guestPrompt, setGuestPrompt] = useState(null);
+      const [showGuestBar, setShowGuestBar] = useState(true);
+      const [showGuestGuide, setShowGuestGuide] = useState(false);
+
+      // Guest Analytics & Feedback States
+      const [guestStats, setGuestStats] = useState({ totalVisits: 0, uniqueVisitors: 0, daily: {}, lastVisitAt: 0 });
+      const [guestFeedbacks, setGuestFeedbacks] = useState([]);
+      const [guestFbOpen, setGuestFbOpen] = useState(false);
+      const [fbName, setFbName] = useState('');
+      const [fbCategory, setFbCategory] = useState('request_tool');
+      const [fbMessage, setFbMessage] = useState('');
+      const [fbContact, setFbContact] = useState('');
+      const [fbSending, setFbSending] = useState(false);
+      const [fbSuccess, setFbSuccess] = useState(false);
+      const [fbErr, setFbErr] = useState('');
+
+      openGuestPrompt = (reason) => setGuestPrompt(reason || 'ฟีเจอร์นี้สงวนสิทธิ์สำหรับสมาชิกสมาคมเท่านั้น');
+
+      const openMemberProfile = (m) => {
+        if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อดูโปรไฟล์แบบเต็ม ประวัติ และช่องทางติดต่อ');
+        setMemberModal(m);
+      };
       
-      const [activeTool, setActiveTool] = useState(null);
+      const [activeTool, setActiveTool] = useState(() => new URLSearchParams(window.location.search).get('tool') || null);
+      const [toolLinkCopied, setToolLinkCopied] = useState(false);
+
+      const openTool = (toolId) => {
+        setActiveTool(toolId);
+        setToolLinkCopied(false);
+        const url = new URL(window.location.href);
+        if (toolId) url.searchParams.set('tool', toolId);
+        else url.searchParams.delete('tool');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      };
+
       const [toolSearchQ, setToolSearchQ] = useState('');
       const [activeCategory, setActiveCategory] = useState('ALL');
       const [trackTime, setTrackTime] = useState({ curA: 0, durA: 0, curB: 0, durB: 0 });
@@ -8197,6 +8504,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const sharedPostId = urlParams.get('post');
       const qrIdParam = urlParams.get('qr');
+      const sharedToolId = urlParams.get('tool');
       const [qrLoading, setQrLoading] = useState(!!qrIdParam);
 
       // สำหรับประมวลผลเมื่อมีคนสแกน Dynamic QR Code เข้ามา
@@ -8235,8 +8543,17 @@
       
       const [currentView, setCurrentView] = useState(() => {
           if (sharedPostId) return 'single_post';
+          if (sharedToolId) return 'tools';
           return sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home';
       });
+
+      useEffect(() => {
+        if (currentView !== 'tools' && new URLSearchParams(window.location.search).has('tool')) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('tool');
+          window.history.replaceState({}, '', url.pathname + url.search);
+        }
+      }, [currentView]);
 
       const [activeRoom, setActiveRoom] = useState(() => { 
         try { 
@@ -8612,8 +8929,14 @@
         });
         
         const u9 = db.collection('bma_events').onSnapshot((s) => setBmaEvents(s.docs.map(d => d.data())), () => {});
-        
-        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); };
+        const u10 = db.collection('bma_system').doc('guest_stats').onSnapshot((s) => {
+          if (s.exists) setGuestStats(s.data());
+        }, () => {});
+        const u11 = db.collection('bma_guest_feedback').orderBy('timestamp', 'desc').limit(100).onSnapshot((s) => {
+          setGuestFeedbacks(s.docs.map(d => d.data()));
+        }, () => {});
+
+        return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); u11(); };
       }, []);
 
       const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -8652,6 +8975,105 @@
          const timer = setTimeout(() => setIsAuthLoading(false), 3000);
          return () => clearTimeout(timer);
       }, []);
+
+	// นับจำนวน Guest ที่เข้าชมเว็บไซต์ (1 Session = 1 ครั้ง, 1 เครื่อง = 1 Unique)
+      useEffect(() => {
+        if (!autoLoginAttempted || currentUser || !db) return;
+        if (sessionStorage.getItem('tbma_guest_session_counted')) return;
+
+        sessionStorage.setItem('tbma_guest_session_counted', '1');
+        const now = new Date();
+        const bkk = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000));
+        const dateKey = `${bkk.getFullYear()}-${String(bkk.getMonth() + 1).padStart(2, '0')}-${String(bkk.getDate()).padStart(2, '0')}`;
+
+        let isNewDevice = false;
+        try {
+          if (!localStorage.getItem('tbma_guest_device_id')) {
+            localStorage.setItem('tbma_guest_device_id', 'g-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
+            isNewDevice = true;
+          }
+        } catch (e) {}
+
+        const inc = firebase.firestore.FieldValue.increment(1);
+        const payload = {
+          totalVisits: inc,
+          lastVisitAt: Date.now(),
+          daily: { [dateKey]: inc }
+        };
+        if (isNewDevice) payload.uniqueVisitors = inc;
+
+        db.collection('bma_system').doc('guest_stats').set(payload, { merge: true }).catch(() => {});
+      }, [autoLoginAttempted, currentUser]);
+
+      // ฟังก์ชันส่ง Guest Feedback พร้อมระบบกันสแปม (Cooldown 2 นาที และสูงสุด 3 ครั้ง/วัน)
+      const handleSendGuestFeedback = async (e) => {
+        e.preventDefault();
+        setFbErr('');
+        const msg = fbMessage.trim();
+        if (msg.length < 5) return setFbErr('กรุณาพิมพ์ข้อความอย่างน้อย 5 ตัวอักษรครับ');
+        if (msg.length > 1000) return setFbErr('ข้อความยาวเกิน 1,000 ตัวอักษร');
+
+        const now = Date.now();
+        const todayKey = 'tbma_guest_fb_cnt_' + todayStr;
+        try {
+          const lastSent = parseInt(localStorage.getItem('tbma_last_guest_fb_at') || '0', 10);
+          const sentToday = parseInt(localStorage.getItem(todayKey) || '0', 10);
+          if (now - lastSent < 120000) {
+            const waitSec = Math.ceil((120000 - (now - lastSent)) / 1000);
+            return setFbErr(`กรุณารออีก ${waitSec} วินาทีก่อนส่งข้อความใหม่ครับ`);
+          }
+          if (sentToday >= 3) {
+            return setFbErr('วันนี้คุณส่งข้อเสนอแนะครบโควตา 3 ครั้งแล้ว ขอบคุณมากครับ');
+          }
+        } catch (err) {}
+
+        setFbSending(true);
+        try {
+          const id = 'gfb-' + now + '-' + Math.random().toString(36).slice(2, 5);
+          const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+          const tStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          const payload = {
+            id,
+            nickname: fbName.trim() || 'Guest',
+            category: fbCategory,
+            message: msg,
+            contact: fbContact.trim(),
+            status: 'new',
+            createdAt: `${dStr} ${tStr}`,
+            timestamp: now,
+            serverCreatedAt: svrTs()
+          };
+          await db.collection('bma_guest_feedback').doc(id).set(payload);
+
+          try {
+            localStorage.setItem('tbma_last_guest_fb_at', String(now));
+            const prevCnt = parseInt(localStorage.getItem(todayKey) || '0', 10);
+            localStorage.setItem(todayKey, String(prevCnt + 1));
+          } catch (err) {}
+
+          // แจ้งเตือน Owner เมื่อมี Feedback ใหม่จาก Guest
+          users.filter(u => u.role === 'admin').forEach(adminU => {
+            sendNotif({
+              recipientId: adminU.id,
+              actorId: 'GUEST',
+              category: 'system',
+              subType: 'guest_feedback',
+              title: 'ข้อเสนอแนะใหม่จาก Guest',
+              body: `${payload.nickname}: ${msg.slice(0, 80)}`,
+              targetView: 'admin'
+            });
+          });
+
+          setFbName('');
+          setFbMessage('');
+          setFbContact('');
+          setFbCategory('request_tool');
+          setFbSuccess(true);
+        } catch (err) {
+          setFbErr('ไม่สามารถส่งข้อความได้ กรุณาลองใหม่อีกครั้ง');
+        }
+        setFbSending(false);
+      };
 
       const pingRef = useRef(0);
       // 📅 Event Invite RSVP Handler
@@ -8895,8 +9317,8 @@
               }
             }
           };
-          ytA.current = new window.YT.Player('yt-player-a', { ...conf, events: { onReady: e => e.target.mute(), onStateChange: handleStateChange('A') } });
-          ytB.current = new window.YT.Player('yt-player-b', { ...conf, events: { onReady: e => e.target.mute(), onStateChange: handleStateChange('B') } });
+          ytA.current = new window.YT.Player('yt-player-a', { ...conf, events: { onReady: e => e.target.mute(), onStateChange: handleStateChange('A'), onError: () => onDeckErrorRef.current && onDeckErrorRef.current('A') } });
+          ytB.current = new window.YT.Player('yt-player-b', { ...conf, events: { onReady: e => e.target.mute(), onStateChange: handleStateChange('B'), onError: () => onDeckErrorRef.current && onDeckErrorRef.current('B') } });
         }
       }, []);
 
@@ -8962,18 +9384,120 @@
 
       }, [localCrossfade, localVolume, djState.playA?.isPlaying, djState.playB?.isPlaying, isLocalPaused, isFullyClosedSync]);
 
-      // Sync Loop (1 sec)
+      // Ref สำหรับจัดการกรณีวิดีโอ YouTube โหลดไม่ได้/ปิดการฝัง
+      const onDeckErrorRef = useRef(null);
+
+      // ฟังก์ชันเลื่อนเพลงถัดไปแบบปลอดภัย (ใช้ Transaction กันหลายเครื่องสั่งข้ามเบิ้ลพร้อมกัน)
+      const advanceDjQueue = useCallback(async (fromDeck, withFade = false, expectedKey = null) => {
+         if (isFadingRef.current) return;
+         isFadingRef.current = true;
+         const djRef = db.collection('bma_system').doc('discjam');
+         try {
+            await db.runTransaction(async (tx) => {
+               const doc = await tx.get(djRef);
+               if (!doc.exists) return;
+               const data = doc.data();
+               const isAuto = (data.djMode || 'auto') === 'auto';
+               if (!isAuto) return;
+
+               const liveDeck = fromDeck === 'A' ? data.deckA : data.deckB;
+               const liveKey = liveDeck?.key || liveDeck?.id || null;
+
+               // หากมีเครื่องอื่นสลับเพลงไปแล้ว ให้หยุดทำซ้ำ
+               if (expectedKey && liveKey !== expectedKey) return;
+               if (!expectedKey && (data.playA?.isPlaying || data.playB?.isPlaying)) return;
+
+               // หากกำลัง Crossfade อยู่และยังไม่หมดเวลา ให้ข้าม
+               if (data.fadeCommand && (Date.now() - data.fadeCommand.startTime < (data.fadeCommand.duration || 5000) + 1000)) return;
+
+               const q = data.queue || [];
+               const now = Date.now();
+
+               if (q.length === 0) {
+                  // ไม่มีเพลงต่อในคิว -> เคลียร์ Deck ที่จบแล้ว
+                  if (expectedKey) {
+                     const clearUp = { fadeCommand: null };
+                     if (fromDeck === 'A') {
+                        clearUp.deckA = null;
+                        clearUp.playA = { ...(data.playA || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     } else {
+                        clearUp.deckB = null;
+                        clearUp.playB = { ...(data.playB || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                     }
+                     tx.update(djRef, clearUp);
+                  }
+                  return;
+               }
+
+               const nextSong = q[0];
+               const newQ = q.slice(1);
+               const fadeDurMs = Math.max(1, data.fadeDuration || 5) * 1000;
+               const targetDeck = !expectedKey ? 'A' : (fromDeck === 'A' ? 'B' : 'A');
+
+               if (withFade && expectedKey) {
+                  const up = {
+                     queue: newQ,
+                     fadeCommand: { target: targetDeck, startTime: now, duration: fadeDurMs }
+                  };
+                  if (targetDeck === 'B') {
+                     up.deckB = nextSong;
+                     up.playB = { isPlaying: true, startedAt: now, pausedPos: 0, isLooping: false };
+                  } else {
+                     up.deckA = nextSong;
+                     up.playA = { isPlaying: true, startedAt: now, pausedPos: 0, isLooping: false };
+                  }
+                  tx.update(djRef, up);
+               } else {
+                  const up = {
+                     queue: newQ,
+                     crossfade: targetDeck === 'B' ? 100 : 0,
+                     fadeCommand: null
+                  };
+                  if (targetDeck === 'B') {
+                     up.deckB = nextSong;
+                     up.playB = { isPlaying: true, startedAt: now, pausedPos: 0, isLooping: false };
+                     up.deckA = null;
+                     up.playA = { ...(data.playA || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                  } else {
+                     up.deckA = nextSong;
+                     up.playA = { isPlaying: true, startedAt: now, pausedPos: 0, isLooping: false };
+                     up.deckB = null;
+                     up.playB = { ...(data.playB || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                  }
+                  tx.update(djRef, up);
+               }
+            });
+         } catch (err) {
+            console.warn('Auto advance skipped:', err);
+         } finally {
+            setTimeout(() => { isFadingRef.current = false; }, 1500);
+         }
+      }, []);
+
+      // เมื่อวิดีโอเล่นไม่ได้ (ปิดการฝัง/ถูกลบ) ให้ข้ามเพลงนั้นอัตโนมัติในโหมด Auto DJ
+      useEffect(() => {
+         onDeckErrorRef.current = (deckId) => {
+            const st = djStateRef.current;
+            const isAuto = (st.djMode || 'auto') === 'auto';
+            const deckData = deckId === 'A' ? st.deckA : st.deckB;
+            if (!isAuto || !deckData?.id) return;
+            setTimeout(() => {
+               advanceDjQueue(deckId, false, deckData.key || deckData.id);
+            }, 1500);
+         };
+      }, [advanceDjQueue]);
+
+      // Sync Loop: โหลดเพลงเข้า Deck A / B
       useEffect(() => {
          if (!ytA.current?.loadVideoById || !ytB.current?.loadVideoById) return;
 
          if (isFullyClosedSync) {
             const songDurationMs = 163000;
-            const currentGlobalTime = Date.now();
-            const targetTime = (currentGlobalTime % songDurationMs) / 1000;
+            const targetTime = (Date.now() % songDurationMs) / 1000;
 
             if (loadedIdA.current !== CLOSED_SONG_ID) {
                 loadedIdA.current = CLOSED_SONG_ID;
-                ytA.current.loadVideoById(CLOSED_SONG_ID, targetTime); 
+                ytA.current.loadVideoById(CLOSED_SONG_ID, targetTime);
                 if (ytA.current.setLoop) ytA.current.setLoop(true);
             }
             const cur = ytA.current.getCurrentTime ? ytA.current.getCurrentTime() : 0;
@@ -8997,12 +9521,14 @@
                 if (player.pauseVideo) player.pauseVideo();
                 return;
             }
-            if (loadedRef.current !== deckData.id) {
-                loadedRef.current = deckData.id;
+            const trackUid = deckData.key || deckData.id;
+            if (loadedRef.current !== trackUid) {
+                loadedRef.current = trackUid;
                 const startSec = playData?.startedAt ? Math.max(0, ((Date.now() - playData.startedAt) / 1000) * currentSpeed) : 0;
                 player.loadVideoById({ videoId: deckData.id, startSeconds: startSec });
             }
-            if (playData?.isPlaying && !isLocalPaused) {
+            if (playData?.isPlaying) {
+                if (isLocalPaused && player.mute) player.mute();
                 const st = player.getPlayerState ? player.getPlayerState() : -1;
                 if (st !== 1 && st !== 3) player.playVideo();
                 if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
@@ -9013,12 +9539,15 @@
 
          syncDeckTrack(ytA.current, loadedIdA, djState.deckA, djState.playA);
          syncDeckTrack(ytB.current, loadedIdB, djState.deckB, djState.playB);
-      }, [djState.deckA?.id, djState.deckB?.id, djState.playA?.isPlaying, djState.playB?.isPlaying, djState.speed, isLocalPaused, lateNight, isFullyClosedSync]);
+      }, [djState.deckA?.id, djState.deckA?.key, djState.deckB?.id, djState.deckB?.key, djState.playA?.isPlaying, djState.playB?.isPlaying, djState.speed, isLocalPaused, lateNight, isFullyClosedSync]);
 
+      // Sync Loop (1 sec): อัปเดตเวลา ซิงก์เสียง และเปลี่ยนเพลงถัดไปอัตโนมัติ
       useEffect(() => {
          const syncTimer = setInterval(() => {
-             const canAutoRun = canManageAudio || djState.djMode === 'auto';
-             
+             const isAutoMode = (djState.djMode || 'auto') === 'auto';
+             const canAutoRun = canManageAudio || isAutoMode;
+             const currentSpeed = djState.speed || 1;
+
              if (isFullyClosedSync) {
                  if (!isLocalPaused && ytA.current?.getPlayerState) {
                      const songDurationMs = 163000;
@@ -9028,19 +9557,47 @@
                      const cur = ytA.current.getCurrentTime ? ytA.current.getCurrentTime() : 0;
 
                      if (curId !== CLOSED_SONG_ID) {
-                         if (typeof loadedIdA !== 'undefined') loadedIdA.current = CLOSED_SONG_ID;
+                         loadedIdA.current = CLOSED_SONG_ID;
                          ytA.current.loadVideoById(CLOSED_SONG_ID, targetTime);
                      } else if (state === 0 || state === 2 || state === -1 || state === 5 || Math.abs(targetTime - cur) > 4) {
                          if (ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
                          if (ytA.current.playVideo) {
                              ytA.current.unMute();
-                             // แก้ไขให้ใช้ Ref ป้องกันการดึงค่าระดับเสียงเก่ามาใช้
-                             if (ytA.current.setVolume && typeof localVolumeRef !== 'undefined') {
-                                 ytA.current.setVolume(localVolumeRef.current);
-                             }
+                             if (ytA.current.setVolume) ytA.current.setVolume(localVolumeRef.current);
                              ytA.current.playVideo();
                          }
                      }
+                 }
+                 return;
+             }
+
+             const durA = ytA.current?.getDuration ? ytA.current.getDuration() : 0;
+             const curA = ytA.current?.getCurrentTime ? ytA.current.getCurrentTime() : 0;
+             const durB = ytB.current?.getDuration ? ytB.current.getDuration() : 0;
+             const curB = ytB.current?.getCurrentTime ? ytB.current.getCurrentTime() : 0;
+
+             setTrackTime({
+                 curA: Math.floor(curA), durA: Math.floor(durA),
+                 curB: Math.floor(curB), durB: Math.floor(durB)
+             });
+
+             // 1. ปิดงาน Crossfade เมื่อครบเวลา (กันค่า fadeCommand ค้างหากมีคนปิดหน้าเว็บกลางคัน)
+             if (djState.fadeCommand) {
+                 const fadeElapsed = Date.now() - (djState.fadeCommand.startTime || 0);
+                 const fadeDur = djState.fadeCommand.duration || 5000;
+                 if (canAutoRun && fadeElapsed >= fadeDur + 400 && !isFadingRef.current) {
+                     isFadingRef.current = true;
+                     const target = djState.fadeCommand.target;
+                     const fUp = { fadeCommand: null, crossfade: target === 'B' ? 100 : 0 };
+                     if (target === 'B') {
+                         fUp.playA = { ...(djState.playA || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                         fUp.deckA = null;
+                     } else {
+                         fUp.playB = { ...(djState.playB || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
+                         fUp.deckB = null;
+                     }
+                     updateDjState(fUp);
+                     setTimeout(() => { isFadingRef.current = false; }, 1000);
                  }
                  return;
              }
@@ -9050,91 +9607,79 @@
              if (canAutoRun && !isFadingRef.current) {
                  const activePlayData = isDeckA ? djState.playA : djState.playB;
                  const activeDeckData = isDeckA ? djState.deckA : djState.deckB;
-                 
-                 const durA = ytA.current?.getDuration ? ytA.current.getDuration() : 0;
-                 const curA = ytA.current?.getCurrentTime ? ytA.current.getCurrentTime() : 0;
-                 const durB = ytB.current?.getDuration ? ytB.current.getDuration() : 0;
-                 const curB = ytB.current?.getCurrentTime ? ytB.current.getCurrentTime() : 0;
-                 
-                 setTrackTime({ 
-                     curA: Math.floor(curA), durA: Math.floor(durA), 
-                     curB: Math.floor(curB), durB: Math.floor(durB) 
-                 });
 
                  const stateA = ytA.current?.getPlayerState ? ytA.current.getPlayerState() : -1;
                  const stateB = ytB.current?.getPlayerState ? ytB.current.getPlayerState() : -1;
 
-                 // คำนวณเวลาที่ผ่านไปจริงตามนาฬิกาโลก
+                 const loadedVidA = ytA.current?.getVideoData ? ytA.current.getVideoData()?.video_id : null;
+                 const loadedVidB = ytB.current?.getVideoData ? ytB.current.getVideoData()?.video_id : null;
+
                  const globalExpA = djState.playA?.startedAt ? ((Date.now() - djState.playA.startedAt) / 1000) * currentSpeed : 0;
                  const globalExpB = djState.playB?.startedAt ? ((Date.now() - djState.playB.startedAt) / 1000) * currentSpeed : 0;
-                 
-                 // ตรวจสอบทั้งกรณีที่เพลงจบ หรือเวลาเลยระยะเวลาของเพลงไปแล้ว
-                 const isEndedA = (stateA === 0 || (durA > 0 && durA - curA <= 0.5) || (durA > 0 && globalExpA >= durA + 1)) && djState.deckA?.id;
-                 const isEndedB = (stateB === 0 || (durB > 0 && durB - curB <= 0.5) || (durB > 0 && globalExpB >= durB + 1)) && djState.deckB?.id;
+
+                 // เช็กว่าเพลงตรงกับ video_id ปัจจุบัน และเล่นไปแล้วอย่างน้อย 2 วินาที เพื่อกันสถานะเก่าจากเพลงก่อนหน้า
+                 const isSameA = !!djState.deckA?.id && loadedVidA === djState.deckA.id;
+                 const isSameB = !!djState.deckB?.id && loadedVidB === djState.deckB.id;
+
+                 const isEndedA = isSameA && globalExpA > 2 && (stateA === 0 || (durA > 0 && durA - curA <= 0.6) || (durA > 0 && globalExpA >= durA + 1.5));
+                 const isEndedB = isSameB && globalExpB > 2 && (stateB === 0 || (durB > 0 && durB - curB <= 0.6) || (durB > 0 && globalExpB >= durB + 1.5));
                  const activeIsEnded = isDeckA ? isEndedA : isEndedB;
 
-                 if ((!djState.playA?.isPlaying && !djState.playB?.isPlaying) || activeIsEnded) {
+                 // กรณีทั้ง 2 Deck ว่าง/หยุด แต่ยังมีเพลงรออยู่ในคิว -> ดึงเพลงแรกมาเล่นทันที
+                 if (!djState.playA?.isPlaying && !djState.playB?.isPlaying) {
+                     if (isAutoMode && djState.queue?.length > 0) {
+                         advanceDjQueue(isDeckA ? 'A' : 'B', false, null);
+                         return;
+                     }
+                 } else if (activeIsEnded) {
                      if (activePlayData?.isLooping && activeDeckData?.id) {
                          isFadingRef.current = true;
                          const up = {};
                          if (isDeckA) up.playA = { ...djState.playA, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
                          else up.playB = { ...djState.playB, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
                          updateDjState(up);
-                         setTimeout(() => { isFadingRef.current = false; }, 1000);
+                         setTimeout(() => { isFadingRef.current = false; }, 1200);
                          return;
                      }
-
-                     if (djState.djMode === 'auto' && djState.queue?.length > 0) {
-                         isFadingRef.current = true;
-                         const nextSong = djState.queue[0];
-                         const newQ = djState.queue.slice(1);
-                         const targetIsB = isDeckA;
-                         
-                         const up = { queue: newQ, crossfade: targetIsB ? 100 : 0, fadeCommand: null };
-                         if (targetIsB) { 
-                             up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                             up.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 }; up.deckA = null; 
-                         } else { 
-                             up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
-                             up.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 }; up.deckB = null; 
-                         }
-                         updateDjState(up);
-                         setTimeout(() => { isFadingRef.current = false; }, 1000);
+                     if (isAutoMode) {
+                         advanceDjQueue(isDeckA ? 'A' : 'B', false, activeDeckData?.key || activeDeckData?.id);
                          return;
                      }
                  }
-                 
+
+                 // เคลียร์ Deck รองที่เล่นจบไปแล้ว (กรณีไม่ได้เปิดวนซ้ำ)
                  let cleared = false;
                  const upClear = {};
-                 if (isEndedA && !djState.playA?.isLooping) {
-                     upClear.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                 if (isEndedA && !isDeckA && !djState.playA?.isLooping) {
+                     upClear.playA = { ...(djState.playA || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
                      upClear.deckA = null; cleared = true;
                  }
-                 if (isEndedB && !djState.playB?.isLooping) {
-                     upClear.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 };
+                 if (isEndedB && isDeckA && !djState.playB?.isLooping) {
+                     upClear.playB = { ...(djState.playB || {}), isPlaying: false, startedAt: 0, pausedPos: 0 };
                      upClear.deckB = null; cleared = true;
                  }
-                 
-                 if (cleared) {
-                     updateDjState(upClear);
-                     if (activeIsEnded) return;
-                 }
+                 if (cleared) updateDjState(upClear);
              }
 
-             const syncPlayer = (player, playData, isActive, deckId) => {
-                 if (!player?.getCurrentTime || !playData?.isPlaying) return; 
-                 
-                 const currentSpeed = djState.speed || 1;
-                 const expRaw = ((Date.now() - (playData.startedAt||Date.now())) / 1000) * currentSpeed;
+             const syncPlayer = (player, deckData, playData, isActive, deckId) => {
+                 if (!player?.getCurrentTime || !playData?.isPlaying || !deckData?.id) return;
+
+                 const expRaw = ((Date.now() - (playData.startedAt || Date.now())) / 1000) * currentSpeed;
                  const exp = Math.max(0, expRaw);
                  const cur = player.getCurrentTime();
+                 const dur = player.getDuration ? player.getDuration() : 0;
                  const state = player.getPlayerState ? player.getPlayerState() : -1;
-                 
+                 const loadedVid = player.getVideoData ? player.getVideoData()?.video_id : null;
+
                  if (state === -1 || state === 2 || state === 5) {
                      player.playVideo();
                      if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
+                 } else if (state === 0 && dur > 0 && exp < dur - 2) {
+                     // รองรับกรณีเปิด Loop แล้ววิดีโอจบไปก่อน
+                     player.seekTo(exp, true);
+                     player.playVideo();
                  }
-                 
+
                  if (isLocalPaused) {
                      if (player.isMuted && !player.isMuted()) player.mute();
                  } else {
@@ -9146,58 +9691,39 @@
                          if (player.setVolume) player.setVolume(finalVol);
                      }
                  }
-                 
-                 const dur = player.getDuration ? player.getDuration() : 0;
-                 if (dur > 0 && dur - cur < 2) return;
-                 
-                 if (Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
-                     if (expRaw < 0 && cur < 15) return; 
-                     isSeekingRef.current = true;
-                     player.seekTo(exp, true); player.playVideo();
-                     setTimeout(() => { isSeekingRef.current = false; }, 2000);
+
+                 if (loadedVid !== deckData.id) return;
+
+                 if (dur > 0 && dur - cur >= 2 && Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
+                     if (expRaw >= 0 || cur >= 15) {
+                         isSeekingRef.current = true;
+                         player.seekTo(exp, true);
+                         player.playVideo();
+                         setTimeout(() => { isSeekingRef.current = false; }, 2000);
+                     }
                  }
-                 
-                 if (canAutoRun && isActive && !isFadingRef.current) {
-                     if (dur > 0 && (dur - cur) <= (djState.fadeDuration || 5) * currentSpeed) {
-                         if (playData.isLooping) {
-                             isFadingRef.current = true;
-                             const up = {};
-                             if (deckId === 'A') up.playA = { ...djState.playA, startedAt: Date.now(), pausedPos: 0 };
-                             else up.playB = { ...djState.playB, startedAt: Date.now(), pausedPos: 0 };
-                             updateDjState(up);
-                             setTimeout(() => { isFadingRef.current = false; }, 1500);
-                         } 
-                         else if (djState.djMode === 'auto' && djState.queue?.length > 0) {
-                             isFadingRef.current = true;
-                             const nextSong = djState.queue[0];
-                             const newQ = djState.queue.slice(1);
-                             const fadeDurMs = (djState.fadeDuration || 5) * 1000;
-                             
-                             const up = { queue: newQ, fadeCommand: { target: deckId === 'A' ? 'B' : 'A', startTime: Date.now(), duration: fadeDurMs } };
-                             if (deckId === 'A') { up.deckB = nextSong; up.playB = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; } 
-                             else { up.deckA = nextSong; up.playA = { isPlaying: true, startedAt: Date.now(), pausedPos: 0 }; }
-                             updateDjState(up);
-                             
-                             setTimeout(() => {
-                                 const fUp = { fadeCommand: null, crossfade: deckId === 'A' ? 100 : 0 };
-                                 if (deckId === 'A') {
-                                     fUp.playA = { ...djState.playA, isPlaying: false, startedAt: 0, pausedPos: 0 }; fUp.deckA = null; 
-                                 } else {
-                                     fUp.playB = { ...djState.playB, isPlaying: false, startedAt: 0, pausedPos: 0 }; fUp.deckB = null; 
-                                 }
-                                 updateDjState(fUp);
-                                 isFadingRef.current = false;
-                             }, fadeDurMs + 500);
-                         }
+
+                 // เริ่ม Auto Crossfade เมื่อใกล้จบเพลง
+                 const fadeSec = Math.max(1, djState.fadeDuration || 5);
+                 if (canAutoRun && isActive && !isFadingRef.current && exp > 3 && dur > fadeSec + 2 && (dur - cur) <= fadeSec * currentSpeed) {
+                     if (playData.isLooping) {
+                         isFadingRef.current = true;
+                         const up = {};
+                         if (deckId === 'A') up.playA = { ...djState.playA, startedAt: Date.now(), pausedPos: 0 };
+                         else up.playB = { ...djState.playB, startedAt: Date.now(), pausedPos: 0 };
+                         updateDjState(up);
+                         setTimeout(() => { isFadingRef.current = false; }, 1500);
+                     } else if (isAutoMode && djState.queue?.length > 0) {
+                         advanceDjQueue(deckId, true, deckData.key || deckData.id);
                      }
                  }
              };
 
-             syncPlayer(ytA.current, djState.playA, isDeckA, 'A');
-             syncPlayer(ytB.current, djState.playB, !isDeckA, 'B');
-         }, 1000); 
+             syncPlayer(ytA.current, djState.deckA, djState.playA, isDeckA, 'A');
+             syncPlayer(ytB.current, djState.deckB, djState.playB, !isDeckA, 'B');
+         }, 1000);
          return () => clearInterval(syncTimer);
-      }, [djState, isLocalPaused, canManageAudio, isFullyClosedSync]);
+      }, [djState, isLocalPaused, canManageAudio, isFullyClosedSync, advanceDjQueue]);
 
       const handleAddTrack = (songObj) => {
          if (!djState.deckA?.id && !djState.deckB?.id) {
@@ -9760,6 +10286,27 @@
         setCurrentView('chat');
       };
 
+      const resetGuestPracticeGame = (gIdx) => {
+        if (currentUser || gIdx === null) return;
+        const prefixMap = {
+          0: ['bma_sudoku_v2_'],
+          1: ['bma_ms_mines_', 'bma_ms_grid_', 'bma_ms_rev_', 'bma_ms_flag_'],
+          2: ['bma_fg_rds_', 'bma_fg_curr_', 'bma_fg_wrong_'],
+          3: ['bma_sol_', 'bma_sol_init_'],
+          4: ['bma_wdl_g_', 'bma_wdl_c_'],
+          5: ['bma_snake_s_', 'bma_snake_f_', 'bma_snake_d_', 'bma_snake_nd_', 'bma_snake_go_', 'bma_snake_sc_'],
+          6: ['bma_2048_b_', 'bma_2048_s_', 'bma_2048_m_', 'bma_2048_max_', 'bma_2048_f_', 'bma_2048_r_'],
+          7: ['bma_24_n_'],
+          8: ['bma_res_t_', 'bma_res_tol_', 'bma_res_c_', 'bma_res_exp_', 'bma_res_l_']
+        };
+        (prefixMap[gIdx] || []).forEach(p => localStorage.removeItem(p + todayStr));
+        setGameAppSt(prev => {
+          const next = { ...prev };
+          delete next[gIdx];
+          return next;
+        });
+      };
+
       if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
@@ -9842,7 +10389,7 @@
           {zoomImg && <div onClick={() => setZoomImg(null)} className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"><img src={zoomImg} alt="" className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl" /><button className="fixed top-5 right-5 w-10 h-10 rounded-full card font-bold">✕</button></div>}
 
           <div className="fixed top-16 right-4 z-40 space-y-2 w-80 pointer-events-none">
-            {toasts.map((t) => <div key={t.id} onClick={() => { setNotifOpen(false); if (t.targetPostId) jumpToPost(t.targetPostId); else if (t.targetRoomType) { setActiveRoom({ type: t.targetRoomType, id: t.targetRoomId }); setCurrentView('chat'); } setToasts((p) => p.filter((x) => x.id !== t.id)); }} className="pointer-events-auto cursor-pointer bg-[#0F2547] border-2 border-white/80 rounded-2xl p-3 shadow-2xl text-xs"><div className="flex justify-between font-bold text-amber-300"><span>{t.title}</span><span>{getTimeStr(t)}</span></div><p className="line-clamp-2 mt-0.5">{t.body}</p></div>)}
+            {toasts.map((t) => <div key={t.id} onClick={() => { setNotifOpen(false); if (t.targetPostId) jumpToPost(t.targetPostId); else if (t.targetRoomType) { setActiveRoom({ type: t.targetRoomType, id: t.targetRoomId }); setCurrentView('chat'); } else if (t.targetView) { setCurrentView(t.targetView); } setToasts((p) => p.filter((x) => x.id !== t.id)); }} className="pointer-events-auto cursor-pointer bg-[#0F2547] border-2 border-white/80 rounded-2xl p-3 shadow-2xl text-xs"><div className="flex justify-between font-bold text-amber-300"><span>{t.title}</span><span>{getTimeStr(t)}</span></div><p className="line-clamp-2 mt-0.5">{t.body}</p></div>)}
           </div>
 
           {/* HEADER NAV */}
@@ -9870,12 +10417,27 @@
 		  ['daily_game', <i className="fas fa-gamepad"></i>, 'Daily Game'], 
 		  ['discjam', <i className="fas fa-compact-disc"></i>, 'Disc Jam'], 
 		  ['tools', <i className="fas fa-tools"></i>, 'Tools']
-		].map(([v, icon, l]) => 
-		  <button id={'nav-' + v} key={v} onClick={() => (v === 'chat' || v === 'daily_game') && !currentUser ? setCurrentView('login') : setCurrentView(v)} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === v ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
-                      <span className="text-sm sm:text-base shrink-0">{icon}</span>
-                      <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>{l}</span>
-                  </button>
-                )}
+		].map(([v, icon, l]) => {
+                  const isLocked = !currentUser && v === 'chat';
+                  return (
+                    <button
+                      id={'nav-' + v}
+                      key={v}
+                      onClick={() => isLocked ? openGuestPrompt('ห้องแชตและแชตเกมสงวนสิทธิ์สำหรับสมาชิกสมาคมเท่านั้น') : setCurrentView(v)}
+                      className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === v ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : isLocked ? 'text-slate-500 hover:text-slate-300 hover:bg-[#0F2547]/60' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}
+                      title={isLocked ? `${l} (เฉพาะสมาชิก)` : l}
+                    >
+                      <span className="text-sm sm:text-base shrink-0 relative">
+                        {icon}
+                        {isLocked && <i className="fas fa-lock text-[8px] text-amber-400/90 absolute -top-1 -right-1.5"></i>}
+                      </span>
+                      <span className={`hidden md:flex overflow-hidden transition-all duration-300 items-center ${currentView === v ? 'max-w-[150px] opacity-100 ml-1.5' : 'max-w-0 opacity-0 group-hover:max-w-[150px] group-hover:opacity-100 group-hover:ml-1.5'}`}>
+                        {l}
+                        {isLocked && <i className="fas fa-lock text-[9px] text-amber-400/80 ml-1.5"></i>}
+                      </span>
+                    </button>
+                  );
+                })}
                 {currentUser?.role === 'admin' && (
 		    <button id="nav-admin" onClick={() => setCurrentView('admin')} className={`group relative z-10 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 flex items-center shrink-0 ${currentView === 'admin' ? 'text-[#050811] bg-white shadow-md md:bg-transparent md:shadow-none' : 'text-slate-300 hover:text-white hover:bg-[#0F2547]'}`}>
 		        <span className="text-sm sm:text-base shrink-0"><i className="fas fa-crown"></i></span>
@@ -9922,6 +10484,31 @@
               </div>
             </div>
           </header>
+
+          {/* Guest Mode Banner */}
+          {!currentUser && currentView !== 'login' && showGuestBar && (
+            <div className="bg-gradient-to-r from-[#0B162C] via-[#0F2547] to-[#0B162C] border-b border-sky-500/30 px-3 sm:px-4 py-1.5 text-[11px] shrink-0 z-30">
+              <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sky-100 min-w-0">
+                  <span className="px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-300 font-bold text-[10px] shrink-0">
+                    <i className="fas fa-user-astronaut mr-1"></i> Guest Mode
+                  </span>
+                  <span className="truncate text-slate-300 hidden sm:inline">คุณกำลังเข้าชมในฐานะผู้มาเยือน — ใช้ Tools, ฟัง Disc Jam และทดลองเล่น Daily Games ได้ฟรี</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+                  <button onClick={() => setShowGuestGuide(true)} className="px-2.5 py-1 rounded-lg bg-[#050811] border border-[#1E3A5F] text-sky-300 hover:text-white hover:border-sky-400 font-bold transition-colors">
+                    <i className="fas fa-info-circle mr-1"></i> คู่มือผู้มาเยือน
+                  </button>
+                  <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="px-2.5 py-1 rounded-lg bg-white text-[#050811] font-bold hover:bg-sky-200 transition-colors">
+                    เข้าสู่ระบบ
+                  </button>
+                  <button onClick={() => setShowGuestBar(false)} className="text-slate-400 hover:text-white px-1" title="ซ่อนแถบนี้">
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="hidden">
              <div id="yt-player-a"></div>
@@ -9988,7 +10575,9 @@
             <div className="animate-view relative flex-1 flex flex-col items-center py-8 px-4 overflow-y-auto no-scrollbar">
               <div className="text-center space-y-1 z-10 shrink-0">
                 <h2 className="text-2xl md:text-3xl font-bold uppercase">The Blue Moon Association</h2>
-                <p className="text-xs text-slate-300">คลิกดาวบริวารเพื่อดูโปรไฟล์และส่งข้อความ หรือเข้าสู่กระดานโพสต์</p>
+                <p className="text-xs text-slate-300">
+                  {currentUser ? 'คลิกดาวบริวารเพื่อดูโปรไฟล์และส่งข้อความ หรือเข้าสู่กระดานโพสต์' : `ขณะนี้มีดาวบริวารในวงโคจรทั้งหมด ${activeMembers.length} ดวง • เข้าสู่ระบบเพื่อดูโปรไฟล์สมาชิก`}
+                </p>
               </div>
               
               <div className="relative w-full max-w-[760px] h-[700px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
@@ -9997,24 +10586,43 @@
                   <div key={ri} className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc} style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}>
                     {ring.items.map((m, mi) => {
                       const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
-                      return <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}><button onClick={() => {
-                          if (IS_HALLOWEEN && m.id === cursedUserId) {
-                              setScareTriggered(true);
-                              setTimeout(() => setScareTriggered(false), 1200);
-                              const mems = activeMembers.filter(x => x.id !== m.id);
-                              setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null); 
-                          } else {
-                              setMemberModal(m);
-                          }
-                      }} className="flex flex-col items-center"><Avatar user={m} size="md" showStatus={true} /><div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div></button></div>;
+                      return (
+                        <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}>
+                          {currentUser ? (
+                            <button onClick={() => {
+                              if (IS_HALLOWEEN && m.id === cursedUserId) {
+                                setScareTriggered(true);
+                                setTimeout(() => setScareTriggered(false), 1200);
+                                const mems = activeMembers.filter(x => x.id !== m.id);
+                                setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null);
+                              } else {
+                                setMemberModal(m);
+                              }
+                            }} className="flex flex-col items-center">
+                              <Avatar user={m} size="md" showStatus={true} />
+                              <div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">{m.displayName}</div>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อดูโปรไฟล์ดาวบริวารในวงโคจร')}
+                              title="สมาชิกสมาคม (เข้าสู่ระบบเพื่อดูโปรไฟล์)"
+                              className="w-5 h-5 rounded-full bg-gradient-to-br from-sky-300 to-blue-700 border border-white/60 shadow-[0_0_12px_rgba(96,165,250,0.8)] hover:scale-125 transition-transform flex items-center justify-center"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/90"></span>
+                            </button>
+                          )}
+                        </div>
+                      );
                     })}
                   </div>
                 ))}
               </div>
               
-              <div className="flex gap-3 w-full max-w-md justify-center z-10 shrink-0">
+              <div className="flex flex-wrap gap-3 w-full max-w-md justify-center z-10 shrink-0">
                 <button onClick={() => setCurrentView('feed')} className="flex-1 py-3 btn-b text-xs shadow-lg hover:scale-105 transition-transform">📖 กระดานโพสต์</button>
-                <button onClick={() => currentUser ? setCurrentView('daily_game') : setCurrentView('login')} className="flex-1 py-3 btn-w text-xs shadow-lg hover:scale-105 transition-transform">{currentUser ? '🎮 ท้าดวล Daily Game' : '🔑 เข้าสู่ระบบ'}</button>
+                <button onClick={() => setCurrentView('daily_game')} className="flex-1 py-3 btn-w text-xs shadow-lg hover:scale-105 transition-transform">
+                  {currentUser ? '🎮 ท้าดวล Daily Game' : '🎮 ทดลองเล่น Daily Game'}
+                </button>
               </div>
 
               <div className="z-10 mt-16 mb-8 w-full max-w-3xl bg-[#0B1325]/80 backdrop-blur-sm border border-[#1E3A5F] rounded-2xl p-6 sm:p-8 text-xs text-slate-300 leading-relaxed shadow-2xl shrink-0 text-left">
@@ -10074,9 +10682,30 @@
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                 {activeMembers.filter((u) => dirTag === 'ALL' || getTags(u).includes(dirTag)).map((m) => (
-                  <div key={m.id} onClick={() => setMemberModal(m)} className="cursor-pointer card hover:border-white/50 overflow-hidden">
-                    <div className="bg-[#0F2547] px-4 py-2.5 border-b border-[#1E3A5F] flex justify-between items-center"><div className="flex items-center gap-1.5"><span className={`font-mono text-xs font-bold ${m.id.startsWith('F') ? 'text-[#38BDF8]' : 'text-white'}`}>{m.id}</span><RoleBadge role={m.role} /></div><TagBadges user={m} /></div>
-                    <div className="p-4 flex items-start gap-3"><Avatar user={m} size="lg" showStatus={true} /><div className="min-w-0 flex-1"><h3 className="text-sm font-bold truncate">{m.displayName}</h3><p className="text-xs font-mono text-slate-400">@{m.username}</p><p className="text-xs text-slate-200 mt-1.5 bg-[#050811] p-2 rounded-xl border border-[#1E3A5F] line-clamp-2">{m.bio}</p></div></div>
+                  <div key={m.id} onClick={() => openMemberProfile(m)} className={`card overflow-hidden transition-colors ${currentUser ? 'cursor-pointer hover:border-white/50' : 'cursor-pointer hover:border-sky-500/40'}`}>
+                    <div className="bg-[#0F2547] px-4 py-2.5 border-b border-[#1E3A5F] flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-mono text-xs font-bold ${m.id.startsWith('F') ? 'text-[#38BDF8]' : 'text-white'}`}>{m.id}</span>
+                        <RoleBadge role={m.role} />
+                      </div>
+                      <TagBadges user={m} />
+                    </div>
+                    <div className="p-4 flex items-center gap-3">
+                      <Avatar user={m} size={currentUser ? 'lg' : 'md'} showStatus={!!currentUser} />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-bold truncate">{m.displayName}</h3>
+                        {currentUser ? (
+                          <>
+                            <p className="text-xs font-mono text-slate-400">@{m.username}</p>
+                            <p className="text-xs text-slate-200 mt-1.5 bg-[#050811] p-2 rounded-xl border border-[#1E3A5F] line-clamp-2">{m.bio}</p>
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                            <i className="fas fa-lock text-[9px]"></i> สงวนรายละเอียดโปรไฟล์สำหรับสมาชิก
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -11190,7 +11819,7 @@
               fmtTime={fmtTime}
               todayStr={todayStr}
               onSelectGame={(idx) => setActiveGameTab(idx)}
-              setMemberModal={setMemberModal}
+              setMemberModal={openMemberProfile}
             />
           )}
 
@@ -11383,7 +12012,7 @@
 
                                 <div className="text-[11px] text-slate-400 bg-[#0B1325] border border-[#1E3A5F] px-3.5 py-2 rounded-xl flex items-center gap-2">
                                   <i className="fas fa-clock text-amber-400"></i>
-                                  <span>จำกัดสิทธิ์วันละ 1 รอบ • รีเซ็ตกระดานใหม่เวลา 06:00 น.</span>
+                                  <span>{currentUser ? 'จำกัดสิทธิ์วันละ 1 รอบ • รีเซ็ตกระดานใหม่เวลา 06:00 น.' : 'โหมดทดลองเล่น (Guest): ไม่บันทึกสถิติขึ้นกระดานอันดับ และสามารถกดเล่นใหม่ได้'}</span>
                                 </div>
                               </div>
                             ) : currGameSt.isPaused ? (
@@ -11424,6 +12053,13 @@
                                     <button onClick={() => setGameAppSt(p => ({ ...p, [activeGameTab]: { ...p[activeGameTab], showModal: true } }))} className="btn-b text-[11px] py-1 px-2.5">ดูใบสรุปผล</button>
                                   </div>
                                 )}
+
+				{!currentUser && (
+				  <button onClick={() => resetGuestPracticeGame(activeGameTab)} className="btn-w text-[11px] py-1 px-2.5">
+				    <i className="fas fa-redo mr-1"></i>ลองใหม่
+				  </button>
+				)}
+
                               </>
                             )}
                           </div>
@@ -11517,17 +12153,21 @@
                                           </div>
                                         </div>
 
-                                        {myRank ? (
-                                          <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 flex items-center gap-1 ${rankBadgeStyle}`}>
-                                            <i className={myRank === 1 ? 'fas fa-crown' : 'fas fa-medal'}></i>
-                                            Rank #{myRank}
-                                          </span>
-                                        ) : (
-                                          <span className="px-2.5 py-1 rounded-full bg-red-950/70 border border-red-500/40 text-red-300 text-[10px] font-bold shrink-0">
-                                            <i className={isBomb ? 'fas fa-bomb mr-1' : 'fas fa-times-circle mr-1'}></i>
-                                            {isBomb ? 'Bomb' : 'ไม่ผ่าน'}
-                                          </span>
-                                        )}
+                                        {!currentUser ? (
+					  <span className="px-2.5 py-1 rounded-full bg-sky-950/80 border border-sky-400/50 text-sky-300 text-[10px] font-bold uppercase tracking-wider shrink-0">
+					    <i className="fas fa-flask mr-1"></i> Practice
+					  </span>
+					) : myRank ? (
+					  <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold font-mono uppercase tracking-wider shrink-0 flex items-center gap-1 ${rankBadgeStyle}`}>
+					    <i className={myRank === 1 ? 'fas fa-crown' : 'fas fa-medal'}></i>
+					    Rank #{myRank}
+					  </span>
+					) : (
+					  <span className="px-2.5 py-1 rounded-full bg-red-950/70 border border-red-500/40 text-red-300 text-[10px] font-bold shrink-0">
+					    <i className={isBomb ? 'fas fa-bomb mr-1' : 'fas fa-times-circle mr-1'}></i>
+					    {isBomb ? 'Bomb' : 'ไม่ผ่าน'}
+					  </span>
+					)}
                                       </div>
 
                                       {/* Primary Stat Box */}
@@ -11565,37 +12205,60 @@
                                     </div>
                                   </div>
 
-                                  {/* Share Actions */}
-                                  <div className="space-y-2.5">
-                                    <button onClick={shareGameResult} className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] transition-transform">
-                                      <i className="fas fa-clipboard-list"></i> แชร์สถิติลงกระดานโพสต์ (Board)
-                                    </button>
+                                  {/* Share Actions / Guest Practice Actions */}
+                             {currentUser ? (
+                               <div className="space-y-2.5">
+                                 <button onClick={shareGameResult} className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] transition-transform">
+                                   <i className="fas fa-clipboard-list"></i> แชร์สถิติลงกระดานโพสต์ (Board)
+                                 </button>
 
-                                    <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
-                                      <div className="text-[10px] font-bold text-sky-300 flex items-center gap-1.5">
-                                        <i className="fas fa-comments"></i> ส่งท้าดวลเข้าห้องแชตโดยตรง
-                                      </div>
-                                      <div className="flex gap-2">
-                                        <select
-                                          value={shareChatRoom}
-                                          onChange={(e) => setShareChatRoom(e.target.value)}
-                                          className="flex-1 inp py-1.5 text-xs bg-[#0B1325]"
-                                        >
-                                          {shareableRooms.map(r => (
-                                            <option key={r.id} value={r.id}>{r.label}</option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          onClick={() => shareGameToChat(shareChatRoom)}
-                                          className="btn-b py-1.5 px-3.5 text-xs whitespace-nowrap hover:bg-sky-600 transition-colors flex items-center gap-1.5"
-                                        >
-                                          <i className="fas fa-paper-plane"></i> ส่งแชต
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </Modal>
+                                 <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2">
+                                   <div className="text-[10px] font-bold text-sky-300 flex items-center gap-1.5">
+                                     <i className="fas fa-comments"></i> ส่งท้าดวลเข้าห้องแชตโดยตรง
+                                   </div>
+                                   <div className="flex gap-2">
+                                     <select
+                                       value={shareChatRoom}
+                                       onChange={(e) => setShareChatRoom(e.target.value)}
+                                       className="flex-1 inp py-1.5 text-xs bg-[#0B1325]"
+                                     >
+                                       {shareableRooms.map(r => (
+                                         <option key={r.id} value={r.id}>{r.label}</option>
+                                       ))}
+                                     </select>
+                                     <button
+                                       onClick={() => shareGameToChat(shareChatRoom)}
+                                       className="btn-b py-1.5 px-3.5 text-xs whitespace-nowrap hover:bg-sky-600 transition-colors flex items-center gap-1.5"
+                                     >
+                                       <i className="fas fa-paper-plane"></i> ส่งแชต
+                                     </button>
+                                   </div>
+                                 </div>
+                               </div>
+                             ) : (
+                               <div className="space-y-2">
+                                 <div className="p-2.5 rounded-xl bg-sky-950/30 border border-sky-500/30 text-center text-[11px] text-sky-200">
+                                   โหมดทดลองเล่น: สถิตินี้ไม่ได้ถูกบันทึกขึ้น Leaderboard
+                                 </div>
+                                 <div className="flex gap-2">
+                                   <button
+                                     onClick={() => resetGuestPracticeGame(activeGameTab)}
+                                     className="flex-1 btn-b py-2.5 text-xs flex items-center justify-center gap-1.5 hover:bg-sky-600"
+                                   >
+                                     <i className="fas fa-redo"></i> ลองเล่นใหม่
+                                   </button>
+                                   <button
+                                     onClick={() => {
+                                       setGameAppSt(p => ({ ...p, [activeGameTab]: { ...p[activeGameTab], showModal: false } }));
+                                       openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อบันทึกสถิติขึ้นกระดานอันดับและแชร์ท้าดวลเพื่อนในสมาคม');
+                                     }}
+                                     className="flex-1 btn-w py-2.5 text-xs flex items-center justify-center gap-1.5"
+                                   >
+                                     <i className="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
+                                   </button>
+                                 </div>
+                               </div>
+                             )}
                             );
                           })()}
                         </div>
@@ -11710,7 +12373,7 @@
                                         {rec && u ? (
                                           <button
                                             type="button"
-                                            onClick={() => setMemberModal && setMemberModal(u)}
+                                            onClick={() => openMemberProfile(u)}
                                             className="flex flex-col items-center group mb-2 w-full"
                                           >
                                             {crown && <i className="fas fa-crown text-amber-400 text-xs mb-1 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]"></i>}
@@ -11753,7 +12416,7 @@
                                   return (
                                     <div
                                       key={s.userId}
-                                      onClick={() => setMemberModal && setMemberModal(u)}
+                                      onClick={() => openMemberProfile(u)}
                                       className={`flex justify-between items-center p-2.5 rounded-xl border cursor-pointer transition-colors ${isMe ? 'bg-sky-950/40 border-sky-500/60' : 'bg-[#050811] border-[#1E3A5F] hover:border-slate-500'}`}
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
@@ -11783,7 +12446,7 @@
                                   return (
                                     <div
                                       key={s.userId}
-                                      onClick={() => setMemberModal && setMemberModal(u)}
+                                      onClick={() => openMemberProfile(u)}
                                       className="flex justify-between items-center p-2 rounded-xl border bg-red-950/15 border-red-900/30 cursor-pointer hover:border-red-500/40 transition-colors"
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
@@ -11835,6 +12498,22 @@
                               <i className="fas fa-play-circle text-sky-400 mr-1.5"></i>เคลียร์เกมนี้เพื่อขึ้นกระดานอันดับ
                             </div>
                           )}
+                        </div>
+                      )}
+
+		      {!currentUser && (
+                        <div className="p-3 border-t border-[#1E3A5F] bg-[#050811] shrink-0">
+                          <div className="p-2.5 rounded-xl bg-[#0B1325] border border-sky-500/30 space-y-2 text-center">
+                            <div className="text-[11px] text-slate-300">
+                              <i className="fas fa-flask text-sky-400 mr-1"></i> โหมดทดลองเล่นสำหรับ Guest
+                            </div>
+                            <button
+                              onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อบันทึกอันดับของคุณลงในตารางคะแนน')}
+                              className="w-full btn-w py-1.5 text-[11px]"
+                            >
+                              เข้าสู่ระบบเพื่อร่วมจัดอันดับ
+                            </button>
+                          </div>
                         </div>
                       )}
                     </>
@@ -12090,7 +12769,7 @@
                                       return (
                                           <button 
                                               key={tool.id} 
-                                              onClick={() => setActiveTool(tool.id)}
+                                              onClick={() => openTool(tool.id)}
                                               className={`card p-4 flex flex-col items-start text-left hover:bg-[#0F2547] border border-[#1E3A5F] hover:${catStyle.borderClass} transition-all group`}
                                           >
                                               <div className="flex items-center gap-3 mb-2 w-full">
@@ -12117,18 +12796,33 @@
                               </div>
                           </>
                       ) : (
-                          <div className="flex flex-col h-full min-h-0 space-y-4">
-                              <div className="flex items-center gap-3 shrink-0 bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F] shadow-md">
-                                  <button 
-                                      onClick={() => setActiveTool(null)}
-                                      className="btn-d px-4 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-white hover:text-[#050811] transition-colors"
+                          <div className="flex items-center justify-between gap-3 shrink-0 bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F] shadow-md">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                      <button 
+                                          onClick={() => openTool(null)}
+                                          className="btn-d px-3 sm:px-4 py-1.5 text-xs font-bold flex items-center gap-1.5 hover:bg-white hover:text-[#050811] transition-colors shrink-0"
+                                      >
+                                          ◀ <span className="hidden sm:inline">กลับหน้าเมนู</span>
+                                      </button>
+                                      <h2 className="text-sm sm:text-lg font-bold text-sky-300 flex items-center gap-2 border-l border-[#1E3A5F] pl-3 truncate">
+                                          <span>{TOOLS.find(t => t.id === activeTool)?.icon}</span>
+                                          <span className="truncate">{TOOLS.find(t => t.id === activeTool)?.name || activeTool}</span>
+                                      </h2>
+                                  </div>
+
+                                  <button
+                                      onClick={() => {
+                                          const toolUrl = `${window.location.origin}${window.location.pathname}?tool=${activeTool}`;
+                                          navigator.clipboard.writeText(toolUrl);
+                                          setToolLinkCopied(true);
+                                          setTimeout(() => setToolLinkCopied(false), 2000);
+                                      }}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shrink-0 ${toolLinkCopied ? 'bg-emerald-500 text-[#050811] border-emerald-400' : 'bg-[#050811] text-sky-300 border-[#1E3A5F] hover:border-sky-400 hover:text-white'}`}
+                                      title="คัดลอกลิงก์ตรงไปยังเครื่องมือนี้"
                                   >
-                                      ◀ กลับหน้าเมนู
+                                      <i className={`fas ${toolLinkCopied ? 'fa-check' : 'fa-link'}`}></i>
+                                      <span className="hidden sm:inline">{toolLinkCopied ? 'คัดลอกลิงก์แล้ว' : 'แชร์ลิงก์เครื่องมือ'}</span>
                                   </button>
-                                  <h2 className="text-base sm:text-lg font-bold text-sky-300 flex items-center gap-2 border-l border-[#1E3A5F] pl-3">
-                                      {TOOLS.find(t => t.id === activeTool)?.icon} 
-                                      {TOOLS.find(t => t.id === activeTool)?.name}
-                                  </h2>
                               </div>
 
                               <div className="flex-1 w-full card p-4 sm:p-6 overflow-y-auto bg-[#050811]/50 shadow-inner">
@@ -12251,7 +12945,7 @@
                         {(() => {
                             // คำนวณความนิยมจากจำนวนโพสต์ ไลก์ และคอมเมนต์
                             const counts = {};
-                            posts.forEach(p => {
+                            posts.filter(p => currentUser || p.isGuestAllowed).forEach(p => {
                                 (p.tags || []).forEach(t => { 
                                     counts[t] = (counts[t] || 0) + 1 + (p.likes?.length || 0) + (p.comments?.length || 0); 
                                 });
@@ -12265,6 +12959,25 @@
                             ));
                         })()}
                     </div>
+                  </div>
+                )}
+		{/* ปุ่มส่งข้อเสนอแนะสำหรับ Guest ในแถบข้างซ้ายหน้า Board */}
+                {!currentUser && (currentView === 'feed' || currentView === 'bookmarks') && (
+                  <div className="card p-4 text-xs border-sky-500/40 bg-gradient-to-br from-[#0B1325] to-[#070C18] space-y-2.5 shadow-lg">
+                    <div className="font-bold text-sky-300 flex items-center gap-2">
+                      <i className="fas fa-comment-dots text-amber-400"></i>
+                      <span>ฝากข้อความถึงสมาคม</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      อยากได้เครื่องมือเพิ่ม เจอบั๊ก หรือมีไอเดียแนะนำ ส่งตรงถึงเจ้าของสมาคมได้เลย
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setFbErr(''); setFbSuccess(false); setGuestFbOpen(true); setBoardMenuOpen(false); }}
+                      className="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors shadow flex items-center justify-center gap-2"
+                    >
+                      <i className="fas fa-paper-plane text-[11px]"></i> ส่ง Guest Feedback
+                    </button>
                   </div>
                 )}
               </aside>
@@ -12281,6 +12994,8 @@
                 {/* ใช้งานคอมโพเนนต์ที่แยกออกมา */}
                 {currentView === 'admin' && currentUser?.role === 'admin' ? (
   		  <OwnerPage 
+		    guestStats={guestStats}
+                    guestFeedbacks={guestFeedbacks}
 		    users={users} 
 		    posts={posts} 
 		    chatMessages={chatMessages} 
@@ -12289,7 +13004,7 @@
 		    allTags={allTags} 
 		    db={db} 
 		    getTags={getTags} 
-		    setMemberModal={setMemberModal} 
+		    setMemberModal={openMemberProfile} 
 		  />
 		) : (
 		  <BoardPage 
@@ -12411,7 +13126,7 @@
             </Modal>
           )}
 
-          {memberModal && (
+          {memberModal && currentUser && (
             <Modal title="โปรไฟล์สมาชิก" onClose={() => setMemberModal(null)}>
               <div className="flex flex-col items-center text-center space-y-3">
                 <Avatar user={memberModal} size="xl" showStatus={true} />
@@ -12723,6 +13438,148 @@
                     </button>
                 </div>
               </form>
+            </Modal>
+          )}
+
+	  {/* Smooth Guest Auth Prompt Modal */}
+          {guestPrompt && (
+            <Modal title="พื้นที่เฉพาะสมาชิกสมาคม" onClose={() => setGuestPrompt(null)} maxW="max-w-sm">
+              <div className="space-y-4 text-center text-xs">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-sky-500/15 border border-sky-400/40 text-sky-400 flex items-center justify-center text-2xl">
+                  <i className="fas fa-lock"></i>
+                </div>
+                <p className="text-slate-200 text-sm leading-relaxed">{guestPrompt}</p>
+                <div className="space-y-2 pt-2">
+                  <button
+                    onClick={() => { setGuestPrompt(null); setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }}
+                    className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2"
+                  >
+                    <i className="fas fa-sign-in-alt"></i> เข้าสู่ระบบสมาชิก
+                  </button>
+                  <button
+                    onClick={() => { setGuestPrompt(null); setAuthMode('activate'); setAuthErr(''); changeViewWithTransition('login'); }}
+                    className="w-full btn-b py-2.5 text-xs border-sky-500/40 text-sky-200 hover:bg-sky-600 hover:text-white flex items-center justify-center gap-2"
+                  >
+                    <i className="fas fa-id-card"></i> มีรหัส MXXX / FXXX แล้ว? เปิดใช้งานเลย
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
+
+          {/* Guest Quick Guide Modal */}
+          {showGuestGuide && (
+            <Modal title="คู่มือการใช้งานสำหรับผู้มาเยือน (Guest)" onClose={() => setShowGuestGuide(false)} maxW="max-w-md">
+              <div className="space-y-3 text-xs text-slate-300">
+                <p className="text-slate-400 leading-relaxed">ยินดีต้อนรับสู่ <strong className="text-white">The Blue Moon Association</strong> ในโหมดผู้มาเยือน คุณสามารถใช้งานส่วนต่างๆ ได้ดังนี้:</p>
+                <div className="space-y-2">
+                  <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-start gap-3">
+                    <i className="fas fa-tools text-sky-400 text-base mt-0.5 w-5 text-center"></i>
+                    <div><strong className="text-white block">Association Tools</strong>ใช้งานเครื่องมือคำนวณ วิศวะ ดนตรี และสาธารณูปโภคทั้งหมดได้ฟรี</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-start gap-3">
+                    <i className="fas fa-gamepad text-emerald-400 text-base mt-0.5 w-5 text-center"></i>
+                    <div><strong className="text-white block">Daily Games (โหมดทดลองเล่น)</strong>ลองเล่นมินิเกมประจำวันได้ทั้ง 9 เกม (ไม่บันทึกสถิติขึ้นกระดานอันดับ)</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-start gap-3">
+                    <i className="fas fa-compact-disc text-fuchsia-400 text-base mt-0.5 w-5 text-center"></i>
+                    <div><strong className="text-white block">Disc Jam Radio</strong>ร่วมรับฟังวิทยุของสมาคมแบบเรียลไทม์ไปพร้อมกับทุกคน</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-start gap-3">
+                    <i className="fas fa-clipboard-list text-amber-400 text-base mt-0.5 w-5 text-center"></i>
+                    <div><strong className="text-white block">Board & Feedback</strong>อ่านโพสต์สาธารณะ และส่งข้อเสนอแนะถึงสมาคมได้จากแถบด้านซ้ายของหน้า Board</div>
+                  </div>
+                </div>
+                <button onClick={() => setShowGuestGuide(false)} className="w-full btn-w py-2.5 text-xs mt-2">เริ่มใช้งานเลย</button>
+              </div>
+            </Modal>
+          )}
+
+          {/* Guest Feedback Modal */}
+          {guestFbOpen && (
+            <Modal title="ส่งข้อเสนอแนะถึงสมาคม (Guest Feedback)" onClose={() => setGuestFbOpen(false)} maxW="max-w-md">
+              {fbSuccess ? (
+                <div className="text-center space-y-4 py-4 text-xs">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-2xl">
+                    <i className="fas fa-check-circle"></i>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-base font-bold text-white">ส่งข้อความเรียบร้อยแล้ว!</h4>
+                    <p className="text-slate-400">ขอบคุณสำหรับข้อเสนอแนะ ข้อความของคุณถูกส่งตรงไปยังหน้า Owner แล้วครับ</p>
+                  </div>
+                  <button onClick={() => setGuestFbOpen(false)} className="w-full btn-w py-2.5 text-xs">ปิดหน้าต่าง</button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendGuestFeedback} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-bold mb-1.5">หัวข้อที่ต้องการแจ้ง</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'request_tool', label: 'ขอเครื่องมือใหม่', icon: 'fas fa-tools' },
+                        { id: 'bug', label: 'แจ้งปัญหา / บั๊ก', icon: 'fas fa-bug' },
+                        { id: 'suggestion', label: 'เสนอแนะทั่วไป', icon: 'fas fa-lightbulb' },
+                        { id: 'other', label: 'อื่นๆ / ทักทาย', icon: 'fas fa-comment' }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setFbCategory(opt.id)}
+                          className={`p-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${fbCategory === opt.id ? 'bg-sky-600 text-white border-sky-400 shadow' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:text-white'}`}
+                        >
+                          <i className={opt.icon}></i> {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-bold mb-1">ชื่อเล่น (ไม่บังคับ)</label>
+                    <input
+                      type="text"
+                      maxLength={40}
+                      value={fbName}
+                      onChange={e => setFbName(e.target.value)}
+                      placeholder="เช่น ผู้มาเยือนจาก KMUTT"
+                      className="w-full inp text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] text-slate-400 font-bold">รายละเอียดข้อความ <span className="text-red-400">*</span></label>
+                      <span className="text-[10px] font-mono text-slate-500">{fbMessage.length}/1000</span>
+                    </div>
+                    <textarea
+                      rows="4"
+                      maxLength={1000}
+                      value={fbMessage}
+                      onChange={e => setFbMessage(e.target.value)}
+                      placeholder="พิมพ์ไอเดียเครื่องมือที่อยากได้ ปัญหาที่พบ หรือข้อเสนอแนะ..."
+                      className="w-full inp text-xs resize-none custom-scrollbar"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-bold mb-1">ช่องทางติดต่อกลับ (ไม่บังคับ)</label>
+                    <input
+                      type="text"
+                      maxLength={80}
+                      value={fbContact}
+                      onChange={e => setFbContact(e.target.value)}
+                      placeholder="เช่น IG / Email / Discord (เผื่อให้เจ้าของติดต่อกลับ)"
+                      className="w-full inp text-xs"
+                    />
+                  </div>
+
+                  {fbErr && <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-900/60 text-red-300 font-bold">{fbErr}</div>}
+
+                  <button type="submit" disabled={fbSending} className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2 disabled:opacity-50">
+                    <i className={`fas ${fbSending ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i>
+                    {fbSending ? 'กำลังส่งข้อความ...' : 'ส่งข้อเสนอแนะ'}
+                  </button>
+                </form>
+              )}
             </Modal>
           )}
 
