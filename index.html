@@ -119,6 +119,81 @@
     .loykrathong-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #FEF08A, #F59E0B 45%, #B45309 80%, #040914 100%) !important; box-shadow: 0 0 70px rgba(251,191,36,0.75) !important; }
     .loykrathong-theme .orbit-sys svg path { fill: #0A162C !important; stroke: #FBBF24 !important; }
 
+    /* ================= CHRISTMAS THEME (MIDNIGHT WINTER) ================= */
+    body.christmas-theme, .christmas-theme.bg-\[\#050811\], .christmas-theme .bg-\[\#050811\] { background-color: #040D0E !important; }
+    .christmas-theme.bg-\[\#070C18\], .christmas-theme .bg-\[\#070C18\], .christmas-theme header { background-color: rgba(6, 20, 21, 0.96) !important; }
+    .christmas-theme.bg-\[\#0B1325\], .christmas-theme .bg-\[\#0B1325\] { background-color: #081C1B !important; }
+    .christmas-theme.bg-\[\#0F2547\], .christmas-theme .bg-\[\#0F2547\] { background-color: #10322E !important; }
+    .christmas-theme.border-\[\#1E3A5F\], .christmas-theme .border-\[\#1E3A5F\] { border-color: rgba(217, 119, 6, 0.55) !important; }
+    .christmas-theme .text-sky-300, .christmas-theme .text-blue-200 { color: #BAE6FD !important; }
+    .christmas-theme .text-sky-400, .christmas-theme .text-blue-300 { color: #FDE68A !important; }
+    .christmas-theme .text-sky-500, .christmas-theme .text-blue-400 { color: #F59E0B !important; }
+    .christmas-theme .bg-sky-400 { background-color: #E11D48 !important; }
+    .christmas-theme .bg-sky-500 { background-color: #DC2626 !important; }
+    .christmas-theme .bg-sky-600 { background-color: #B91C1C !important; }
+    .christmas-theme .border-sky-400, .christmas-theme .border-blue-400 { border-color: #FDE68A !important; }
+    .christmas-theme .border-sky-500, .christmas-theme .border-blue-400\/50 { border-color: #D97706 !important; }
+    .christmas-theme .inp { background-color: #040D0E !important; border-color: rgba(217, 119, 6, 0.55) !important; }
+    .christmas-theme .card { background-color: #081C1B !important; border-color: rgba(217, 119, 6, 0.5) !important; }
+    .christmas-theme .btn-b { background-color: #10322E !important; border-color: rgba(253, 230, 138, 0.45) !important; }
+    .christmas-theme .btn-d { background-color: #040D0E !important; border-color: rgba(217, 119, 6, 0.5) !important; }
+    .christmas-theme ::-webkit-scrollbar-track { background: #040D0E !important; }
+    .christmas-theme ::-webkit-scrollbar-thumb { background: #B45309 !important; }
+
+    /* Snow Globe Home Center & Starlight Orbit Rings */
+    .christmas-theme .orbit-sys > div:first-child {
+      background: radial-gradient(circle at 32% 28%, #E0F2FE, #38BDF8 38%, #0E3A4D 72%, #040D0E 100%) !important;
+      box-shadow: 0 0 65px rgba(186, 230, 253, 0.65), 0 0 24px rgba(253, 230, 138, 0.45), inset 0 0 22px rgba(255, 255, 255, 0.55) !important;
+      border: 2px solid rgba(253, 230, 138, 0.75) !important;
+    }
+    .christmas-theme .orbit-sys svg path { fill: #081C1B !important; stroke: #FDE68A !important; }
+    .christmas-theme .orbit-sys > div:not(:first-child) {
+      border-style: dashed !important;
+      border-color: rgba(253, 230, 138, 0.35) !important;
+    }
+
+    /* Snowfall Animation */
+    @keyframes xmasSnowFall {
+      0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+      10% { opacity: 0.85; }
+      90% { opacity: 0.75; }
+      100% { transform: translate3d(var(--drift, 25px), 108vh, 0) rotate(360deg); opacity: 0; }
+    }
+    .xmas-snowflake {
+      position: fixed;
+      top: -24px;
+      pointer-events: none;
+      z-index: 35;
+      animation: xmasSnowFall var(--dur, 12s) linear infinite;
+      animation-delay: var(--delay, 0s);
+      will-change: transform;
+    }
+
+    /* Fairy Lights Twinkle */
+    @keyframes fairyTwinkleA { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); } 50% { opacity: 0.35; filter: none; } }
+    @keyframes fairyTwinkleB { 0%, 100% { opacity: 0.35; filter: none; } 50% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); } }
+    .fairy-bulb-a { animation: fairyTwinkleA 2.2s ease-in-out infinite; }
+    .fairy-bulb-b { animation: fairyTwinkleB 2.2s ease-in-out infinite; }
+
+    /* Santa Hat on Avatar (แสดงเฉพาะช่วงธีมคริสต์มาส) */
+    .avatar-santa-hat { display: none; pointer-events: none; z-index: 15; }
+    body.christmas-theme .avatar-santa-hat { display: block; }
+
+    /* Chat Keyword Snow Burst */
+    @keyframes chatBurstFall {
+      0% { transform: translate3d(0, -10%, 0) rotate(0deg) scale(0.75); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 0.9; }
+      100% { transform: translate3d(var(--bx, 20px), 115%, 0) rotate(320deg) scale(1.1); opacity: 0; }
+    }
+    .chat-burst-flake {
+      position: absolute;
+      top: -18px;
+      pointer-events: none;
+      animation: chatBurstFall var(--bdur, 3.2s) ease-in forwards;
+      animation-delay: var(--bdel, 0s);
+    }
+
     /* ================= DAILY GAMES CUSTOM CSS ================= */
     .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; padding: 1px; box-sizing: border-box; }
     .note-item { display: flex; align-items: center; justify-content: center; font-size: clamp(7px, 2vw, 10px); color: #94A3B8; font-weight: 600; line-height: 1; pointer-events: none; overflow: hidden; }
@@ -422,6 +497,13 @@
 
     const Avatar = ({ user, size = 'md', showStatus = false }) => {
       const sc = { xs: 'w-6 h-6 text-[10px]', sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-xs', lg: 'w-14 h-14 text-sm', xl: 'w-20 h-20 text-lg' }[size] || 'w-10 h-10 text-xs';
+      const hatCls = {
+        xs: 'w-4 h-4 -top-1.5 -right-1',
+        sm: 'w-5 h-5 -top-2 -right-1.5',
+        md: 'w-6 h-6 -top-2.5 -right-1.5',
+        lg: 'w-8 h-8 -top-3.5 -right-2',
+        xl: 'w-11 h-11 -top-4 -right-2.5'
+      }[size] || 'w-6 h-6 -top-2.5 -right-1.5';
       const stat = getStatusInfo(user);
       return (
         <div className="relative inline-flex shrink-0">
@@ -432,6 +514,11 @@
               {user?.displayName ? user.displayName.charAt(0).toUpperCase() : '#'}
             </div>
           )}
+          <svg viewBox="0 0 40 36" fill="none" className={`avatar-santa-hat absolute rotate-[18deg] drop-shadow-[0_2px_4px_rgba(0,0,0,0.65)] ${hatCls}`} aria-hidden="true">
+            <path d="M5 27 C8 13 17 5 30 8 C26 13 28 20 32 27 Z" fill="#DC2626" stroke="#FCA5A5" strokeWidth="1.3" strokeLinejoin="round" />
+            <rect x="3" y="25" width="31" height="7" rx="3.5" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1" />
+            <circle cx="32.5" cy="9.5" r="4.2" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="1" />
+          </svg>
           {showStatus && user && <span title={stat.t} className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#050811] ${stat.c}`} />}
         </div>
       );
@@ -6820,7 +6907,13 @@
       users, posts, chatMessages, groups, bmaEvents, 
       allTags, db, getTags, setMemberModal,
       guestStats = { totalVisits: 0, uniqueVisitors: 0, daily: {}, lastVisitAt: 0 },
-      guestFeedbacks = []
+      guestFeedbacks = [],
+      themePreview = 'auto',
+      setThemePreview,
+      xmasPreviewUnlock = false,
+      setXmasPreviewUnlock,
+      onOpenXmasTree,
+      onOpenLoyWelcome
     }) {
       const [subTab, setSubTab] = useState('dashboard'); // 'dashboard' | 'members' | 'guests'
       const [fbSearch, setFbSearch] = useState('');
@@ -7028,6 +7121,14 @@
                 ) : (
                   <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${subTab === 'guests' ? 'bg-[#050811] text-amber-400' : 'bg-[#0F2547] text-sky-300'}`}>{guestFeedbacks.length}</span>
                 )}
+              </button>
+	      <button 
+                onClick={() => setSubTab('themes')} 
+                className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${subTab === 'themes' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+              >
+                <i className="fas fa-palette"></i>
+                <span>Theme Viewer</span>
+                {themePreview !== 'auto' && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>}
               </button>
             </div>
           </div>
@@ -7596,6 +7697,157 @@
             </div>
           )}
 
+	  {/* ========================================== */}
+          {/* TAB 4: THEME VIEWER & EVENT PREVIEW        */}
+          {/* ========================================== */}
+          {subTab === 'themes' && (
+            <div className="space-y-5 animate-fade-in">
+              <div className="card p-5 space-y-4 border-amber-500/40">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1E3A5F] pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <i className="fas fa-palette text-amber-400"></i> Theme Viewer (โหมดพรีวิวธีมเทศกาล)
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      สลับดูธีมเทศกาลได้ทันทีบนเครื่องนี้ (ไม่มีผลกระทบกับผู้ใช้คนอื่นที่เข้าเว็บอยู่)
+                    </p>
+                  </div>
+                  {themePreview !== 'auto' && (
+                    <button
+                      onClick={() => { setThemePreview && setThemePreview('auto'); setXmasPreviewUnlock && setXmasPreviewUnlock(false); }}
+                      className="btn-w py-1.5 px-3.5 text-xs flex items-center gap-1.5"
+                    >
+                      <i className="fas fa-undo"></i> กลับสู่โหมดอัตโนมัติ (Auto)
+                    </button>
+                  )}
+                </div>
+
+                {/* การ์ดเลือกธีม 5 โหมด */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {[
+                    {
+                      id: 'auto',
+                      name: 'อัตโนมัติตามปฏิทิน (Auto)',
+                      schedule: 'สลับธีมเองเมื่อถึงช่วงเทศกาล (เวลาไทย UTC+7)',
+                      icon: 'fas fa-magic',
+                      swatches: ['#050811', '#0F2547', '#38BDF8', '#FFFFFF']
+                    },
+                    {
+                      id: 'normal',
+                      name: 'The Blue Moon (ปกติ)',
+                      schedule: 'ธีมดาราศาสตร์หลักประจำสมาคม',
+                      icon: 'fas fa-moon',
+                      swatches: ['#050811', '#0B1325', '#1E3A5F', '#60A5FA']
+                    },
+                    {
+                      id: 'christmas',
+                      name: 'Midnight Winter (Christmas)',
+                      schedule: 'เปิดอัตโนมัติ: 11 – 26 ธันวาคม ของทุกปี',
+                      icon: 'fas fa-snowflake',
+                      swatches: ['#040D0E', '#081C1B', '#DC2626', '#FDE68A']
+                    },
+                    {
+                      id: 'halloween',
+                      name: 'Spooky Night (Halloween)',
+                      schedule: 'เปิดอัตโนมัติ: 19 – 31 ตุลาคม ของทุกปี',
+                      icon: 'fas fa-ghost',
+                      swatches: ['#110419', '#260A37', '#EA580C', '#FDBA74']
+                    },
+                    {
+                      id: 'loykrathong',
+                      name: 'Full Moon River (Loy Krathong)',
+                      schedule: 'เปิดอัตโนมัติ: วันเพ็ญเดือน 12 (ลอยกระทง)',
+                      icon: 'fas fa-water',
+                      swatches: ['#040914', '#0A162C', '#D97706', '#FEF08A']
+                    }
+                  ].map((th) => {
+                    const isActive = themePreview === th.id;
+                    return (
+                      <button
+                        key={th.id}
+                        type="button"
+                        onClick={() => setThemePreview && setThemePreview(th.id)}
+                        className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between gap-3 ${isActive ? 'bg-[#0F2547]/80 border-amber-400 ring-2 ring-amber-400/40 shadow-lg' : 'bg-[#050811] border-[#1E3A5F] hover:border-slate-500'}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-sm shrink-0 ${isActive ? 'bg-amber-400 text-[#050811] border-amber-300' : 'bg-[#0B1325] text-sky-300 border-[#1E3A5F]'}`}>
+                              <i className={th.icon}></i>
+                            </div>
+                            <div>
+                              <div className="font-bold text-white text-xs">{th.name}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">{th.schedule}</div>
+                            </div>
+                          </div>
+                          {isActive && (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-[#050811] text-[9px] font-bold shrink-0">ใช้งานอยู่</span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#1E3A5F]/60">
+                          <div className="flex items-center gap-1.5">
+                            {th.swatches.map((hex, i) => (
+                              <span key={i} className="w-5 h-5 rounded-full border border-white/30 shadow-inner" style={{ backgroundColor: hex }} title={hex}></span>
+                            ))}
+                          </div>
+                          <span className="text-[10px] font-bold text-sky-300">
+                            {isActive ? 'กำลังพรีวิว' : 'คลิกเพื่อพรีวิว →'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* แผงเครื่องมือทดสอบกิจกรรมเทศกาล */}
+              <div className="card p-5 space-y-4 bg-[#0B1325] border-[#1E3A5F]">
+                <h3 className="text-sm font-bold text-sky-300 border-b border-[#1E3A5F] pb-2 flex items-center gap-2">
+                  <i className="fas fa-flask"></i> เครื่องมือทดสอบกิจกรรมเทศกาล (Owner Sandbox)
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-amber-300">จำลองเวลาหลังคริสต์มาส (25 ธ.ค.+)</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">ปลดล็อกการอ่านคำอวยพรบนต้นไม้, ทดสอบแจ้งเตือน @ และปลดล็อกปุ่ม "ต้นคริสต์มาสของฉัน" ในหน้า Board</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setXmasPreviewUnlock && setXmasPreviewUnlock(!xmasPreviewUnlock)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-[11px] shrink-0 transition-colors ${xmasPreviewUnlock ? 'bg-emerald-500 text-[#050811]' : 'bg-[#0F2547] text-slate-300 border border-[#1E3A5F]'}`}
+                      >
+                        {xmasPreviewUnlock ? 'เปิดอยู่' : 'ปิดอยู่'}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setThemePreview && setThemePreview('christmas'); onOpenXmasTree && onOpenXmasTree(); }}
+                      className="w-full btn-b py-2 text-xs hover:bg-red-700 hover:border-amber-400 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <i className="fas fa-tree text-emerald-400"></i> เปิดหน้า Christmas Wish Tree ทันที
+                    </button>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-amber-300">ทดสอบหน้าต่างวันลอยกระทง</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">เปิด Welcome Overlay กิจกรรมลอยกระทง เซียมซี และมินิเกมรักษ์โลกเพื่อตรวจความเรียบร้อย</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setThemePreview && setThemePreview('loykrathong'); onOpenLoyWelcome && onOpenLoyWelcome(); }}
+                      className="w-full btn-b py-2 text-xs hover:bg-amber-600 hover:text-[#050811] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <i className="fas fa-water text-amber-300"></i> เปิดหน้าต่างลอยกระทง
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Modal แก้ไขหมวดหมู่สมาชิก */}
           {editTagU && (
             <Modal title={`🏷️ แก้ไขหมวดหมู่: ${editTagU.displayName} (${editTagU.id})`} onClose={() => setEditTagU(null)}>
@@ -7671,7 +7923,7 @@
       filteredPosts, posts, visiblePosts, hiPostId, getAuthor, setMemberModal, 
       postMenu, setPostMenu, db, handleEditPostReq, setCurrentView, setActiveGameTab, GAMES, fmtTime,
       toggleCommLike, repComm, setRepComm, setCommMenu, cInputs, setCInputs, handleAddComment,
-      setBoardMenuOpen
+      setBoardMenuOpen, onOpenXmasTree, isTargetMuted, getMuteExp, onOpenMuteModal
     }) {
       
       const [showComments, setShowComments] = useState({});
@@ -7806,8 +8058,29 @@
                                 </div>
                               </div>
                               
-                              <div className="flex items-center gap-2 relative shrink-0">
+                              <div className="flex items-center gap-1.5 relative shrink-0">
                                 {!canManage(post.authorId) && !isCompact && <span className="px-2 py-0.5 rounded-full bg-[#050811] border border-[#1E3A5F] text-[9px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
+                                {currentUser && currentUser.id === post.authorId && (() => {
+                                  const mKey = 'post:' + post.id;
+                                  const muted = isTargetMuted && isTargetMuted(mKey);
+                                  const exp = getMuteExp ? getMuteExp(mKey) : null;
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenMuteModal && onOpenMuteModal({
+                                          key: mKey,
+                                          label: 'โพสต์: ' + (post.title || post.content?.slice(0, 32) || 'โพสต์ของคุณ')
+                                        });
+                                      }}
+                                      className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] transition-colors ${muted ? 'bg-red-950/70 border-red-500/60 text-red-400 hover:bg-red-900' : 'bg-[#050811] border-[#1E3A5F] text-slate-400 hover:text-amber-300 hover:border-amber-400/60'}`}
+                                      title={muted ? `ปิดแจ้งเตือนอยู่ (${formatMuteUntil(exp)}) — คลิกเพื่อตั้งค่า` : 'ปิดการแจ้งเตือนโพสต์นี้'}
+                                    >
+                                      <i className={`fas ${muted ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+                                    </button>
+                                  );
+                                })()}
                                 {canManage(post.authorId) && (
                                   <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold"><i className="fas fa-ellipsis-v"></i></button>
                                 )}
@@ -7857,6 +8130,30 @@
                                           {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
                                         </span></div>
                                         <button onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-[10px] self-start mt-1 hover:scale-105 transition-transform"><i className="fas fa-gamepad mr-1"></i> ตามไปเล่นเกมนี้เลย</button>
+                                      </div>
+                                    )}
+
+				    {post.xmasTreeShare && (
+                                      <div className="p-4 rounded-2xl border border-amber-400/50 bg-gradient-to-br from-[#081C1B] via-[#0B2624] to-[#040D0E] flex flex-col gap-2.5 shadow-lg mt-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                                            <i className="fas fa-tree text-emerald-400"></i>
+                                            <span>ต้นคริสต์มาสของ {post.xmasTreeShare.ownerName}</span>
+                                          </div>
+                                          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[#040D0E] border border-amber-500/40 text-amber-200">
+                                            {post.xmasTreeShare.code}
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-slate-300">
+                                          ปี {post.xmasTreeShare.year} • แขวนของประดับแล้ว <strong className="text-white font-mono">{post.xmasTreeShare.count || 0}</strong> ชิ้น • เปิดอ่านคำอวยพร 25 ธ.ค.
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); onOpenXmasTree && onOpenXmasTree(post.xmasTreeShare.code); }}
+                                          className="self-start mt-0.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow transition-transform hover:scale-105 flex items-center gap-1.5"
+                                        >
+                                          <i className="fas fa-gift"></i> เข้าไปแขวนคำอวยพรบนต้นไม้นี้
+                                        </button>
                                       </div>
                                     )}
 
@@ -8299,6 +8596,1770 @@
     }
 
     // ==========================================
+    // 7.5 🎄 CHRISTMAS WISH TREE & ARCHIVE COMPONENTS 🎄
+    // ==========================================
+    const XMAS_COLORS = [
+      { id: 'crimson', label: 'แดงทับทิม', main: '#E11D48', light: '#FDA4AF', dark: '#881337' },
+      { id: 'gold', label: 'ทองแชมเปญ', main: '#F59E0B', light: '#FEF08A', dark: '#92400E' },
+      { id: 'ice', label: 'ฟ้าน้ำแข็ง', main: '#38BDF8', light: '#E0F2FE', dark: '#0369A1' },
+      { id: 'emerald', label: 'เขียวมรกต', main: '#10B981', light: '#A7F3D0', dark: '#065F46' },
+      { id: 'snow', label: 'เงินหิมะ', main: '#E2E8F0', light: '#FFFFFF', dark: '#64748B' }
+    ];
+
+    const XMAS_SHAPES = [
+      { id: 'bauble', label: 'ลูกบอล' },
+      { id: 'star', label: 'ดวงดาว' },
+      { id: 'moon', label: 'พระจันทร์เสี้ยว' },
+      { id: 'bell', label: 'กระดิ่ง' },
+      { id: 'gingerbread', label: 'ขนมปังขิง' },
+      { id: 'santahat', label: 'หมวกซานต้า' },
+      { id: 'stocking', label: 'ถุงเท้า' },
+      { id: 'mistletoe', label: 'มิสเติลโท' }
+    ];
+
+    // พิกัดแขวนของประดับบนต้นไม้ (รองรับสูงสุด 24 ตำแหน่ง/ต้น)
+    const XMAS_SLOTS = [
+      { x: 50, y: 24 }, { x: 43, y: 31 }, { x: 57, y: 31 },
+      { x: 37, y: 39 }, { x: 49, y: 38 }, { x: 62, y: 39 },
+      { x: 32, y: 47 }, { x: 44, y: 46 }, { x: 56, y: 46 }, { x: 68, y: 47 },
+      { x: 28, y: 56 }, { x: 39, y: 55 }, { x: 50, y: 54 }, { x: 61, y: 55 }, { x: 72, y: 56 },
+      { x: 24, y: 65 }, { x: 35, y: 64 }, { x: 46, y: 63 }, { x: 56, y: 64 }, { x: 67, y: 65 }, { x: 76, y: 66 },
+      { x: 30, y: 73 }, { x: 50, y: 73 }, { x: 70, y: 73 }
+    ];
+
+    // สร้างรหัสต้นไม้แบบสุ่ม เช่น X26-K7M4P9
+    const generateRandomTreeCode = (year) => {
+      const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      let rand = '';
+      for (let i = 0; i < 6; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+      return `X${String(year).slice(-2)}-${rand}`;
+    };
+
+    // ดึงเวลาไทย (UTC+7) ปัจจุบัน
+    const getBkkNow = () => {
+      const now = new Date();
+      return new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000));
+    };
+
+    // เช็กว่าเลยช่วงคริสต์มาสของปีนั้นๆ แล้วหรือยัง (หลัง 26 ธ.ค. เวลา 23:59 น.)
+    const isXmasSeasonPassed = (year) => {
+      const bkk = getBkkNow();
+      const y = bkk.getFullYear(), m = bkk.getMonth() + 1, d = bkk.getDate();
+      return y > year || (y === year && m === 12 && d > 26);
+    };
+
+    // เช็กว่าถึงเที่ยงคืนวันคริสต์มาส (25 ธ.ค. 00:00 น.) ของปีนั้นแล้วหรือยัง
+    const isXmasMidnightUnlocked = (year) => {
+      const bkk = getBkkNow();
+      const y = bkk.getFullYear(), m = bkk.getMonth() + 1, d = bkk.getDate();
+      return y > year || (y === year && m === 12 && d >= 25);
+    };
+
+    // เช็กว่าข้อความบนต้นไม้สมาคมแท็กถึงสมาชิกคนนี้หรือไม่
+    const doesOrnamentMentionUser = (orn, user) => {
+      if (!orn || !user || !orn.mentions || !orn.mentions.length) return false;
+      const myTags = getTags(user).map(t => t.toLowerCase());
+      return orn.mentions.some((m) => {
+        const lw = String(m).toLowerCase();
+        if (lw === '@everyone' || lw === '@here') return true;
+        if (lw === '@' + String(user.id).toLowerCase()) return true;
+        if (user.username && lw === '@' + user.username.toLowerCase()) return true;
+        if (lw.startsWith('@[') && lw.endsWith(']')) {
+          return myTags.includes(lw.slice(2, -1));
+        }
+        return myTags.some(t => lw === '@' + t);
+      });
+    };
+
+    function XmasOrnamentSVG({ shape = 'bauble', colorId = 'crimson', size = 34 }) {
+      const c = XMAS_COLORS.find(x => x.id === colorId) || XMAS_COLORS[0];
+      return (
+        <svg width={size} height={size * 1.1} viewBox="0 0 40 44" fill="none" className="drop-shadow-[0_3px_6px_rgba(0,0,0,0.65)]">
+          {/* สายแขวนด้านบน */}
+          <line x1="20" y1="0" x2="20" y2="8" stroke="#FDE68A" strokeWidth="1.6" />
+          <circle cx="20" cy="8.5" r="2.2" fill="none" stroke="#FDE68A" strokeWidth="1.5" />
+
+          {shape === 'bauble' && (
+            <>
+              <rect x="16" y="10" width="8" height="4" rx="1" fill="#F59E0B" />
+              <circle cx="20" cy="26" r="12.5" fill={c.main} stroke={c.light} strokeWidth="1.2" />
+              <path d="M9.5 26 Q20 31 30.5 26" stroke={c.light} strokeWidth="1.4" strokeDasharray="2 2" opacity="0.85" />
+              <ellipse cx="15.5" cy="21" rx="3.2" ry="2" transform="rotate(-28 15.5 21)" fill="#FFFFFF" opacity="0.55" />
+            </>
+          )}
+
+          {shape === 'star' && (
+            <>
+              <polygon
+                points="20,10 23.6,18.2 32.5,19 25.8,24.8 27.8,33.6 20,28.9 12.2,33.6 14.2,24.8 7.5,19 16.4,18.2"
+                fill={c.main} stroke={c.light} strokeWidth="1.3" strokeLinejoin="round"
+              />
+              <circle cx="20" cy="22.5" r="2.8" fill={c.light} opacity="0.7" />
+            </>
+          )}
+
+          {shape === 'moon' && (
+            <>
+              <path
+                d="M25.5 12.5 A12 12 0 1 0 25.5 35.5 A9.5 11.6 0 0 1 25.5 12.5 Z"
+                fill={c.main} stroke={c.light} strokeWidth="1.3" strokeLinejoin="round"
+              />
+              <path
+                d="M15.5 17.5 A8.5 8.5 0 0 0 15.5 30.5"
+                stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="round" opacity="0.55"
+              />
+              <polygon
+                points="27,20 28.1,22.4 30.5,23.5 28.1,24.6 27,27 25.9,24.6 23.5,23.5 25.9,22.4"
+                fill="#FEF08A"
+              />
+            </>
+          )}
+
+          {shape === 'bell' && (
+            <>
+              <path d="M20 11 C13.5 11 11 16.5 10.5 24 L8 29.5 L32 29.5 L29.5 24 C29 16.5 26.5 11 20 11 Z" fill={c.main} stroke={c.light} strokeWidth="1.3" strokeLinejoin="round" />
+              <rect x="8" y="28.5" width="24" height="3.2" rx="1.6" fill={c.dark} stroke={c.light} strokeWidth="0.9" />
+              <circle cx="20" cy="34" r="3" fill="#FDE68A" />
+              <path d="M15.5 16.5 Q14 21 13.5 25" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+            </>
+          )}
+
+          {shape === 'gingerbread' && (
+            <>
+              <circle cx="20" cy="16.5" r="5.5" fill="#B45309" stroke="#FDE68A" strokeWidth="1.1" />
+              <path d="M10.5 23.5 L29.5 23.5" stroke="#B45309" strokeWidth="5.2" strokeLinecap="round" />
+              <path d="M15.5 22 L13.5 35.5 M24.5 22 L26.5 35.5" stroke="#B45309" strokeWidth="5.2" strokeLinecap="round" />
+              <rect x="15.2" y="21.5" width="9.6" height="10.5" rx="3" fill="#B45309" />
+              <circle cx="18.1" cy="15.6" r="0.9" fill="#FFFFFF" />
+              <circle cx="21.9" cy="15.6" r="0.9" fill="#FFFFFF" />
+              <path d="M18 18.4 Q20 20 22 18.4" stroke="#FFFFFF" strokeWidth="1" strokeLinecap="round" />
+              <circle cx="20" cy="24.5" r="1.7" fill={c.main} stroke={c.light} strokeWidth="0.6" />
+              <circle cx="20" cy="29" r="1.7" fill={c.main} stroke={c.light} strokeWidth="0.6" />
+              <path d="M10.5 23.5 L12.5 23.5 M27.5 23.5 L29.5 23.5" stroke={c.light} strokeWidth="1.3" strokeLinecap="round" />
+            </>
+          )}
+
+          {shape === 'santahat' && (
+            <>
+              <path d="M9 31 C11 19 18 12 29 14 C25 18 27 24 30 31 Z" fill={c.main} stroke={c.light} strokeWidth="1.2" strokeLinejoin="round" />
+              <rect x="7" y="29.5" width="25" height="6" rx="3" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1" />
+              <circle cx="30.5" cy="15.5" r="3.6" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="1" />
+            </>
+          )}
+
+          {shape === 'stocking' && (
+            <>
+              <path d="M15 13 L26 13 L26 27 C26 32.5 22 36 15.5 36 C11 36 8.5 33.2 8.5 30 C8.5 26.8 11.2 25 15 25 Z" fill={c.main} stroke={c.light} strokeWidth="1.2" strokeLinejoin="round" />
+              <rect x="13.5" y="10.5" width="14" height="5.5" rx="2.5" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1" />
+              <path d="M15 21.5 L26 21.5" stroke={c.light} strokeWidth="1.4" strokeDasharray="2 2" opacity="0.85" />
+            </>
+          )}
+
+          {shape === 'mistletoe' && (
+            <>
+              <path d="M20 14 C13 15 8 21 10 28 C14.5 27.5 18.5 23.5 20 19 Z" fill="#059669" stroke="#6EE7B7" strokeWidth="1.1" />
+              <path d="M20 14 C27 15 32 21 30 28 C25.5 27.5 21.5 23.5 20 19 Z" fill="#10B981" stroke="#A7F3D0" strokeWidth="1.1" />
+              <path d="M20 15 C16 22 16.5 30 20 35 C23.5 30 24 22 20 15 Z" fill="#047857" stroke="#6EE7B7" strokeWidth="1" />
+              <circle cx="17.5" cy="21" r="2.6" fill={c.main} stroke={c.light} strokeWidth="0.9" />
+              <circle cx="22.5" cy="21" r="2.6" fill={c.main} stroke={c.light} strokeWidth="0.9" />
+              <circle cx="20" cy="24.5" r="2.8" fill={c.main} stroke={c.light} strokeWidth="0.9" />
+              <path d="M15 11.5 Q20 15 25 11.5" stroke="#FDE68A" strokeWidth="1.8" strokeLinecap="round" />
+            </>
+          )}
+        </svg>
+      );
+    }
+
+    // คอมโพเนนต์ต้นคริสต์มาส SVG + การวางของประดับ
+    function XmasTreeCanvas({ ornaments, selectedId, onSelectOrnament, currentUser, isAssocTree, canReadWishes }) {
+      return (
+        <div className="relative w-full max-w-[390px] aspect-[390/460] mx-auto select-none">
+          <svg viewBox="0 0 360 430" className="w-full h-full drop-shadow-[0_12px_30px_rgba(0,0,0,0.75)]">
+            <defs>
+              <radialGradient id="xmasStarGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#FEF08A" stopOpacity="0.95" />
+                <stop offset="60%" stopColor="#F59E0B" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
+              </radialGradient>
+              <linearGradient id="xmasTreeGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#115E59" />
+                <stop offset="55%" stopColor="#0D3B38" />
+                <stop offset="100%" stopColor="#06201F" />
+              </linearGradient>
+            </defs>
+
+            {/* เงาพื้นหิมะ */}
+            <ellipse cx="180" cy="402" rx="125" ry="18" fill="rgba(186,230,253,0.1)" />
+
+            {/* ลำต้น */}
+            <rect x="158" y="346" width="44" height="52" rx="6" fill="#451A03" stroke="#92400E" strokeWidth="1.5" />
+
+            {/* พุ่มใบ 4 ชั้น */}
+            <polygon points="180,62 114,160 246,160" fill="url(#xmasTreeGrad)" stroke="rgba(253,230,138,0.45)" strokeWidth="1.6" strokeLinejoin="round" />
+            <polygon points="180,122 92,235 268,235" fill="url(#xmasTreeGrad)" stroke="rgba(253,230,138,0.45)" strokeWidth="1.6" strokeLinejoin="round" />
+            <polygon points="180,192 68,312 292,312" fill="url(#xmasTreeGrad)" stroke="rgba(253,230,138,0.45)" strokeWidth="1.6" strokeLinejoin="round" />
+            <polygon points="180,262 46,368 314,368" fill="url(#xmasTreeGrad)" stroke="rgba(253,230,138,0.45)" strokeWidth="1.6" strokeLinejoin="round" />
+
+            {/* สายไฟริบบิ้น */}
+            <path d="M126 148 Q180 170 234 148" fill="none" stroke="rgba(253,230,138,0.4)" strokeWidth="1.5" strokeDasharray="4 4" />
+            <path d="M102 222 Q180 250 258 222" fill="none" stroke="rgba(186,230,253,0.38)" strokeWidth="1.5" strokeDasharray="4 4" />
+            <path d="M78 298 Q180 330 282 298" fill="none" stroke="rgba(253,230,138,0.4)" strokeWidth="1.5" strokeDasharray="4 4" />
+
+            {/* ดาวบนยอดต้นไม้ */}
+            <circle cx="180" cy="46" r="34" fill="url(#xmasStarGlow)" />
+            <polygon
+              points="180,20 186.5,36 203.5,37.2 190.4,48.2 194.5,64.8 180,55.6 165.5,64.8 169.6,48.2 156.5,37.2 173.5,36"
+              fill="#FEF08A" stroke="#F59E0B" strokeWidth="1.5" strokeLinejoin="round"
+            />
+          </svg>
+
+          {/* ของประดับที่แขวนอยู่บนต้นไม้ */}
+          {ornaments.map((orn, idx) => {
+            const slot = XMAS_SLOTS[(orn.slotIdx ?? idx) % XMAS_SLOTS.length];
+            const isSel = selectedId === orn.id;
+            const isMentioningMe = isAssocTree && canReadWishes && currentUser && doesOrnamentMentionUser(orn, currentUser);
+
+            return (
+              <button
+                key={orn.id}
+                type="button"
+                onClick={() => onSelectOrnament(orn)}
+                style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 hover:scale-125 hover:z-30 cursor-pointer rounded-full p-0.5 ${isSel ? 'scale-125 z-30 ring-2 ring-amber-300 bg-amber-400/20' : 'z-20'} ${isMentioningMe ? 'ring-2 ring-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.9)]' : ''}`}
+                title={canReadWishes ? `คำอวยพรจาก ${orn.isAnonymous ? 'ผู้ส่งนิรนาม' : orn.senderName}` : 'ปิดผนึกถึง 25 ธ.ค. 00:00 น.'}
+              >
+                <XmasOrnamentSVG shape={orn.shape} colorId={orn.color} size={32} />
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+// สร้างภาพแนวตั้ง 9:16 (1080x1920) สำหรับแชร์ลง IG / Facebook Story
+    const generateXmasStoryDataUrl = (treeMeta, ornaments, shareUrl) => {
+      return new Promise((resolve) => {
+        const W = 1080, H = 1920;
+        const canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // Helper วาดกรอบสี่เหลี่ยมมุมมน (รองรับ iOS Safari เก่า)
+        const rRect = (x, y, w, h, r) => {
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+        };
+
+        // 1. พื้นหลัง Midnight Winter Gradient
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#030A0C');
+        bg.addColorStop(0.45, '#071E1F');
+        bg.addColorStop(0.85, '#092623');
+        bg.addColorStop(1, '#040D0E');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // แสงออร่าหลังต้นไม้
+        const glow = ctx.createRadialGradient(W / 2, 840, 40, W / 2, 840, 520);
+        glow.addColorStop(0, 'rgba(253, 230, 138, 0.20)');
+        glow.addColorStop(0.5, 'rgba(56, 189, 248, 0.08)');
+        glow.addColorStop(1, 'rgba(4, 13, 14, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        // 2. เกล็ดหิมะและประกายดาวประดับฉากหลัง
+        for (let i = 0; i < 65; i++) {
+          const sx = ((i * 197) % 1020) + 30;
+          const sy = ((i * 313) % 1820) + 40;
+          const sr = (i % 4) + 1.5;
+          ctx.fillStyle = i % 5 === 0 ? 'rgba(253, 230, 138, 0.75)' : 'rgba(186, 230, 253, 0.48)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // กรอบเส้นทองบางๆ รอบภาพ
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.45)';
+        ctx.lineWidth = 3;
+        rRect(38, 38, W - 76, H - 76, 44);
+        ctx.stroke();
+
+        // 3. หัวข้อด้านบน
+        rRect(W / 2 - 270, 95, 540, 54, 27);
+        ctx.fillStyle = 'rgba(136, 19, 55, 0.72)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.65)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#FDE68A';
+        ctx.font = 'bold 22px "Inter", "Noto Sans Thai", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`THE BLUE MOON ASSOCIATION • ${treeMeta.year}`, W / 2, 130);
+
+        const ownerTitle = `ต้นคริสต์มาสของ ${treeMeta.ownerName}`;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = ownerTitle.length > 22
+          ? 'bold 46px "Noto Sans Thai", "Inter", sans-serif'
+          : 'bold 58px "Noto Sans Thai", "Inter", sans-serif';
+        ctx.fillText(ownerTitle, W / 2, 235, W - 140);
+
+        ctx.fillStyle = '#BAE6FD';
+        ctx.font = '600 30px "Noto Sans Thai", "Inter", sans-serif';
+        ctx.fillText('มาแขวนของประดับและเขียนคำอวยพรให้กันนะ', W / 2, 295);
+
+        // 4. วาดต้นคริสต์มาสตรงกลาง (อิงสัดส่วนเดียวกับ XmasTreeCanvas 360x430)
+        const treeW = 760, treeH = 908;
+        const ox = (W - treeW) / 2;
+        const oy = 355;
+        const scX = treeW / 360;
+        const scY = treeH / 430;
+        const px = (x) => ox + x * scX;
+        const py = (y) => oy + y * scY;
+
+        // เงาพื้นหิมะ
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.14)';
+        ctx.beginPath();
+        ctx.ellipse(px(180), py(402), 125 * scX, 18 * scY, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // ลำต้น
+        ctx.fillStyle = '#451A03';
+        ctx.strokeStyle = '#92400E';
+        ctx.lineWidth = 3;
+        rRect(px(158), py(346), 44 * scX, 52 * scY, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        // พุ่มใบ 4 ชั้น
+        const treeGrad = ctx.createLinearGradient(0, py(60), 0, py(370));
+        treeGrad.addColorStop(0, '#115E59');
+        treeGrad.addColorStop(0.55, '#0D3B38');
+        treeGrad.addColorStop(1, '#06201F');
+
+        const tiers = [
+          [[180, 62], [114, 160], [246, 160]],
+          [[180, 122], [92, 235], [268, 235]],
+          [[180, 192], [68, 312], [292, 312]],
+          [[180, 262], [46, 368], [314, 368]]
+        ];
+        tiers.forEach((pts) => {
+          ctx.beginPath();
+          ctx.moveTo(px(pts[0][0]), py(pts[0][1]));
+          ctx.lineTo(px(pts[1][0]), py(pts[1][1]));
+          ctx.lineTo(px(pts[2][0]), py(pts[2][1]));
+          ctx.closePath();
+          ctx.fillStyle = treeGrad;
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(253, 230, 138, 0.5)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        });
+
+        // เส้นริบบิ้นประดับ
+        const garlands = [
+          [126, 148, 180, 174, 234, 148, 'rgba(253,230,138,0.45)'],
+          [102, 222, 180, 254, 258, 222, 'rgba(186,230,253,0.42)'],
+          [78, 298, 180, 334, 282, 298, 'rgba(253,230,138,0.45)']
+        ];
+        ctx.save();
+        ctx.setLineDash([10, 10]);
+        ctx.lineWidth = 3.5;
+        garlands.forEach(([x1, y1, cx, cy, x2, y2, col]) => {
+          ctx.strokeStyle = col;
+          ctx.beginPath();
+          ctx.moveTo(px(x1), py(y1));
+          ctx.quadraticCurveTo(px(cx), py(cy), px(x2), py(y2));
+          ctx.stroke();
+        });
+        ctx.restore();
+
+        // ดาวยอดต้นไม้
+        const starG = ctx.createRadialGradient(px(180), py(46), 4, px(180), py(46), 70);
+        starG.addColorStop(0, 'rgba(254, 240, 138, 0.95)');
+        starG.addColorStop(0.55, 'rgba(245, 158, 11, 0.3)');
+        starG.addColorStop(1, 'rgba(245, 158, 11, 0)');
+        ctx.fillStyle = starG;
+        ctx.beginPath();
+        ctx.arc(px(180), py(46), 70, 0, Math.PI * 2);
+        ctx.fill();
+
+        const drawStarPoly = (cx, cy, spikes, outerR, innerR, fill, stroke) => {
+          let rot = (Math.PI / 2) * 3;
+          const step = Math.PI / spikes;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - outerR);
+          for (let i = 0; i < spikes; i++) {
+            ctx.lineTo(cx + Math.cos(rot) * outerR, cy + Math.sin(rot) * outerR);
+            rot += step;
+            ctx.lineTo(cx + Math.cos(rot) * innerR, cy + Math.sin(rot) * innerR);
+            rot += step;
+          }
+          ctx.closePath();
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2.5; ctx.stroke(); }
+        };
+        drawStarPoly(px(180), py(46), 5, 48, 22, '#FEF08A', '#F59E0B');
+
+        // 5. วาดของประดับจริงที่แขวนอยู่บนต้นไม้ (หรือไฟระยิบถ้ายังไม่มี)
+        const listToDraw = ornaments.slice(0, 24);
+        if (listToDraw.length === 0) {
+          [0, 2, 4, 7, 11, 14, 17, 20].forEach((si, k) => {
+            const slot = XMAS_SLOTS[si];
+            const bx = ox + (slot.x / 100) * treeW;
+            const by = oy + (slot.y / 100) * treeH;
+            ctx.fillStyle = k % 2 === 0 ? '#FEF08A' : '#BAE6FD';
+            ctx.beginPath();
+            ctx.arc(bx, by, 9, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        } else {
+          listToDraw.forEach((orn, idx) => {
+            const slot = XMAS_SLOTS[(orn.slotIdx ?? idx) % XMAS_SLOTS.length];
+            const cx = ox + (slot.x / 100) * treeW;
+            const cy = oy + (slot.y / 100) * treeH;
+            const col = XMAS_COLORS.find(c => c.id === orn.color) || XMAS_COLORS[0];
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 10;
+
+            if (orn.shape === 'star') {
+              drawStarPoly(cx, cy, 5, 26, 12, col.main, col.light);
+            } else if (orn.shape === 'moon') {
+              ctx.beginPath();
+              ctx.arc(cx, cy, 22, 0.35 * Math.PI, 1.65 * Math.PI, false);
+              ctx.quadraticCurveTo(cx - 4, cy, cx + 10, cy + 19);
+              ctx.closePath();
+              ctx.fillStyle = col.main;
+              ctx.fill();
+              ctx.strokeStyle = col.light;
+              ctx.lineWidth = 2.5;
+              ctx.stroke();
+            } else if (orn.shape === 'santahat') {
+              ctx.beginPath();
+              ctx.moveTo(cx - 20, cy + 14);
+              ctx.quadraticCurveTo(cx - 4, cy - 22, cx + 22, cy - 14);
+              ctx.lineTo(cx + 18, cy + 14);
+              ctx.closePath();
+              ctx.fillStyle = col.main;
+              ctx.fill();
+              ctx.fillStyle = '#F8FAFC';
+              rRect(cx - 22, cy + 10, 44, 11, 5);
+              ctx.fill();
+              ctx.beginPath();
+              ctx.arc(cx + 23, cy - 12, 7, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (orn.shape === 'gingerbread') {
+              ctx.fillStyle = '#B45309';
+              ctx.beginPath();
+              ctx.arc(cx, cy - 11, 10, 0, Math.PI * 2);
+              ctx.fill();
+              rRect(cx - 12, cy - 2, 24, 22, 8);
+              ctx.fill();
+              ctx.fillStyle = col.main;
+              ctx.beginPath();
+              ctx.arc(cx, cy + 5, 3.5, 0, Math.PI * 2);
+              ctx.arc(cx, cy + 14, 3.5, 0, Math.PI * 2);
+              ctx.fill();
+            } else {
+              // bauble, bell, stocking, mistletoe -> เหรียญประดับเรืองแสงตามสีที่เลือก
+              ctx.fillStyle = col.main;
+              ctx.strokeStyle = col.light;
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+              ctx.fillStyle = 'rgba(255,255,255,0.45)';
+              ctx.beginPath();
+              ctx.arc(cx - 7, cy - 7, 5.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          });
+        }
+
+        // 6. แถบสถิติใต้ต้นไม้
+        rRect(W / 2 - 330, 1295, 660, 66, 33);
+        ctx.fillStyle = 'rgba(4, 13, 14, 0.86)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(217, 119, 6, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#FDE68A';
+        ctx.font = 'bold 26px "Noto Sans Thai", "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`แขวนแล้ว ${ornaments.length} ชิ้น  •  เปิดอ่าน 25 ธ.ค. เวลา 00:00 น.`, W / 2, 1337);
+
+        // 7. การ์ดด้านล่าง: QR Code + พื้นที่วาง IG Link Sticker
+        const cardX = 90, cardY = 1405, cardW = W - 180, cardH = 385;
+        rRect(cardX, cardY, cardW, cardH, 34);
+        ctx.fillStyle = 'rgba(8, 28, 27, 0.92)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.5)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // ด้านขวาของการ์ด: ข้อความเชิญ + ช่องวางสติกเกอร์ลิงก์
+        const textCenterX = cardX + 610;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 34px "Noto Sans Thai", "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('สแกน QR หรือกดลิงก์ด้านล่าง', textCenterX, cardY + 90);
+
+        ctx.fillStyle = '#BAE6FD';
+        ctx.font = 'bold 24px "JetBrains Mono", monospace';
+        ctx.fillText(`TREE ID: ${treeMeta.code}`, textCenterX, cardY + 138);
+
+        // กรอบเส้นประสำหรับแปะสติกเกอร์ลิงก์บน IG Story
+        ctx.save();
+        ctx.setLineDash([12, 10]);
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.65)';
+        ctx.lineWidth = 2.5;
+        rRect(cardX + 375, cardY + 185, 470, 130, 24);
+        ctx.fillStyle = 'rgba(4, 13, 14, 0.6)';
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(253, 230, 138, 0.75)';
+        ctx.font = '600 24px "Noto Sans Thai", "Inter", sans-serif';
+        ctx.fillText('วางสติกเกอร์ลิงก์ IG / FB ตรงนี้', textCenterX, cardY + 258);
+
+        // เครดิตด้านล่างสุด
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+        ctx.font = '600 22px "Inter", sans-serif';
+        ctx.fillText(window.location.host || 'The Blue Moon Association', W / 2, 1842);
+
+        // 8. สร้าง QR Code จริงแล้ววาดลงมุมซ้ายของการ์ดด้านล่าง
+        const qrBoxX = cardX + 50, qrBoxY = cardY + 52, qrBoxSize = 280;
+        rRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 26);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+
+        if (window.QRCode) {
+          try {
+            const tempDiv = document.createElement('div');
+            new window.QRCode(tempDiv, {
+              text: shareUrl,
+              width: 240,
+              height: 240,
+              colorDark: '#040D0E',
+              colorLight: '#FFFFFF',
+              correctLevel: window.QRCode.CorrectLevel.M
+            });
+            setTimeout(() => {
+              const qrCanvas = tempDiv.querySelector('canvas');
+              if (qrCanvas) {
+                ctx.drawImage(qrCanvas, qrBoxX + 20, qrBoxY + 20, 240, 240);
+              }
+              resolve(canvas.toDataURL('image/png'));
+            }, 80);
+            return;
+          } catch (e) {}
+        }
+        resolve(canvas.toDataURL('image/png'));
+      });
+    };
+
+    // Modal เลือกช่องทางแชร์ต้นคริสต์มาสส่วนตัว
+    function XmasShareModal({
+      isOpen, onClose, treeMeta, ornaments, currentUser,
+      channels = [], myGroups = [], onShareToBoard, onShareToChat, openGuestPrompt
+    }) {
+      const [view, setView] = useState('menu'); // 'menu' | 'story' | 'board' | 'chat'
+      const [copied, setCopied] = useState(false);
+      const [storyImg, setStoryImg] = useState('');
+      const [storyLoading, setStoryLoading] = useState(false);
+      const [boardNote, setBoardNote] = useState('');
+      const [chatRoomId, setChatRoomId] = useState('global-lobby');
+      const [chatNote, setChatNote] = useState('');
+      const [busy, setBusy] = useState(false);
+
+      useEffect(() => {
+        if (isOpen) {
+          setView('menu');
+          setCopied(false);
+          setStoryImg('');
+          setBoardNote('');
+          setChatNote('');
+        }
+      }, [isOpen]);
+
+      if (!isOpen || !treeMeta) return null;
+
+      const shareUrl = `${window.location.origin}${window.location.pathname}?tree=${treeMeta.code}`;
+      const shareableRooms = [
+        ...channels.filter(c => !c.isSystemReadOnly).map(c => ({ id: c.id, label: `# ${c.name}` })),
+        ...myGroups.filter(g => !g.isArchived).map(g => ({ id: g.id, label: `[กลุ่ม] ${g.name}` }))
+      ];
+
+      const handleCopyLink = () => {
+        navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2200);
+      };
+
+      const handleOpenStoryView = async () => {
+        setView('story');
+        setStoryLoading(true);
+        const url = await generateXmasStoryDataUrl(treeMeta, ornaments, shareUrl);
+        setStoryImg(url);
+        setStoryLoading(false);
+      };
+
+      const handleDownloadStory = () => {
+        if (!storyImg) return;
+        const a = document.createElement('a');
+        a.href = storyImg;
+        a.download = `xmas-tree-${treeMeta.code}-story.png`;
+        a.click();
+      };
+
+      const handleNativeShareStory = async () => {
+        if (!storyImg) return;
+        try {
+          const res = await fetch(storyImg);
+          const blob = await res.blob();
+          const file = new File([blob], `xmas-tree-${treeMeta.code}-story.png`, { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: `ต้นคริสต์มาสของ ${treeMeta.ownerName}`,
+              text: `มาแขวนคำอวยพรบนต้นคริสต์มาสของ ${treeMeta.ownerName} กันนะ! ${shareUrl}`
+            });
+            return;
+          }
+        } catch (err) {
+          if (err?.name === 'AbortError') return;
+        }
+        // Fallback กรณีเบราว์เซอร์บน PC ไม่รองรับ Web Share File
+        handleDownloadStory();
+        alert('ดาวน์โหลดภาพสตอรี่ 9:16 เรียบร้อยแล้ว! สามารถอัปโหลดลง IG / Facebook Story และกดคัดลอกลิงก์ไปแปะสติกเกอร์ได้เลยครับ');
+      };
+
+      return (
+        <Modal
+          title={
+            view === 'story' ? 'แชร์ลงสตอรี่ IG / Facebook (9:16)'
+            : view === 'board' ? 'แชร์ต้นไม้ลงกระดานโพสต์ (Board)'
+            : view === 'chat' ? 'ส่งต้นไม้เข้าห้องแชต (Chat)'
+            : 'เลือกช่องทางแชร์ต้นคริสต์มาส'
+          }
+          onClose={onClose}
+          maxW="max-w-md"
+        >
+          <div className="space-y-3.5 text-xs">
+
+            {/* เมนูหลักเลือกช่องทางแชร์ */}
+            {view === 'menu' && (
+              <>
+                <div className="p-3 rounded-xl bg-[#040D0E] border border-amber-500/35 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-amber-200 truncate">ต้นคริสต์มาสของ {treeMeta.ownerName}</div>
+                    <div className="text-[10px] font-mono text-slate-400 mt-0.5">ID: {treeMeta.code} • แขวนแล้ว {ornaments.length} ชิ้น</div>
+                  </div>
+                  <i className="fas fa-tree text-emerald-400 text-xl shrink-0"></i>
+                </div>
+
+                <div className="space-y-2">
+                  {/* 1. แชร์ลงสตอรี่ IG / Facebook */}
+                  <button
+                    type="button"
+                    onClick={handleOpenStoryView}
+                    className="w-full p-3.5 rounded-xl bg-gradient-to-r from-[#831843]/70 via-[#9D174D]/60 to-[#92400E]/70 hover:brightness-110 border border-amber-400/50 text-left flex items-center justify-between gap-3 transition-all shadow-md"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-black/35 border border-white/20 text-amber-200 flex items-center justify-center text-lg shrink-0">
+                        <i className="fab fa-instagram"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm">แชร์ลงสตอรี่ IG / Facebook</div>
+                        <div className="text-[10px] text-amber-100/80">สร้างภาพแนวตั้ง 9:16 พร้อม QR Code และกรอบสติกเกอร์ลิงก์</div>
+                      </div>
+                    </div>
+                    <i className="fas fa-chevron-right text-amber-200 shrink-0"></i>
+                  </button>
+
+                  {/* 2. แชร์ลง Board */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อแชร์ต้นคริสต์มาสลงกระดานโพสต์ของสมาคม');
+                      setView('board');
+                    }}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all ${currentUser ? 'bg-[#050811] border-[#1E3A5F] hover:border-sky-400 hover:bg-[#0F2547]/50' : 'bg-[#050811]/60 border-[#1E3A5F]/50 opacity-75'}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-400/40 text-sky-300 flex items-center justify-center text-base shrink-0">
+                        <i className="fas fa-clipboard-list"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                          <span>แชร์ลงกระดานโพสต์ (Board)</span>
+                          {!currentUser && <i className="fas fa-lock text-[10px] text-amber-400"></i>}
+                        </div>
+                        <div className="text-[10px] text-slate-400">สร้างโพสต์การ์ดชวนเพื่อนในสมาคมมากดแขวนคำอวยพร</div>
+                      </div>
+                    </div>
+                    <i className="fas fa-chevron-right text-slate-400 shrink-0"></i>
+                  </button>
+
+                  {/* 3. ส่งเข้าห้องแชต */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อส่งต้นคริสต์มาสเข้าห้องแชตของสมาคม');
+                      setView('chat');
+                    }}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all ${currentUser ? 'bg-[#050811] border-[#1E3A5F] hover:border-emerald-400 hover:bg-[#0F2547]/50' : 'bg-[#050811]/60 border-[#1E3A5F]/50 opacity-75'}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 flex items-center justify-center text-base shrink-0">
+                        <i className="fas fa-comments"></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                          <span>ส่งเข้าห้องแชต (Chat)</span>
+                          {!currentUser && <i className="fas fa-lock text-[10px] text-amber-400"></i>}
+                        </div>
+                        <div className="text-[10px] text-slate-400">ส่งการ์ดชวนแขวนคำอวยพรไปยังห้องแชตหรือกลุ่มที่เลือก</div>
+                      </div>
+                    </div>
+                    <i className="fas fa-chevron-right text-slate-400 shrink-0"></i>
+                  </button>
+
+                  {/* 4. คัดลอกลิงก์ */}
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all ${copied ? 'bg-emerald-950/60 border-emerald-400 text-emerald-200' : 'bg-[#050811] border-[#1E3A5F] hover:border-amber-400'}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 flex items-center justify-center text-base shrink-0">
+                        <i className={`fas ${copied ? 'fa-check' : 'fa-link'}`}></i>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm">{copied ? 'คัดลอกลิงก์เรียบร้อยแล้ว!' : 'คัดลอกลิงก์ต้นไม้ (?tree=...)'}</div>
+                        <div className="text-[10px] text-slate-400 truncate font-mono">{shareUrl}</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* หน้าย่อย 1: พรีวิวภาพสตอรี่ 9:16 */}
+            {view === 'story' && (
+              <div className="space-y-3.5">
+                <button type="button" onClick={() => setView('menu')} className="text-slate-400 hover:text-white flex items-center gap-1.5 font-bold">
+                  <i className="fas fa-arrow-left"></i> กลับไปเลือกช่องทางอื่น
+                </button>
+
+                <div className="bg-[#040D0E] border border-amber-500/35 rounded-2xl p-3 flex flex-col items-center justify-center min-h-[340px]">
+                  {storyLoading ? (
+                    <div className="text-amber-300 font-bold py-16 animate-pulse flex flex-col items-center gap-2">
+                      <i className="fas fa-spinner fa-spin text-2xl"></i>
+                      <span>กำลังเรนเดอร์ภาพสตอรี่ 9:16 พร้อม QR Code...</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={storyImg}
+                      alt="Christmas Story Preview"
+                      className="max-h-[380px] w-auto rounded-xl border border-amber-400/40 shadow-2xl object-contain"
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={storyLoading}
+                    onClick={handleNativeShareStory}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-amber-500 text-white font-bold shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <i className="fas fa-share-square"></i> แชร์ลงสตอรี่ (IG / Facebook / แอปอื่น)
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={storyLoading}
+                      onClick={handleDownloadStory}
+                      className="btn-w py-2 text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      <i className="fas fa-download"></i> บันทึกภาพ PNG
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className={`py-2 px-3 rounded-xl font-bold border text-xs flex items-center justify-center gap-1.5 transition-colors ${copied ? 'bg-emerald-500 text-[#050811] border-emerald-400' : 'bg-[#050811] text-amber-200 border-amber-500/40 hover:border-amber-300'}`}
+                    >
+                      <i className={`fas ${copied ? 'fa-check' : 'fa-link'}`}></i>
+                      <span>{copied ? 'คัดลอกแล้ว' : 'คัดลอกลิงก์ IG'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-slate-400 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] leading-relaxed">
+                  <strong>ทิปส์ลงสตอรี่:</strong> กด <strong>"คัดลอกลิงก์ IG"</strong> แล้วบันทึก/แชร์ภาพเข้า Instagram หรือ Facebook Story จากนั้นแปะ <strong>สติกเกอร์ลิงก์</strong> ลงในกรอบเส้นประด้านล่างของภาพได้เลย
+                </div>
+              </div>
+            )}
+
+            {/* หน้าย่อย 2: แชร์ลง Board */}
+            {view === 'board' && (
+              <div className="space-y-3.5">
+                <button type="button" onClick={() => setView('menu')} className="text-slate-400 hover:text-white flex items-center gap-1.5 font-bold">
+                  <i className="fas fa-arrow-left"></i> กลับไปเลือกช่องทางอื่น
+                </button>
+                <div>
+                  <label className="block text-[11px] text-slate-300 font-bold mb-1.5">ข้อความชวนเพื่อนบนกระดานโพสต์ (ไม่บังคับ)</label>
+                  <textarea
+                    rows="3"
+                    maxLength={300}
+                    value={boardNote}
+                    onChange={(e) => setBoardNote(e.target.value)}
+                    placeholder={`มาแขวนของประดับและเขียนคำอวยพรบนต้นคริสต์มาสของ ${treeMeta.ownerName} กันเถอะ!`}
+                    className="w-full inp text-xs resize-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    await onShareToBoard(treeMeta, ornaments.length, boardNote.trim());
+                    setBusy(false);
+                    onClose();
+                  }}
+                  className="w-full btn-w py-2.5 text-xs flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-clipboard-list'}`}></i>
+                  {busy ? 'กำลังโพสต์ลงกระดาน...' : 'ยืนยันแชร์ลง Board'}
+                </button>
+              </div>
+            )}
+
+            {/* หน้าย่อย 3: ส่งเข้าห้องแชต */}
+            {view === 'chat' && (
+              <div className="space-y-3.5">
+                <button type="button" onClick={() => setView('menu')} className="text-slate-400 hover:text-white flex items-center gap-1.5 font-bold">
+                  <i className="fas fa-arrow-left"></i> กลับไปเลือกช่องทางอื่น
+                </button>
+                <div>
+                  <label className="block text-[11px] text-slate-300 font-bold mb-1.5">เลือกห้องแชตหรือกลุ่มที่จะส่ง</label>
+                  <select
+                    value={chatRoomId}
+                    onChange={(e) => setChatRoomId(e.target.value)}
+                    className="w-full inp py-2 text-xs bg-[#050811]"
+                  >
+                    {shareableRooms.map(r => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-300 font-bold mb-1.5">ข้อความแนบสั้นๆ (ไม่บังคับ)</label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    value={chatNote}
+                    onChange={(e) => setChatNote(e.target.value)}
+                    placeholder={`มาแขวนคำอวยพรให้ ${treeMeta.ownerName} กัน!`}
+                    className="w-full inp text-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    await onShareToChat(treeMeta, ornaments.length, chatRoomId, chatNote.trim());
+                    setBusy(false);
+                    onClose();
+                  }}
+                  className="w-full btn-b py-2.5 text-xs hover:bg-sky-600 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <i className={`fas ${busy ? 'fa-spinner fa-spin' : 'fa-paper-plane'}`}></i>
+                  {busy ? 'กำลังส่งเข้าแชต...' : 'ส่งการ์ดต้นไม้เข้าห้องแชต'}
+                </button>
+              </div>
+            )}
+
+          </div>
+        </Modal>
+      );
+    }
+
+    // คอมโพเนนต์หน้าแท็บ Christmas Wish Tree
+    function ChristmasTreePage({
+      currentUser, users, allTags, db, svrTs, getAuthor,
+      onBackHome, initialTreeCode, isOwnerPreviewUnlock, openGuestPrompt,
+      channels = [], myGroups = [], onShareToBoard, onShareToChat
+    }) {
+      const currentYear = getBkkNow().getFullYear();
+      const assocCode = `assoc_${currentYear}`;
+
+      const [activeTab, setActiveTab] = useState(initialTreeCode ? 'personal' : 'assoc'); // 'assoc' | 'personal'
+      const [activePersonalCode, setActivePersonalCode] = useState(initialTreeCode || null);
+      const [personalTreeMeta, setPersonalTreeMeta] = useState(null);
+      const [personalLoading, setPersonalLoading] = useState(false);
+
+      // เก็บข้อมูลต้นไม้ของ Guest ในเครื่อง (code + token สำหรับยืนยันความเป็นเจ้าของตอนเปิดอ่าน)
+      const [guestTrees, setGuestTrees] = useStickyState({}, 'tbma_guest_xmas_trees');
+      const [myMemberTree, setMyMemberTree] = useState(null);
+
+      // รายการของประดับของต้นที่กำลังดูอยู่
+      const [ornaments, setOrnaments] = useState([]);
+      const [selectedOrn, setSelectedOrn] = useState(null);
+
+      // ฟอร์มสร้างต้นไม้ส่วนตัว (สำหรับ Guest / Member)
+      const [newTreeOwnerName, setNewTreeOwnerName] = useState('');
+      const [creatingTree, setCreatingTree] = useState(false);
+
+      // ฟอร์มแขวนของประดับ
+      const [shape, setShape] = useState('moon');
+      const [color, setColor] = useState('gold');
+      const [wishText, setWishText] = useState('');
+      const [guestSenderName, setGuestSenderName] = useState('');
+      const [isAnonymous, setIsAnonymous] = useState(false);
+      const [sending, setSending] = useState(false);
+      const [copiedShare, setCopiedShare] = useState(false);
+      const [shareModalOpen, setShareModalOpen] = useState(false);
+
+      // Autocomplete แท็ก @ (เฉพาะสมาชิกในต้นไม้สมาคม)
+      const [mentionOpen, setMentionOpen] = useState(false);
+      const [mentionQuery, setMentionQuery] = useState('');
+
+      // นับถอยหลังสู่ 25 ธ.ค. 00:00 น.
+      const [countdown, setCountdown] = useState('');
+      const isDateUnlocked = isXmasMidnightUnlocked(currentYear) || !!isOwnerPreviewUnlock;
+
+      useEffect(() => {
+        if (isDateUnlocked) { setCountdown('ปลดล็อกแล้ว!'); return; }
+        const updateTimer = () => {
+          const bkk = getBkkNow();
+          const target = new Date(currentYear, 11, 25, 0, 0, 0);
+          const diff = Math.max(0, Math.floor((target - bkk) / 1000));
+          const d = Math.floor(diff / 86400);
+          const h = String(Math.floor((diff % 86400) / 3600)).padStart(2, '0');
+          const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+          const s = String(diff % 60).padStart(2, '0');
+          setCountdown(`${d} วัน ${h}:${m}:${s}`);
+        };
+        updateTimer();
+        const t = setInterval(updateTimer, 1000);
+        return () => clearInterval(t);
+      }, [currentYear, isDateUnlocked]);
+
+      // หากมี initialTreeCode เปลี่ยนเข้ามา (เช่น กดจากลิงก์ ?tree=...)
+      useEffect(() => {
+        if (initialTreeCode) {
+          setActivePersonalCode(initialTreeCode);
+          setActiveTab('personal');
+        }
+      }, [initialTreeCode]);
+
+      // โหลดต้นไม้ส่วนตัวของสมาชิกในปีปัจจุบัน (ถ้ามี)
+      useEffect(() => {
+        if (!currentUser || !db) { setMyMemberTree(null); return; }
+        const unsub = db.collection('bma_xmas_trees')
+          .where('ownerId', '==', currentUser.id)
+          .onSnapshot((s) => {
+            const list = s.docs.map(d => d.data());
+            const thisYearTree = list.find(t => t.year === currentYear) || null;
+            setMyMemberTree(thisYearTree);
+          }, () => {});
+        return () => unsub();
+      }, [currentUser, currentYear, db]);
+
+      // หา code ต้นไม้ส่วนตัวที่กำลังเปิดอยู่
+      const myOwnPersonalCode = currentUser
+        ? myMemberTree?.code || null
+        : (guestTrees[currentYear]?.code || null);
+
+      const viewingPersonalCode = activePersonalCode || myOwnPersonalCode;
+
+      // โหลดข้อมูลเจ้าของต้นไม้ส่วนตัวที่กำลังดูอยู่
+      useEffect(() => {
+        if (activeTab !== 'personal' || !viewingPersonalCode || !db) {
+          setPersonalTreeMeta(null);
+          return;
+        }
+        setPersonalLoading(true);
+        const unsub = db.collection('bma_xmas_trees').doc(viewingPersonalCode).onSnapshot((doc) => {
+          setPersonalTreeMeta(doc.exists ? doc.data() : { notFound: true, code: viewingPersonalCode });
+          setPersonalLoading(false);
+        }, () => setPersonalLoading(false));
+        return () => unsub();
+      }, [activeTab, viewingPersonalCode, db]);
+
+      const activeTreeCode = activeTab === 'assoc' ? assocCode : (viewingPersonalCode || null);
+
+      // โหลดของประดับของต้นไม้ที่เปิดอยู่ (Sort ฝั่ง Client ไม่ต้องสร้าง Index ใน Firestore)
+      useEffect(() => {
+        if (!activeTreeCode || !db) { setOrnaments([]); return; }
+        setSelectedOrn(null);
+        const unsub = db.collection('bma_xmas_ornaments')
+          .where('treeCode', '==', activeTreeCode)
+          .onSnapshot((s) => {
+            const list = s.docs.map(d => d.data()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            setOrnaments(list);
+          }, () => {});
+        return () => unsub();
+      }, [activeTreeCode, db]);
+
+      // สิทธิ์ในการเปิดอ่านคำอวยพร
+      const isMyPersonalTree = activeTab === 'personal' && personalTreeMeta && !personalTreeMeta.notFound && (
+        (currentUser && personalTreeMeta.ownerId === currentUser.id) ||
+        (!currentUser && guestTrees[personalTreeMeta.year]?.code === personalTreeMeta.code && guestTrees[personalTreeMeta.year]?.guestToken === personalTreeMeta.guestToken)
+      );
+
+      const canReadCurrentTree = activeTab === 'assoc'
+        ? (isDateUnlocked && !!currentUser)
+        : (isDateUnlocked && (isMyPersonalTree || !!isOwnerPreviewUnlock));
+
+      // สร้างต้นไม้ส่วนตัวพร้อมรหัสสุ่ม (รองรับทั้ง Member และ Guest)
+      const handleCreatePersonalTree = async (e) => {
+        e.preventDefault();
+        const ownerName = currentUser ? currentUser.displayName : newTreeOwnerName.trim();
+        if (!ownerName) return alert('กรุณากรอกชื่อเจ้าของต้นไม้ก่อนครับ');
+
+        setCreatingTree(true);
+        try {
+          let code = generateRandomTreeCode(currentYear);
+          // ตรวจสอบไม่ให้รหัสสุ่มซ้ำ
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const check = await db.collection('bma_xmas_trees').doc(code).get();
+            if (!check.exists) break;
+            code = generateRandomTreeCode(currentYear);
+          }
+
+          const guestToken = !currentUser ? ('gt-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)) : '';
+          const payload = {
+            code,
+            year: currentYear,
+            ownerType: currentUser ? 'member' : 'guest',
+            ownerId: currentUser ? currentUser.id : ('GUEST_' + code),
+            ownerName,
+            guestToken,
+            createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }),
+            timestamp: Date.now(),
+            serverCreatedAt: svrTs()
+          };
+
+          await db.collection('bma_xmas_trees').doc(code).set(payload);
+
+          if (!currentUser) {
+            setGuestTrees(prev => ({
+              ...prev,
+              [currentYear]: { code, ownerName, guestToken, year: currentYear }
+            }));
+          }
+          setActivePersonalCode(code);
+          setNewTreeOwnerName('');
+        } catch (err) {
+          alert('ไม่สามารถสร้างต้นไม้ได้ กรุณาลองใหม่อีกครั้ง');
+        }
+        setCreatingTree(false);
+      };
+
+      // แขวนของประดับและคำอวยพร
+      const handleHangOrnament = async (e) => {
+        e.preventDefault();
+        if (!activeTreeCode) return;
+        const msg = wishText.trim();
+        if (!msg) return alert('กรุณาพิมพ์คำอวยพรก่อนแขวนครับ');
+        if (!currentUser && !guestSenderName.trim()) return alert('กรุณาใส่ชื่อเล่นของคุณก่อนแขวนครับ');
+
+        // ป้องกันการสแปมของ Guest เล็กน้อย (เว้น 20 วินาทีต่อชิ้น)
+        if (!currentUser) {
+          const lastHang = parseInt(localStorage.getItem('tbma_guest_last_orn') || '0', 10);
+          if (Date.now() - lastHang < 20000) {
+            return alert('กรุณารอสักครู่ก่อนแขวนของประดับชิ้นถัดไปครับ');
+          }
+        }
+
+        setSending(true);
+        try {
+          const mentions = (activeTab === 'assoc' && currentUser)
+            ? Array.from(new Set(msg.match(/(@\[[^\]]+\]|@[a-zA-Z0-9_&-]+)/g) || []))
+            : [];
+
+          const id = 'orn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+          const payload = {
+            id,
+            treeCode: activeTreeCode,
+            year: activeTab === 'assoc' ? currentYear : (personalTreeMeta?.year || currentYear),
+            isAssoc: activeTab === 'assoc',
+            shape,
+            color,
+            message: msg,
+            senderName: currentUser ? (isAnonymous ? 'ผู้ส่งนิรนาม' : currentUser.displayName) : guestSenderName.trim(),
+            senderId: currentUser ? currentUser.id : 'GUEST',
+            isAnonymous: currentUser ? isAnonymous : false,
+            isGuest: !currentUser,
+            mentions,
+            slotIdx: ornaments.length % XMAS_SLOTS.length,
+            createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+            timestamp: Date.now(),
+            serverCreatedAt: svrTs()
+          };
+
+          await db.collection('bma_xmas_ornaments').doc(id).set(payload);
+          if (!currentUser) {
+            try { localStorage.setItem('tbma_guest_last_orn', String(Date.now())); } catch (e) {}
+          }
+          setWishText('');
+          setMentionOpen(false);
+          setSelectedOrn(payload);
+        } catch (err) {
+          alert('ไม่สามารถแขวนของประดับได้ กรุณาลองใหม่อีกครั้ง');
+        }
+        setSending(false);
+      };
+
+      const copyShareLink = (code) => {
+        const shareUrl = `${window.location.origin}${window.location.pathname}?tree=${code}`;
+        navigator.clipboard.writeText(shareUrl);
+        setCopiedShare(true);
+        setTimeout(() => setCopiedShare(false), 2500);
+      };
+
+      // รายชื่อแท็ก @ สำหรับ Autocomplete บนต้นไม้สมาคม
+      const getXmasMentionCandidates = () => {
+        const list = [{ token: '@everyone', label: '@everyone', sub: 'สมาชิกทุกคน' }];
+        allTags.forEach(t => list.push({ token: `@[${t}]`, label: `@[${t}]`, sub: `หมวดหมู่ ${t}` }));
+        users.filter(u => u.isActivated).forEach(m => {
+          list.push({ token: `@${m.id}`, label: `@${m.id} (${m.displayName})`, sub: `@${m.username}` });
+        });
+        if (!mentionQuery) return list.slice(0, 12);
+        return list.filter(x => x.label.toLowerCase().includes(mentionQuery) || x.sub.toLowerCase().includes(mentionQuery)).slice(0, 12);
+      };
+
+      const isViewingForeignPersonalTree = activeTab === 'personal' && viewingPersonalCode && viewingPersonalCode !== myOwnPersonalCode;
+
+      return (
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-gradient-to-b from-[#040D0E] via-[#061517] to-[#040D0E]">
+          <div className="max-w-6xl mx-auto space-y-5 pb-12">
+
+            {/* Header Bar */}
+            <div className="card p-4 sm:p-5 bg-gradient-to-br from-[#081C1B] to-[#040D0E] border-amber-500/40 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <button
+                  onClick={onBackHome}
+                  className="btn-d py-2 px-3 text-xs font-bold shrink-0 hover:bg-white hover:text-[#050811] transition-colors"
+                  title="กลับหน้า Home"
+                >
+                  <i className="fas fa-arrow-left"></i>
+                </button>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-950/60 border border-amber-500/40 text-[10px] font-bold text-amber-300 uppercase tracking-wider mb-1">
+                    <i className="fas fa-holly-berry text-red-400"></i> Midnight Winter Event • {currentYear}
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">Christmas Wish Tree</h2>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    แขวนของประดับพร้อมคำอวยพรส่งท้ายปี — เปิดอ่านข้อความได้ตั้งแต่ 00:00 น. วันที่ 25 ธันวาคม
+                  </p>
+                </div>
+              </div>
+
+              {/* Countdown Pill */}
+              <div className="bg-[#040D0E] border border-amber-500/40 rounded-2xl px-4 py-2.5 flex items-center gap-3 shrink-0 self-start md:self-auto">
+                <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-sm ${isDateUnlocked ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300' : 'bg-amber-500/15 border-amber-400/50 text-amber-300'}`}>
+                  <i className={`fas ${isDateUnlocked ? 'fa-unlock-alt' : 'fa-clock'}`}></i>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    {isDateUnlocked ? 'สถานะการเปิดอ่าน' : 'นับถอยหลังสู่คืนคริสต์มาส'}
+                  </div>
+                  <div className={`text-sm sm:text-base font-mono font-bold ${isDateUnlocked ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {countdown}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tree Mode Switcher */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex bg-[#081C1B] p-1 rounded-xl border border-amber-500/40 gap-1 text-xs font-bold">
+                <button
+                  onClick={() => setActiveTab('assoc')}
+                  className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${activeTab === 'assoc' ? 'bg-white text-[#040D0E] shadow' : 'text-slate-300 hover:text-white'}`}
+                >
+                  <i className="fas fa-tree text-emerald-600"></i> ต้นไม้สมาคม
+                </button>
+                <button
+                  onClick={() => setActiveTab('personal')}
+                  className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${activeTab === 'personal' ? 'bg-amber-400 text-[#040D0E] shadow' : 'text-slate-300 hover:text-white'}`}
+                >
+                  <i className="fas fa-gift text-red-600"></i>
+                  <span>{isViewingForeignPersonalTree ? 'ต้นไม้ที่เปิดจากลิงก์' : 'ต้นไม้ส่วนตัวของฉัน'}</span>
+                </button>
+              </div>
+
+              {activeTab === 'personal' && isViewingForeignPersonalTree && myOwnPersonalCode && (
+                <button
+                  onClick={() => setActivePersonalCode(myOwnPersonalCode)}
+                  className="btn-b text-xs py-1.5 px-3 flex items-center gap-1.5"
+                >
+                  <i className="fas fa-home"></i> กลับไปต้นไม้ของฉัน
+                </button>
+              )}
+            </div>
+
+            {/* กรณีอยู่แท็บส่วนตัว และยังไม่มีต้นไม้ */}
+            {activeTab === 'personal' && !viewingPersonalCode ? (
+              <div className="card p-6 sm:p-8 max-w-lg mx-auto text-center space-y-5 border-amber-500/40">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-300 flex items-center justify-center text-3xl">
+                  <i className="fas fa-tree"></i>
+                </div>
+                <div className="space-y-1.5">
+                  <h3 className="text-lg font-bold text-white">สร้างต้นคริสต์มาสส่วนตัวปี {currentYear}</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    ระบบจะสร้างรหัสสุ่มเฉพาะตัวให้คุณนำไปแชร์ลิงก์ให้เพื่อนๆ มาแขวนคำอวยพรได้ทันที (รองรับทั้งสมาชิกและผู้มาเยือน)
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreatePersonalTree} className="space-y-3 text-left">
+                  {!currentUser && (
+                    <div>
+                      <label className="block text-[11px] text-amber-200 font-bold mb-1">ชื่อเจ้าของต้นไม้ (แสดงบนหัวต้นไม้)</label>
+                      <input
+                        type="text"
+                        maxLength={40}
+                        value={newTreeOwnerName}
+                        onChange={(e) => setNewTreeOwnerName(e.target.value)}
+                        placeholder="เช่น น้องมิ้นต์, พี่เอ..."
+                        className="w-full inp text-xs"
+                        required
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={creatingTree}
+                    className="w-full btn-w py-3 text-xs flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] transition-transform disabled:opacity-50"
+                  >
+                    <i className={`fas ${creatingTree ? 'fa-spinner fa-spin' : 'fa-magic'}`}></i>
+                    {creatingTree ? 'กำลังสร้างรหัสต้นไม้...' : `สร้างต้นคริสต์มาสส่วนตัวปี ${currentYear}`}
+                  </button>
+                </form>
+
+                {!currentUser && (
+                  <p className="text-[10px] text-slate-400">
+                    หมายเหตุ: สำหรับ Guest ระบบจะจำสิทธิ์เจ้าของต้นไม้ไว้ในเบราว์เซอร์เครื่องนี้เพื่อใช้เปิดอ่านข้อความในวันที่ 25 ธ.ค.
+                  </p>
+                )}
+              </div>
+            ) : activeTab === 'personal' && personalTreeMeta?.notFound ? (
+              <div className="card p-8 max-w-md mx-auto text-center space-y-4 border-red-500/40">
+                <i className="fas fa-exclamation-triangle text-3xl text-red-400"></i>
+                <div className="font-bold text-base text-white">ไม่พบต้นคริสต์มาสรหัส {viewingPersonalCode}</div>
+                <p className="text-xs text-slate-400">ลิงก์อาจพิมพ์ผิดหรือยังไม่ได้สร้างต้นไม้นี้ในระบบ</p>
+                <button
+                  onClick={() => { setActivePersonalCode(null); setActiveTab('assoc'); }}
+                  className="btn-w text-xs px-5 py-2"
+                >
+                  กลับไปต้นไม้สมาคม
+                </button>
+              </div>
+            ) : (
+              /* พื้นที่ต้นไม้ + ฟอร์มแขวนของประดับ */
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                {/* ฝั่งซ้าย: ต้นคริสต์มาส + กล่องอ่านข้อความ */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="card p-4 sm:p-6 bg-gradient-to-b from-[#081C1B] to-[#040D0E] border-amber-500/40 relative overflow-hidden">
+                    {/* หัวข้อต้นไม้ + ปุ่มแชร์ */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-2 border-b border-amber-500/25">
+                      <div>
+                        <h3 className="text-sm sm:text-base font-bold text-amber-200 flex items-center gap-2">
+                          <i className={`fas ${activeTab === 'assoc' ? 'fa-moon text-sky-300' : 'fa-star text-amber-300'}`}></i>
+                          {activeTab === 'assoc'
+                            ? `ต้นคริสต์มาสสมาคม (${currentYear})`
+                            : (personalLoading ? 'กำลังโหลด...' : `ต้นคริสต์มาสของ ${personalTreeMeta?.ownerName || viewingPersonalCode}`)}
+                        </h3>
+                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                          <span>แขวนแล้ว <strong className="text-white font-mono">{ornaments.length}</strong> ชิ้น</span>
+                          {activeTab === 'personal' && viewingPersonalCode && (
+                            <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-[#040D0E] border border-amber-500/30 text-amber-300">
+                              ID: {viewingPersonalCode}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {activeTab === 'personal' && viewingPersonalCode && personalTreeMeta && !personalTreeMeta.notFound && (
+                        <button
+                          onClick={() => setShareModalOpen(true)}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 bg-[#040D0E] text-amber-200 border-amber-500/60 hover:bg-amber-400 hover:text-[#040D0E] shadow"
+                        >
+                          <i className="fas fa-share-alt"></i>
+                          <span>แชร์ต้นไม้นี้</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* ต้นไม้ SVG */}
+                    <XmasTreeCanvas
+                      ornaments={ornaments}
+                      selectedId={selectedOrn?.id}
+                      onSelectOrnament={(orn) => setSelectedOrn(orn)}
+                      currentUser={currentUser}
+                      isAssocTree={activeTab === 'assoc'}
+                      canReadWishes={canReadCurrentTree}
+                    />
+
+                    {/* กล่องแสดงคำอวยพรที่คลิกเลือก */}
+                    <div className="mt-4 p-4 rounded-xl bg-[#040D0E]/90 border border-amber-500/35 text-xs">
+                      {!selectedOrn ? (
+                        <div className="text-center text-slate-400 py-2">
+                          <i className="fas fa-hand-pointer text-amber-300 mr-1.5"></i>
+                          คลิกที่ของประดับบนต้นไม้เพื่อดูรายละเอียด
+                        </div>
+                      ) : canReadCurrentTree ? (
+                        <div className="space-y-2.5 animate-fade-in">
+                          <div className="flex items-center justify-between gap-2 pb-2 border-b border-amber-500/20">
+                            <div className="flex items-center gap-2">
+                              <XmasOrnamentSVG shape={selectedOrn.shape} colorId={selectedOrn.color} size={24} />
+                              <div>
+                                <div className="font-bold text-amber-200 flex items-center gap-1.5">
+                                  <span>{selectedOrn.isAnonymous ? 'ผู้ส่งนิรนาม' : selectedOrn.senderName}</span>
+                                  {selectedOrn.isGuest && <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-500/30">Guest</span>}
+                                  {selectedOrn.isAnonymous && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-600">นิรนาม</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">{selectedOrn.createdAt}</div>
+                              </div>
+                            </div>
+                            <button onClick={() => setSelectedOrn(null)} className="text-slate-400 hover:text-white px-2">✕</button>
+                          </div>
+                          <div className="text-slate-100 leading-relaxed">
+                            <FormattedText text={selectedOrn.message} currentUser={currentUser} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-1">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+                              <i className="fas fa-lock"></i>
+                            </div>
+                            <div>
+                              <div className="font-bold text-amber-200">
+                                {activeTab === 'assoc' && !currentUser
+                                  ? 'คำอวยพรบนต้นไม้สมาคมสงวนไว้สำหรับสมาชิก'
+                                  : activeTab === 'personal' && isDateUnlocked && !isMyPersonalTree
+                                    ? 'ข้อความบนต้นไม้ส่วนตัวเปิดอ่านได้เฉพาะเจ้าของต้นไม้'
+                                    : 'คำอวยพรถูกปิดผนึกไว้จนถึงเที่ยงคืนวันคริสต์มาส'}
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">
+                                แขวนโดย: <strong className="text-slate-200">{selectedOrn.isAnonymous ? 'ผู้ส่งนิรนาม' : selectedOrn.senderName}</strong> • {selectedOrn.createdAt}
+                              </div>
+                            </div>
+                          </div>
+                          {activeTab === 'assoc' && !currentUser && (
+                            <button
+                              onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อเปิดอ่านคำอวยพรบนต้นไม้สมาคมในวันคริสต์มาส')}
+                              className="btn-w py-1.5 px-3 text-[11px] shrink-0"
+                            >
+                              เข้าสู่ระบบ
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ฝั่งขวา: ฟอร์มออกแบบและแขวนของประดับ */}
+                <div className="lg:col-span-5">
+                  <form onSubmit={handleHangOrnament} className="card p-5 space-y-4 border-amber-500/40 shadow-2xl text-xs">
+                    <div className="flex items-center justify-between border-b border-amber-500/25 pb-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <i className="fas fa-magic text-amber-300"></i> ออกแบบและแขวนของประดับ
+                        </h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">เลือกทรง สี และเขียนคำอวยพรลงบนต้นไม้นี้</p>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-[#040D0E] border border-amber-500/40 flex items-center justify-center shrink-0">
+                        <XmasOrnamentSVG shape={shape} colorId={color} size={34} />
+                      </div>
+                    </div>
+
+                    {/* เลือกรูปทรง 8 แบบ */}
+                    <div>
+                      <label className="block text-[11px] text-amber-200 font-bold mb-2">1. เลือกรูปทรงของประดับ</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {XMAS_SHAPES.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setShape(s.id)}
+                            className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${shape === s.id ? 'bg-amber-400/20 border-amber-300 text-white shadow' : 'bg-[#040D0E] border-[#1E3A5F] text-slate-400 hover:text-white'}`}
+                          >
+                            <XmasOrnamentSVG shape={s.id} colorId={color} size={24} />
+                            <span className="text-[9px] font-bold truncate w-full text-center">{s.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* เลือกโทนสี */}
+                    <div>
+                      <label className="block text-[11px] text-amber-200 font-bold mb-2">2. เลือกโทนสี</label>
+                      <div className="flex flex-wrap gap-2">
+                        {XMAS_COLORS.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setColor(c.id)}
+                            className={`px-2.5 py-1.5 rounded-full border text-[10px] font-bold flex items-center gap-1.5 transition-all ${color === c.id ? 'border-white bg-white/15 text-white scale-105' : 'border-[#1E3A5F] bg-[#040D0E] text-slate-400 hover:text-white'}`}
+                          >
+                            <span className="w-3 h-3 rounded-full border border-white/50" style={{ backgroundColor: c.main }}></span>
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ชื่อผู้ส่ง หรือ โหมดนิรนาม (เฉพาะสมาชิก) */}
+                    {currentUser ? (
+                      <div className="p-3 rounded-xl bg-[#040D0E] border border-amber-500/30 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-slate-200">ส่งในชื่อ: <span className="text-amber-300">{isAnonymous ? 'ผู้ส่งนิรนาม' : currentUser.displayName}</span></div>
+                          <div className="text-[10px] text-slate-400">เฉพาะสมาชิกสามารถซ่อนชื่อเป็นนิรนามได้</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsAnonymous(!isAnonymous)}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-colors shrink-0 ${isAnonymous ? 'bg-amber-400 text-[#040D0E] border-amber-300' : 'bg-[#081C1B] text-slate-300 border-[#1E3A5F]'}`}
+                        >
+                          <i className={`fas ${isAnonymous ? 'fa-user-secret' : 'fa-user'} mr-1`}></i>
+                          {isAnonymous ? 'นิรนาม: เปิด' : 'นิรนาม: ปิด'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] text-amber-200 font-bold mb-1">ชื่อเล่นผู้ส่ง (Guest) <span className="text-red-400">*</span></label>
+                        <input
+                          type="text"
+                          maxLength={35}
+                          value={guestSenderName}
+                          onChange={(e) => setGuestSenderName(e.target.value)}
+                          placeholder="ใส่ชื่อเล่นของคุณ..."
+                          className="w-full inp text-xs"
+                          required
+                        />
+                      </div>
+                    )}
+
+                    {/* ช่องพิมพ์คำอวยพร + Autocomplete @ (ในต้นไม้สมาคมสำหรับสมาชิก) */}
+                    <div className="relative">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[11px] text-amber-200 font-bold">3. เขียนคำอวยพร <span className="text-red-400">*</span></label>
+                        <span className="text-[10px] font-mono text-slate-400">{wishText.length}/400</span>
+                      </div>
+                      <textarea
+                        rows="4"
+                        maxLength={400}
+                        value={wishText}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setWishText(v);
+                          if (activeTab === 'assoc' && currentUser) {
+                            const lastWord = v.split(/\s+/).pop() || '';
+                            if (lastWord.startsWith('@')) {
+                              setMentionOpen(true);
+                              setMentionQuery(lastWord.slice(1).toLowerCase());
+                            } else {
+                              setMentionOpen(false);
+                            }
+                          }
+                        }}
+                        placeholder={activeTab === 'assoc' && currentUser
+                          ? 'พิมพ์คำอวยพร... (พิมพ์ @ เพื่อแท็กสมาชิก จะแจ้งเตือนให้ในวันที่ 25 ธ.ค.)'
+                          : 'พิมพ์คำอวยพรส่งท้ายปีถึงเจ้าของต้นไม้...'}
+                        className="w-full inp text-xs resize-none custom-scrollbar"
+                        required
+                      />
+
+                      {mentionOpen && activeTab === 'assoc' && currentUser && (
+                        <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#081C1B] border border-amber-400/60 rounded-xl p-1.5 max-h-40 overflow-y-auto shadow-2xl z-40 space-y-1 custom-scrollbar">
+                          <div className="text-[9px] text-amber-300 font-bold px-2 py-0.5">เลือกแท็กสมาชิก (แจ้งเตือน 25 ธ.ค.)</div>
+                          {getXmasMentionCandidates().map((item, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                const words = wishText.split(/\s+/);
+                                if (words[words.length - 1]?.startsWith('@')) words[words.length - 1] = item.token;
+                                else words.push(item.token);
+                                setWishText(words.join(' ') + ' ');
+                                setMentionOpen(false);
+                              }}
+                              className="w-full flex justify-between items-center px-2.5 py-1.5 rounded-lg hover:bg-amber-400/20 text-left"
+                            >
+                              <span className="font-mono font-bold text-white text-[11px]">{item.label}</span>
+                              <span className="text-[9px] text-slate-400">{item.sub}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-[0_0_18px_rgba(220,38,38,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <i className={`fas ${sending ? 'fa-spinner fa-spin' : 'fa-gift'}`}></i>
+                      {sending ? 'กำลังแขวนบนต้นไม้...' : 'แขวนของประดับลงบนต้นไม้'}
+                    </button>
+                  </form>
+                </div>
+
+              </div>
+            )}
+          <XmasShareModal
+            isOpen={shareModalOpen}
+            onClose={() => setShareModalOpen(false)}
+            treeMeta={personalTreeMeta}
+            ornaments={ornaments}
+            currentUser={currentUser}
+            channels={channels}
+            myGroups={myGroups}
+            onShareToBoard={onShareToBoard}
+            onShareToChat={onShareToChat}
+            openGuestPrompt={openGuestPrompt}
+          />
+        </div>
+      );
+    }
+
+    // คอมโพเนนต์หน้าต่างคลังต้นคริสต์มาสสะสม (Archive Tree Modal - เฉพาะสมาชิก)
+    function MyChristmasTreeArchiveModal({ isOpen, onClose, archivedTrees, db, currentUser }) {
+      const [selectedTree, setSelectedTree] = useState(null);
+      const [ornaments, setOrnaments] = useState([]);
+      const [selectedOrn, setSelectedOrn] = useState(null);
+
+      useEffect(() => {
+        if (isOpen && archivedTrees.length > 0 && !selectedTree) {
+          setSelectedTree(archivedTrees[0]);
+        }
+      }, [isOpen, archivedTrees, selectedTree]);
+
+      useEffect(() => {
+        if (!isOpen || !selectedTree || !db) { setOrnaments([]); return; }
+        setSelectedOrn(null);
+        const unsub = db.collection('bma_xmas_ornaments')
+          .where('treeCode', '==', selectedTree.code)
+          .onSnapshot((s) => {
+            setOrnaments(s.docs.map(d => d.data()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)));
+          }, () => {});
+        return () => unsub();
+      }, [isOpen, selectedTree, db]);
+
+      if (!isOpen) return null;
+
+      return (
+        <Modal title="ต้นคริสต์มาสของฉัน (คลังสะสมรายปี)" onClose={onClose} maxW="max-w-4xl">
+          <div className="space-y-4 text-xs">
+            {/* แถบเลือกปีที่สะสมไว้ */}
+            <div className="flex flex-wrap gap-2 pb-3 border-b border-[#1E3A5F]">
+              {archivedTrees.map((t) => (
+                <button
+                  key={t.code}
+                  type="button"
+                  onClick={() => setSelectedTree(t)}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold border transition-all flex items-center gap-2 ${selectedTree?.code === t.code ? 'bg-amber-400 text-[#050811] border-amber-300 shadow' : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:text-white'}`}
+                >
+                  <i className="fas fa-tree"></i>
+                  <span>คริสต์มาส {t.year}</span>
+                  <span className="font-mono text-[10px] opacity-75">({t.code})</span>
+                </button>
+              ))}
+            </div>
+
+            {selectedTree && (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                <div className="md:col-span-7 bg-[#050811] rounded-2xl border border-[#1E3A5F] p-4">
+                  <div className="flex justify-between items-center text-[11px] text-slate-400 mb-2">
+                    <span>ต้นคริสต์มาสปี <strong className="text-amber-300">{selectedTree.year}</strong></span>
+                    <span>ของประดับทั้งหมด <strong className="text-white font-mono">{ornaments.length}</strong> ชิ้น</span>
+                  </div>
+                  <XmasTreeCanvas
+                    ornaments={ornaments}
+                    selectedId={selectedOrn?.id}
+                    onSelectOrnament={(orn) => setSelectedOrn(orn)}
+                    currentUser={currentUser}
+                    isAssocTree={false}
+                    canReadWishes={true}
+                  />
+                </div>
+
+                <div className="md:col-span-5 space-y-2.5 max-h-[460px] overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="font-bold text-amber-300 text-xs pb-1 border-b border-[#1E3A5F]">
+                    คำอวยพรทั้งหมดในปี {selectedTree.year}
+                  </div>
+                  {ornaments.length === 0 ? (
+                    <div className="text-center text-slate-500 py-8 border border-dashed border-[#1E3A5F] rounded-xl">
+                      ไม่มีคำอวยพรบนต้นไม้นี้
+                    </div>
+                  ) : (
+                    ornaments.map((orn) => (
+                      <div
+                        key={orn.id}
+                        onClick={() => setSelectedOrn(orn)}
+                        className={`p-3 rounded-xl border cursor-pointer transition-colors space-y-1.5 ${selectedOrn?.id === orn.id ? 'bg-amber-950/30 border-amber-400' : 'bg-[#050811] border-[#1E3A5F] hover:border-slate-500'}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <XmasOrnamentSVG shape={orn.shape} colorId={orn.color} size={20} />
+                            <span className="font-bold text-white truncate">
+                              {orn.isAnonymous ? 'ผู้ส่งนิรนาม' : orn.senderName}
+                            </span>
+                            {orn.isGuest && <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-950 text-sky-300">Guest</span>}
+                          </div>
+                          <span className="text-[9px] text-slate-500 font-mono shrink-0">{orn.createdAt}</span>
+                        </div>
+                        <p className="text-slate-200 whitespace-pre-line leading-relaxed break-words">{orn.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      );
+    }
+
+    // ==========================================
+    // 🔕 MUTE DURATION MODAL (ตั้งเวลาปิดการแจ้งเตือน)
+    // ==========================================
+    const formatMuteUntil = (exp) => {
+      if (!exp) return '';
+      if (exp === -1) return 'จนกว่าจะเปิดอีกครั้ง';
+      return 'ถึง ' + new Date(exp).toLocaleString('th-TH', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+      }) + ' น.';
+    };
+
+    function MuteDurationModal({ target, currentExp, onClose, onSave }) {
+      const [customAmt, setCustomAmt] = useState(2);
+      const [customUnit, setCustomUnit] = useState('hours'); // 'hours' | 'days' | 'weeks' | 'months'
+
+      if (!target) return null;
+
+      const isMutedNow = currentExp === -1 || (typeof currentExp === 'number' && currentExp > Date.now());
+      const HOUR = 3600000;
+      const DAY = 86400000;
+
+      const PRESETS = [
+        { label: '1 ชั่วโมง', sub: '1 hr', ms: HOUR },
+        { label: '8 ชั่วโมง', sub: '8 hrs', ms: 8 * HOUR },
+        { label: '1 วัน', sub: '24 hrs', ms: DAY },
+        { label: '1 สัปดาห์', sub: '7 วัน', ms: 7 * DAY },
+        { label: '1 เดือน', sub: '30 วัน', ms: 30 * DAY },
+        { label: 'จนกว่าจะเปิดอีกครั้ง', sub: 'ถาวร', ms: -1 }
+      ];
+
+      const handleCustomSubmit = (e) => {
+        e.preventDefault();
+        const n = Math.max(1, parseInt(customAmt, 10) || 1);
+        const unitMs = {
+          hours: HOUR,
+          days: DAY,
+          weeks: 7 * DAY,
+          months: 30 * DAY
+        }[customUnit] || HOUR;
+        onSave(target.key, Date.now() + n * unitMs);
+      };
+
+      return (
+        <Modal title="ปิดการแจ้งเตือน" onClose={onClose} maxW="max-w-sm">
+          <div className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center gap-2.5">
+              <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-sm shrink-0 ${isMutedNow ? 'bg-red-950/60 border-red-500/40 text-red-400' : 'bg-sky-950/60 border-sky-500/40 text-sky-300'}`}>
+                <i className={`fas ${isMutedNow ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+              </div>
+              <div className="min-w-0">
+                <div className="font-bold text-white truncate">{target.label}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  {isMutedNow ? `ปิดแจ้งเตือนอยู่ (${formatMuteUntil(currentExp)})` : 'กำลังเปิดรับการแจ้งเตือนตามปกติ'}
+                </div>
+              </div>
+            </div>
+
+            {isMutedNow && (
+              <button
+                type="button"
+                onClick={() => onSave(target.key, null)}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow flex items-center justify-center gap-2 transition-colors"
+              >
+                <i className="fas fa-bell"></i> เปิดการแจ้งเตือนอีกครั้ง
+              </button>
+            )}
+
+            <div className="space-y-2">
+              <div className="text-[11px] font-bold text-slate-300">
+                {isMutedNow ? 'หรือเปลี่ยนระยะเวลาปิดการแจ้งเตือน:' : 'เลือกระยะเวลาที่ต้องการปิด:'}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => onSave(target.key, p.ms === -1 ? -1 : Date.now() + p.ms)}
+                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${p.ms === -1 ? 'col-span-2 bg-red-950/30 border-red-900/60 hover:border-red-400 text-red-200' : 'bg-[#050811] border-[#1E3A5F] hover:border-sky-400 hover:bg-[#0F2547] text-slate-100'}`}
+                  >
+                    <span className="font-bold">{p.label}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{p.sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form onSubmit={handleCustomSubmit} className="pt-3 border-t border-[#1E3A5F] space-y-2">
+              <div className="text-[11px] font-bold text-sky-300">กำหนดระยะเวลาเอง</div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={customAmt}
+                  onChange={(e) => setCustomAmt(e.target.value)}
+                  className="w-20 inp text-center font-mono text-xs py-1.5"
+                  required
+                />
+                <select
+                  value={customUnit}
+                  onChange={(e) => setCustomUnit(e.target.value)}
+                  className="flex-1 inp text-xs py-1.5 bg-[#050811]"
+                >
+                  <option value="hours">ชั่วโมง</option>
+                  <option value="days">วัน</option>
+                  <option value="weeks">สัปดาห์</option>
+                  <option value="months">เดือน</option>
+                </select>
+                <button type="submit" className="btn-w py-1.5 px-4 text-xs shrink-0">ตกลง</button>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      );
+    }
+
+    // ==========================================
     // 8. MAIN APP COMPONENT (State & Logic)
     // ==========================================
     function App() {
@@ -8367,7 +10428,9 @@
           return (month === 10 && date >= 19 && date <= 31);
       };
       
-      const IS_HALLOWEEN = checkIsHalloween();
+      // โหมดพรีวิวธีมสำหรับ Owner ('auto' | 'normal' | 'halloween' | 'loykrathong' | 'christmas')
+      const [themePreview, setThemePreview] = useState('auto');
+      const IS_HALLOWEEN = themePreview === 'auto' ? checkIsHalloween() : themePreview === 'halloween';
       
       useEffect(() => {
           if (IS_HALLOWEEN) document.body.classList.add('halloween-theme');
@@ -8429,12 +10492,107 @@
           return (phase < 0.5 || phase > synodicMonth - 0.5) && (m === 11 || bkkDate.getDate() >= 25);
       };
 
-      const IS_LOY_KRATHONG = checkIsLoyKrathong();
+      const IS_LOY_KRATHONG = themePreview === 'auto' ? checkIsLoyKrathong() : themePreview === 'loykrathong';
       
       useEffect(() => {
           if (IS_LOY_KRATHONG) document.body.classList.add('loykrathong-theme');
           else document.body.classList.remove('loykrathong-theme');
       }, [IS_LOY_KRATHONG]);
+
+      // ==========================================
+      // ❄️ THEME EFFECTS: CHRISTMAS (11 - 26 DEC) ❄️
+      // ==========================================
+      const checkIsChristmas = () => {
+          const now = new Date();
+          const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const bkkDate = new Date(utcMs + (7 * 3600000));
+          const month = bkkDate.getMonth() + 1;
+          const date = bkkDate.getDate();
+          return (month === 12 && date >= 11 && date <= 26);
+      };
+
+      const IS_CHRISTMAS = themePreview === 'auto' ? checkIsChristmas() : themePreview === 'christmas';
+
+      useEffect(() => {
+          if (IS_CHRISTMAS) document.body.classList.add('christmas-theme');
+          else document.body.classList.remove('christmas-theme');
+      }, [IS_CHRISTMAS]);
+
+      const [snowEnabled, setSnowEnabled] = useStickyState(true, 'tbma_xmas_snow_enabled');
+
+      const [xmasPreviewUnlock, setXmasPreviewUnlock] = useState(false);
+      const [showXmasArchive, setShowXmasArchive] = useState(false);
+      const [myArchivedXmasTrees, setMyArchivedXmasTrees] = useState([]);
+
+      // โหลดต้นคริสต์มาสส่วนตัวที่พ้นช่วงเทศกาลแล้ว (Archive) ของสมาชิก
+      useEffect(() => {
+        if (!currentUser || !db) { setMyArchivedXmasTrees([]); return; }
+        const unsub = db.collection('bma_xmas_trees')
+          .where('ownerId', '==', currentUser.id)
+          .onSnapshot((s) => {
+            const archived = s.docs
+              .map(d => d.data())
+              .filter(t => isXmasSeasonPassed(t.year) || (currentUser.role === 'admin' && xmasPreviewUnlock))
+              .sort((a, b) => (b.year || 0) - (a.year || 0));
+            setMyArchivedXmasTrees(archived);
+          }, () => {});
+        return () => unsub();
+      }, [currentUser, xmasPreviewUnlock]);
+
+      // ส่งแจ้งเตือนเข้าหมวด "โพสต์" อัตโนมัติ เมื่อถึง 00:00 น. วันที่ 25 ธ.ค. และมีคนแท็ก @ ถึงสมาชิกบนต้นไม้สมาคม
+      useEffect(() => {
+        if (!currentUser || !db) return;
+        const year = getBkkNow().getFullYear();
+        const unlocked = isXmasMidnightUnlocked(year) || (currentUser.role === 'admin' && xmasPreviewUnlock);
+        if (!unlocked) return;
+
+        const nfId = `nf-xmas-${year}-${currentUser.id}`;
+        let cancelled = false;
+
+        db.collection('bma_xmas_ornaments')
+          .where('treeCode', '==', `assoc_${year}`)
+          .get()
+          .then(async (snap) => {
+            if (cancelled) return;
+            const taggedForMe = snap.docs
+              .map(d => d.data())
+              .filter(orn => orn.senderId !== currentUser.id && doesOrnamentMentionUser(orn, currentUser));
+            if (taggedForMe.length === 0) return;
+
+            const existing = await db.collection('bma_notifications').doc(nfId).get();
+            if (existing.exists || cancelled) return;
+
+            await db.collection('bma_notifications').doc(nfId).set({
+              id: nfId,
+              recipientId: currentUser.id,
+              actorId: 'SYSTEM',
+              category: 'posts',
+              subType: 'xmas_wish',
+              title: `🎄 มีคำอวยพรถึงคุณบนต้นไม้สมาคม (${taggedForMe.length} ชิ้น)`,
+              body: `ถึงวันคริสต์มาสแล้ว! คลิกเพื่อเปิดอ่านคำอวยพรที่แท็กถึงคุณบนต้นคริสต์มาสสมาคมปี ${year}`,
+              targetView: 'xmas_tree',
+              readBy: [],
+              time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+              timestamp: Date.now(),
+              serverCreatedAt: svrTs()
+            });
+          })
+          .catch(() => {});
+
+        return () => { cancelled = true; };
+      }, [currentUser, xmasPreviewUnlock]);
+
+      const snowFlakes = useRef(
+        Array.from({ length: 28 }, (_, i) => ({
+          id: i,
+          left: (i * 3.6 + (i % 3) * 1.4) % 98,
+          size: 7 + (i % 5) * 3,
+          dur: 9 + (i % 7) * 2.1,
+          delay: -(i * 0.85),
+          drift: ((i % 2 === 0 ? 1 : -1) * (15 + (i % 4) * 12)) + 'px',
+          isStar: i % 3 === 0
+        }))
+      ).current;
 
       const [showWelcome, setShowWelcome] = useState(() => {
           return IS_LOY_KRATHONG && !sessionStorage.getItem('bma_loykrathong_seen');
@@ -8505,6 +10663,8 @@
       const sharedPostId = urlParams.get('post');
       const qrIdParam = urlParams.get('qr');
       const sharedToolId = urlParams.get('tool');
+      const sharedTreeParam = urlParams.get('tree');
+      const [sharedTreeCode, setSharedTreeCode] = useState(sharedTreeParam || null);
       const [qrLoading, setQrLoading] = useState(!!qrIdParam);
 
       // สำหรับประมวลผลเมื่อมีคนสแกน Dynamic QR Code เข้ามา
@@ -8543,6 +10703,7 @@
       
       const [currentView, setCurrentView] = useState(() => {
           if (sharedPostId) return 'single_post';
+          if (sharedTreeParam) return 'xmas_tree';
           if (sharedToolId) return 'tools';
           return sessionStorage.getItem('tbma_last_view') || localStorage.getItem('tbma_last_view') || 'home';
       });
@@ -8551,6 +10712,14 @@
         if (currentView !== 'tools' && new URLSearchParams(window.location.search).has('tool')) {
           const url = new URL(window.location.href);
           url.searchParams.delete('tool');
+          window.history.replaceState({}, '', url.pathname + url.search);
+        }
+      }, [currentView]);
+
+      useEffect(() => {
+        if (currentView !== 'xmas_tree' && new URLSearchParams(window.location.search).has('tree')) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('tree');
           window.history.replaceState({}, '', url.pathname + url.search);
         }
       }, [currentView]);
@@ -8797,6 +10966,37 @@
 
       // Notification States
       const [notifOpen, setNotifOpen] = useState(false); const [notifTab, setNotifTab] = useState('posts'); const [toasts, setToasts] = useState([]);
+      // Per-Post / Per-Room Mute States
+      const [muteModalTarget, setMuteModalTarget] = useState(null); // { key, label }
+      const [muteClock, setMuteClock] = useState(Date.now());
+
+      useEffect(() => {
+        const t = setInterval(() => setMuteClock(Date.now()), 30000);
+        return () => clearInterval(t);
+      }, []);
+
+      const getMuteExp = useCallback((targetKey) => {
+        if (!currentUser || !targetKey) return null;
+        return currentUser.mutedTargets?.[targetKey] || null;
+      }, [currentUser]);
+
+      const isTargetMuted = useCallback((targetKey) => {
+        const exp = getMuteExp(targetKey);
+        if (!exp) return false;
+        return exp === -1 || exp > muteClock;
+      }, [getMuteExp, muteClock]);
+
+      const handleSetTargetMute = async (targetKey, expiresAt) => {
+        if (!currentUser || !targetKey) return;
+        const nextMuted = { ...(currentUser.mutedTargets || {}) };
+        if (expiresAt === null) delete nextMuted[targetKey];
+        else nextMuted[targetKey] = expiresAt;
+
+        setCurrentUser((prev) => (prev ? { ...prev, mutedTargets: nextMuted } : prev));
+        setMuteModalTarget(null);
+        await db.collection('bma_users').doc(currentUser.id).update({ mutedTargets: nextMuted }).catch(() => {});
+      };
+
       const [postMenu, setPostMenu] = useState(null);
       const [editPostData, setEditPostData] = useState(null);
       const [pushPerm, setPushPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'default');
@@ -9789,6 +11989,29 @@
       const dmKey = (a, b) => 'dm_' + [a, b].sort().join('_');
       const roomKey = currentUser && activeRoom.type === 'dm' ? dmKey(currentUser.id, activeRoom.id) : activeRoom.id;
       const roomMsgs = chatMessages.filter((m) => m.roomKey === roomKey);
+      // คีย์เวิร์ดโปรยหิมะในแชต (ทำงานทั้งฝั่งผู้ส่งและผู้รับในห้อง)
+      const [chatSnowBurst, setChatSnowBurst] = useState(false);
+      const lastBurstMsgIdRef = useRef(null);
+      const chatBurstTimerRef = useRef(null);
+      const XMAS_CHAT_REGEX = /(merry\s*christmas|merry\s*xmas|x'?mas|สุขสันต์วันคริสต์มาส|เมอร์รี่คริสต์มาส)/i;
+
+      const triggerChatSnowBurst = useCallback(() => {
+        setChatSnowBurst(true);
+        if (chatBurstTimerRef.current) clearTimeout(chatBurstTimerRef.current);
+        chatBurstTimerRef.current = setTimeout(() => setChatSnowBurst(false), 4500);
+      }, []);
+
+      useEffect(() => {
+        if (currentView !== 'chat' || roomMsgs.length === 0) return;
+        const latest = roomMsgs[roomMsgs.length - 1];
+        if (!latest || latest.id === lastBurstMsgIdRef.current) return;
+        lastBurstMsgIdRef.current = latest.id;
+        const msgAgeMs = Date.now() - getMs(latest);
+        if (msgAgeMs < 15000 && !latest.isDeleted && XMAS_CHAT_REGEX.test(latest.text || '')) {
+          triggerChatSnowBurst();
+        }
+      }, [roomMsgs, currentView, triggerChatSnowBurst]);
+
       const pinnedMsg = activeRoom.type === 'dm' ? roomMsgs.find(m => m.isPinned) : null;
 
       useEffect(() => {
@@ -9816,15 +12039,13 @@
 
       const myNotifs = currentUser ? notifications.filter((n) => {
         if (n.recipientId !== currentUser.id && !(n.recipientId === 'ALL' && n.actorId !== currentUser.id)) return false;
-        const p = currentUser.notifPrefs || {};
         if (n.category === 'posts') {
-          if (p.muteOwnPosts && n.subType !== 'new_post') return false;
+          if (n.targetPostId && isTargetMuted('post:' + n.targetPostId)) return false;
           const post = n.targetPostId && posts.find((x) => x.id === n.targetPostId);
           if (post && (post.mutedBy || []).includes(currentUser.id)) return false;
         }
         if (n.category === 'messages') {
-          if (n.subType === 'global_chat' && p.muteGlobalChat) return false;
-          if (n.subType !== 'global_chat' && p.mutePrivateChat) return false;
+          if (n.targetRoomType && n.targetRoomId && isTargetMuted(`${n.targetRoomType}:${n.targetRoomId}`)) return false;
         }
         return true;
       }) : [];
@@ -9837,7 +12058,11 @@
             db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }).catch(() => {});
           });
         } else if (currentView === 'feed') {
-          unreadNotifs.filter((n) => n.category === 'posts' && (!hiPostId || n.targetPostId === hiPostId || n.subType === 'new_post')).forEach((n) => {
+          unreadNotifs.filter((n) => n.category === 'posts' && n.subType !== 'xmas_wish' && (!hiPostId || n.targetPostId === hiPostId || n.subType === 'new_post')).forEach((n) => {
+            db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }).catch(() => {});
+          });
+        } else if (currentView === 'xmas_tree') {
+          unreadNotifs.filter((n) => n.subType === 'xmas_wish').forEach((n) => {
             db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }).catch(() => {});
           });
         }
@@ -9998,6 +12223,7 @@
         if (IS_HALLOWEEN && finalText.length > 0 && Math.random() < 0.15) {
             const spookySuffixes = [" 👻", " 🎃", " 🕸️", " 🦇", " ...ระวังหลังให้ดีนะ", " ...แฮ่!"];
             finalText += spookySuffixes[Math.floor(Math.random() * spookySuffixes.length)];
+        if (XMAS_CHAT_REGEX.test(finalText)) triggerChatSnowBurst();
         }
 
         setChatIn(''); setChatAtts([]); setRepMsg(null); setMentOpen(false); setTyping(false);
@@ -10307,10 +12533,118 @@
         });
       };
 
+      const openXmasTreeByCode = (code) => {
+        setSharedTreeCode(code);
+        changeViewWithTransition('xmas_tree');
+      };
+
+      const shareXmasTreeToBoard = async (treeMeta, count, customNote) => {
+        if (!currentUser || !treeMeta?.code) return;
+        const postId = 'post-' + Date.now();
+        const note = customNote || `มาแขวนของประดับและเขียนคำอวยพรบนต้นคริสต์มาสของ ${treeMeta.ownerName} กันเถอะ!`;
+        await db.collection('bma_posts').doc(postId).set({
+          id: postId,
+          authorId: currentUser.id,
+          title: `ต้นคริสต์มาสของ ${treeMeta.ownerName} (${treeMeta.year})`,
+          content: note,
+          xmasTreeShare: {
+            code: treeMeta.code,
+            ownerName: treeMeta.ownerName,
+            year: treeMeta.year,
+            count: count || 0
+          },
+          isGuestAllowed: true,
+          tags: ['Christmas'],
+          attachments: [],
+          mutedBy: [],
+          createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now(),
+          serverCreatedAt: svrTs(),
+          likes: [],
+          bookmarks: [],
+          comments: []
+        });
+        alert('แชร์ต้นคริสต์มาสลงกระดานโพสต์เรียบร้อยแล้ว!');
+        setCurrentView('feed');
+      };
+
+      const shareXmasTreeToChat = async (treeMeta, count, targetRoomId, customNote) => {
+        if (!currentUser || !treeMeta?.code) return;
+        const roomId = targetRoomId || 'global-lobby';
+        const isGrp = myGroups.some(g => g.id === roomId);
+        const now = Date.now();
+        const mid = 'msg-' + now + '-' + Math.random().toString(36).slice(2, 5);
+        const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+        const fullTime = `${dStr} ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`;
+        const note = customNote || `มาแขวนคำอวยพรบนต้นคริสต์มาสของ ${treeMeta.ownerName} กันนะ!`;
+
+        await db.collection('bma_messages').doc(mid).set({
+          id: mid,
+          roomKey: roomId,
+          senderId: currentUser.id,
+          receiverId: null,
+          text: note,
+          xmasTreeShare: {
+            code: treeMeta.code,
+            ownerName: treeMeta.ownerName,
+            year: treeMeta.year,
+            count: count || 0
+          },
+          attachments: [],
+          likes: [],
+          readBy: [currentUser.id],
+          isEdited: false,
+          isDeleted: false,
+          isSystemPostAlert: false,
+          time: fullTime,
+          timestamp: now,
+          serverCreatedAt: svrTs()
+        });
+
+        alert('ส่งการ์ดต้นคริสต์มาสเข้าห้องแชตเรียบร้อยแล้ว!');
+        setActiveRoom({ type: isGrp ? 'group' : 'channel', id: roomId });
+        setCurrentView('chat');
+      };
+
       if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
         <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
+          {/* CHRISTMAS SNOWFALL LAYER */}
+          {IS_CHRISTMAS && snowEnabled && (
+            <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden" aria-hidden="true">
+              {snowFlakes.map((f) => (
+                <div
+                  key={f.id}
+                  className="xmas-snowflake"
+                  style={{
+                    left: `${f.left}vw`,
+                    '--dur': `${f.dur}s`,
+                    '--delay': `${f.delay}s`,
+                    '--drift': f.drift
+                  }}
+                >
+                  {f.isStar ? (
+                    <svg width={f.size + 4} height={f.size + 4} viewBox="0 0 24 24" fill="none" stroke="#BAE6FD" strokeWidth="1.8" strokeLinecap="round">
+                      <line x1="12" y1="2" x2="12" y2="22" />
+                      <line x1="3.3" y1="7" x2="20.7" y2="17" />
+                      <line x1="20.7" y1="7" x2="3.3" y2="17" />
+                      <circle cx="12" cy="12" r="2.2" fill="#FDE68A" stroke="none" />
+                    </svg>
+                  ) : (
+                    <div
+                      style={{
+                        width: `${f.size}px`,
+                        height: `${f.size}px`,
+                        borderRadius: '9999px',
+                        background: 'radial-gradient(circle, #FFFFFF 0%, rgba(186,230,253,0.45) 70%, transparent 100%)'
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {/* WELCOME OVERLAY (Loy Krathong) */}
           {showWelcome && (
             <div id="welcome-overlay" className="fixed inset-0 bg-[#040914] z-[1000] flex flex-col items-center overflow-y-auto pt-4 transition-all pb-10">
@@ -10447,6 +12781,15 @@
               </nav>
 
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                {IS_CHRISTMAS && (
+                  <button
+                    onClick={() => setSnowEnabled(!snowEnabled)}
+                    className={`btn-d text-xs px-2 sm:px-2.5 flex items-center gap-1 transition-colors ${snowEnabled ? 'text-sky-200 border-amber-500/60' : 'text-slate-500 opacity-70'}`}
+                    title={snowEnabled ? 'ปิดเอฟเฟกต์หิมะตก' : 'เปิดเอฟเฟกต์หิมะตก'}
+                  >
+                    <i className="fas fa-snowflake"></i>
+                  </button>
+                )}
                 {currentUser && (
                     <button onClick={() => { 
                         setNotifOpen(true);
@@ -10483,7 +12826,47 @@
                 ) : <button onClick={() => { setAuthMode('signin'); setAuthErr(''); changeViewWithTransition('login'); }} className="btn-w text-xs px-3 py-1.5 sm:px-4 sm:py-2">เข้าสู่ระบบ</button>}
               </div>
             </div>
+            {/* CHRISTMAS FAIRY LIGHTS STRING */}
+            {IS_CHRISTMAS && (
+              <div className="absolute left-0 right-0 -bottom-4 h-5 pointer-events-none overflow-hidden z-40" aria-hidden="true">
+                <svg viewBox="0 0 1200 28" preserveAspectRatio="none" className="w-full h-full">
+                  <path
+                    d="M0,2 Q50,18 100,2 T200,2 T300,2 T400,2 T500,2 T600,2 T700,2 T800,2 T900,2 T1000,2 T1100,2 T1200,2"
+                    fill="none"
+                    stroke="rgba(217, 119, 6, 0.55)"
+                    strokeWidth="1.5"
+                  />
+                  {[50, 150, 250, 350, 450, 550, 650, 750, 850, 950, 1050, 1150].map((cx, idx) => {
+                    const palette = ['#FDE68A', '#F43F5E', '#BAE6FD', '#34D399'];
+                    const color = palette[idx % palette.length];
+                    return (
+                      <g key={cx} className={idx % 2 === 0 ? 'fairy-bulb-a' : 'fairy-bulb-b'} style={{ color }}>
+                        <rect x={cx - 2} y="9" width="4" height="3" rx="1" fill="#92400E" />
+                        <circle cx={cx} cy="15" r="4" fill={color} />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            )}
           </header>
+
+	  {/* Owner Theme Preview Indicator Bar */}
+          {currentUser?.role === 'admin' && themePreview !== 'auto' && (
+            <div className="bg-amber-400 text-[#050811] px-3 py-1 text-[11px] font-bold shrink-0 z-40 flex items-center justify-between gap-2">
+              <span className="truncate">
+                <i className="fas fa-palette mr-1.5"></i>
+                กำลังพรีวิวธีม: <span className="uppercase font-mono">{themePreview}</span>
+                {xmasPreviewUnlock && ' • (จำลองปลดล็อก 25 ธ.ค.+)'}
+              </span>
+              <button
+                onClick={() => { setThemePreview('auto'); setXmasPreviewUnlock(false); }}
+                className="px-2.5 py-0.5 rounded-lg bg-[#050811] text-amber-300 text-[10px] hover:opacity-90 shrink-0"
+              >
+                ปิดพรีวิว (Auto)
+              </button>
+            </div>
+          )}
 
           {/* Guest Mode Banner */}
           {!currentUser && currentView !== 'login' && showGuestBar && (
@@ -10624,6 +13007,18 @@
                   {currentUser ? '🎮 ท้าดวล Daily Game' : '🎮 ทดลองเล่น Daily Game'}
                 </button>
               </div>
+              {IS_CHRISTMAS && (
+                <div className="w-full max-w-md mt-3 z-10 shrink-0">
+                  <button
+                    onClick={() => { setSharedTreeCode(null); changeViewWithTransition('xmas_tree'); }}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#881337] via-[#B91C1C] to-[#92400E] border-2 border-amber-300/80 text-white font-bold text-xs sm:text-sm shadow-[0_0_25px_rgba(245,158,11,0.35)] hover:scale-[1.02] transition-all flex items-center justify-center gap-2.5"
+                  >
+                    <i className="fas fa-holly-berry text-amber-300 text-base"></i>
+                    <span>Christmas Wish Tree — แขวนคำอวยพรคริสต์มาส</span>
+                    <i className="fas fa-arrow-right text-amber-200 text-xs"></i>
+                  </button>
+                </div>
+              )}
 
               <div className="z-10 mt-16 mb-8 w-full max-w-3xl bg-[#0B1325]/80 backdrop-blur-sm border border-[#1E3A5F] rounded-2xl p-6 sm:p-8 text-xs text-slate-300 leading-relaxed shadow-2xl shrink-0 text-left">
                 <h3 className="font-bold text-sky-400 text-sm mb-4">📜 ข้อตกลง (อัพเดตล่าสุด 10 ตุลาคม 2026)</h3>
@@ -10636,6 +13031,26 @@
                 </ul>
               </div>
             </div>
+          )}
+
+	  {/* CHRISTMAS WISH TREE VIEW */}
+          {currentView === 'xmas_tree' && (
+            <ChristmasTreePage
+              currentUser={currentUser}
+              users={users}
+              allTags={allTags}
+              db={db}
+              svrTs={svrTs}
+              getAuthor={getAuthor}
+              onBackHome={() => { setSharedTreeCode(null); changeViewWithTransition('home'); }}
+              initialTreeCode={sharedTreeCode}
+              isOwnerPreviewUnlock={currentUser?.role === 'admin' && xmasPreviewUnlock}
+              openGuestPrompt={openGuestPrompt}
+              channels={channels}
+              myGroups={myGroups}
+              onShareToBoard={shareXmasTreeToBoard}
+              onShareToChat={shareXmasTreeToChat}
+            />
           )}
 
           {/* LOGIN VIEW */}
@@ -11214,7 +13629,7 @@
                     {channels.map((ch) => (
                       <div key={ch.id} className="flex items-center gap-1 mb-1 group">
                         <button onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`flex-1 px-3 py-2 rounded-xl text-left truncate transition-all font-bold ${activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
-                            <span className="opacity-70 mr-1.5">{ch.icon}</span> {ch.name}
+                            <span className="opacity-70 mr-1.5">{ch.icon}</span> {ch.name}{isTargetMuted('channel:' + ch.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-1.5"></i>}
                         </button>
                         {isModOrAdmin && !ch.isProtected && <button onClick={() => setDelTgt({ roomType: 'channel', id: ch.id, name: '#' + ch.name })} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity px-2"><i className="fas fa-trash-alt"></i></button>}
                       </div>
@@ -11228,7 +13643,7 @@
                     </div>
                     {myGroups.map((g) => (
                         <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex justify-between items-center px-3 py-2 mb-1 rounded-xl font-bold transition-all ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
-                            <span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}</span>
+                            <span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}{isTargetMuted('group:' + g.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-1.5"></i>}</span>
                             <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-white/20 text-white' : 'bg-[#050811] text-slate-400'}`}>{(g.members || []).length}</span>
                         </button>
                     ))}
@@ -11246,7 +13661,7 @@
                        {conversedDms.map((m) => (
                            <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex items-center gap-2.5 p-2 mb-1 rounded-xl text-left transition-all ${activeRoom.type === 'dm' && activeRoom.id === m.id ? 'bg-white text-[#050811] shadow-md' : 'text-slate-200 hover:bg-[#0F2547]'}`}>
                                <Avatar user={m} size="xs" showStatus={true} />
-                               <span className="truncate font-bold text-sm">{m.displayName}</span>
+                               <span className="truncate font-bold text-sm">{m.displayName}</span>{isTargetMuted('dm:' + m.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-auto shrink-0"></i>}
                            </button>
                        ))}
                     </div>
@@ -11255,7 +13670,41 @@
 
               {/* CENTER CHAT SECTION */}
               <main className="flex-1 flex flex-col bg-[#050811] min-w-0 h-full overflow-hidden relative z-10">
-                
+                {/* เอฟเฟกต์โปรยหิมะและประกายดาวเมื่อพิมพ์ Merry Christmas ในแชต */}
+                {chatSnowBurst && (
+                  <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden" aria-hidden="true">
+                    <div className="absolute top-16 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-[#081C1B]/95 border border-amber-300/80 text-amber-200 text-xs font-bold shadow-[0_0_20px_rgba(251,191,36,0.4)] animate-bounce whitespace-nowrap">
+                      <i className="fas fa-snowflake text-sky-300 mr-1.5"></i>
+                      Merry Christmas!
+                      <i className="fas fa-star text-amber-300 ml-1.5"></i>
+                    </div>
+                    {Array.from({ length: 24 }, (_, idx) => (
+                      <div
+                        key={idx}
+                        className="chat-burst-flake"
+                        style={{
+                          left: `${(idx * 4.2 + (idx % 3) * 1.1) % 96}%`,
+                          '--bdur': `${2.4 + (idx % 5) * 0.4}s`,
+                          '--bdel': `${(idx % 6) * 0.16}s`,
+                          '--bx': `${((idx % 2 === 0 ? 1 : -1) * (18 + (idx % 4) * 14))}px`
+                        }}
+                      >
+                        {idx % 3 === 0 ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="#FDE68A">
+                            <polygon points="12,2 14.5,9 22,9.5 16,14 18,21.5 12,17.2 6,21.5 8,14 2,9.5 9.5,9" />
+                          </svg>
+                        ) : (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#BAE6FD" strokeWidth="2" strokeLinecap="round">
+                            <line x1="12" y1="2" x2="12" y2="22" />
+                            <line x1="3.3" y1="7" x2="20.7" y2="17" />
+                            <line x1="20.7" y1="7" x2="3.3" y2="17" />
+                          </svg>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* 🔍 Chat Header & Search */}
                 <div className="h-14 px-3 sm:px-4 bg-[#0B1325] border-b border-[#1E3A5F] flex items-center justify-between shrink-0 text-xs shadow-sm z-20">
                   <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -11297,6 +13746,26 @@
                     
                     {/* 📌 ปุ่มตัวเลือกเสริม (ขวาบน) - ปรับไอคอนและสีให้ชัดเจน */}
                     <div className="flex items-center gap-1.5 border-r border-[#1E3A5F] pr-2 mr-1">
+                        {currentUser && (() => {
+                          const chatMuteKey = `${activeRoom.type}:${activeRoom.id}`;
+                          const chatMuted = isTargetMuted(chatMuteKey);
+                          const chatExp = getMuteExp(chatMuteKey);
+                          const roomLabel = activeCh
+                            ? `แชตรวม #${activeCh.name}`
+                            : activeGrp
+                              ? `กลุ่ม ${activeGrp.name}`
+                              : `แชตส่วนตัวกับ ${activeDmUser?.displayName || activeRoom.id}`;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setMuteModalTarget({ key: chatMuteKey, label: roomLabel })}
+                              className={`w-8 h-8 rounded-full border transition flex items-center justify-center shrink-0 shadow-sm ${chatMuted ? 'bg-red-950/80 border-red-500/60 text-red-400 hover:bg-red-900 hover:text-white' : 'bg-[#0F2547] text-slate-300 border-[#1E3A5F] hover:text-amber-300 hover:border-amber-400/60'}`}
+                              title={chatMuted ? `ปิดแจ้งเตือนห้องนี้อยู่ (${formatMuteUntil(chatExp)})` : 'ปิดการแจ้งเตือนห้องแชตนี้'}
+                            >
+                              <i className={`fas ${chatMuted ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+                            </button>
+                          );
+                        })()}
                         {activeRoom.type === 'group' && activeGrp && !activeGrp.isArchived && (
                             <button onClick={() => setAddMemOpen(true)} className="w-8 h-8 rounded-full bg-[#0F2547] text-sky-300 border border-sky-500/30 hover:bg-sky-600 hover:text-white transition flex items-center justify-center shrink-0 shadow-sm" title="แก้ไขสมาชิกกลุ่ม">
                                 <i className="fas fa-user-edit"></i>
@@ -11395,6 +13864,37 @@
                         </div>
                       );
                     }
+
+		    if (msg.xmasTreeShare) {
+                      const pa = getAuthor(msg.senderId);
+                      return (
+                        <div key={msg.id} className="p-3.5 rounded-2xl border border-amber-400/50 bg-gradient-to-br from-[#081C1B] to-[#040D0E] flex flex-col gap-2.5 shadow-lg max-w-sm">
+                          <div className="flex items-center gap-3">
+                            <Avatar user={pa} size="sm" showStatus={true} />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-amber-300 truncate">{pa.displayName}</span>
+                                <span className="text-[10px] text-slate-400 shrink-0">{tStr}</span>
+                              </div>
+                              <p className="text-xs text-slate-100 mt-0.5">{msg.text}</p>
+                            </div>
+                          </div>
+                          <div className="bg-[#040D0E]/90 p-2.5 rounded-xl border border-amber-500/35 text-xs flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-bold text-amber-200 truncate"><i className="fas fa-tree text-emerald-400 mr-1.5"></i>ต้นคริสต์มาสของ {msg.xmasTreeShare.ownerName}</div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {msg.xmasTreeShare.code} • ปี {msg.xmasTreeShare.year}</div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openXmasTreeByCode(msg.xmasTreeShare.code)}
+                            className="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs self-start hover:scale-105 transition-transform flex items-center gap-1.5 shadow"
+                          >
+                            <i className="fas fa-gift"></i> เข้าไปแขวนคำอวยพร
+                          </button>
+                        </div>
+                      );
+                    }
+
                     const s = getAuthor(msg.senderId), rdrs = (msg.readBy || []).filter((id) => id !== msg.senderId);
                     const isMe = currentUser && msg.senderId === currentUser.id;
 
@@ -12571,8 +15071,29 @@
                           {post.isPinned && <div className="text-amber-300 text-xs font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2">📌 โพสต์ปักหมุด</div>}
                           <div className="flex justify-between items-start gap-2">
                             <div onClick={() => setMemberModal(author)} className="flex items-center gap-2.5 cursor-pointer"><Avatar user={author} size="md" showStatus={true} /><div><div className="flex flex-wrap items-center gap-1.5"><span className="font-bold text-sm hover:underline">{author.displayName}</span><span className={`px-1.5 py-0.5 rounded font-mono text-[10px] font-bold ${author.id.startsWith('F') ? 'bg-[#38BDF8] text-[#050811]' : 'bg-white text-[#050811]'}`}>{author.id}</span><TagBadges user={author} /><RoleBadge role={author.role} /></div><div className="text-[11px] text-slate-400">@{author.username} • {post.createdAt}</div></div></div>
-                            <div className="flex items-center gap-2 relative">
+                            <div className="flex items-center gap-1.5 relative">
                               {!canManage(post.authorId) && <span className="px-2 py-0.5 rounded-full bg-[#050811] text-[10px] text-slate-400">{post.isGuestAllowed ? '🌐 Guest' : '🔒 สมาชิก'}</span>}
+                              {currentUser && currentUser.id === post.authorId && (() => {
+                                const mKey = 'post:' + post.id;
+                                const muted = isTargetMuted(mKey);
+                                const exp = getMuteExp(mKey);
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMuteModalTarget({
+                                        key: mKey,
+                                        label: 'โพสต์: ' + (post.title || post.content?.slice(0, 32) || 'โพสต์ของคุณ')
+                                      });
+                                    }}
+                                    className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] transition-colors ${muted ? 'bg-red-950/70 border-red-500/60 text-red-400 hover:bg-red-900' : 'bg-[#050811] border-[#1E3A5F] text-slate-400 hover:text-amber-300 hover:border-amber-400/60'}`}
+                                    title={muted ? `ปิดแจ้งเตือนอยู่ (${formatMuteUntil(exp)}) — คลิกเพื่อตั้งค่า` : 'ปิดการแจ้งเตือนโพสต์นี้'}
+                                  >
+                                    <i className={`fas ${muted ? 'fa-bell-slash' : 'fa-bell'}`}></i>
+                                  </button>
+                                );
+                              })()}
                               {canManage(post.authorId) && (
                                 <button onClick={() => setPostMenu(postMenu === post.id ? null : post.id)} className="text-slate-400 hover:text-white px-2 font-bold">⋮</button>
                               )}
@@ -12607,6 +15128,30 @@
                                 {post.dailyGameShare.score ? `สถิติ ${post.dailyGameShare.score} / ${fmtTime(post.dailyGameShare.timeMs)}` : fmtTime(post.dailyGameShare.timeMs)}
                               </span></div>
                               <button onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); setActiveGameTab(post.dailyGameShare.gameIndex); setCurrentView('daily_game'); }} className="btn-w text-xs self-start mt-1 hover:scale-105 transition-transform">🎮 ตามไปเล่นเกมนี้เลย</button>
+                            </div>
+                          )}
+
+			  {post.xmasTreeShare && (
+                            <div className="p-4 rounded-2xl border border-amber-400/50 bg-gradient-to-br from-[#081C1B] via-[#0B2624] to-[#040D0E] flex flex-col gap-2.5 shadow-lg">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                                  <i className="fas fa-tree text-emerald-400"></i>
+                                  <span>ต้นคริสต์มาสของ {post.xmasTreeShare.ownerName}</span>
+                                </div>
+                                <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[#040D0E] border border-amber-500/40 text-amber-200">
+                                  {post.xmasTreeShare.code}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-300">
+                                ปี {post.xmasTreeShare.year} • แขวนของประดับแล้ว <strong className="text-white font-mono">{post.xmasTreeShare.count || 0}</strong> ชิ้น
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => { window.history.replaceState({}, document.title, window.location.pathname); openXmasTreeByCode(post.xmasTreeShare.code); }}
+                                className="self-start mt-0.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow transition-transform hover:scale-105 flex items-center gap-1.5"
+                              >
+                                <i className="fas fa-gift"></i> เข้าไปแขวนคำอวยพรบนต้นไม้นี้
+                              </button>
                             </div>
                           )}
 
@@ -12934,6 +15479,26 @@
                             <button onClick={() => setShowCalendar(true)} className="w-full flex justify-start items-center px-4 py-2.5 rounded-xl font-bold border border-sky-500/50 bg-sky-950/30 text-sky-300 hover:bg-sky-600 hover:text-white hover:border-sky-400 transition-colors shadow-sm mt-1">
                                 <i className="fas fa-calendar-alt w-5 text-center"></i> ปฏิทินสมาคม
                             </button>
+			    <button
+                              type="button"
+                              disabled={myArchivedXmasTrees.length === 0}
+                              onClick={() => myArchivedXmasTrees.length > 0 && setShowXmasArchive(true)}
+                              className={`w-full flex justify-between items-center px-4 py-2.5 rounded-xl font-bold border transition-colors shadow-sm mt-1 ${myArchivedXmasTrees.length > 0 ? 'border-amber-500/50 bg-amber-950/25 text-amber-300 hover:bg-amber-500 hover:text-[#050811] hover:border-amber-400 cursor-pointer' : 'border-[#1E3A5F]/60 bg-[#050811]/60 text-slate-500 cursor-not-allowed opacity-70'}`}
+                              title={myArchivedXmasTrees.length > 0 ? 'เปิดดูต้นคริสต์มาสส่วนตัวที่สะสมไว้ทุกปี' : 'เปิดให้เข้าชมหลังจบเทศกาลคริสต์มาสปีนี้'}
+                            >
+                              <span className="flex items-center">
+                                <i className="fas fa-tree w-5 text-center"></i> ต้นคริสต์มาสของฉัน
+                              </span>
+                              {myArchivedXmasTrees.length > 0 ? (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[#050811] text-amber-300 border border-amber-500/40">
+                                  {myArchivedXmasTrees.length} ปี
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#0B1325] text-slate-400 border border-[#1E3A5F]">
+                                  เร็ว ๆ นี้
+                                </span>
+                              )}
+                            </button>
                         </div>
                       )}
                     </>
@@ -13000,6 +15565,12 @@
   		  <OwnerPage 
 		    guestStats={guestStats}
                     guestFeedbacks={guestFeedbacks}
+                    themePreview={themePreview}
+                    setThemePreview={setThemePreview}
+                    xmasPreviewUnlock={xmasPreviewUnlock}
+                    setXmasPreviewUnlock={setXmasPreviewUnlock}
+                    onOpenXmasTree={() => { setSharedTreeCode(null); changeViewWithTransition('xmas_tree'); }}
+                    onOpenLoyWelcome={() => setShowWelcome(true)}
 		    users={users} 
 		    posts={posts} 
 		    chatMessages={chatMessages} 
@@ -13027,6 +15598,10 @@
                     GAMES={GAMES} fmtTime={fmtTime} toggleCommLike={toggleCommLike} 
                     repComm={repComm} setRepComm={setRepComm} setCommMenu={setCommMenu} 
                     cInputs={cInputs} setCInputs={setCInputs} handleAddComment={handleAddComment}
+		    onOpenXmasTree={openXmasTreeByCode}
+		    isTargetMuted={isTargetMuted}
+                    getMuteExp={getMuteExp}
+                    onOpenMuteModal={setMuteModalTarget}
                   />
                 )}
               </main>
@@ -13112,23 +15687,26 @@
             <Modal title="🔔 การแจ้งเตือน" onClose={() => setNotifOpen(false)} maxW="max-w-lg">
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between items-center p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F]"><span>📱 แจ้งเตือนอุปกรณ์: {pushPerm === 'granted' ? '✓ เปิดแล้ว' : 'ยังไม่เปิด'}</span>{pushPerm !== 'granted' && <button onClick={async () => { if (typeof Notification !== 'undefined') setPushPerm(await Notification.requestPermission()); }} className="btn-w py-1">ขออนุญาต</button>}</div>
-                <div className="flex justify-between">
-                  <div className="flex gap-1 overflow-x-auto no-scrollbar">{[['posts', '📝 โพสต์'], ['messages', '💬 ข้อความ'], ['members', '👥 สมาชิกใหม่'], ['settings', '🔕 ตั้งค่า']].map(([k, l]) => <button key={k} onClick={() => setNotifTab(k)} className={notifTab === k ? 'px-2.5 py-1 rounded-lg font-bold bg-white text-[#050811] shrink-0' : 'px-2.5 py-1 rounded-lg bg-[#050811] shrink-0'}>{l}</button>)}</div>
-                  {notifTab !== 'settings' && <button onClick={() => unreadNotifs.forEach((n) => db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }))} className="text-sky-300 font-bold">✓ อ่านแล้วทั้งหมด</button>}
+                <div className="flex justify-between items-center gap-2">
+                  <div className="flex gap-1 overflow-x-auto no-scrollbar">{[['posts', '📝 โพสต์'], ['messages', '💬 ข้อความ'], ['members', '👥 สมาชิกใหม่']].map(([k, l]) => <button key={k} onClick={() => setNotifTab(k)} className={notifTab === k ? 'px-2.5 py-1 rounded-lg font-bold bg-white text-[#050811] shrink-0' : 'px-2.5 py-1 rounded-lg bg-[#050811] shrink-0'}>{l}</button>)}</div>
+                  <button onClick={() => unreadNotifs.forEach((n) => db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }))} className="text-sky-300 font-bold shrink-0">✓ อ่านแล้วทั้งหมด</button>
                 </div>
-                {notifTab === 'settings' ? (
-                  <div className="space-y-2">{[['muteOwnPosts', 'ปิดแจ้งเตือนโพสต์ตนเอง'], ['muteGlobalChat', 'ปิดแจ้งเตือนช่องหลัก'], ['mutePrivateChat', 'ปิดแจ้งเตือนแชตกลุ่ม/ส่วนตัว']].map(([k, l]) => <div key={k} className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex justify-between items-center"><span>{l}</span><button onClick={() => db.collection('bma_users').doc(currentUser.id).update({ notifPrefs: { ...(currentUser.notifPrefs || {}), [k]: !currentUser.notifPrefs?.[k] } })} className={currentUser.notifPrefs?.[k] ? 'px-2.5 py-1 rounded bg-red-600 font-bold' : 'btn-b py-1'}>{currentUser.notifPrefs?.[k] ? '🔕 ปิดอยู่' : '🔔 เปิดอยู่'}</button></div>)}</div>
-                ) : (
-                  <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar">
-                    {myNotifs.filter((n) => n.category === notifTab).map((n) => {
-                      const rd = (n.readBy || []).includes(currentUser.id);
-                      return <div key={n.id} onClick={() => { db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }); setNotifOpen(false); if (n.targetPostId) jumpToPost(n.targetPostId); else if (n.targetRoomType) { setActiveRoom({ type: n.targetRoomType, id: n.targetRoomId }); setCurrentView('chat'); } else if (n.targetView === 'members') { setCurrentView('members'); setMemberModal(users.find(u => u.id === n.targetRoomId) || null); } }} className={'p-2.5 rounded-xl border cursor-pointer flex justify-between items-center ' + (rd ? 'bg-[#050811] border-[#1E3A5F] opacity-60' : 'bg-[#0F2547]/70 border-sky-400')}><div><div className="font-bold">{!rd && '● '}{n.title}</div><div className="text-slate-300">{n.body}</div></div><div className="flex items-center gap-2"><span className="text-sky-400 shrink-0">ดู →</span>{rd && <button onClick={(e) => { e.stopPropagation(); db.collection('bma_notifications').doc(n.id).delete(); }} className="text-red-400 px-2 py-1 bg-red-950/50 rounded hover:bg-red-900 font-bold ml-1">🗑️ ลบ</button>}</div></div>;
-                    })}
-                  </div>
-                )}
+                <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar">
+                  {myNotifs.filter((n) => n.category === notifTab).map((n) => {
+                    const rd = (n.readBy || []).includes(currentUser.id);
+                    return <div key={n.id} onClick={() => { db.collection('bma_notifications').doc(n.id).update({ readBy: Array.from(new Set([...(n.readBy || []), currentUser.id])) }); setNotifOpen(false); if (n.targetPostId) jumpToPost(n.targetPostId); else if (n.targetRoomType) { setActiveRoom({ type: n.targetRoomType, id: n.targetRoomId }); setCurrentView('chat'); } else if (n.targetView === 'members') { setCurrentView('members'); setMemberModal(users.find(u => u.id === n.targetRoomId) || null); } else if (n.targetView) { setCurrentView(n.targetView); } }} className={'p-2.5 rounded-xl border cursor-pointer flex justify-between items-center ' + (rd ? 'bg-[#050811] border-[#1E3A5F] opacity-60' : 'bg-[#0F2547]/70 border-sky-400')}><div><div className="font-bold">{!rd && '● '}{n.title}</div><div className="text-slate-300">{n.body}</div></div><div className="flex items-center gap-2"><span className="text-sky-400 shrink-0">ดู →</span>{rd && <button onClick={(e) => { e.stopPropagation(); db.collection('bma_notifications').doc(n.id).delete(); }} className="text-red-400 px-2 py-1 bg-red-950/50 rounded hover:bg-red-900 font-bold ml-1">🗑️ ลบ</button>}</div></div>;
+                  })}
+                </div>
               </div>
             </Modal>
           )}
+
+	  <MuteDurationModal
+            target={muteModalTarget}
+            currentExp={muteModalTarget ? getMuteExp(muteModalTarget.key) : null}
+            onClose={() => setMuteModalTarget(null)}
+            onSave={handleSetTargetMute}
+          />
 
           {memberModal && currentUser && (
             <Modal title="โปรไฟล์สมาชิก" onClose={() => setMemberModal(null)}>
@@ -13301,6 +15879,14 @@
               currentUser={currentUser} 
               db={db} 
               users={users} 
+          />
+
+	  <MyChristmasTreeArchiveModal
+            isOpen={showXmasArchive}
+            onClose={() => setShowXmasArchive(false)}
+            archivedTrees={myArchivedXmasTrees}
+            db={db}
+            currentUser={currentUser}
           />
 
 {/* Modal สำหรับแนบลิงก์ URL ลงในแชต */}
