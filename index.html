@@ -227,6 +227,27 @@
         border-top-right-radius: 15px; clip-path: polygon(0 0, 100% 0, 0 100%);
     }
 
+    /* Chat Bubble Tails & Reply Box ตามธีมเทศกาล */
+    /* 1. Halloween Theme */
+    .halloween-theme .msg-left .msg-content::before { background: #3b1156; border-color: #EA580C; }
+    .halloween-theme .msg-right .msg-content::after { background: #C2410C; }
+    .halloween-theme .bg-sky-700 { background-color: #9A3412 !important; }
+
+    /* 2. Loy Krathong Theme */
+    .loykrathong-theme .bg-sky-600 { background-color: #B45309 !important; }
+    .loykrathong-theme .bg-sky-700 { background-color: #92400E !important; }
+    .loykrathong-theme .msg-left .msg-content::before { background: #13284C; border-color: #D97706; }
+    .loykrathong-theme .msg-right .msg-content::after { background: #B45309; }
+
+    /* 3. Christmas Theme */
+    .christmas-theme .msg-left .msg-content::before { background: #10322E; border-color: rgba(217, 119, 6, 0.55); }
+    .christmas-theme .msg-right .msg-content::after { background: #B91C1C; }
+    .christmas-theme .bg-sky-700 { background-color: #991B1B !important; }
+
+    /* 4. กล่องข้อความที่ถูกยกเลิก (Deleted) */
+    .msg-left .msg-content.bg-slate-800::before { background: #1e293b !important; border-color: #334155 !important; }
+    .msg-right .msg-content.bg-slate-800::after { background: #1e293b !important; }
+
     /* Smart Media Grid */
     .media-grid { display: grid; gap: 4px; border-radius: 8px; overflow: hidden; margin-top: 8px; }
     .media-grid-2 { grid-template-columns: 1fr 1fr; }
@@ -254,6 +275,39 @@
         background-color: rgba(245, 158, 11, 0.4); color: #FDE68A;
         padding: 0 2px; border-radius: 2px; border-bottom: 2px solid #F59E0B;
     }
+    /* ================= DAILY GAMES & GRADIENT HEADER OVERRIDES ================= */
+    /* 1. Halloween Theme */
+    .halloween-theme header, .halloween-theme .bg-\[\#070C18\] { background-color: rgba(22, 6, 33, 0.96) !important; }
+    .halloween-theme .bg-\[\#050811\]\/90 { background-color: rgba(17, 4, 25, 0.9) !important; }
+    .halloween-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #110419, #09020e) !important; }
+    .halloween-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #260a37, #1c072b 55%, #110419) !important; }
+    .halloween-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #3b1156, #260a37 55%, #110419) !important; }
+    .halloween-theme .bg-sky-950\/60 { background-color: rgba(154, 52, 18, 0.45) !important; }
+    .halloween-theme .border-sky-500\/30 { border-color: rgba(234, 88, 12, 0.5) !important; }
+    .halloween-theme .bg-sky-500\/10 { background-color: rgba(249, 115, 22, 0.14) !important; }
+    .halloween-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #EA580C, #FDBA74) !important; }
+
+    /* 2. Loy Krathong Theme */
+    .loykrathong-theme header, .loykrathong-theme .bg-\[\#070C18\] { background-color: rgba(6, 13, 28, 0.96) !important; }
+    .loykrathong-theme .bg-\[\#050811\]\/90 { background-color: rgba(4, 9, 20, 0.9) !important; }
+    .loykrathong-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #040914, #02050c) !important; }
+    .loykrathong-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #0A162C, #081224 55%, #040914) !important; }
+    .loykrathong-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #13284C, #0A162C 55%, #040914) !important; }
+    .loykrathong-theme .bg-sky-950\/60 { background-color: rgba(180, 83, 9, 0.35) !important; }
+    .loykrathong-theme .border-sky-500\/30 { border-color: rgba(245, 158, 11, 0.45) !important; }
+    .loykrathong-theme .bg-sky-500\/10 { background-color: rgba(251, 191, 36, 0.14) !important; }
+    .loykrathong-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #D97706, #FDE68A) !important; }
+
+    /* 3. Christmas Theme */
+    .christmas-theme .bg-\[\#050811\]\/90 { background-color: rgba(4, 13, 14, 0.9) !important; }
+    .christmas-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #040D0E, #020809) !important; }
+    .christmas-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #081C1B, #061515 55%, #040D0E) !important; }
+    .christmas-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #10322E, #081C1B 55%, #040D0E) !important; }
+    .christmas-theme .bg-sky-950\/60 { background-color: rgba(153, 27, 27, 0.48) !important; }
+    .christmas-theme .border-sky-500\/30 { border-color: rgba(217, 119, 6, 0.5) !important; }
+    .christmas-theme .bg-sky-500\/10 { background-color: rgba(253, 230, 138, 0.12) !important; }
+    .christmas-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #DC2626, #FDE68A) !important; }
+
   </style>
 </head>
 <body class="bg-[#050811] text-white">
