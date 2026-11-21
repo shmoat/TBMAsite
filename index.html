@@ -376,16 +376,21 @@
 
     function useStickyState(defaultValue, key) {
       const [value, setValue] = useState(() => {
-        try { const v = window.localStorage.getItem(key); return v !== null ? JSON.parse(v) : defaultValue; } 
-        catch (e) { return defaultValue; }
+        const getDef = () => (typeof defaultValue === 'function' ? defaultValue() : defaultValue);
+        try {
+          const v = window.localStorage.getItem(key);
+          if (v === null || v === 'undefined') return getDef();
+          return JSON.parse(v);
+        } catch (e) {
+          return getDef();
+        }
       });
-      useEffect(() => { 
-          try {
-              window.localStorage.setItem(key, JSON.stringify(value)); 
-          } catch (e) {
-              console.warn("LocalStorage เต็มหรือไม่สามารถเซฟได้:", e);
-              // ดักจับ Error ไว้ เว็บจะได้ไม่จอดำ (แค่ไม่บันทึกสถานะเกมชั่วคราว)
-          }
+      useEffect(() => {
+        try {
+          if (value !== undefined) window.localStorage.setItem(key, JSON.stringify(value));
+        } catch (e) {
+          console.warn("LocalStorage เต็มหรือไม่สามารถเซฟได้:", e);
+        }
       }, [key, value]);
       return [value, setValue];
     }
@@ -2000,7 +2005,7 @@
 
       const [snake, setSnake] = useStickyState([{ r: 7, c: 7 }], `bma_snake_s_${dateSeed}`);
       const [foodStep, setFoodStep] = useStickyState(0, `bma_snake_step_${dateSeed}`);
-      const [food, setFood] = useStickyState(() => spawnSeededFood([{ r: 7, c: 7 }], 0), `bma_snake_f_${dateSeed}`);
+      const [food, setFood] = useStickyState(null, `bma_snake_f_${dateSeed}`);
       const [goldFood, setGoldFood] = useStickyState(null, `bma_snake_gf_${dateSeed}`);
       const [dir, setDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_d_${dateSeed}`);
       const [nextDir, setNextDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_nd_${dateSeed}`);
@@ -2010,12 +2015,19 @@
 
       const touchStartRef = useRef(null);
 
-      // ป้องกันกรณีอาหารค้างจากเวอร์ชันเก่าไปทับกำแพง
+      // สร้างพิกัดอาหารเริ่มต้น และซ่อมพิกัดอัตโนมัติหากข้อมูลเดิมค้างหรือทับกำแพง
       useEffect(() => {
-        if (!food || walls.some(w => w.r === food.r && w.c === food.c)) {
-          setFood(spawnSeededFood(snake, foodStep));
+        if (isGameOver) return;
+        const isInvalid =
+          !food ||
+          typeof food.r !== 'number' ||
+          typeof food.c !== 'number' ||
+          walls.some(w => w.r === food.r && w.c === food.c);
+        if (isInvalid) {
+          const next = spawnSeededFood(snake, foodStep);
+          if (next) setFood(next);
         }
-      }, [walls]);
+      }, [food, walls, isGameOver]);
 
       useEffect(() => {
         const handleKeyDown = (e) => {
@@ -2166,7 +2178,7 @@
                       }}
                     >
                       {isFood && <div className="w-full h-full bg-red-500 rounded-full scale-[0.62] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.85)]" />}
-                      {isGold && <div className="w-full h-full bg-amber-300 rounded-full scale-[0.78] animate-ping shadow-[0_0_12px_rgba(251,191,36,1)]" />}
+                      {isGold && <div className="w-full h-full bg-amber-300 rounded-full scale-[0.78] animate-pulse shadow-[0_0_12px_rgba(251,191,36,1)]" />}
                     </div>
                   );
                 })}
@@ -8471,9 +8483,9 @@
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1E3A5F] pb-3">
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <i className="fas fa-inbox text-sky-400"></i> กล่องข้อความ & ข้อเสนอแนะจาก Guest
+                      <i className="fas fa-inbox text-sky-400"></i> กล่องข้อความ & ข้อเสนอแนะ (Feedback)
                     </h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">ข้อความที่ส่งผ่านปุ่ม Guest Feedback ในแถบด้านซ้ายของหน้า Board</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">ข้อความที่สมาชิกและผู้มาเยือนส่งผ่านปุ่ม Feedback ในหน้า Board</p>
                   </div>
                   {unreadFbCount > 0 && (
                     <button
@@ -8532,6 +8544,15 @@
                                 <i className={cat.icon}></i> {cat.label}
                               </span>
                               <span className="font-bold text-white text-xs">{fb.nickname || 'Guest'}</span>
+                              {fb.senderId && fb.senderId !== 'GUEST' ? (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[9px] font-mono font-bold">
+                                  สมาชิก
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-600 text-slate-300 text-[9px] font-bold">
+                                  Guest
+                                </span>
+                              )}
                               <span className="text-[10px] text-slate-500 font-mono">{fb.createdAt}</span>
                             </div>
                             <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${st.cls}`}>{st.label}</span>
@@ -12320,12 +12341,18 @@
           const id = 'gfb-' + now + '-' + Math.random().toString(36).slice(2, 5);
           const dStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
           const tStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          const senderNickname = currentUser
+            ? `${currentUser.displayName} (${currentUser.id})`.slice(0, 40)
+            : (fbName.trim() || 'Guest').slice(0, 40);
+          const senderContact = (fbContact.trim() || (currentUser ? `@${currentUser.username} (${currentUser.id})` : '')).slice(0, 80);
+
           const payload = {
             id,
-            nickname: fbName.trim() || 'Guest',
+            senderId: currentUser ? currentUser.id : 'GUEST',
+            nickname: senderNickname,
             category: fbCategory,
             message: msg,
-            contact: fbContact.trim(),
+            contact: senderContact,
             status: 'new',
             createdAt: `${dStr} ${tStr}`,
             timestamp: now,
@@ -12339,14 +12366,14 @@
             localStorage.setItem(todayKey, String(prevCnt + 1));
           } catch (err) {}
 
-          // แจ้งเตือน Owner เมื่อมี Feedback ใหม่จาก Guest
+          // แจ้งเตือน Owner เมื่อมี Feedback ใหม่
           users.filter(u => u.role === 'admin').forEach(adminU => {
             sendNotif({
               recipientId: adminU.id,
-              actorId: 'GUEST',
+              actorId: currentUser ? currentUser.id : 'GUEST',
               category: 'system',
               subType: 'guest_feedback',
-              title: 'ข้อเสนอแนะใหม่จาก Guest',
+              title: currentUser ? 'ข้อเสนอแนะใหม่จากสมาชิก' : 'ข้อเสนอแนะใหม่จาก Guest',
               body: `${payload.nickname}: ${msg.slice(0, 80)}`,
               targetView: 'admin'
             });
@@ -16687,12 +16714,12 @@
                     </div>
                   </div>
                 )}
-		{/* ปุ่มส่งข้อเสนอแนะสำหรับ Guest ในแถบข้างซ้ายหน้า Board */}
-                {!currentUser && (currentView === 'feed' || currentView === 'bookmarks') && (
+		{/* ปุ่มส่งข้อเสนอแนะ (Feedback) สำหรับทุกคนในแถบข้างซ้ายหน้า Board */}
+                {(currentView === 'feed' || currentView === 'bookmarks') && (
                   <div className="card p-4 text-xs border-sky-500/40 bg-gradient-to-br from-[#0B1325] to-[#070C18] space-y-2.5 shadow-lg">
                     <div className="font-bold text-sky-300 flex items-center gap-2">
                       <i className="fas fa-comment-dots text-amber-400"></i>
-                      <span>ฝากข้อความถึงสมาคม</span>
+                      <span>ส่งข้อเสนอแนะ / แจ้งปัญหา</span>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
                       อยากได้เครื่องมือเพิ่ม เจอบั๊ก หรือมีไอเดียแนะนำ ส่งตรงถึงเจ้าของสมาคมได้เลย
@@ -16702,7 +16729,7 @@
                       onClick={() => { setFbErr(''); setFbSuccess(false); setGuestFbOpen(true); setBoardMenuOpen(false); }}
                       className="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition-colors shadow flex items-center justify-center gap-2"
                     >
-                      <i className="fas fa-paper-plane text-[11px]"></i> ส่ง Guest Feedback
+                      <i className="fas fa-paper-plane text-[11px]"></i> ส่ง Feedback
                     </button>
                   </div>
                 )}
@@ -17256,9 +17283,9 @@
             </Modal>
           )}
 
-          {/* Guest Feedback Modal */}
+          {/* Feedback Modal (รองรับทั้งสมาชิกและ Guest) */}
           {guestFbOpen && (
-            <Modal title="ส่งข้อเสนอแนะถึงสมาคม (Guest Feedback)" onClose={() => setGuestFbOpen(false)} maxW="max-w-md">
+            <Modal title="ส่งข้อเสนอแนะถึงสมาคม (Feedback)" onClose={() => setGuestFbOpen(false)} maxW="max-w-md">
               {fbSuccess ? (
                 <div className="text-center space-y-4 py-4 text-xs">
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-2xl">
@@ -17272,6 +17299,18 @@
                 </div>
               ) : (
                 <form onSubmit={handleSendGuestFeedback} className="space-y-3.5 text-xs">
+                  {currentUser && (
+                    <div className="p-2.5 rounded-xl bg-[#050811] border border-emerald-500/35 flex items-center gap-2.5">
+                      <Avatar user={currentUser} size="xs" />
+                      <div className="min-w-0">
+                        <div className="font-bold text-emerald-300 truncate">
+                          ส่งในนามสมาชิก: {currentUser.displayName} ({currentUser.id})
+                        </div>
+                        <div className="text-[10px] text-slate-400">ระบบจะแนบข้อมูลสมาชิกให้อัตโนมัติ</div>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-[11px] text-slate-400 font-bold mb-1.5">หัวข้อที่ต้องการแจ้ง</label>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -17293,17 +17332,19 @@
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-400 font-bold mb-1">ชื่อเล่น (ไม่บังคับ)</label>
-                    <input
-                      type="text"
-                      maxLength={40}
-                      value={fbName}
-                      onChange={e => setFbName(e.target.value)}
-                      placeholder="เช่น ผู้มาเยือนจาก KMUTT"
-                      className="w-full inp text-xs"
-                    />
-                  </div>
+                  {!currentUser && (
+                    <div>
+                      <label className="block text-[11px] text-slate-400 font-bold mb-1">ชื่อเล่น (ไม่บังคับ)</label>
+                      <input
+                        type="text"
+                        maxLength={40}
+                        value={fbName}
+                        onChange={e => setFbName(e.target.value)}
+                        placeholder="เช่น ผู้มาเยือนจาก KMUTT"
+                        className="w-full inp text-xs"
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -17328,7 +17369,7 @@
                       maxLength={80}
                       value={fbContact}
                       onChange={e => setFbContact(e.target.value)}
-                      placeholder="เช่น IG / Email / Discord (เผื่อให้เจ้าของติดต่อกลับ)"
+                      placeholder={currentUser ? `เว้นว่างเพื่อใช้ @${currentUser.username} หรือใส่ช่องทางอื่น` : 'เช่น IG / Email / Discord (เผื่อให้เจ้าของติดต่อกลับ)'}
                       className="w-full inp text-xs"
                     />
                   </div>
