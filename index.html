@@ -6880,29 +6880,247 @@
         );
     };
 
-    // 1. Advanced Group Bill Splitter (เคลียร์หนี้กลุ่ม)
+    // ==========================================
+    // 🧾 FRANKFURTER FOREIGN BILL HELPER FOR LUNAR SPLITTER
+    // ==========================================
+    function LunarSplitterFxBar({ onApplyThb }) {
+      const [open, setOpen] = useState(false);
+      const [fxCurr, setFxCurr] = useState('JPY');
+      const [fxAmt, setFxAmt] = useState('');
+      const [cardFeePct, setCardFeePct] = useState('0'); // 0 หรือ 2.5 สำหรับรูดบัตรต่างประเทศ
+      const [splitCount, setSplitCount] = useState('1');
+      const [fxData, setFxData] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [copied, setCopied] = useState(false);
+
+      useEffect(() => {
+        if (!open || fxData) return;
+        setLoading(true);
+        fetchFrankfurterRates('THB')
+          .then(d => setFxData(d))
+          .catch(() => {})
+          .finally(() => setLoading(false));
+      }, [open, fxData]);
+
+      const codes = Object.keys(CURRENCY_META).filter(c => c !== 'THB');
+      const rawForeign = parseFloat(fxAmt) || 0;
+      const feeMultiplier = 1 + ((parseFloat(cardFeePct) || 0) / 100);
+      const rateToThb = fxData?.rates?.[fxCurr] ? (1 / fxData.rates[fxCurr]) : 0;
+      const thbTotal = rawForeign * rateToThb * feeMultiplier;
+      const people = Math.max(1, parseInt(splitCount, 10) || 1);
+      const thbPerPerson = thbTotal / people;
+
+      const handleCopyThb = () => {
+        if (thbTotal <= 0) return;
+        navigator.clipboard.writeText(thbTotal.toFixed(2));
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      };
+
+      return (
+        <div className="rounded-2xl bg-[#0B1325] border border-sky-500/35 overflow-hidden text-xs">
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 hover:bg-[#0F2547]/60 transition-colors"
+          >
+            <div className="flex items-center gap-2 font-bold text-sky-300">
+              <i className="fas fa-globe-asia text-emerald-400"></i>
+              <span>บิลสกุลเงินต่างประเทศ (แปลงเป็นบาทอัตโนมัติ)</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-400">
+              {fxData?.date && <span className="font-mono hidden sm:inline">เรท {fxData.date}</span>}
+              <i className={`fas fa-chevron-${open ? 'up' : 'down'}`}></i>
+            </div>
+          </button>
+
+          {open && (
+            <div className="p-3.5 pt-2 border-t border-[#1E3A5F] space-y-3 bg-[#050811]/70">
+              {loading && !fxData ? (
+                <div className="py-3 text-center text-sky-400 animate-pulse">กำลังดึงเรทจาก Frankfurter...</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">สกุลเงินบิล</label>
+                      <select value={fxCurr} onChange={(e) => setFxCurr(e.target.value)} className="w-full inp py-1.5 text-xs font-bold">
+                        {codes.map(c => (
+                          <option key={c} value={c}>
+                            {CURRENCY_META[c].flag} {c} ({CURRENCY_META[c].name})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">ยอดเงิน ({fxCurr})</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={fxAmt}
+                        onChange={(e) => setFxAmt(e.target.value)}
+                        placeholder={`เช่น 4800`}
+                        className="w-full inp py-1.5 text-xs font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">ค่าธรรมเนียมรูดบัตร (%)</label>
+                      <div className="flex gap-1">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={cardFeePct}
+                          onChange={(e) => setCardFeePct(e.target.value)}
+                          className="w-full inp py-1.5 text-xs font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCardFeePct(p => p === '2.5' ? '0' : '2.5')}
+                          className={`px-2 rounded-lg border text-[10px] font-bold shrink-0 ${cardFeePct === '2.5' ? 'bg-amber-500 text-[#050811] border-amber-300' : 'bg-[#0B1325] text-slate-300 border-[#1E3A5F]'}`}
+                          title="สลับค่าความเสี่ยงอัตราแลกเปลี่ยนบัตรเครดิต 2.5%"
+                        >
+                          +2.5%
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">หารด่วน (คน)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={splitCount}
+                        onChange={(e) => setSplitCount(e.target.value)}
+                        className="w-full inp py-1.5 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* แถบสรุปยอดบาท + ปุ่มส่งเข้าช่องบิล */}
+                  <div className="p-3 rounded-xl bg-[#0B1325] border border-emerald-500/35 flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        1 {fxCurr} ≈ {(rateToThb * feeMultiplier).toFixed(4)} THB
+                        {parseFloat(cardFeePct) > 0 ? ` (รวมค่าบัตร +${cardFeePct}%)` : ''}
+                      </div>
+                      <div className="text-base sm:text-lg font-mono font-bold text-emerald-300">
+                        {thbTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท
+                      </div>
+                      {people > 1 && thbTotal > 0 && (
+                        <div className="text-[11px] text-amber-300 font-mono">
+                          หาร {people} คน = คนละ <strong>{thbPerPerson.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> บาท
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyThb}
+                        disabled={thbTotal <= 0}
+                        className="btn-d py-1.5 px-3 text-[11px] disabled:opacity-40"
+                      >
+                        <i className={`fas ${copied ? 'fa-check text-emerald-400' : 'fa-copy'} mr-1`}></i>
+                        {copied ? 'คัดลอกแล้ว' : 'คัดลอกยอดบาท'}
+                      </button>
+                      {onApplyThb && (
+                        <button
+                          type="button"
+                          disabled={thbTotal <= 0}
+                          onClick={() => onApplyThb(Number(thbTotal.toFixed(2)), {
+                            currency: fxCurr,
+                            originalAmount: rawForeign,
+                            note: `${rawForeign.toLocaleString()} ${fxCurr}`
+                          })}
+                          className="btn-b py-1.5 px-3 text-[11px] disabled:opacity-40"
+                        >
+                          <i className="fas fa-arrow-down mr-1"></i> ใช้ยอดนี้ในบิล
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 1. Advanced Group Bill Splitter (เคลียร์หนี้กลุ่ม + รองรับหลายสกุลเงินจาก Frankfurter)
     const LunarSplitter = () => {
         const [members, setMembers] = useState([{ id: 1, name: 'นาย A' }, { id: 2, name: 'นาย B' }]);
         const [bills, setBills] = useState([]);
         const [newMem, setNewMem] = useState('');
         const [bName, setBName] = useState('');
         const [bAmt, setBAmt] = useState('');
+        const [bCurr, setBCurr] = useState('THB');
         const [bPayer, setBPayer] = useState(1);
+        const [fxData, setFxData] = useState(null);
+
+        useEffect(() => {
+            fetchFrankfurterRates('THB')
+                .then(d => setFxData(d))
+                .catch(() => {});
+        }, []);
+
+        const currencyCodes = Object.keys(CURRENCY_META);
+        const getRateToThb = (code) => {
+            if (code === 'THB') return 1;
+            const r = fxData?.rates?.[code];
+            return r ? (1 / r) : 0;
+        };
+
+        const previewThb = (() => {
+            const raw = parseFloat(bAmt) || 0;
+            if (raw <= 0) return 0;
+            if (bCurr === 'THB') return raw;
+            const rate = getRateToThb(bCurr);
+            return rate > 0 ? raw * rate : 0;
+        })();
 
         const addMember = (e) => {
             e.preventDefault();
             if (newMem.trim()) {
-                setMembers([...members, { id: Date.now(), name: newMem.trim() }]);
+                const nextId = Date.now();
+                const nextMembers = [...members, { id: nextId, name: newMem.trim() }];
+                setMembers(nextMembers);
+                if (members.length === 0) setBPayer(nextId);
                 setNewMem('');
             }
         };
 
+        const removeMember = (id) => {
+            const nextMembers = members.filter(x => x.id !== id);
+            setMembers(nextMembers);
+            if (bPayer === id && nextMembers.length > 0) setBPayer(nextMembers[0].id);
+        };
+
         const addBill = (e) => {
             e.preventDefault();
-            if (bName.trim() && parseFloat(bAmt) > 0) {
-                setBills([...bills, { id: Date.now(), name: bName.trim(), amt: parseFloat(bAmt), payer: bPayer }]);
-                setBName(''); setBAmt('');
+            const raw = parseFloat(bAmt);
+            if (!bName.trim() || !(raw > 0)) return;
+
+            if (bCurr !== 'THB' && !fxData?.rates?.[bCurr]) {
+                alert('กำลังโหลดอัตราแลกเปลี่ยน กรุณารอสักครู่แล้วลองใหม่อีกครั้ง');
+                return;
             }
+
+            const thbAmt = bCurr === 'THB' ? raw : Number((raw * getRateToThb(bCurr)).toFixed(2));
+            setBills([
+                ...bills,
+                {
+                    id: Date.now(),
+                    name: bName.trim(),
+                    amt: thbAmt,
+                    origAmt: bCurr !== 'THB' ? raw : null,
+                    origCurr: bCurr !== 'THB' ? bCurr : null,
+                    payer: bPayer
+                }
+            ]);
+            setBName('');
+            setBAmt('');
         };
 
         const calculateDebts = () => {
@@ -6944,9 +7162,21 @@
         };
 
         const transactions = calculateDebts();
+        const totalThb = bills.reduce((sum, b) => sum + b.amt, 0);
 
         return (
-            <div className="flex flex-col gap-6 py-2 w-full max-w-2xl mx-auto text-xs">
+            <div className="flex flex-col gap-5 py-2 w-full max-w-2xl mx-auto text-xs">
+                {/* แถบตัวช่วยแปลงบิลต่างประเทศ + คิดค่าบัตร 2.5% */}
+                <LunarSplitterFxBar
+                    onApplyThb={(thbVal, meta) => {
+                        setBCurr('THB');
+                        setBAmt(String(thbVal));
+                        if (!bName.trim() && meta?.note) {
+                            setBName(`บิลต่างประเทศ (${meta.note})`);
+                        }
+                    }}
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg">
                         <div className="font-bold text-sky-300 mb-3 border-b border-[#1E3A5F] pb-2"><i className="fas fa-users"></i> สมาชิกทริป ({members.length} คน)</div>
@@ -6957,29 +7187,52 @@
                         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto custom-scrollbar">
                             {members.map(m => (
                                 <span key={m.id} className="bg-[#050811] border border-[#1E3A5F] px-2 py-1 rounded-full text-slate-300 flex items-center gap-2">
-                                    {m.name} <button onClick={() => setMembers(members.filter(x => x.id !== m.id))} className="text-red-400 hover:text-red-300">✕</button>
+                                    {m.name} <button type="button" onClick={() => removeMember(m.id)} className="text-red-400 hover:text-red-300">✕</button>
                                 </span>
                             ))}
                         </div>
                     </div>
 
                     <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-lg">
-                        <div className="font-bold text-amber-300 mb-3 border-b border-[#1E3A5F] pb-2"><i className="fas fa-receipt"></i> บิลค่าใช้จ่าย ({bills.length} รายการ)</div>
+                        <div className="flex items-center justify-between font-bold text-amber-300 mb-3 border-b border-[#1E3A5F] pb-2">
+                            <span><i className="fas fa-receipt"></i> บิลค่าใช้จ่าย ({bills.length} รายการ)</span>
+                            {totalThb > 0 && <span className="font-mono text-[10px] text-slate-300">รวม {totalThb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿</span>}
+                        </div>
                         <form onSubmit={addBill} className="space-y-2 mb-3">
                             <input type="text" value={bName} onChange={e => setBName(e.target.value)} placeholder="ชื่อรายการ (เช่น ค่าที่พัก)..." className="w-full inp py-1.5" required />
-                            <div className="flex gap-2">
-                                <input type="number" value={bAmt} onChange={e => setBAmt(e.target.value)} placeholder="จำนวนเงิน" className="flex-1 inp py-1.5 font-mono" required />
-                                <select value={bPayer} onChange={e => setBPayer(parseInt(e.target.value))} className="flex-1 inp py-1.5 bg-[#050811]">
-                                    {members.map(m => <option key={m.id} value={m.id}>จ่ายโดย: {m.name}</option>)}
+                            <div className="flex gap-1.5">
+                                <select value={bCurr} onChange={e => setBCurr(e.target.value)} className="w-24 inp py-1.5 bg-[#050811] font-mono font-bold shrink-0">
+                                    {currencyCodes.map(c => (
+                                        <option key={c} value={c}>{CURRENCY_META[c].flag} {c}</option>
+                                    ))}
                                 </select>
+                                <input type="number" step="any" value={bAmt} onChange={e => setBAmt(e.target.value)} placeholder={`จำนวนเงิน (${bCurr})`} className="flex-1 inp py-1.5 font-mono min-w-0" required />
                             </div>
+                            {bCurr !== 'THB' && previewThb > 0 && (
+                                <div className="text-[10px] font-mono text-emerald-300 bg-emerald-950/35 border border-emerald-500/30 px-2.5 py-1 rounded-lg flex justify-between">
+                                    <span>แปลงเป็นบาท ({fxData?.date || 'ล่าสุด'})</span>
+                                    <strong>≈ {previewThb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿</strong>
+                                </div>
+                            )}
+                            <select value={bPayer} onChange={e => setBPayer(parseInt(e.target.value))} className="w-full inp py-1.5 bg-[#050811]">
+                                {members.map(m => <option key={m.id} value={m.id}>จ่ายโดย: {m.name}</option>)}
+                            </select>
                             <button type="submit" className="w-full btn-b py-1.5 border-amber-500/50 text-amber-300 hover:bg-amber-900">+ เพิ่มบิล</button>
                         </form>
                         <div className="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar">
                             {bills.map(b => (
                                 <div key={b.id} className="flex justify-between items-center bg-[#050811] p-2 rounded border border-[#1E3A5F] text-[10px]">
-                                    <div className="flex flex-col"><span className="font-bold text-slate-200">{b.name}</span><span className="text-slate-500">จ่ายโดย {members.find(m => m.id === b.payer)?.name}</span></div>
-                                    <div className="flex items-center gap-2"><span className="font-mono text-amber-300 font-bold">{b.amt.toLocaleString()} ฿</span> <button onClick={() => setBills(bills.filter(x => x.id !== b.id))} className="text-red-400">✕</button></div>
+                                    <div className="flex flex-col min-w-0 pr-2">
+                                        <span className="font-bold text-slate-200 truncate">{b.name}</span>
+                                        <span className="text-slate-500">
+                                            จ่ายโดย {members.find(m => m.id === b.payer)?.name}
+                                            {b.origCurr && <span className="ml-1.5 text-sky-400 font-mono">({b.origAmt.toLocaleString()} {b.origCurr})</span>}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className="font-mono text-amber-300 font-bold">{b.amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ฿</span>
+                                        <button type="button" onClick={() => setBills(bills.filter(x => x.id !== b.id))} className="text-red-400">✕</button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -7579,6 +7832,277 @@
     };
 
     // ==========================================
+    // 🌙 OPEN-METEO SKY, WEATHER & PM2.5 WIDGET (CALENDAR ONLY)
+    // ==========================================
+    const WEATHER_PRESETS = [
+      { id: 'bkk', label: 'กรุงเทพฯ / ปริมณฑล', lat: 13.7563, lon: 100.5018 },
+      { id: 'cnx', label: 'เชียงใหม่', lat: 18.7883, lon: 98.9853 },
+      { id: 'chon', label: 'ชลบุรี', lat: 13.3611, lon: 100.9847 },
+      { id: 'kkc', label: 'ขอนแก่น', lat: 16.4322, lon: 102.8236 },
+      { id: 'hkt', label: 'ภูเก็ต', lat: 7.8804, lon: 98.3923 }
+    ];
+
+    const decodeWmoWeather = (code) => {
+      if (code === 0) return { label: 'ท้องฟ้าแจ่มใส', icon: 'fas fa-sun', cls: 'text-amber-300' };
+      if (code === 1 || code === 2) return { label: 'มีเมฆบางส่วน', icon: 'fas fa-cloud-sun', cls: 'text-sky-300' };
+      if (code === 3) return { label: 'มีเมฆมาก', icon: 'fas fa-cloud', cls: 'text-slate-300' };
+      if (code === 45 || code === 48) return { label: 'มีหมอก / ฟ้าหลัว', icon: 'fas fa-smog', cls: 'text-slate-300' };
+      if ([51, 53, 55, 56, 57].includes(code)) return { label: 'ฝนปรอยๆ', icon: 'fas fa-cloud-rain', cls: 'text-sky-400' };
+      if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { label: 'มีฝนตก', icon: 'fas fa-cloud-showers-heavy', cls: 'text-blue-400' };
+      if ([95, 96, 99].includes(code)) return { label: 'พายุฝนฟ้าคะนอง', icon: 'fas fa-bolt', cls: 'text-amber-400' };
+      return { label: 'สภาพอากาศทั่วไป', icon: 'fas fa-cloud', cls: 'text-slate-300' };
+    };
+
+    const getPm25Badge = (pm) => {
+      if (pm == null || Number.isNaN(pm)) return { label: 'ไม่มีข้อมูล', cls: 'text-slate-400 bg-slate-900 border-slate-700' };
+      if (pm <= 15) return { label: 'ดีมาก', cls: 'text-sky-300 bg-sky-950/60 border-sky-500/40' };
+      if (pm <= 25) return { label: 'ดี', cls: 'text-emerald-300 bg-emerald-950/60 border-emerald-500/40' };
+      if (pm <= 37.5) return { label: 'ปานกลาง', cls: 'text-amber-300 bg-amber-950/60 border-amber-500/40' };
+      if (pm <= 75) return { label: 'เริ่มมีผลกระทบ', cls: 'text-orange-300 bg-orange-950/60 border-orange-500/50' };
+      return { label: 'อันตรายต่อสุขภาพ', cls: 'text-red-300 bg-red-950/70 border-red-500/60' };
+    };
+
+    const _omCache = {};
+
+    function CalendarSkyWeatherWidget({ selectedDate }) {
+      const [loc, setLoc] = useStickyState(WEATHER_PRESETS[0], 'tbma_cal_weather_loc');
+      const [weather, setWeather] = useState(null);
+      const [air, setAir] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [gpsLoading, setGpsLoading] = useState(false);
+      const [err, setErr] = useState('');
+
+      const loadWeather = useCallback(async (targetLoc, force = false) => {
+        const key = `${Number(targetLoc.lat).toFixed(2)},${Number(targetLoc.lon).toFixed(2)}`;
+        const hit = _omCache[key];
+        if (!force && hit && Date.now() - hit.fetchedAt < 20 * 60 * 1000) {
+          setWeather(hit.weather);
+          setAir(hit.air);
+          setLoading(false);
+          setErr('');
+          return;
+        }
+        setLoading(true);
+        setErr('');
+        try {
+          const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${targetLoc.lat}&longitude=${targetLoc.lon}&current=temperature_2m,relative_humidity_2m,cloud_cover,weather_code&hourly=cloud_cover&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=Asia%2FBangkok&forecast_days=7`;
+          const aUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${targetLoc.lat}&longitude=${targetLoc.lon}&current=pm2_5,us_aqi&hourly=pm2_5&timezone=Asia%2FBangkok&forecast_days=5`;
+
+          const [wRes, aRes] = await Promise.all([fetch(wUrl), fetch(aUrl)]);
+          if (!wRes.ok) throw new Error('Weather API error');
+          const wData = await wRes.json();
+          const aData = aRes.ok ? await aRes.json() : null;
+
+          _omCache[key] = { weather: wData, air: aData, fetchedAt: Date.now() };
+          setWeather(wData);
+          setAir(aData);
+        } catch (e) {
+          setErr('โหลดข้อมูลสภาพอากาศไม่สำเร็จ');
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      useEffect(() => {
+        if (loc?.lat && loc?.lon) loadWeather(loc);
+      }, [loc?.lat, loc?.lon, loadWeather]);
+
+      const handleUseGps = () => {
+        if (!navigator.geolocation) return alert('เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง GPS');
+        setGpsLoading(true);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const customLoc = {
+              id: 'gps',
+              label: `ตำแหน่งฉัน (${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)})`,
+              lat: Number(pos.coords.latitude.toFixed(4)),
+              lon: Number(pos.coords.longitude.toFixed(4))
+            };
+            setLoc(customLoc);
+            setGpsLoading(false);
+          },
+          () => {
+            setGpsLoading(false);
+            alert('ไม่สามารถเข้าถึงตำแหน่ง GPS ได้ กรุณาเลือกพื้นที่จากรายการแทน');
+          },
+          { timeout: 8000 }
+        );
+      };
+
+      // คำนวณข้อมูลของวันที่เลือก (หรือ fallback เป็นวันนี้ถ้าเลือกวันเกินพยากรณ์ 7 วัน)
+      const viewData = React.useMemo(() => {
+        if (!weather?.daily?.time?.length) return null;
+        const todayKey = weather.daily.time[0];
+        const idxInForecast = selectedDate ? weather.daily.time.indexOf(selectedDate) : 0;
+        const isExactDate = idxInForecast !== -1;
+        const dayIdx = isExactDate ? idxInForecast : 0;
+        const targetDate = weather.daily.time[dayIdx];
+        const isToday = dayIdx === 0;
+
+        // คำนวณความโปร่งท้องฟ้าช่วงหัวค่ำ-กลางคืน (19:00 - 23:00 น.) สำหรับดูดวงจันทร์
+        let nightCloudSum = 0, nightCloudCnt = 0;
+        if (weather.hourly?.time && weather.hourly?.cloud_cover) {
+          weather.hourly.time.forEach((tStr, i) => {
+            if (!tStr.startsWith(targetDate + 'T')) return;
+            const hr = parseInt(tStr.slice(11, 13), 10);
+            if (hr >= 19 && hr <= 23 && typeof weather.hourly.cloud_cover[i] === 'number') {
+              nightCloudSum += weather.hourly.cloud_cover[i];
+              nightCloudCnt++;
+            }
+          });
+        }
+        const nightCloud = nightCloudCnt > 0
+          ? Math.round(nightCloudSum / nightCloudCnt)
+          : Math.round(weather.current?.cloud_cover ?? 50);
+        const moonClarity = Math.max(0, Math.min(100, 100 - nightCloud));
+
+        // ค่า PM2.5 (ถ้าเป็นวันนี้ใช้ค่าเรียลไทม์, ถ้าเป็นวันถัดไปใน 5 วันใช้ค่าเฉลี่ยของวันนั้น)
+        let pm25 = null;
+        if (isToday && typeof air?.current?.pm2_5 === 'number') {
+          pm25 = air.current.pm2_5;
+        } else if (air?.hourly?.time && air?.hourly?.pm2_5) {
+          const dayPms = [];
+          air.hourly.time.forEach((tStr, i) => {
+            if (tStr.startsWith(targetDate + 'T') && typeof air.hourly.pm2_5[i] === 'number') {
+              dayPms.push(air.hourly.pm2_5[i]);
+            }
+          });
+          if (dayPms.length > 0) pm25 = dayPms.reduce((a, b) => a + b, 0) / dayPms.length;
+        }
+
+        return {
+          isExactDate,
+          isToday,
+          targetDate,
+          wmo: decodeWmoWeather(isToday ? weather.current?.weather_code : weather.daily.weather_code[dayIdx]),
+          currTemp: weather.current?.temperature_2m,
+          tMin: weather.daily.temperature_2m_min[dayIdx],
+          tMax: weather.daily.temperature_2m_max[dayIdx],
+          rainProb: weather.daily.precipitation_probability_max[dayIdx],
+          sunset: (weather.daily.sunset?.[dayIdx] || '').slice(11, 16),
+          sunrise: (weather.daily.sunrise?.[dayIdx] || '').slice(11, 16),
+          moonClarity,
+          nightCloud,
+          pm25
+        };
+      }, [weather, air, selectedDate]);
+
+      const pmInfo = getPm25Badge(viewData?.pm25);
+      const moonTip = !viewData ? '' :
+        viewData.moonClarity >= 75 ? 'ฟ้าเปิดมาก เหมาะส่องดวงจันทร์' :
+        viewData.moonClarity >= 45 ? 'เมฆประปราย พอเห็นดวงจันทร์' : 'เมฆหนา อาจบังดวงจันทร์';
+
+      return (
+        <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#0B1325] to-[#050811] border border-[#1E3A5F] space-y-2.5 text-xs">
+          {/* แถบหัว + เลือกพื้นที่ */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-bold text-sky-300">
+              <i className="fas fa-moon text-amber-300"></i>
+              <span>สภาพฟ้าดูดวงจันทร์ &amp; อากาศ</span>
+              {viewData && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-slate-300">
+                  {viewData.isExactDate ? (viewData.isToday ? 'วันนี้' : viewData.targetDate) : 'วันนี้ (เกินระยะพยากรณ์ 7 วัน)'}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <select
+                value={WEATHER_PRESETS.some(p => p.id === loc?.id) ? loc.id : 'gps'}
+                onChange={(e) => {
+                  const found = WEATHER_PRESETS.find(p => p.id === e.target.value);
+                  if (found) setLoc(found);
+                }}
+                className="bg-[#050811] border border-[#1E3A5F] rounded-lg px-2 py-1 text-[10px] text-slate-200 outline-none"
+              >
+                {WEATHER_PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                {loc?.id === 'gps' && <option value="gps">{loc.label}</option>}
+              </select>
+              <button
+                type="button"
+                onClick={handleUseGps}
+                disabled={gpsLoading}
+                className="px-2 py-1 rounded-lg bg-[#0F2547] hover:bg-sky-600 border border-[#1E3A5F] text-[10px] text-white transition-colors"
+                title="ใช้ตำแหน่ง GPS ปัจจุบัน"
+              >
+                <i className={`fas ${gpsLoading ? 'fa-spinner fa-spin' : 'fa-location-arrow'}`}></i>
+              </button>
+              <button
+                type="button"
+                onClick={() => loadWeather(loc, true)}
+                disabled={loading}
+                className="px-2 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] text-[10px] text-slate-300"
+                title="รีเฟรชข้อมูลอากาศ"
+              >
+                <i className={`fas fa-sync-alt ${loading ? 'fa-spin' : ''}`}></i>
+              </button>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="py-3 text-center text-[11px] text-sky-400 animate-pulse">
+              <i className="fas fa-spinner fa-spin mr-1.5"></i> กำลังดึงข้อมูลท้องฟ้าและ PM2.5 จาก Open-Meteo...
+            </div>
+          ) : err || !viewData ? (
+            <div className="py-2 text-center text-[11px] text-slate-500">{err || 'ไม่พบข้อมูลสภาพอากาศ'}</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {/* การ์ด 1: สภาพอากาศ & อุณหภูมิ */}
+              <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl bg-[#0B1325] border border-[#1E3A5F] flex items-center justify-center text-base shrink-0 ${viewData.wmo.cls}`}>
+                  <i className={viewData.wmo.icon}></i>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-white truncate">{viewData.wmo.label}</div>
+                  <div className="text-[10px] font-mono text-slate-300">
+                    {viewData.isToday && typeof viewData.currTemp === 'number'
+                      ? `${Math.round(viewData.currTemp)}°C • `
+                      : ''}
+                    {Math.round(viewData.tMin)}°–{Math.round(viewData.tMax)}°C
+                  </div>
+                  <div className="text-[9px] text-slate-400">
+                    โอกาสฝน {viewData.rainProb ?? 0}% {viewData.sunset ? `• อาทิตย์ตก ${viewData.sunset}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              {/* การ์ด 2: ฟ้าเปิดดูดวงจันทร์ช่วงค่ำ (19:00-23:00) */}
+              <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-col justify-between gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-bold">ฟ้าเปิดดูจันทร์ (19–23 น.)</span>
+                  <span className={`font-mono font-bold text-sm ${viewData.moonClarity >= 75 ? 'text-emerald-300' : viewData.moonClarity >= 45 ? 'text-amber-300' : 'text-slate-400'}`}>
+                    {viewData.moonClarity}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-[#0B1325] overflow-hidden border border-[#1E3A5F]">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${viewData.moonClarity >= 75 ? 'bg-emerald-400' : viewData.moonClarity >= 45 ? 'bg-amber-400' : 'bg-slate-500'}`}
+                    style={{ width: `${viewData.moonClarity}%` }}
+                  />
+                </div>
+                <div className="text-[9px] text-slate-400 truncate">{moonTip} (เมฆ {viewData.nightCloud}%)</div>
+              </div>
+
+              {/* การ์ด 3: ค่าฝุ่น PM2.5 */}
+              <div className="p-2.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-bold">ฝุ่น PM2.5</div>
+                  <div className="font-mono font-bold text-base text-white leading-tight mt-0.5">
+                    {viewData.pm25 != null ? viewData.pm25.toFixed(1) : '-'}
+                    <span className="text-[9px] text-slate-400 font-normal ml-1">µg/m³</span>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 rounded-lg border text-[10px] font-bold shrink-0 ${pmInfo.cls}`}>
+                  {pmInfo.label}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
     // 7. 📅 ASSOCIATION CALENDAR COMPONENT 📅
     // ==========================================
     const AssociationCalendar = ({ isOpen, onClose, events, currentUser, db, users }) => {
@@ -7770,6 +8294,11 @@
                             </div>
                         </div>
                         <button onClick={onClose} className="absolute top-3 right-4 text-slate-400 hover:text-white font-bold text-2xl leading-none p-1">✕</button>
+                    </div>
+
+                    {/* 🌙 แถบสภาพฟ้าดูดวงจันทร์ + อากาศ + PM2.5 (Open-Meteo) */}
+                    <div className="px-4 pt-3 pb-1 bg-[#070C18] border-b border-[#1E3A5F]/60 shrink-0">
+                        <CalendarSkyWeatherWidget selectedDate={selectedDate} />
                     </div>
 
                     <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
@@ -10072,6 +10601,586 @@
     }
 
     // ==========================================
+    // 🎤 LRCLIB SYNCED LYRICS PANEL (DISC JAM)
+    // ==========================================
+    const cleanYoutubeTitleForLyrics = (raw = '') => {
+      let s = String(raw || '')
+        .replace(/[\(\[\{【「][^)\]\}】」]*(official|mv|music\s*video|lyric|audio|visualizer|live|ver\.?|version|hd|4k|prod\.?|feat\.?|ft\.?|เนื้อเพลง|ซับไทย|แปลไทย)[^)\]\}】」]*[\)\]\}】」]/gi, ' ')
+        .replace(/\b(official\s*(music\s*)?video|official\s*mv|official\s*audio|lyric\s*video|lyrics|m\/v|full\s*song|4k|hd)\b/gi, ' ')
+        .replace(/\|.*$/g, ' ')
+        .replace(/[「」『』【】""'']/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return s.length >= 2 ? s : String(raw || '').trim();
+    };
+
+    const parseLrcLines = (lrcText = '') => {
+      const out = [];
+      const lines = String(lrcText || '').split(/\r?\n/);
+      const timeRe = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+      for (const rawLine of lines) {
+        const stamps = [];
+        let m;
+        timeRe.lastIndex = 0;
+        while ((m = timeRe.exec(rawLine)) !== null) {
+          const min = parseInt(m[1], 10);
+          const sec = parseInt(m[2], 10);
+          const frac = m[3] ? parseInt(m[3].padEnd(3, '0').slice(0, 3), 10) / 1000 : 0;
+          stamps.push(min * 60 + sec + frac);
+        }
+        const text = rawLine.replace(timeRe, '').trim();
+        if (stamps.length > 0) {
+          stamps.forEach((t) => out.push({ time: t, text: text || '♪' }));
+        }
+      }
+      return out.sort((a, b) => a.time - b.time);
+    };
+
+    function DiscJamLyricsPanel({ activeSong, playState }) {
+      const [results, setResults] = useState([]);
+      const [selectedIdx, setSelectedIdx] = useState(0);
+      const [loading, setLoading] = useState(false);
+      const [errMsg, setErrMsg] = useState('');
+      const [queryInput, setQueryInput] = useState('');
+      const [syncOffset, setSyncOffset] = useState(0);
+      const [autoScroll, setAutoScroll] = useState(true);
+      const [nowSec, setNowSec] = useState(0);
+
+      const listRef = useRef(null);
+      const activeLineRef = useRef(null);
+      const cacheRef = useRef({});
+
+      const fetchLyrics = useCallback(async (qStr) => {
+        const q = (qStr || '').trim();
+        if (!q) { setResults([]); return; }
+        if (cacheRef.current[q]) {
+          setResults(cacheRef.current[q]);
+          setSelectedIdx(0);
+          setErrMsg(cacheRef.current[q].length ? '' : 'ไม่พบเนื้อเพลงในฐานข้อมูล LRCLIB');
+          return;
+        }
+        setLoading(true);
+        setErrMsg('');
+        try {
+          const res = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const sorted = (Array.isArray(data) ? data : [])
+            .filter(item => item.syncedLyrics || item.plainLyrics)
+            .sort((a, b) => (b.syncedLyrics ? 1 : 0) - (a.syncedLyrics ? 1 : 0));
+          cacheRef.current[q] = sorted;
+          setResults(sorted);
+          setSelectedIdx(0);
+          if (!sorted.length) setErrMsg('ไม่พบเนื้อเพลง ลองตัดชื่อช่องหรือพิมพ์ "ชื่อเพลง ศิลปิน" เองด้านบน');
+        } catch (e) {
+          setResults([]);
+          setErrMsg('ไม่สามารถเชื่อมต่อ LRCLIB ได้ชั่วคราว');
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      // ค้นหาอัตโนมัติเมื่อเปลี่ยนเพลงบน Deck
+      useEffect(() => {
+        if (!activeSong?.title) {
+          setResults([]);
+          setQueryInput('');
+          setErrMsg('');
+          return;
+        }
+        const cleaned = cleanYoutubeTitleForLyrics(activeSong.title);
+        setQueryInput(cleaned);
+        setSyncOffset(0);
+        fetchLyrics(cleaned);
+      }, [activeSong?.id, activeSong?.title, fetchLyrics]);
+
+      // อัปเดตเวลาปัจจุบันของเพลงทุก 250ms เพื่อไฮไลต์บรรทัดซิงก์
+      useEffect(() => {
+        const calcTime = () => {
+          if (!playState) return 0;
+          if (playState.isPlaying && playState.startedAt) {
+            return Math.max(0, (Date.now() - playState.startedAt) / 1000 + (playState.pausedPos || 0));
+          }
+          return Math.max(0, playState.pausedPos || 0);
+        };
+        setNowSec(calcTime());
+        if (!playState?.isPlaying) return;
+        const iv = setInterval(() => setNowSec(calcTime()), 250);
+        return () => clearInterval(iv);
+      }, [playState?.isPlaying, playState?.startedAt, playState?.pausedPos]);
+
+      const currentTrack = results[selectedIdx] || null;
+      const parsedLines = React.useMemo(
+        () => (currentTrack?.syncedLyrics ? parseLrcLines(currentTrack.syncedLyrics) : []),
+        [currentTrack?.syncedLyrics]
+      );
+
+      const effectiveSec = nowSec + syncOffset;
+      const activeLineIdx = React.useMemo(() => {
+        if (!parsedLines.length) return -1;
+        let idx = -1;
+        for (let i = 0; i < parsedLines.length; i++) {
+          if (parsedLines[i].time <= effectiveSec) idx = i;
+          else break;
+        }
+        return idx;
+      }, [parsedLines, effectiveSec]);
+
+      // เลื่อนกล่องเนื้อเพลงตามบรรทัดปัจจุบันอัตโนมัติ
+      useEffect(() => {
+        if (!autoScroll || activeLineIdx < 0 || !activeLineRef.current || !listRef.current) return;
+        const box = listRef.current;
+        const el = activeLineRef.current;
+        const targetTop = el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2;
+        box.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+      }, [activeLineIdx, autoScroll]);
+
+      const fmtMmSs = (sec) => {
+        const s = Math.max(0, Math.floor(sec));
+        return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+      };
+
+      return (
+        <div className="card p-4 bg-[#0B1325] border-[#1E3A5F] flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1E3A5F]/70">
+            <div className="flex items-center gap-2 min-w-0">
+              <i className="fas fa-microphone-alt text-sky-400"></i>
+              <span className="text-xs font-bold text-white truncate">เนื้อเพลง (LRCLIB Sync)</span>
+              {currentTrack?.syncedLyrics && (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-[9px] font-mono font-bold">
+                  SYNC {fmtMmSs(effectiveSec)}
+                </span>
+              )}
+            </div>
+
+            {currentTrack?.syncedLyrics && (
+              <div className="flex items-center gap-1 text-[10px]">
+                <button type="button" onClick={() => setSyncOffset(o => Number((o - 1).toFixed(1)))} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-slate-300 hover:text-white" title="ถอยเวลาเนื้อเพลง 1 วิ">-1s</button>
+                <button type="button" onClick={() => setSyncOffset(o => Number((o - 0.5).toFixed(1)))} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-slate-300 hover:text-white">-0.5</button>
+                <button type="button" onClick={() => setSyncOffset(0)} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] font-mono text-amber-300" title="รีเซ็ตชดเชยเวลา">
+                  {syncOffset >= 0 ? `+${syncOffset}s` : `${syncOffset}s`}
+                </button>
+                <button type="button" onClick={() => setSyncOffset(o => Number((o + 0.5).toFixed(1)))} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-slate-300 hover:text-white">+0.5</button>
+                <button type="button" onClick={() => setSyncOffset(o => Number((o + 1).toFixed(1)))} className="px-1.5 py-0.5 rounded bg-[#050811] border border-[#1E3A5F] text-slate-300 hover:text-white" title="เร่งเวลาเนื้อเพลง 1 วิ">+1s</button>
+                <button
+                  type="button"
+                  onClick={() => setAutoScroll(v => !v)}
+                  className={`ml-1 px-2 py-0.5 rounded border font-bold ${autoScroll ? 'bg-sky-600/30 border-sky-400 text-sky-200' : 'bg-[#050811] border-[#1E3A5F] text-slate-500'}`}
+                  title="เปิด/ปิดการเลื่อนตามอัตโนมัติ"
+                >
+                  Auto
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ช่องค้นหาแก้คำเองกรณีชื่อคลิป YouTube ไม่ตรง */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); fetchLyrics(queryInput); }}
+            className="flex gap-1.5"
+          >
+            <input
+              type="text"
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              placeholder="พิมพ์ชื่อเพลง + ศิลปินเพื่อค้นหาเนื้อเพลง..."
+              className="flex-1 inp py-1.5 text-xs"
+            />
+            <button type="submit" disabled={loading} className="btn-b px-3 py-1.5 text-xs shrink-0">
+              <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-search'}`}></i>
+            </button>
+          </form>
+
+          {/* ตัวเลือกเวอร์ชันเพลง (ถ้าเจอหลายผลลัพธ์) */}
+          {results.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+              {results.slice(0, 5).map((r, i) => (
+                <button
+                  key={r.id || i}
+                  type="button"
+                  onClick={() => { setSelectedIdx(i); setSyncOffset(0); }}
+                  className={`px-2.5 py-1 rounded-lg border text-[10px] whitespace-nowrap transition-colors ${selectedIdx === i ? 'bg-sky-600 text-white border-sky-400 font-bold' : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:text-white'}`}
+                >
+                  {r.syncedLyrics ? '⏱ ' : '📄 '}{r.trackName} — {r.artistName}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* พื้นที่แสดงเนื้อเพลง */}
+          <div
+            ref={listRef}
+            className="relative h-64 sm:h-72 overflow-y-auto custom-scrollbar rounded-xl bg-[#050811] border border-[#1E3A5F] p-4"
+          >
+            {!activeSong?.title && !results.length ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs gap-2 text-center">
+                <i className="fas fa-music text-2xl opacity-40"></i>
+                <span>ยังไม่มีเพลงกำลังเล่นบน Deck — หรือพิมพ์ชื่อเพลงค้นหาด้านบนได้เลย</span>
+              </div>
+            ) : loading ? (
+              <div className="h-full flex items-center justify-center text-sky-400 text-xs font-bold animate-pulse">
+                <i className="fas fa-spinner fa-spin mr-2"></i> กำลังค้นหาเนื้อเพลงจาก LRCLIB...
+              </div>
+            ) : errMsg ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs gap-1.5 text-center px-4">
+                <i className="fas fa-search-minus text-xl text-slate-600"></i>
+                <span>{errMsg}</span>
+              </div>
+            ) : parsedLines.length > 0 ? (
+              <div className="space-y-2.5 py-6 text-center">
+                {parsedLines.map((line, i) => {
+                  const isCurr = i === activeLineIdx;
+                  const isPast = i < activeLineIdx;
+                  return (
+                    <div
+                      key={`${i}-${line.time}`}
+                      ref={isCurr ? activeLineRef : null}
+                      className={`transition-all duration-300 leading-relaxed px-2 py-0.5 rounded-lg ${
+                        isCurr
+                          ? 'text-white font-bold text-sm sm:text-base scale-[1.03] bg-sky-500/15 border border-sky-400/30 shadow-[0_0_15px_rgba(56,189,248,0.18)]'
+                          : isPast
+                            ? 'text-slate-500 text-xs'
+                            : 'text-slate-300/80 text-xs'
+                      }`}
+                    >
+                      {line.text}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : currentTrack?.plainLyrics ? (
+              <div className="text-xs text-slate-200 whitespace-pre-line leading-7 text-center">
+                {currentTrack.plainLyrics}
+              </div>
+            ) : null}
+          </div>
+
+          {currentTrack && (
+            <div className="flex justify-between items-center text-[10px] text-slate-500">
+              <span className="truncate">{currentTrack.trackName} — {currentTrack.artistName}</span>
+              <span className="shrink-0 font-mono">Powered by LRCLIB</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 💱 FRANKFURTER SHARED RATES & CURRENCY CONVERTER TOOL
+    // ==========================================
+    const CURRENCY_META = {
+      THB: { flag: '🇹🇭', name: 'บาทไทย' },
+      USD: { flag: '🇺🇸', name: 'ดอลลาร์สหรัฐ' },
+      JPY: { flag: '🇯🇵', name: 'เยนญี่ปุ่น' },
+      KRW: { flag: '🇰🇷', name: 'วอนเกาหลีใต้' },
+      EUR: { flag: '🇪🇺', name: 'ยูโร' },
+      GBP: { flag: '🇬🇧', name: 'ปอนด์สเตอร์ลิง' },
+      SGD: { flag: '🇸🇬', name: 'ดอลลาร์สิงคโปร์' },
+      CNY: { flag: '🇨🇳', name: 'หยวนจีน' },
+      HKD: { flag: '🇭🇰', name: 'ดอลลาร์ฮ่องกง' },
+      AUD: { flag: '🇦🇺', name: 'ดอลลาร์ออสเตรเลีย' },
+      CHF: { flag: '🇨🇭', name: 'ฟรังก์สวิส' },
+      MYR: { flag: '🇲🇾', name: 'ริงกิตมาเลเซีย' },
+      CAD: { flag: '🇨🇦', name: 'ดอลลาร์แคนาดา' },
+      NZD: { flag: '🇳🇿', name: 'ดอลลาร์นิวซีแลนด์' },
+      INR: { flag: '🇮🇳', name: 'รูปีอินเดีย' },
+      IDR: { flag: '🇮🇩', name: 'รูเปียห์อินโดนีเซีย' },
+      PHP: { flag: '🇵🇭', name: 'เปโซฟิลิปปินส์' }
+    };
+
+    const _fxCache = {};
+    const fetchFrankfurterRates = async (base = 'THB') => {
+      const key = String(base || 'THB').toUpperCase();
+      const hit = _fxCache[key];
+      if (hit && Date.now() - hit.fetchedAt < 30 * 60 * 1000) return hit;
+
+      const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error('Frankfurter API Error');
+      const data = await res.json();
+      const payload = {
+        base: data.base,
+        date: data.date,
+        rates: { [data.base]: 1, ...(data.rates || {}) },
+        fetchedAt: Date.now()
+      };
+      _fxCache[key] = payload;
+      return payload;
+    };
+
+    function CurrencyConverterTool() {
+      const [amount, setAmount] = useState('1000');
+      const [fromCurr, setFromCurr] = useState('JPY');
+      const [toCurr, setToCurr] = useState('THB');
+      const [fxData, setFxData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [err, setErr] = useState('');
+
+      // กราฟแนวโน้มย้อนหลัง 30 วัน
+      const [historyPts, setHistoryPts] = useState([]);
+      const [histLoading, setHistLoading] = useState(false);
+
+      const loadRates = useCallback(async () => {
+        setLoading(true);
+        setErr('');
+        try {
+          const data = await fetchFrankfurterRates('THB');
+          setFxData(data);
+        } catch (e) {
+          setErr('ไม่สามารถโหลดอัตราแลกเปลี่ยนจาก Frankfurter ได้ กรุณาลองใหม่');
+        } finally {
+          setLoading(false);
+        }
+      }, []);
+
+      useEffect(() => { loadRates(); }, [loadRates]);
+
+      // โหลดข้อมูลกราฟย้อนหลัง 30 วันเมื่อเปลี่ยนคู่สกุลเงิน
+      useEffect(() => {
+        if (!fromCurr || !toCurr || fromCurr === toCurr) {
+          setHistoryPts([]);
+          return;
+        }
+        let cancelled = false;
+        setHistLoading(true);
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 30);
+        const fmt = (d) => d.toISOString().slice(0, 10);
+
+        fetch(`https://api.frankfurter.dev/v1/${fmt(start)}..${fmt(end)}?base=${fromCurr}&symbols=${toCurr}`)
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => {
+            if (cancelled) return;
+            const pts = Object.entries(d.rates || {})
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([date, obj]) => ({ date, val: obj[toCurr] }))
+              .filter(p => typeof p.val === 'number');
+            setHistoryPts(pts);
+          })
+          .catch(() => { if (!cancelled) setHistoryPts([]); })
+          .finally(() => { if (!cancelled) setHistLoading(false); });
+
+        return () => { cancelled = true; };
+      }, [fromCurr, toCurr]);
+
+      const allCodes = React.useMemo(() => {
+        const popular = Object.keys(CURRENCY_META);
+        if (!fxData?.rates) return popular;
+        const extras = Object.keys(fxData.rates).filter(c => !popular.includes(c)).sort();
+        return [...popular, ...extras];
+      }, [fxData]);
+
+      const numAmt = parseFloat(String(amount).replace(/,/g, '')) || 0;
+
+      // แปลงผ่านฐาน THB (แม่นยำและใช้เรทชุดเดียวกันทุกคู่)
+      const convertVal = (val, from, to) => {
+        if (!fxData?.rates) return 0;
+        const rFrom = fxData.rates[from];
+        const rTo = fxData.rates[to];
+        if (!rFrom || !rTo) return 0;
+        return (val / rFrom) * rTo;
+      };
+
+      const unitRate = convertVal(1, fromCurr, toCurr);
+      const converted = convertVal(numAmt, fromCurr, toCurr);
+      const revRate = convertVal(1, toCurr, fromCurr);
+
+      const fmtMoney = (n, code) => {
+        const decimals = ['JPY', 'KRW', 'IDR'].includes(code) ? 0 : 2;
+        return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+      };
+
+      // คำนวณ SVG Sparkline 30 วัน
+      const chartStats = React.useMemo(() => {
+        if (historyPts.length < 2) return null;
+        const vals = historyPts.map(p => p.val);
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        const span = max - min || 1e-6;
+        const first = vals[0];
+        const last = vals[vals.length - 1];
+        const pct = ((last - first) / first) * 100;
+        const W = 320, H = 86, pad = 8;
+        const points = historyPts.map((p, i) => {
+          const x = pad + (i / (historyPts.length - 1)) * (W - pad * 2);
+          const y = H - pad - ((p.val - min) / span) * (H - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+        return { min, max, pct, points, W, H };
+      }, [historyPts]);
+
+      const quickBoardCodes = ['THB', 'USD', 'JPY', 'KRW', 'EUR', 'GBP', 'SGD', 'CNY'].filter(c => c !== fromCurr);
+
+      return (
+        <div className="max-w-3xl mx-auto space-y-5 text-xs">
+          {/* Header */}
+          <div className="card p-5 bg-gradient-to-br from-[#0B1325] to-[#050811] border-[#1E3A5F] space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <i className="fas fa-exchange-alt text-emerald-400"></i>
+                  <span>แปลงสกุลเงินเรียลไทม์ (Currency Converter)</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  อัตราอ้างอิงจากธนาคารกลาง (Frankfurter / ECB & BOT)
+                  {fxData?.date && <span className="ml-1.5 font-mono text-sky-300">• อัปเดต {fxData.date}</span>}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { delete _fxCache.THB; loadRates(); }}
+                disabled={loading}
+                className="btn-d py-1.5 px-3 text-[11px] flex items-center gap-1.5"
+              >
+                <i className={`fas fa-sync-alt ${loading ? 'fa-spin' : ''}`}></i> รีเฟรชเรท
+              </button>
+            </div>
+
+            {err && <div className="p-3 rounded-xl bg-red-950/60 border border-red-800 text-red-300 font-bold">{err}</div>}
+
+            {/* Input & Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-end">
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-slate-400 font-bold">จากสกุลเงิน</label>
+                <select value={fromCurr} onChange={(e) => setFromCurr(e.target.value)} className="w-full inp text-xs font-bold">
+                  {allCodes.map(c => (
+                    <option key={c} value={c}>
+                      {(CURRENCY_META[c]?.flag || '🌐')} {c} {CURRENCY_META[c]?.name ? `- ${CURRENCY_META[c].name}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  step="any"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full inp text-lg font-mono font-bold text-white"
+                  placeholder="กรอกจำนวนเงิน"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setFromCurr(toCurr); setToCurr(fromCurr); }}
+                className="h-11 w-11 mx-auto rounded-full bg-[#0F2547] hover:bg-sky-600 border border-[#1E3A5F] text-white flex items-center justify-center transition-all active:scale-90 shadow"
+                title="สลับสกุลเงิน"
+              >
+                <i className="fas fa-exchange-alt"></i>
+              </button>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-slate-400 font-bold">เป็นสกุลเงิน</label>
+                <select value={toCurr} onChange={(e) => setToCurr(e.target.value)} className="w-full inp text-xs font-bold">
+                  {allCodes.map(c => (
+                    <option key={c} value={c}>
+                      {(CURRENCY_META[c]?.flag || '🌐')} {c} {CURRENCY_META[c]?.name ? `- ${CURRENCY_META[c].name}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div className="w-full px-3 py-2 rounded-xl bg-emerald-950/35 border border-emerald-500/40 text-lg font-mono font-bold text-emerald-300 truncate">
+                  {loading ? '...' : `${fmtMoney(converted, toCurr)} ${toCurr}`}
+                </div>
+              </div>
+            </div>
+
+            {/* ปุ่มจำนวนเงินด่วน */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex flex-wrap gap-1.5">
+                {[100, 500, 1000, 5000, 10000].map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setAmount(String(v))}
+                    className="px-2.5 py-1 rounded-lg bg-[#050811] hover:bg-[#0F2547] border border-[#1E3A5F] font-mono text-[11px] text-slate-300 transition-colors"
+                  >
+                    {v.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              {fxData && (
+                <div className="text-[11px] font-mono text-slate-400">
+                  1 {fromCurr} = <strong className="text-white">{unitRate.toFixed(4)}</strong> {toCurr}
+                  <span className="mx-1.5 opacity-40">|</span>
+                  1 {toCurr} = <strong className="text-slate-200">{revRate.toFixed(4)}</strong> {fromCurr}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* กราฟแนวโน้ม 30 วัน */}
+          <div className="card p-4 bg-[#0B1325] border-[#1E3A5F] space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-bold text-slate-200 flex items-center gap-2">
+                <i className="fas fa-chart-line text-sky-400"></i>
+                <span>แนวโน้ม 30 วันล่าสุด ({fromCurr} → {toCurr})</span>
+              </div>
+              {chartStats && (
+                <span className={`font-mono font-bold px-2 py-0.5 rounded-full text-[10px] border ${chartStats.pct >= 0 ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-red-950/60 border-red-500/40 text-red-300'}`}>
+                  {chartStats.pct >= 0 ? '▲' : '▼'} {Math.abs(chartStats.pct).toFixed(2)}%
+                </span>
+              )}
+            </div>
+
+            {histLoading ? (
+              <div className="h-24 flex items-center justify-center text-sky-400 animate-pulse">กำลังโหลดกราฟย้อนหลัง...</div>
+            ) : chartStats ? (
+              <div className="space-y-2">
+                <div className="bg-[#050811] rounded-xl border border-[#1E3A5F] p-2">
+                  <svg viewBox={`0 0 ${chartStats.W} ${chartStats.H}`} className="w-full h-24 overflow-visible">
+                    <polyline
+                      fill="none"
+                      stroke={chartStats.pct >= 0 ? '#34D399' : '#F87171'}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={chartStats.points}
+                    />
+                  </svg>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                  <span>ต่ำสุด 30 วัน: <strong className="text-slate-200">{chartStats.min.toFixed(4)}</strong></span>
+                  <span>สูงสุด 30 วัน: <strong className="text-slate-200">{chartStats.max.toFixed(4)}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-4 text-center text-slate-500 text-[11px]">เลือกคู่สกุลเงินที่ต่างกันเพื่อดูกราฟแนวโน้ม 30 วัน</div>
+            )}
+          </div>
+
+          {/* ตารางเทียบค่าเงินยอดนิยม */}
+          {fxData && (
+            <div className="card p-4 bg-[#0B1325] border-[#1E3A5F] space-y-3">
+              <div className="font-bold text-slate-200">
+                เทียบค่า <span className="font-mono text-amber-300">{numAmt.toLocaleString()} {fromCurr}</span> เป็นสกุลเงินยอดนิยม
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {quickBoardCodes.map(code => {
+                  const val = convertVal(numAmt, fromCurr, code);
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => setToCurr(code)}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${toCurr === code ? 'bg-sky-950/50 border-sky-400' : 'bg-[#050811] border-[#1E3A5F] hover:border-slate-500'}`}
+                    >
+                      <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                        <span>{CURRENCY_META[code]?.flag || '🌐'} {code}</span>
+                        <span className="truncate ml-1 opacity-70">{CURRENCY_META[code]?.name}</span>
+                      </div>
+                      <div className="font-mono font-bold text-sm text-white mt-1 truncate">
+                        {fmtMoney(val, code)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
     // 7.5 🎄 CHRISTMAS WISH TREE & ARCHIVE COMPONENTS 🎄
     // ==========================================
     const XMAS_COLORS = [
@@ -12291,7 +13400,7 @@
       useEffect(() => { setVisiblePosts(10); }, [tagFilter, searchQ, currentView, filterType, filterLatestOnly]);
 
       const [visibleChatLimit, setVisibleChatLimit] = useState(50);
-      useEffect(() => { setVisibleChatLimit(50); }, [roomKey]);
+      
 
       // Auth States
       const [authMode, setAuthMode] = useState('signin');
@@ -12326,6 +13435,8 @@
           localStorage.setItem('tbma_post_draft', JSON.stringify(draft));
           alert('💾 บันทึกฉบับร่างเรียบร้อยแล้ว! (เนื้อหาจะยังอยู่เมื่อคุณปิดหน้าต่างไป)');
       };
+
+      const [editPostData, setEditPostData] = useState(null);
 
       // โหลดฉบับร่างอัตโนมัติเมื่อกดสร้างโพสต์
       useEffect(() => {
@@ -12490,6 +13601,8 @@
 
       // Notification States
       const [notifOpen, setNotifOpen] = useState(false); const [notifTab, setNotifTab] = useState('posts'); const [toasts, setToasts] = useState([]);
+
+       
       // Per-Post / Per-Room Mute States
       const [muteModalTarget, setMuteModalTarget] = useState(null); // { key, label }
       const [muteClock, setMuteClock] = useState(Date.now());
@@ -12522,7 +13635,6 @@
       };
 
       const [postMenu, setPostMenu] = useState(null);
-      const [editPostData, setEditPostData] = useState(null);
       const [pushPerm, setPushPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'default');
       const prevNLen = useRef(0); 
       const isInitNotif = useRef(true);
@@ -13527,6 +14639,7 @@
       // ==========================================
       const dmKey = (a, b) => 'dm_' + [a, b].sort().join('_');
       const roomKey = currentUser && activeRoom.type === 'dm' ? dmKey(currentUser.id, activeRoom.id) : activeRoom.id;
+      useEffect(() => { setVisibleChatLimit(50); }, [roomKey]);
       const roomMsgs = chatMessages.filter((m) => m.roomKey === roomKey);
       // คีย์เวิร์ดโปรยหิมะในแชต (ทำงานทั้งฝั่งผู้ส่งและผู้รับในห้อง)
       const [chatSnowBurst, setChatSnowBurst] = useState(false);
@@ -13718,6 +14831,7 @@
           const postObj = { id: postId, authorId: currentUser.id, title: pTitle.trim(), content: pCont.trim(), isGuestAllowed: pGuest, attachments: pAtts, tags: pTags, poll, mutedBy: [], isPinned: pPinned, isQA, isSpoiler, createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: [] };
           setPTitle(''); setPCont(''); setPGuest(false); setPPinned(false); setPAtts([]); setPTags([]); setTagInput(''); setHasPoll(false); setPollQ(''); setPollOpts(['', '']); setIsQA(false); setIsSpoiler(false); setCreatePost(false);
           await db.collection('bma_posts').doc(postId).set(postObj);
+          localStorage.removeItem('tbma_post_draft');
           await db.collection('bma_messages').doc('ann-' + now).set({ id: 'ann-' + now, roomKey: 'global-announce', senderId: currentUser.id, text: currentUser.displayName + ' (' + currentUser.id + ') เพิ่งโพสต์โพสต์ใหม่', postTitle: postObj.title || (poll ? '📊 โพลล์: ' + poll.question : postObj.content.slice(0, 60)), linkedPostId: postId, isSystemPostAlert: true, readBy: [currentUser.id], time: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), timestamp: now, serverCreatedAt: svrTs() });
           await sendNotif({ recipientId: 'ALL', actorId: currentUser.id, category: 'posts', subType: 'new_post', title: '📝 โพสต์ใหม่ในสมาคม', body: currentUser.displayName + ' เพิ่งโพสต์โพสต์ใหม่', targetView: 'feed', targetPostId: postId });
         }
@@ -13932,16 +15046,22 @@
         if(!db || lbTab !== 'monthly' || activeGameTab === null) return;
         const prefix = todayStr.substring(0, 7);
         db.collection('bma_daily_scores').where('gameIndex', '==', activeGameTab).get().then(s => {
-          const docs = s.docs.map(d=>d.data()).filter(d => d.date.startsWith(prefix) && d.timeMs !== Infinity);
+          const docs = s.docs.map(d => d.data()).filter(d =>
+            d.date.startsWith(prefix) &&
+            d.timeMs !== Infinity &&
+            d.status !== 'lost_bomb' &&
+            !(d.status === 'lost' && !(activeGameTab === 2 && (d.score || 0) > 0))
+          );
           let best = {};
           docs.forEach(sc => {
             if(!best[sc.userId]) best[sc.userId] = sc;
             else {
               let isB = false;
-              if(activeGameTab===2) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
-              else if(activeGameTab===4) isB = sc.score < best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
-              else if(activeGameTab===5) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
-              else if(activeGameTab===6) isB = sc.score > best[sc.userId].score || (sc.score === best[sc.userId].score && sc.timeMs < best[sc.userId].timeMs);
+              if(activeGameTab===2) isB = (sc.score||0) > (best[sc.userId].score||0) || ((sc.score||0) === (best[sc.userId].score||0) && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===4) isB = (sc.score||99) < (best[sc.userId].score||99) || ((sc.score||99) === (best[sc.userId].score||99) && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===5) isB = (sc.score||0) > (best[sc.userId].score||0) || ((sc.score||0) === (best[sc.userId].score||0) && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===6) isB = (sc.score||0) > (best[sc.userId].score||0) || ((sc.score||0) === (best[sc.userId].score||0) && sc.timeMs < best[sc.userId].timeMs);
+              else if(activeGameTab===8) isB = (sc.score||0) > (best[sc.userId].score||0) || ((sc.score||0) === (best[sc.userId].score||0) && sc.timeMs < best[sc.userId].timeMs);
               else isB = sc.timeMs < best[sc.userId].timeMs;
               if(isB) best[sc.userId] = sc;
             }
@@ -15594,6 +16714,14 @@
                   </div>
                </div>
 
+            </div>
+
+            {/* 🎤 แผงเนื้อเพลงซิงก์ตามเวลา (LRCLIB) */}
+            <div className="lg:col-span-12">
+              <DiscJamLyricsPanel
+                activeSong={isFullyClosedSync ? null : activeDeckSong}
+                playState={localCrossfade < 50 ? djState.playA : djState.playB}
+              />
             </div>
          </div>
       </div>
@@ -17319,6 +18447,7 @@
                   { id: 'cipher', category: 'Community Utilities', name: 'Secret Cipher', icon: '🕵️', desc: 'เข้ารหัสข้อความลับ (Base64, Caesar, ฯลฯ) เอาไว้ส่งความลับให้เพื่อนในแชต' },
                   { id: 'qrcode', category: 'Community Utilities', name: 'QR Generator', icon: '🔲', desc: 'สร้าง QR Code ปรับสี ใส่โลโก้ และตั้งค่าวันหมดอายุหรือจำกัดสแกนได้' },
                   { id: 'randomizer', category: 'Community Utilities', name: 'Spin the Wheel', icon: '🎡', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนาแบบข้อความ และวงล้อหมุนอนิเมชั่น' },
+		  { id: 'currency', category: 'Community Utilities', name: 'แปลงค่าเงิน (Currency Converter)', icon: '💱', desc: 'แปลงสกุลเงินเรียลไทม์พร้อมกราฟแนวโน้ม 30 วัน อ้างอิงอัตราจากธนาคารกลาง (Frankfurter)'},
               ];
               
               const toolCategories = ['ALL', ...Array.from(new Set(TOOLS.map(t => t.category)))];
@@ -17473,6 +18602,7 @@
                                   {activeTool === 'cipher' && <SecretCipher />}
                                   {activeTool === 'qrcode' && <QRCodeGenerator currentUser={currentUser} db={db} />}
                                   {activeTool === 'randomizer' && <Randomizer />}
+				  {activeTool === 'currency' && <CurrencyConverterTool />}
                               </div>
                           </div>
                       )}
@@ -17745,6 +18875,31 @@
                 <input type="text" value={chDesc} onChange={(e) => setChDesc(e.target.value)} placeholder="คำอธิบายห้องแชตสั้น ๆ ..." className="w-full inp" />
                 <button type="submit" className="w-full btn-w py-2">สร้างห้องแชต</button>
               </form>
+            </Modal>
+          )}
+
+	  {delTgt && (
+            <Modal title={`🗑️ ยืนยันการลบ ${delTgt.name}`} onClose={() => setDelTgt(null)} maxW="max-w-sm">
+              <div className="space-y-4 text-xs">
+                <p className="text-slate-300 leading-relaxed">
+                  คุณต้องการลบ{delTgt.roomType === 'channel' ? 'ห้องแชตรวม' : 'กลุ่มแชต'} <strong className="text-white">{delTgt.name}</strong> ถาวรใช่หรือไม่?
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setDelTgt(null)} className="flex-1 btn-d py-2">ยกเลิก</button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const col = delTgt.roomType === 'channel' ? 'bma_channels' : 'bma_groups';
+                      await db.collection(col).doc(delTgt.id).delete();
+                      if (activeRoom.id === delTgt.id) setActiveRoom({ type: 'channel', id: 'global-lobby' });
+                      setDelTgt(null);
+                    }}
+                    className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold"
+                  >
+                    ยืนยันลบ
+                  </button>
+                </div>
+              </div>
             </Modal>
           )}
 
