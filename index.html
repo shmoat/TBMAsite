@@ -335,6 +335,7 @@
     const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
     let openZoom = () => {};
     let openGuestPrompt = () => {};
+    let openAppMenu = () => {};
 
     // ==========================================
     // 2. CORE UTILITIES & CONSTANTS
@@ -537,13 +538,41 @@
         return () => { m = false; };
       }, [att]);
 
+      const handleMediaCtx = (e) => {
+        if (onContextMenu) return onContextMenu(e);
+        if (!url) return;
+        const items = [];
+        if (att.type === 'image') {
+          items.push({ icon: 'fas fa-search-plus', label: 'ขยายภาพเต็มจอ', accent: true, onClick: () => openZoom(url) });
+        }
+        items.push({
+          icon: 'fas fa-download',
+          label: 'ดาวน์โหลด / เปิดไฟล์',
+          onClick: () => {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = att.name || 'file';
+            a.target = '_blank';
+            a.rel = 'noreferrer';
+            a.click();
+          }
+        });
+        if (!url.startsWith('data:')) {
+          items.push({ icon: 'fas fa-link', label: 'คัดลอกลิงก์ไฟล์', onClick: () => navigator.clipboard.writeText(url) });
+        }
+        openAppMenu(e, {
+          header: { icon: att.type === 'image' ? 'fas fa-image' : 'fas fa-paperclip', title: att.name || 'ไฟล์แนบ', sub: att.size || att.type },
+          items
+        });
+      };
+
       if (loading) return <div className="p-2.5 card text-xs text-sky-300 animate-pulse">⏳ กำลังโหลดไฟล์ "{att.name}"...</div>;
 
       const dId = (url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/))?.[1];
       const yId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/)?.[1];
       
       if (dId) return (
-        <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md">
+        <div onContextMenu={handleMediaCtx} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md">
           <iframe src={'https://drive.google.com/file/d/' + dId + '/preview'} className="w-full h-60 border-0" allow="autoplay; fullscreen" allowFullScreen />
           <div className="px-3 py-1 bg-[#0B1325] flex justify-between text-[11px]">
             <span>▶️ Google Drive</span><a href={url} target="_blank" rel="noreferrer" className="text-sky-400">เปิดแท็บใหม่ ↗</a>
@@ -551,29 +580,29 @@
         </div>
       );
       if (yId) return (
-        <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md">
+        <div onContextMenu={handleMediaCtx} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black w-full max-w-md">
           <iframe src={'https://www.youtube.com/embed/' + yId} className="w-full h-60 border-0" allowFullScreen />
         </div>
       );
       if (att.type === 'video') return (
-        <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black max-w-md">
+        <div onContextMenu={handleMediaCtx} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-black max-w-md">
           <video src={url} controls className="max-h-72 w-full" />
         </div>
       );
       if (att.type === 'audio') return (
-        <div onContextMenu={onContextMenu} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] w-full max-w-md p-3">
+        <div onContextMenu={handleMediaCtx} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] w-full max-w-md p-3">
           <audio src={url} controls className="w-full outline-none" />
         </div>
       );
       if (att.type === 'image') return (
-        <div onContextMenu={onContextMenu} onClick={() => openZoom(url)} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md cursor-zoom-in relative group">
+        <div onContextMenu={handleMediaCtx} onClick={() => openZoom(url)} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md cursor-zoom-in relative group">
           <img src={url} alt={att.name} className="max-h-80 w-auto mx-auto object-contain" />
           <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] opacity-0 group-hover:opacity-100">🔍 ขยาย</span>
         </div>
       );
       
       return (
-        <a href={url} download={att.name} target="_blank" rel="noreferrer" onContextMenu={onContextMenu} className="flex items-center justify-between p-3 card hover:bg-[#0F2547] text-xs max-w-md">
+        <a href={url} download={att.name} target="_blank" rel="noreferrer" onContextMenu={handleMediaCtx} className="flex items-center justify-between p-3 card hover:bg-[#0F2547] text-xs max-w-md">
           <span className="truncate font-semibold">📎 {att.name} ({att.size || 'File'})</span>
           <span className="px-2 py-1 rounded bg-white text-[#050811] font-bold text-[10px] ml-2">ดาวน์โหลด</span>
         </a>
@@ -647,6 +676,148 @@
         </div>
       </div>
     );
+
+    // ตัวช่วยกดค้าง (Long-Press) สำหรับมือถือ/iPad เพื่อเปิด Context Menu เดียวกับคลิกขวาบน PC
+    let _bmaLpTimer = null;
+    let _bmaLpX = 0, _bmaLpY = 0;
+    const cancelLongPress = () => {
+      if (_bmaLpTimer) { clearTimeout(_bmaLpTimer); _bmaLpTimer = null; }
+    };
+    const longPressProps = (onTrigger) => ({
+      onTouchStart: (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        cancelLongPress();
+        _bmaLpX = e.touches[0].clientX;
+        _bmaLpY = e.touches[0].clientY;
+        _bmaLpTimer = setTimeout(() => {
+          _bmaLpTimer = null;
+          if (navigator.vibrate) { try { navigator.vibrate(20); } catch {} }
+          onTrigger({
+            clientX: _bmaLpX,
+            clientY: _bmaLpY,
+            shiftKey: false,
+            preventDefault: () => {},
+            stopPropagation: () => {}
+          });
+        }, 450);
+      },
+      onTouchMove: (e) => {
+        if (!_bmaLpTimer || !e.touches?.[0]) return;
+        if (Math.abs(e.touches[0].clientX - _bmaLpX) > 10 || Math.abs(e.touches[0].clientY - _bmaLpY) > 10) {
+          cancelLongPress();
+        }
+      },
+      onTouchEnd: cancelLongPress,
+      onTouchCancel: cancelLongPress
+    });
+
+    // คอมโพเนนต์ Unified Context Menu กลาง (กันขอบจออัตโนมัติ + รองรับธีมเทศกาล)
+    function AppContextMenu({ menu, onClose }) {
+      const menuRef = useRef(null);
+      const [pos, setPos] = useState({ left: -9999, top: -9999, ready: false });
+
+      React.useLayoutEffect(() => {
+        if (!menu || !menuRef.current) return;
+        const rect = menuRef.current.getBoundingClientRect();
+        const pad = 10;
+        let left = menu.x;
+        let top = menu.y;
+        if (left + rect.width + pad > window.innerWidth) {
+          left = Math.max(pad, window.innerWidth - rect.width - pad);
+        }
+        if (top + rect.height + pad > window.innerHeight) {
+          top = Math.max(pad, window.innerHeight - rect.height - pad);
+        }
+        setPos({ left, top, ready: true });
+      }, [menu]);
+
+      useEffect(() => {
+        if (!menu) return;
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        const onWin = () => onClose();
+        window.addEventListener('keydown', onKey);
+        window.addEventListener('resize', onWin);
+        return () => {
+          window.removeEventListener('keydown', onKey);
+          window.removeEventListener('resize', onWin);
+        };
+      }, [menu, onClose]);
+
+      if (!menu) return null;
+
+      return (
+        <div
+          ref={menuRef}
+          style={{
+            left: `${pos.left}px`,
+            top: `${pos.top}px`,
+            opacity: pos.ready ? 1 : 0
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+          className="fixed z-[120] min-w-[215px] max-w-[270px] card bg-[#0B1325]/95 backdrop-blur-md border border-white/25 shadow-[0_12px_40px_rgba(0,0,0,0.85)] py-1.5 text-xs select-none transition-opacity duration-75"
+        >
+          {menu.header && (
+            <div className="px-3 py-1.5 mb-1 border-b border-[#1E3A5F] flex items-center gap-2">
+              {menu.header.icon && <i className={`${menu.header.icon} text-sky-400 text-xs shrink-0`}></i>}
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-white truncate text-[11px]">{menu.header.title}</div>
+                {menu.header.sub && <div className="text-[9px] text-slate-400 truncate font-mono">{menu.header.sub}</div>}
+              </div>
+            </div>
+          )}
+
+          {menu.quickReactions?.length > 0 && (
+            <div className="px-2 py-1.5 mb-1 border-b border-[#1E3A5F] flex items-center justify-between gap-1">
+              {menu.quickReactions.map((r) => (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  onClick={() => { r.onClick(); onClose(); }}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-transform hover:scale-125 ${r.active ? 'bg-sky-500/30 ring-1 ring-sky-400' : 'hover:bg-[#0F2547]'}`}
+                  title={`รีแอ็กชัน ${r.emoji}`}
+                >
+                  {r.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col">
+            {(menu.items || []).filter(Boolean).map((item, idx) => {
+              if (item.type === 'divider') {
+                return <div key={`d-${idx}`} className="my-1 border-t border-[#1E3A5F]/80" />;
+              }
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    if (item.disabled) return;
+                    onClose();
+                    item.onClick && item.onClick();
+                  }}
+                  className={`w-full px-3 py-1.5 text-left flex items-center justify-between gap-2.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    item.danger
+                      ? 'text-red-400 hover:bg-red-950/70 hover:text-red-200'
+                      : item.accent
+                        ? 'text-amber-300 hover:bg-[#0F2547] font-bold'
+                        : 'text-slate-100 hover:bg-[#0F2547]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    {item.icon && <i className={`${item.icon} w-3.5 text-center shrink-0 opacity-85`}></i>}
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  {item.sub && <span className="text-[9px] text-slate-400 font-mono shrink-0">{item.sub}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
     function FormattedText({ text, currentUser, isEdited }) {
       if (!text) return null;
@@ -782,9 +953,49 @@
     function PantipThread({ c, all, lbl, postId, me, getAuthor, canManage, onDel, onLike, onReply, onCtx, isQA, isOwner, onMarkBestAnswer }) {
       const ca = getAuthor(c.authorId);
       const subs = all.filter((x) => (x.parentId || x.replyTo?.id) === c.id);
+
+      const handleOpenCommMenu = (e) => {
+        const selectedText = window.getSelection ? window.getSelection().toString().trim() : '';
+        const isLiked = me && (c.likes || []).includes(me.id);
+        const items = [];
+
+        if (selectedText) {
+          items.push({ icon: 'fas fa-highlighter', label: 'คัดลอกข้อความที่ไฮไลต์', accent: true, onClick: () => navigator.clipboard.writeText(selectedText) });
+        }
+        if (me) {
+          items.push({ icon: 'fas fa-reply', label: 'ตอบกลับความเห็นนี้', accent: !selectedText, onClick: () => onReply(postId, c, lbl) });
+          items.push({ icon: isLiked ? 'fas fa-heart-broken' : 'fas fa-heart', label: isLiked ? 'เลิกถูกใจ' : 'ถูกใจความเห็นนี้', onClick: () => onLike(postId, c.id) });
+        }
+        if (c.text) {
+          items.push({ icon: 'fas fa-copy', label: 'คัดลอกข้อความ', onClick: () => navigator.clipboard.writeText(c.text) });
+        }
+        if (isQA && isOwner && onMarkBestAnswer) {
+          items.push({ type: 'divider' });
+          items.push({ icon: 'fas fa-crown', label: 'เลือก / ยกเลิก Best Answer', accent: true, onClick: () => onMarkBestAnswer(c.id) });
+        }
+        if (canManage(c.authorId)) {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-trash-alt',
+            label: 'ลบความคิดเห็นนี้',
+            danger: true,
+            onClick: () => { if (confirm('ยืนยันการลบความคิดเห็นนี้?')) onDel(postId, c.id); }
+          });
+        }
+
+        openAppMenu(e, {
+          header: { icon: 'fas fa-comment-alt', title: `${lbl} • ${ca.displayName}`, sub: c.createdAt },
+          items
+        });
+      };
+
       return (
         <div className="space-y-2">
-          <div onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onCtx({ x: e.clientX, y: e.clientY, postId, comment: c, lbl }); }} className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs hover:border-white/30">
+          <div
+            onContextMenu={handleOpenCommMenu}
+            {...longPressProps(handleOpenCommMenu)}
+            className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-xs hover:border-white/30"
+          >
             <div className="flex justify-between mb-1 pb-1 border-b border-[#1E3A5F]/50 text-[10px]">
               <span className="font-mono font-bold text-sky-300">{lbl}</span>
               <div className="flex gap-2">
@@ -809,7 +1020,7 @@
                 <p className="text-slate-100 mt-1 whitespace-pre-line break-words">{c.text}</p>
                 {c.attachments?.length > 0 && (
                   <div className="mt-2 space-y-2">
-                    {c.attachments.map((att) => <SmartMedia key={att.id} att={att} onContextMenu={(e)=>{e.preventDefault();}} />)}
+                    {c.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}
                   </div>
                 )}
                 <div className="flex gap-2 mt-1.5 items-center">
@@ -829,6 +1040,7 @@
         </div>
       );
     }
+
     // ==========================================
     // 4. DAILY GAMES COMPONENTS (ส่วนที่ 1)
     // ==========================================
@@ -7582,8 +7794,40 @@
                                         const { phase, event, isMainPhase } = getAstroInfo(currentDate.getFullYear(), currentDate.getMonth(), dateNum);
                                         const dayEvents = getDayEvents(dateStr);
 
+                                        const handleDateCtx = (e) => {
+                                            const items = [
+                                                { icon: 'fas fa-search', label: 'ดูรายละเอียดวันนี้', onClick: () => setSelectedDate(dateStr) }
+                                            ];
+                                            if (currentUser) {
+                                                items.unshift({
+                                                    icon: 'fas fa-plus-circle',
+                                                    label: 'สร้างกิจกรรมในวันนี้ทันที',
+                                                    accent: true,
+                                                    onClick: () => { setSelectedDate(dateStr); setShowCreateForm(true); }
+                                                });
+                                            }
+                                            if (dayEvents.length > 0) {
+                                                items.push({ type: 'divider' });
+                                                items.push({
+                                                    icon: 'fas fa-calendar-plus',
+                                                    label: `ดาวน์โหลด .ICS (${dayEvents[0].title})`,
+                                                    onClick: () => exportToICS(dayEvents[0])
+                                                });
+                                            }
+                                            openAppMenu(e, {
+                                                header: { icon: 'fas fa-calendar-day', title: `วันที่ ${dateNum} ${monthNames[currentDate.getMonth()]}`, sub: `${dayEvents.length} กิจกรรม` },
+                                                items
+                                            });
+                                        };
+
                                         return (
-                                            <div key={dateNum} onClick={() => setSelectedDate(dateStr)} className={`min-h-[85px] border rounded-xl p-1.5 cursor-pointer transition-all relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/30 shadow-[0_0_15px_rgba(56,189,248,0.2)]' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                                            <div
+                                                key={dateNum}
+                                                onClick={() => setSelectedDate(dateStr)}
+                                                onContextMenu={handleDateCtx}
+                                                {...longPressProps(handleDateCtx)}
+                                                className={`min-h-[85px] border rounded-xl p-1.5 cursor-pointer transition-all relative flex flex-col items-start ${isSelected ? 'border-sky-400 bg-sky-900/30 shadow-[0_0_15px_rgba(56,189,248,0.2)]' : 'border-[#1E3A5F] hover:bg-[#0F2547]'}`}
+                                            >
                                                 <span className={`text-sm font-bold ${event ? 'text-sky-200' : 'text-slate-300'}`}>{dateNum}</span>
                                                 
                                                 {/* เรนเดอร์พระจันทร์ หรือ ปรากฏการณ์พิเศษ */}
@@ -8835,6 +9079,103 @@
       const [visibleCommCount, setVisibleCommCount] = useState({});
       const [boardView, setBoardView] = useState('standard');
       const [spoilerRevealed, setSpoilerRevealed] = useState({}); 
+      const openPostMenu = (e, post) => {
+        const author = getAuthor(post.authorId);
+        const isBm = currentUser && (post.bookmarks || []).includes(currentUser.id);
+        const canManage = currentUser?.role === 'admin' || currentUser?.role === 'mod' || currentUser?.id === post.authorId;
+        const selectedText = window.getSelection ? window.getSelection().toString().trim() : '';
+
+        const items = [];
+        if (selectedText) {
+          items.push({ icon: 'fas fa-highlighter', label: 'คัดลอกข้อความที่ไฮไลต์', accent: true, onClick: () => navigator.clipboard.writeText(selectedText) });
+        }
+
+        items.push({
+          icon: 'fas fa-link',
+          label: 'คัดลอกลิงก์แชร์โพสต์',
+          accent: !selectedText,
+          onClick: () => {
+            const u = window.location.origin + window.location.pathname + '?post=' + post.id;
+            navigator.clipboard.writeText(u);
+            alert('คัดลอกลิงก์โพสต์นี้แล้ว!\n' + u);
+          }
+        });
+
+        items.push({
+          icon: isBm ? 'fas fa-star' : 'far fa-star',
+          label: isBm ? 'เลิกบันทึกโพสต์นี้' : 'บันทึกโพสต์ไว้อ่านทีหลัง',
+          onClick: async () => {
+            if (!currentUser) return openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อบันทึกโพสต์เก็บไว้อ่านภายหลัง');
+            const b = post.bookmarks || [];
+            await db.collection('bma_posts').doc(post.id).update({
+              bookmarks: b.includes(currentUser.id) ? b.filter((i) => i !== currentUser.id) : [...b, currentUser.id]
+            });
+          }
+        });
+
+        items.push({ type: 'divider' });
+        items.push({
+          icon: 'fas fa-user',
+          label: `ดูโปรไฟล์ ${author.displayName}`,
+          onClick: () => setMemberModal(author)
+        });
+        items.push({
+          icon: 'fas fa-search',
+          label: 'ดูโพสต์ทั้งหมดของคนนี้',
+          onClick: () => { setSearchQ(post.authorId); setCurrentView('feed'); }
+        });
+
+        if (currentUser && currentUser.id === post.authorId && onOpenMuteModal) {
+          const mKey = 'post:' + post.id;
+          const muted = isTargetMuted && isTargetMuted(mKey);
+          items.push({
+            icon: muted ? 'fas fa-bell' : 'fas fa-bell-slash',
+            label: muted ? 'ตั้งค่า / เปิดแจ้งเตือนโพสต์นี้' : 'ปิดการแจ้งเตือนโพสต์นี้...',
+            onClick: () => onOpenMuteModal({
+              key: mKey,
+              label: 'โพสต์: ' + (post.title || post.content?.slice(0, 32) || 'โพสต์ของคุณ')
+            })
+          });
+        }
+
+        if (canManage) {
+          items.push({ type: 'divider' });
+          if (currentUser?.role !== 'member') {
+            items.push({
+              icon: 'fas fa-thumbtack',
+              label: post.isPinned ? 'เลิกปักหมุดโพสต์' : 'ปักหมุดโพสต์ไว้บนสุด',
+              accent: !post.isPinned,
+              onClick: () => db.collection('bma_posts').doc(post.id).update({ isPinned: !post.isPinned })
+            });
+          }
+          items.push({
+            icon: post.isGuestAllowed ? 'fas fa-lock' : 'fas fa-globe',
+            label: post.isGuestAllowed ? 'เปลี่ยนเป็นเฉพาะสมาชิก' : 'เปิดให้ Guest อ่านได้',
+            onClick: () => db.collection('bma_posts').doc(post.id).update({ isGuestAllowed: !post.isGuestAllowed })
+          });
+          items.push({
+            icon: 'fas fa-pen',
+            label: 'แก้ไขโพสต์',
+            accent: true,
+            onClick: () => handleEditPostReq(post)
+          });
+          items.push({
+            icon: 'fas fa-trash-alt',
+            label: 'ลบโพสต์นี้',
+            danger: true,
+            onClick: () => {
+              if (confirm('ต้องการลบโพสต์นี้ใช่หรือไม่?')) {
+                db.collection('bma_posts').doc(post.id).delete();
+              }
+            }
+          });
+        }
+
+        openAppMenu(e, {
+          header: { icon: 'fas fa-clipboard-list', title: post.title || `โพสต์ของ ${author.displayName}`, sub: `${author.id} • ${post.createdAt}` },
+          items
+        });
+      };
 
       return (
         <div className="space-y-4">
@@ -8945,7 +9286,7 @@
                       const markPostAsRead = (postId, postReadBy) => { if (currentUser && !(postReadBy || []).includes(currentUser.id)) db.collection('bma_posts').doc(postId).update({ readBy: firebase.firestore.FieldValue.arrayUnion(currentUser.id) }).catch(()=>{}); };
 
                       return (
-                        <article id={'post-' + post.id} key={post.id} onMouseEnter={() => setTimeout(() => markPostAsRead(post.id, post.readBy), 1000)} className={`rounded-[1rem] p-4 sm:p-5 flex flex-col gap-3.5 transition-all duration-300 border ${borderStyle} ${shadowStyle}`}>
+                        <article id={'post-' + post.id} key={post.id} onContextMenu={(e) => openPostMenu(e, post)} onMouseEnter={() => setTimeout(() => markPostAsRead(post.id, post.readBy), 1000)} className={`rounded-[1rem] p-4 sm:p-5 flex flex-col gap-3.5 transition-all duration-300 border ${borderStyle} ${shadowStyle}`}>
                             {post.isPinned && <div className="text-amber-300 text-[11px] font-bold -mt-1 mb-1 border-b border-amber-900/30 pb-2"><i className="fas fa-thumbtack mr-1"></i> โพสต์ปักหมุด</div>}
                             
                             <div className="flex justify-between items-start gap-2">
@@ -9302,13 +9643,14 @@
     function DailyArcadeLobby({
       GAMES, gameAppSt, allTodayScores, currentUser, getAuthor,
       sortScores, fmtTime, todayStr, onSelectGame, setMemberModal,
-      db, sfxMuted, onToggleSfx
+      db, sfxMuted, onToggleSfx, onResetGuestGame
     }) {
       const [lobbyFilter, setLobbyFilter] = useState('ALL'); // 'ALL' | 'TODO' | 'DONE'
       const [countdown, setCountdown] = useState('--:--:--');
       const [overallTab, setOverallTab] = useState('daily'); // 'daily' | 'monthly'
       const [monthScoresAll, setMonthScoresAll] = useState([]);
       const [monthLoading, setMonthLoading] = useState(false);
+      const [hubRuleGame, setHubRuleGame] = useState(null);
 
       useEffect(() => {
         const calcTimeToReset = () => {
@@ -9608,9 +9950,28 @@
                 const leaderUser = leader ? getAuthor(leader.userId) : null;
 
                 return (
+                  const handleGameCardCtx = (e) => {
+                  const items = [
+                    { icon: 'fas fa-play', label: stateType === 'playing' ? 'เล่นเกมต่อ' : 'เข้าเล่นเกมนี้', accent: true, onClick: () => { playGameSfx('tap'); onSelectGame(idx); } },
+                    { icon: 'fas fa-book-open', label: 'ดูวิธีเล่นและกติกา', onClick: () => setHubRuleGame(g) },
+                    { icon: 'fas fa-trophy', label: 'เปิดดูตารางอันดับเกมนี้', onClick: () => { playGameSfx('tap'); onSelectGame(idx, { openLb: true }); } }
+                  ];
+                  if (!currentUser && onResetGuestGame && stateType !== 'todo') {
+                    items.push({ type: 'divider' });
+                    items.push({ icon: 'fas fa-redo', label: 'รีเซ็ตลองเล่นใหม่ (Guest)', danger: true, onClick: () => onResetGuestGame(idx) });
+                  }
+                  openAppMenu(e, {
+                    header: { icon: g.faIcon || 'fas fa-gamepad', title: g.name, sub: `${playerCount} คนเล่นวันนี้` },
+                    items
+                  });
+                };
+
+                return (
                   <div
                     key={g.id}
                     onClick={() => { playGameSfx('tap'); onSelectGame(idx); }}
+                    onContextMenu={handleGameCardCtx}
+                    {...longPressProps(handleGameCardCtx)}
                     className={`group card p-4 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-300 border-[#1E3A5F] bg-[#0B1325] hover:-translate-y-1 ${g.hoverCls}`}
                   >
                     <div>
@@ -9688,6 +10049,23 @@
                 );
               })}
             </div>
+
+            {hubRuleGame && (
+              <Modal title={`กติกา: ${hubRuleGame.name}`} onClose={() => setHubRuleGame(null)} maxW="max-w-md">
+                <div className="space-y-4 text-xs">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${hubRuleGame.iconCls}`}>
+                      <i className={hubRuleGame.faIcon || 'fas fa-gamepad'}></i>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">{hubRuleGame.desc}</p>
+                  </div>
+                  <ul className="space-y-2.5 text-slate-200 pl-4 list-disc leading-relaxed">
+                    {(GAME_RULES[hubRuleGame.id] || []).map((line, i) => <li key={i}>{line}</li>)}
+                  </ul>
+                  <button onClick={() => setHubRuleGame(null)} className="w-full btn-w py-2 text-xs">เข้าใจแล้ว</button>
+                </div>
+              </Modal>
+            )}
 
           </div>
         </div>
@@ -9918,11 +10296,40 @@
             const isSel = selectedId === orn.id;
             const isMentioningMe = isAssocTree && canReadWishes && currentUser && doesOrnamentMentionUser(orn, currentUser);
 
+            const handleOrnCtx = (e) => {
+              const senderLbl = orn.isAnonymous ? 'ผู้ส่งนิรนาม' : orn.senderName;
+              const items = [
+                { icon: 'fas fa-eye', label: 'เปิดดูรายละเอียดของประดับนี้', accent: true, onClick: () => onSelectOrnament(orn) }
+              ];
+              if (canReadWishes && orn.message) {
+                items.push({
+                  icon: 'fas fa-copy',
+                  label: 'คัดลอกคำอวยพร',
+                  onClick: () => {
+                    navigator.clipboard.writeText(orn.message);
+                    alert('คัดลอกคำอวยพรเรียบร้อยแล้ว!');
+                  }
+                });
+              } else {
+                items.push({
+                  icon: 'fas fa-lock',
+                  label: 'คำอวยพรยังถูกปิดผนึกอยู่',
+                  disabled: true
+                });
+              }
+              openAppMenu(e, {
+                header: { icon: 'fas fa-gift', title: `จาก ${senderLbl}`, sub: orn.createdAt },
+                items
+              });
+            };
+
             return (
               <button
                 key={orn.id}
                 type="button"
                 onClick={() => onSelectOrnament(orn)}
+                onContextMenu={handleOrnCtx}
+                {...longPressProps(handleOrnCtx)}
                 style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 transition-transform duration-200 hover:scale-125 hover:z-30 cursor-pointer rounded-full p-0.5 ${isSel ? 'scale-125 z-30 ring-2 ring-amber-300 bg-amber-400/20' : 'z-20'} ${isMentioningMe ? 'ring-2 ring-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.9)]' : ''}`}
                 title={canReadWishes ? `คำอวยพรจาก ${orn.isAnonymous ? 'ผู้ส่งนิรนาม' : orn.senderName}` : 'ปิดผนึกถึง 25 ธ.ค. 00:00 น.'}
@@ -11475,6 +11882,24 @@
       
       const [zoomImg, setZoomImg] = useState(null);
       openZoom = setZoomImg;
+
+      const [appCtxMenu, setAppCtxMenu] = useState(null);
+      openAppMenu = (e, config) => {
+        if (!config || !config.items?.length) return;
+        // กด Shift + คลิกขวา เพื่อเปิดเมนูเดิมของเบราว์เซอร์ (เช่น Inspect)
+        if (e?.shiftKey) return;
+        if (e?.preventDefault) e.preventDefault();
+        if (e?.stopPropagation) e.stopPropagation();
+        setCommMenu(null);
+        setCtxMenu(null);
+        setProfMenuOpen(false);
+        setAppCtxMenu({
+          x: e?.clientX ?? 100,
+          y: e?.clientY ?? 100,
+          ...config
+        });
+      };
+
       const [guestPrompt, setGuestPrompt] = useState(null);
       const [showGuestBar, setShowGuestBar] = useState(true);
       const [showGuestGuide, setShowGuestGuide] = useState(false);
@@ -12189,7 +12614,7 @@
       }, [chatMessages, currentUser, db]);
 
       useEffect(() => { 
-          const fn = () => { setCtxMenu(null); setCommMenu(null); setProfMenuOpen(false); }; 
+          const fn = () => { setAppCtxMenu(null); setCtxMenu(null); setCommMenu(null); setProfMenuOpen(false); }; 
           window.addEventListener('click', fn); 
           return () => window.removeEventListener('click', fn); 
       }, []);
@@ -13127,7 +13552,7 @@
         }
       }, [roomMsgs, currentView, triggerChatSnowBurst]);
 
-      const pinnedMsg = activeRoom.type === 'dm' ? roomMsgs.find(m => m.isPinned) : null;
+      const pinnedMsg = roomMsgs.find(m => m.isPinned) || null;
 
       useEffect(() => {
         if (!currentUser || currentView !== 'chat') return;
@@ -13760,6 +14185,414 @@
         setCurrentView('chat');
       };
 
+      // ==========================================
+      // 🖱️ UNIFIED CONTEXT MENU BUILDERS (ชุดที่ 1)
+      // ==========================================
+      const canPinInActiveRoom = !!currentUser && (
+        activeRoom.type === 'dm' ||
+        isModOrAdmin ||
+        (activeRoom.type === 'group' && activeGrp?.createdBy === currentUser.id)
+      );
+
+      const toggleMsgReaction = async (msg, emoji) => {
+        if (!currentUser || !msg?.id) return;
+        const nextReacts = { ...(msg.reactions || {}) };
+        const arr = Array.isArray(nextReacts[emoji]) ? [...nextReacts[emoji]] : [];
+        const has = arr.includes(currentUser.id);
+        const updated = has ? arr.filter(id => id !== currentUser.id) : [...arr, currentUser.id];
+        if (updated.length > 0) nextReacts[emoji] = updated;
+        else delete nextReacts[emoji];
+        await db.collection('bma_messages').doc(msg.id).update({ reactions: nextReacts }).catch(() => {});
+      };
+
+      const downloadAttachment = async (att) => {
+        if (!att) return;
+        let url = att.url || '';
+        if (att.isChunked && !url && att.chunkIds?.length) {
+          const docs = await Promise.all(att.chunkIds.map(id => db.collection('bma_file_chunks').doc(id).get()));
+          url = docs.map(d => d.data()).filter(Boolean).sort((a, b) => a.index - b.index).map(s => s.data).join('');
+        }
+        if (!url) return;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = att.name || 'file';
+        a.target = '_blank';
+        a.rel = 'noreferrer';
+        a.click();
+      };
+
+      const markRoomAsRead = (roomType, roomId) => {
+        if (!currentUser) return;
+        const targetKey = roomType === 'dm' ? dmKey(currentUser.id, roomId) : roomId;
+        unreadNotifs
+          .filter(n => n.category === 'messages' && n.targetRoomType === roomType && n.targetRoomId === roomId)
+          .forEach(n => {
+            db.collection('bma_notifications').doc(n.id).update({
+              readBy: Array.from(new Set([...(n.readBy || []), currentUser.id]))
+            }).catch(() => {});
+          });
+        chatMessages
+          .filter(m => m.roomKey === targetKey && m.senderId !== currentUser.id && !(m.readBy || []).includes(currentUser.id))
+          .forEach(m => {
+            db.collection('bma_messages').doc(m.id).update({
+              readBy: Array.from(new Set([...(m.readBy || []), currentUser.id]))
+            }).catch(() => {});
+          });
+      };
+
+      // 1) เมนูคลิกขวาบนข้อความ / ไฟล์แนบในแชต
+      const openChatMsgMenu = (e, msg, mediaItem = null) => {
+        if (!msg || msg.isDeleted) return;
+        const selectedText = window.getSelection ? window.getSelection().toString().trim() : '';
+        const isSender = currentUser?.id === msg.senderId;
+
+        const quickReactions = currentUser
+          ? ['👍', '❤️', '😂', '😮', '😢', '🔥'].map(emoji => ({
+              emoji,
+              active: (msg.reactions?.[emoji] || []).includes(currentUser.id),
+              onClick: () => toggleMsgReaction(msg, emoji)
+            }))
+          : [];
+
+        const items = [];
+        if (selectedText) {
+          items.push({
+            icon: 'fas fa-highlighter',
+            label: 'คัดลอกข้อความที่ไฮไลต์',
+            accent: true,
+            onClick: () => navigator.clipboard.writeText(selectedText)
+          });
+        }
+        if (mediaItem) {
+          if (mediaItem.type === 'image' && mediaItem.url) {
+            items.push({ icon: 'fas fa-search-plus', label: 'ขยายภาพเต็มจอ', onClick: () => openZoom(mediaItem.url) });
+          }
+          items.push({ icon: 'fas fa-download', label: 'ดาวน์โหลดไฟล์', onClick: () => downloadAttachment(mediaItem) });
+          if (mediaItem.url && !mediaItem.url.startsWith('data:')) {
+            items.push({ icon: 'fas fa-link', label: 'คัดลอกลิงก์ไฟล์', onClick: () => navigator.clipboard.writeText(mediaItem.url) });
+          }
+          items.push({ type: 'divider' });
+        }
+
+        items.push({ icon: 'fas fa-reply', label: 'ตอบกลับข้อความ', accent: !selectedText, onClick: () => setRepMsg(msg) });
+        if (msg.text) {
+          items.push({ icon: 'fas fa-copy', label: 'คัดลอกข้อความ', onClick: () => navigator.clipboard.writeText(msg.text) });
+        }
+        items.push({ icon: 'fas fa-share', label: 'ส่งต่อ...', onClick: () => setFwdMsg({ message: msg, mediaItem }) });
+
+        if (canPinInActiveRoom) {
+          items.push({ type: 'divider' });
+          if (!msg.isPinned) {
+            items.push({
+              icon: 'fas fa-thumbtack',
+              label: 'ปักหมุดข้อความในห้องนี้',
+              accent: true,
+              onClick: async () => {
+                const prevPins = roomMsgs.filter(m => m.isPinned);
+                for (const pm of prevPins) await db.collection('bma_messages').doc(pm.id).update({ isPinned: false });
+                await db.collection('bma_messages').doc(msg.id).update({ isPinned: true });
+              }
+            });
+          } else {
+            items.push({
+              icon: 'fas fa-thumbtack',
+              label: 'เลิกปักหมุดข้อความ',
+              danger: true,
+              onClick: () => db.collection('bma_messages').doc(msg.id).update({ isPinned: false })
+            });
+          }
+        }
+
+        if (isSender) {
+          items.push({ type: 'divider' });
+          if (!mediaItem && msg.text) {
+            items.push({
+              icon: 'fas fa-pen',
+              label: 'แก้ไขข้อความ',
+              accent: true,
+              onClick: () => { setEditMsg(msg); setChatIn(msg.text || ''); }
+            });
+          }
+          items.push({
+            icon: 'fas fa-ban',
+            label: 'ยกเลิกข้อความ',
+            danger: true,
+            onClick: () => db.collection('bma_messages').doc(msg.id).update({ isDeleted: true, text: '', attachments: [], reactions: {} })
+          });
+        }
+
+        openAppMenu(e, { quickReactions, items });
+      };
+
+      // 2) เมนูคลิกขวาบนแถบห้องแชตด้านซ้าย (แชตรวม / กลุ่ม / แชตส่วนตัว)
+      const openRoomMenu = (e, roomType, roomObj) => {
+        if (!currentUser || !roomObj) return;
+        const mKey = `${roomType}:${roomObj.id}`;
+        const muted = isTargetMuted(mKey);
+        const label = roomType === 'channel'
+          ? `แชตรวม #${roomObj.name}`
+          : roomType === 'group'
+            ? `กลุ่ม ${roomObj.name}`
+            : `แชตส่วนตัวกับ ${roomObj.displayName}`;
+
+        const items = [
+          {
+            icon: muted ? 'fas fa-bell' : 'fas fa-bell-slash',
+            label: muted ? 'ตั้งค่า / เปิดการแจ้งเตือน' : 'ปิดการแจ้งเตือนห้องนี้...',
+            accent: !muted,
+            onClick: () => setMuteModalTarget({ key: mKey, label })
+          },
+          {
+            icon: 'fas fa-check-double',
+            label: 'ทำเครื่องหมายว่าอ่านแล้ว',
+            onClick: () => markRoomAsRead(roomType, roomObj.id)
+          }
+        ];
+
+        if (roomType === 'dm') {
+          items.push({ type: 'divider' });
+          items.push({ icon: 'fas fa-user', label: 'ดูโปรไฟล์สมาชิก', onClick: () => openMemberProfile(roomObj) });
+          items.push({ icon: 'fas fa-id-badge', label: 'คัดลอก Member ID', sub: roomObj.id, onClick: () => navigator.clipboard.writeText(roomObj.id) });
+        }
+
+        if (roomType === 'group') {
+          items.push({ type: 'divider' });
+          if (!roomObj.isArchived) {
+            items.push({
+              icon: 'fas fa-users-cog',
+              label: 'จัดการสมาชิกกลุ่ม',
+              onClick: () => { setActiveRoom({ type: 'group', id: roomObj.id }); setAddMemOpen(true); }
+            });
+          }
+          if (currentUser.id === roomObj.createdBy || currentUser.role === 'admin') {
+            items.push({
+              icon: roomObj.isArchived ? 'fas fa-unlock' : 'fas fa-box',
+              label: roomObj.isArchived ? 'เปิดใช้งานกลุ่มอีกครั้ง' : 'Archive กลุ่มนี้',
+              onClick: () => db.collection('bma_groups').doc(roomObj.id).update({ isArchived: !roomObj.isArchived })
+            });
+            items.push({
+              icon: 'fas fa-trash-alt',
+              label: 'ลบกลุ่มนี้ถาวร',
+              danger: true,
+              onClick: () => {
+                if (confirm(`ยืนยันการลบกลุ่ม "${roomObj.name}" ?`)) {
+                  db.collection('bma_groups').doc(roomObj.id).delete();
+                  if (activeRoom.id === roomObj.id) setActiveRoom({ type: 'channel', id: 'global-lobby' });
+                }
+              }
+            });
+          }
+        }
+
+        if (roomType === 'channel' && isModOrAdmin && !roomObj.isProtected) {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-trash-alt',
+            label: 'ลบห้องแชตนี้',
+            danger: true,
+            onClick: () => {
+              if (confirm(`ยืนยันการลบห้องแชต #${roomObj.name} ?`)) {
+                db.collection('bma_channels').doc(roomObj.id).delete();
+                if (activeRoom.id === roomObj.id) setActiveRoom({ type: 'channel', id: 'global-lobby' });
+              }
+            }
+          });
+        }
+
+        openAppMenu(e, {
+          header: {
+            icon: roomType === 'channel' ? 'fas fa-hashtag' : roomType === 'group' ? 'fas fa-users' : 'fas fa-user',
+            title: roomType === 'dm' ? roomObj.displayName : roomObj.name,
+            sub: muted ? `ปิดแจ้งเตือน (${formatMuteUntil(getMuteExp(mKey))})` : (roomType === 'dm' ? roomObj.id : roomType.toUpperCase())
+          },
+          items
+        });
+      };
+
+      // 3) เมนูคลิกขวาบนรายชื่อสมาชิก / ดาวบริวารหน้า Home / หน้า Members
+      const openMemberMenu = (e, member) => {
+        if (!member) return;
+        if (!currentUser) {
+          openAppMenu(e, {
+            header: { icon: 'fas fa-user-astronaut', title: member.displayName, sub: member.id },
+            items: [
+              { icon: 'fas fa-sign-in-alt', label: 'เข้าสู่ระบบเพื่อดูโปรไฟล์', accent: true, onClick: () => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อดูโปรไฟล์และส่งข้อความส่วนตัว') },
+              { icon: 'fas fa-search', label: 'ดูโพสต์สาธารณะของคนนี้', onClick: () => { setSearchQ(member.id); setCurrentView('feed'); } }
+            ]
+          });
+          return;
+        }
+
+        const items = [
+          { icon: 'fas fa-id-card', label: 'ดูโปรไฟล์สมาชิก', onClick: () => openMemberProfile(member) }
+        ];
+
+        if (currentUser.id !== member.id) {
+          items.push({
+            icon: 'fas fa-comment-dots',
+            label: 'ส่งข้อความส่วนตัว (DM)',
+            accent: true,
+            onClick: () => { setActiveRoom({ type: 'dm', id: member.id }); setCurrentView('chat'); }
+          });
+        }
+
+        if (currentView === 'chat') {
+          items.push({
+            icon: 'fas fa-at',
+            label: 'แท็กชื่อลงช่องแชต',
+            sub: `@${member.id}`,
+            onClick: () => {
+              setChatIn(prev => `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}@${member.id} `);
+              document.querySelector('textarea.max-h-24')?.focus();
+            }
+          });
+        }
+
+        items.push({
+          icon: 'fas fa-clipboard-list',
+          label: 'ดูโพสต์ทั้งหมดของคนนี้',
+          onClick: () => { setSearchQ(member.id); setCurrentView('feed'); }
+        });
+
+        items.push({ type: 'divider' });
+        items.push({ icon: 'fas fa-copy', label: 'คัดลอก Member ID', sub: member.id, onClick: () => navigator.clipboard.writeText(member.id) });
+        if (member.username) {
+          items.push({ icon: 'fas fa-at', label: 'คัดลอก Username', sub: `@${member.username}`, onClick: () => navigator.clipboard.writeText('@' + member.username) });
+        }
+
+        if (currentUser.role === 'admin' && member.role !== 'admin' && member.isActivated) {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-shield-alt',
+            label: member.role === 'mod' ? 'ปลดจากตำแหน่ง Vice' : 'แต่งตั้งเป็น Vice',
+            accent: member.role !== 'mod',
+            danger: member.role === 'mod',
+            onClick: () => {
+              const nextRole = member.role === 'mod' ? 'member' : 'mod';
+              if (confirm(`ยืนยันการ${nextRole === 'mod' ? 'แต่งตั้ง' : 'ปลด'} ${member.displayName} ${nextRole === 'mod' ? 'เป็น Vice' : 'จาก Vice'}?`)) {
+                db.collection('bma_users').doc(member.id).update({ role: nextRole });
+              }
+            }
+          });
+        }
+
+        openAppMenu(e, {
+          header: { icon: 'fas fa-user', title: member.displayName, sub: `${member.id}${member.username ? ' • @' + member.username : ''}` },
+          items
+        });
+      };
+
+	// 4) เมนูคลิกขวาบน Floating Player มุมขวาล่าง
+      const openFloatingPlayerMenu = (e) => {
+        const items = [
+          {
+            icon: isLocalPaused ? 'fas fa-volume-up' : 'fas fa-volume-mute',
+            label: isLocalPaused ? 'เปิดรับเสียงวิทยุ' : 'ปิดเสียงวิทยุชั่วคราว',
+            accent: true,
+            onClick: handleToggleLocalAudio
+          }
+        ];
+
+        if (canManageAudio && !isFullyClosedSync && activeDeckSong?.id) {
+          items.push({
+            icon: 'fas fa-step-forward',
+            label: 'ข้ามเพลงปัจจุบัน (DJ)',
+            onClick: () => {
+              const activeDeck = localCrossfade < 50 ? 'A' : 'B';
+              if ((djState.djMode || 'auto') === 'auto') {
+                advanceDjQueue(activeDeck, false, activeDeckSong.key || activeDeckSong.id);
+              } else {
+                const up = activeDeck === 'A'
+                  ? { deckA: null, playA: { ...(djState.playA || {}), isPlaying: false } }
+                  : { deckB: null, playB: { ...(djState.playB || {}), isPlaying: false } };
+                updateDjState(up);
+              }
+            }
+          });
+        }
+
+        if (!isFullyClosedSync && activeDeckSong?.id) {
+          const ytUrl = `https://www.youtube.com/watch?v=${activeDeckSong.id}`;
+          items.push({ type: 'divider' });
+          items.push({ icon: 'fas fa-link', label: 'คัดลอกลิงก์ YouTube เพลงนี้', onClick: () => navigator.clipboard.writeText(ytUrl) });
+          items.push({ icon: 'fab fa-youtube', label: 'เปิดดูบน YouTube', onClick: () => window.open(ytUrl, '_blank', 'noopener,noreferrer') });
+        }
+
+        items.push({ type: 'divider' });
+        items.push({ icon: 'fas fa-compact-disc', label: 'เปิดหน้า Disc Jam', onClick: () => changeViewWithTransition('discjam') });
+        items.push({ icon: 'fas fa-compress', label: 'ยุบตัวเล่นเป็นปุ่มวงกลม', onClick: () => setIsPlayerFloatingOpen(false) });
+
+        openAppMenu(e, {
+          header: { icon: 'fas fa-compact-disc', title: 'Disc Jam Radio', sub: isFullyClosedSync ? 'ปิดรับคิวชั่วคราว' : (activeDeckSong?.title || 'ไม่มีเพลงเล่น') },
+          items
+        });
+      };
+
+      // 5) เมนูคลิกขวาบนรายการเพลงในคิว Disc Jam
+      const openQueueTrackMenu = (e, q, idx) => {
+        const ytUrl = `https://www.youtube.com/watch?v=${q.id}`;
+        const items = [
+          { icon: 'fas fa-link', label: 'คัดลอกลิงก์ YouTube', onClick: () => navigator.clipboard.writeText(ytUrl) },
+          { icon: 'fab fa-youtube', label: 'เปิดดูบน YouTube', onClick: () => window.open(ytUrl, '_blank', 'noopener,noreferrer') }
+        ];
+
+        if (canManageAudio && djState.djMode === 'manual') {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-compact-disc',
+            label: 'โหลดเข้า Deck A ทันที',
+            accent: true,
+            onClick: () => {
+              const nQ = djState.queue.filter(x => x.key !== q.key);
+              updateDjState({ queue: nQ, deckA: q, playA: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 } });
+            }
+          });
+          items.push({
+            icon: 'fas fa-compact-disc',
+            label: 'โหลดเข้า Deck B ทันที',
+            accent: true,
+            onClick: () => {
+              const nQ = djState.queue.filter(x => x.key !== q.key);
+              updateDjState({ queue: nQ, deckB: q, playB: { isPlaying: true, startedAt: Date.now(), pausedPos: 0 } });
+            }
+          });
+        }
+
+        if (canManageAudio && idx > 0) {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-angle-double-up',
+            label: 'เลื่อนขึ้นเป็นคิวถัดไปทันที',
+            accent: true,
+            onClick: () => {
+              const nQ = [...djState.queue];
+              const [picked] = nQ.splice(idx, 1);
+              nQ.unshift(picked);
+              updateDjState({ queue: nQ });
+            }
+          });
+        }
+
+        if (canManageAudio || q.addedBy === currentUser?.id) {
+          items.push({ type: 'divider' });
+          items.push({
+            icon: 'fas fa-trash-alt',
+            label: 'ลบเพลงนี้ออกจากคิว',
+            danger: true,
+            onClick: () => {
+              const nQ = [...djState.queue];
+              nQ.splice(idx, 1);
+              updateDjState({ queue: nQ });
+            }
+          });
+        }
+
+        openAppMenu(e, {
+          header: { icon: 'fas fa-music', title: q.title || 'เพลงในคิว', sub: `คิวที่ #${idx + 1} • โดย ${getAuthor(q.addedBy).displayName}` },
+          items
+        });
+      };
+
       if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
@@ -14055,7 +14888,11 @@
           {/* FLOATING PLAYER */}
           {isPlayerFloatingOpen && (
             <div className="fixed bottom-6 right-6 z-50 flex items-end justify-end pointer-events-none">
-                <div className="pointer-events-auto bg-[#0B1325]/90 backdrop-blur-md border border-[#1E3A5F] p-3 rounded-2xl shadow-2xl flex flex-col gap-2 max-w-[280px]">
+                <div
+                  onContextMenu={openFloatingPlayerMenu}
+                  {...longPressProps(openFloatingPlayerMenu)}
+                  className="pointer-events-auto bg-[#0B1325]/90 backdrop-blur-md border border-[#1E3A5F] p-3 rounded-2xl shadow-2xl flex flex-col gap-2 max-w-[280px]"
+                >
                     <div className="flex items-center gap-3">
                         <div className="relative w-12 h-12 rounded-full border-2 border-slate-700 shrink-0 shadow-[0_0_10px_rgba(14,165,233,0.3)]">
                             <div className="w-full h-full rounded-full overflow-hidden">
@@ -14126,7 +14963,7 @@
                       return (
                         <div key={m.id} style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }} className={'absolute pointer-events-auto ' + ring.cc}>
                           {currentUser ? (
-                            <button onClick={() => {
+                            <button onContextMenu={(e) => openMemberMenu(e, m)} onClick={() => {
                               if (IS_HALLOWEEN && m.id === cursedUserId) {
                                 setScareTriggered(true);
                                 setTimeout(() => setScareTriggered(false), 1200);
@@ -14251,7 +15088,7 @@
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
                 {activeMembers.filter((u) => dirTag === 'ALL' || getTags(u).includes(dirTag)).map((m) => (
-                  <div key={m.id} onClick={() => openMemberProfile(m)} className={`card overflow-hidden transition-colors ${currentUser ? 'cursor-pointer hover:border-white/50' : 'cursor-pointer hover:border-sky-500/40'}`}>
+                  <div key={m.id} onClick={() => openMemberProfile(m)} onContextMenu={(e) => openMemberMenu(e, m)} className={`card overflow-hidden transition-colors ${currentUser ? 'cursor-pointer hover:border-white/50' : 'cursor-pointer hover:border-sky-500/40'}`}>
                     <div className="bg-[#0F2547] px-4 py-2.5 border-b border-[#1E3A5F] flex justify-between items-center">
                       <div className="flex items-center gap-1.5">
                         <span className={`font-mono text-xs font-bold ${m.id.startsWith('F') ? 'text-[#38BDF8]' : 'text-white'}`}>{m.id}</span>
@@ -14724,7 +15561,12 @@
                     ) : (
                       <>
                         {djState.queue.map((q, idx) => (
-                        <div key={q.key} className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-[#050811] border border-[#1E3A5F] hover:border-slate-600 transition-colors">
+                        <div
+                          key={q.key}
+                          onContextMenu={(e) => openQueueTrackMenu(e, q, idx)}
+                          {...longPressProps((ev) => openQueueTrackMenu(ev, q, idx))}
+                          className="flex items-center justify-between p-2.5 rounded-xl text-xs bg-[#050811] border border-[#1E3A5F] hover:border-slate-600 transition-colors"
+                        >
                           <div className="flex items-center gap-3 overflow-hidden flex-1">
                             <img src={`https://img.youtube.com/vi/${q.id}/default.jpg`} className="w-10 h-7 object-cover rounded opacity-80 shrink-0" alt="" />
                             <div className="flex flex-col min-w-0">
@@ -14782,7 +15624,12 @@
                   <div className="p-3 border-b border-[#1E3A5F]">
                     {channels.map((ch) => (
                       <div key={ch.id} className="flex items-center gap-1 mb-1 group">
-                        <button onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`flex-1 px-3 py-2 rounded-xl text-left truncate transition-all font-bold ${activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
+                        <button
+                          onClick={() => { setActiveRoom({ type: 'channel', id: ch.id }); if(window.innerWidth<768)setLeftOpen(false); }}
+                          onContextMenu={(e) => openRoomMenu(e, 'channel', ch)}
+                          {...longPressProps((ev) => openRoomMenu(ev, 'channel', ch))}
+                          className={`flex-1 px-3 py-2 rounded-xl text-left truncate transition-all font-bold ${activeRoom.type === 'channel' && activeRoom.id === ch.id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}
+                        >
                             <span className="opacity-70 mr-1.5">{ch.icon}</span> {ch.name}{isTargetMuted('channel:' + ch.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-1.5"></i>}
                         </button>
                         {isModOrAdmin && !ch.isProtected && <button onClick={() => setDelTgt({ roomType: 'channel', id: ch.id, name: '#' + ch.name })} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity px-2"><i className="fas fa-trash-alt"></i></button>}
@@ -14796,7 +15643,13 @@
                         <button onClick={() => { setGrpMems([]); setCGrpOpen(true); }} className="px-2 py-0.5 rounded bg-white text-[#050811] text-[10px] font-bold hover:bg-slate-200 transition-colors"><i className="fas fa-plus mr-1"></i> สร้างกลุ่ม</button>
                     </div>
                     {myGroups.map((g) => (
-                        <button key={g.id} onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex justify-between items-center px-3 py-2 mb-1 rounded-xl font-bold transition-all ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}>
+                        <button
+                          key={g.id}
+                          onClick={() => { setActiveRoom({ type: 'group', id: g.id }); if(window.innerWidth<768)setLeftOpen(false); }}
+                          onContextMenu={(e) => openRoomMenu(e, 'group', g)}
+                          {...longPressProps((ev) => openRoomMenu(ev, 'group', g))}
+                          className={`w-full flex justify-between items-center px-3 py-2 mb-1 rounded-xl font-bold transition-all ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-300 hover:bg-[#0F2547] hover:text-white'}`}
+                        >
                             <span className="truncate">{g.isArchived ? '📦 ' : '👥 '}{g.name}{isTargetMuted('group:' + g.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-1.5"></i>}</span>
                             <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${activeRoom.type === 'group' && activeRoom.id === g.id ? 'bg-white/20 text-white' : 'bg-[#050811] text-slate-400'}`}>{(g.members || []).length}</span>
                         </button>
@@ -14813,7 +15666,13 @@
                     </div>
                     <div className="flex-1 overflow-y-auto no-scrollbar pt-1">
                        {conversedDms.map((m) => (
-                           <button key={m.id} onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }} className={`w-full flex items-center gap-2.5 p-2 mb-1 rounded-xl text-left transition-all ${activeRoom.type === 'dm' && activeRoom.id === m.id ? 'bg-white text-[#050811] shadow-md' : 'text-slate-200 hover:bg-[#0F2547]'}`}>
+                           <button
+                             key={m.id}
+                             onClick={() => { setActiveRoom({ type: 'dm', id: m.id }); if(window.innerWidth<768)setLeftOpen(false); }}
+                             onContextMenu={(e) => openRoomMenu(e, 'dm', m)}
+                             {...longPressProps((ev) => openRoomMenu(ev, 'dm', m))}
+                             className={`w-full flex items-center gap-2.5 p-2 mb-1 rounded-xl text-left transition-all ${activeRoom.type === 'dm' && activeRoom.id === m.id ? 'bg-white text-[#050811] shadow-md' : 'text-slate-200 hover:bg-[#0F2547]'}`}
+                           >
                                <Avatar user={m} size="xs" showStatus={true} />
                                <span className="truncate font-bold text-sm">{m.displayName}</span>{isTargetMuted('dm:' + m.id) && <i className="fas fa-bell-slash text-[10px] text-red-400/80 ml-auto shrink-0"></i>}
                            </button>
@@ -14954,9 +15813,11 @@
                                 {pinnedMsg.text || (pinnedMsg.attachments?.length > 0 ? `[${pinnedMsg.attachments[0].type === 'image' ? 'รูปภาพ' : pinnedMsg.attachments[0].type === 'video' ? 'วิดีโอ' : pinnedMsg.attachments[0].type === 'audio' ? 'ไฟล์เสียง' : 'ไฟล์แนบ'}]` : 'ข้อความ')}
                             </div>
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); db.collection('bma_messages').doc(pinnedMsg.id).update({ isPinned: false }); }} className="text-slate-500 hover:text-red-400 w-8 h-8 rounded-full hover:bg-black/20 flex items-center justify-center transition-colors" title="เลิกปักหมุด">
-                            <i className="fas fa-times"></i>
-                        </button>
+                        {canPinInActiveRoom && (
+                            <button onClick={(e) => { e.stopPropagation(); db.collection('bma_messages').doc(pinnedMsg.id).update({ isPinned: false }); }} className="text-slate-500 hover:text-red-400 w-8 h-8 rounded-full hover:bg-black/20 flex items-center justify-center transition-colors" title="เลิกปักหมุด">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -15083,7 +15944,7 @@
                                     <div className={images.length > 1 ? `media-grid ${gridClass} w-full max-w-sm` : 'w-full max-w-sm'}>
                                         {images.slice(0, 4).map((att, idx) => (
                                             <div key={att.id} className="relative">
-                                                <SmartMedia att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />
+                                                <SmartMedia att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openChatMsgMenu(e, msg, att); }} />
                                                 {idx === 3 && images.length > 4 && (
                                                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xl font-bold rounded-xl pointer-events-none">
                                                         +{images.length - 4}
@@ -15097,7 +15958,7 @@
                                 {others.length > 0 && (
                                     <div className="space-y-2 w-full max-w-sm">
                                         {others.map(att => (
-                                            <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setCtxMenu({ x: e.clientX, y: e.clientY, message: msg, mediaItem: att }); }} />
+                                            <SmartMedia key={att.id} att={att} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openChatMsgMenu(e, msg, att); }} />
                                         ))}
                                     </div>
                                 )}
@@ -15106,8 +15967,9 @@
                     };
 
                     return (
-                      <div id={'msg-' + msg.id} key={msg.id} 
-                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!msg.isDeleted) setCtxMenu({ x: Math.min(e.clientX, window.innerWidth - 200), y: Math.min(e.clientY, window.innerHeight - 220), message: msg, mediaItem: null }); }} 
+                      <div id={'msg-' + msg.id} key={msg.id}
+                           onContextMenu={(e) => openChatMsgMenu(e, msg, null)}
+                           {...longPressProps((ev) => openChatMsgMenu(ev, msg, null))}
                            className={`flex items-end gap-2.5 group/msg ${isMe ? 'msg-right self-end flex-row-reverse' : 'msg-left self-start'} ${chatSearch && (msg.text||'').toLowerCase().includes(chatSearch.toLowerCase()) ? 'ring-2 ring-amber-500/50 rounded-2xl p-1 bg-amber-900/10' : ''}`}
                       >
                         <div onClick={() => setMemberModal(s)} className="cursor-pointer shrink-0 mb-1 z-10">
@@ -15177,6 +16039,29 @@
                                     </>
                                 )}
                             </div>
+
+                            {/* แถบ Quick Reactions ใต้กล่องข้อความ */}
+                            {!msg.isDeleted && msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                              <div className={`flex flex-wrap gap-1 mt-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                {Object.entries(msg.reactions).map(([em, uids]) => {
+                                  if (!Array.isArray(uids) || uids.length === 0) return null;
+                                  const reacted = currentUser && uids.includes(currentUser.id);
+                                  const names = uids.map(id => getAuthor(id).displayName).join(', ');
+                                  return (
+                                    <button
+                                      key={em}
+                                      type="button"
+                                      onClick={() => toggleMsgReaction(msg, em)}
+                                      title={names}
+                                      className={`px-2 py-0.5 rounded-full text-[11px] border flex items-center gap-1 transition-all ${reacted ? 'bg-sky-500/25 border-sky-400 text-sky-200 font-bold' : 'bg-[#0B1325] border-[#1E3A5F] text-slate-300 hover:border-slate-400'}`}
+                                    >
+                                      <span>{em}</span>
+                                      <span className="font-mono text-[10px]">{uids.length}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                             
                             {!msg.isDeleted && (
                                 <div className={`flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity ${isMe ? 'mr-2' : 'ml-2'}`}>
@@ -15444,7 +16329,13 @@
                     }).map((m) => {
                        const stat = getStatusInfo(m);
                        return (
-                           <div key={m.id} onClick={() => setMemberModal(m)} className={`p-2 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-colors ${stat.t === 'Online' ? 'bg-[#0B1325] border-emerald-900/40 hover:border-emerald-500/80' : 'bg-[#050811] border-[#1E3A5F] hover:bg-[#0F2547]'}`}>
+                           <div
+                             key={m.id}
+                             onClick={() => openMemberProfile(m)}
+                             onContextMenu={(e) => openMemberMenu(e, m)}
+                             {...longPressProps((ev) => openMemberMenu(ev, m))}
+                             className={`p-2 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-colors ${stat.t === 'Online' ? 'bg-[#0B1325] border-emerald-900/40 hover:border-emerald-500/80' : 'bg-[#050811] border-[#1E3A5F] hover:bg-[#0F2547]'}`}
+                           >
                                <Avatar user={m} size="sm" showStatus={true} />
                                <div className="min-w-0 flex-1">
                                    <div className="font-bold truncate text-[12px] text-slate-100">{m.displayName}</div>
@@ -15472,7 +16363,11 @@
               sortScores={sortScores}
               fmtTime={fmtTime}
               todayStr={todayStr}
-              onSelectGame={(idx) => setActiveGameTab(idx)}
+              onSelectGame={(idx, opts) => {
+                setActiveGameTab(idx);
+                if (opts?.openLb) { setGameFocusMode(false); setRightOpen(true); }
+              }}
+              onResetGuestGame={resetGuestPracticeGame}
               setMemberModal={openMemberProfile}
               db={db}
               sfxMuted={gameSfxMuted}
@@ -16211,25 +17106,7 @@
             </div>
           )}
           {/* CONTEXT MENUS (Right-click or Long-press) */}
-          {ctxMenu && (
-            <div style={{ top: ctxMenu.y + 'px', left: ctxMenu.x + 'px' }} onClick={(e) => e.stopPropagation()} className="fixed z-50 w-48 card border-2 border-white/40 shadow-2xl py-1 text-xs">
-              <button onClick={() => { setRepMsg(ctxMenu.message); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-sky-300 font-bold">↩️ ตอบกลับ</button>
-              <button onClick={() => { navigator.clipboard.writeText(ctxMenu.mediaItem ? ctxMenu.mediaItem.url : ctxMenu.message.text || ''); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">📋 คัดลอก</button>
-              <button onClick={() => { setFwdMsg(ctxMenu); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">↪️ ส่งต่อ...</button>
-              {currentUser?.id === ctxMenu.message.senderId && !ctxMenu.mediaItem && <button onClick={() => { setEditMsg(ctxMenu.message); setChatIn(ctxMenu.message.text || ''); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-amber-300">✎ แก้ไข</button>}
-              {currentUser?.id === ctxMenu.message.senderId && <button onClick={async () => { await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isDeleted: true, text: '', attachments: [] }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-red-950 text-red-400">🚫 ยกเลิกข้อความ</button>}
-              {activeRoom.type === 'dm' && !ctxMenu.message.isPinned && <button onClick={async () => { const prevPins = roomMsgs.filter(m => m.isPinned); for(const pm of prevPins) await db.collection('bma_messages').doc(pm.id).update({ isPinned: false }); await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isPinned: true }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-amber-300 border-t border-[#1E3A5F] mt-1 pt-2">📌 ปักหมุดข้อความ</button>}
-              {activeRoom.type === 'dm' && ctxMenu.message.isPinned && <button onClick={async () => { await db.collection('bma_messages').doc(ctxMenu.message.id).update({ isPinned: false }); setCtxMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-red-950 text-red-400 border-t border-[#1E3A5F] mt-1 pt-2">📍 เลิกปักหมุด</button>}
-            </div>
-          )}
-
-          {commMenu && (
-            <div style={{ top: commMenu.y + 'px', left: commMenu.x + 'px' }} onClick={(e) => e.stopPropagation()} className="fixed z-50 w-44 card border-2 border-white/40 shadow-2xl py-1 text-xs">
-              <button onClick={() => { setRepComm({ ...repComm, [commMenu.postId]: { ...commMenu.comment, labelNum: commMenu.lbl } }); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547] text-sky-300 font-bold">↩️ ตอบกลับ</button>
-              <button onClick={() => { toggleCommLike(commMenu.postId, commMenu.comment.id); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]">♥ ถูกใจ</button>
-              <button onClick={() => { navigator.clipboard.writeText(commMenu.comment.text || ''); setCommMenu(null); }} className="w-full px-3.5 py-1.5 text-left hover:bg-[#0F2547]"><i className="fas fa-copy mr-1"></i> คัดลอก</button>
-            </div>
-          )}
+          <AppContextMenu menu={appCtxMenu} onClose={() => setAppCtxMenu(null)} />
 
           {/* SHARED POST / SINGLE POST VIEW */}
           {currentView === 'single_post' && (
@@ -16498,10 +17375,24 @@
                      	                 // ดึงสไตล์ของหมวดหมู่มาใช้
                                       const catStyle = CATEGORY_STYLES[tool.category] || { textClass: 'text-sky-400' };
                                       
+                                      const handleToolCtx = (e) => {
+                                          const toolUrl = `${window.location.origin}${window.location.pathname}?tool=${tool.id}`;
+                                          openAppMenu(e, {
+                                              header: { icon: 'fas fa-tools', title: tool.name, sub: tool.category },
+                                              items: [
+                                                  { icon: 'fas fa-play', label: 'เปิดใช้งานเครื่องมือนี้', accent: true, onClick: () => openTool(tool.id) },
+                                                  { icon: 'fas fa-link', label: 'คัดลอกลิงก์เครื่องมือ', sub: `?tool=${tool.id}`, onClick: () => navigator.clipboard.writeText(toolUrl) },
+                                                  { icon: 'fas fa-external-link-alt', label: 'เปิดในแท็บใหม่', onClick: () => window.open(toolUrl, '_blank', 'noopener,noreferrer') }
+                                              ]
+                                          });
+                                      };
+
                                       return (
                                           <button 
                                               key={tool.id} 
                                               onClick={() => openTool(tool.id)}
+                                              onContextMenu={handleToolCtx}
+                                              {...longPressProps(handleToolCtx)}
                                               className={`card p-4 flex flex-col items-start text-left hover:bg-[#0F2547] border border-[#1E3A5F] hover:${catStyle.borderClass} transition-all group`}
                                           >
                                               <div className="flex items-center gap-3 mb-2 w-full">
