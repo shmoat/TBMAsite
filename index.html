@@ -200,7 +200,9 @@
     .card-ui { border-radius: 0.35rem; display: flex; flex-direction: column; justify-content: space-between; padding: 0.15rem; background: #fff; border: 1px solid #cbd5e1; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); touch-action: none; }
     .card-ui.face-down { background: repeating-linear-gradient(45deg, #1E3A5F, #1E3A5F 5px, #0F2547 5px, #0F2547 10px); border-color: #0F2547; }
     .text-red { color: #EF4444; } .text-black { color: #050811; }
-
+    @keyframes tilePop { 0% { transform: scale(0.82); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
+    .animate-tile-pop { animation: tilePop 0.22s ease-out; }
+    @keyframes flipIn { 0% { transform: rotateX(90deg); opacity: 0.4; } 100% { transform: rotateX(0deg); opacity: 1; } }
     @keyframes floatMusicNote {
       0% { transform: translateY(0) scale(0.8) rotate(-10deg); opacity: 1; }
       100% { transform: translateY(-60px) scale(1.5) rotate(20deg); opacity: 0; }
@@ -408,6 +410,46 @@
       { id: '24game', name: "Daily 24", icon: "➗", faIcon: "fas fa-calculator", desc: "นำเลขโดด 4 ตัวมาบวก ลบ คูณ หาร ให้ได้ 24 พอดี", iconCls: "bg-cyan-500/15 text-cyan-400 border-cyan-500/40", hoverCls: "hover:border-cyan-400/70 hover:shadow-[0_0_20px_rgba(34,211,238,0.18)]", barCls: "bg-cyan-400" },
       { id: 'resistor', name: "Resistor Code", icon: "🔌", faIcon: "fas fa-microchip", desc: "เลือกแถบสีตัวต้านทาน 4 แถบให้ตรงค่า (โอกาส 3 ครั้ง)", iconCls: "bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/40", hoverCls: "hover:border-fuchsia-400/70 hover:shadow-[0_0_20px_rgba(232,121,249,0.18)]", barCls: "bg-fuchsia-400" }
     ];
+
+    // Daily Games Synth SFX (Web Audio API)
+    let _bmaSfxCtx = null;
+    const isGameSfxMuted = () => {
+      try { return localStorage.getItem('tbma_game_sfx_muted') === '1'; } catch { return false; }
+    };
+    const playGameSfx = (type = 'tap') => {
+      if (isGameSfxMuted()) return;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!_bmaSfxCtx || _bmaSfxCtx.state === 'closed') _bmaSfxCtx = new AC();
+        if (_bmaSfxCtx.state === 'suspended') _bmaSfxCtx.resume();
+        const ctx = _bmaSfxCtx;
+        const now = ctx.currentTime;
+
+        const tone = (freq, endFreq, dur, wave = 'sine', vol = 0.09, delay = 0) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = wave;
+          osc.frequency.setValueAtTime(freq, now + delay);
+          if (endFreq && endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + delay + dur);
+          gain.gain.setValueAtTime(0.0001, now + delay);
+          gain.gain.linearRampToValueAtTime(vol, now + delay + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + dur);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(now + delay); osc.stop(now + delay + dur + 0.02);
+        };
+
+        if (type === 'tap') tone(520, 620, 0.045, 'triangle', 0.07);
+        else if (type === 'card') tone(340, 500, 0.06, 'sine', 0.08);
+        else if (type === 'flag') { tone(760, 880, 0.045, 'triangle', 0.07); tone(980, 980, 0.05, 'triangle', 0.06, 0.045); }
+        else if (type === 'merge') tone(420, 680, 0.09, 'triangle', 0.09);
+        else if (type === 'undo') tone(440, 290, 0.07, 'sine', 0.07);
+        else if (type === 'error') tone(170, 120, 0.14, 'sawtooth', 0.06);
+        else if (type === 'bonus') { tone(784, 784, 0.08, 'triangle', 0.09, 0); tone(1046, 1046, 0.09, 'triangle', 0.09, 0.07); tone(1318, 1318, 0.14, 'sine', 0.09, 0.14); }
+        else if (type === 'win') { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, f, 0.16, 'triangle', 0.09, i * 0.08)); }
+        else if (type === 'bomb' || type === 'lose') { tone(190, 48, 0.34, 'sawtooth', 0.1); tone(110, 38, 0.38, 'square', 0.05, 0.04); }
+      } catch (e) {}
+    };
 
     // PRNG (Pseudo-Random Number Generator)
     class PRNG {
@@ -787,11 +829,11 @@
     // ==========================================
     
     // ------------------------------------------
-    // 4.1 Sudoku Game
+    // 4.1 Sudoku Game (Crosshair + Undo + Remaining Count)
     // ------------------------------------------
     function SudokuGame({ dateSeed, onEnd }) {
-      // ใช้ v2 ใน key ของ local storage เพื่อแก้บักกระดานค้างจากวันก่อนหน้า
       const [board, setBoard] = useStickyState(null, `bma_sudoku_v2_${dateSeed}`);
+      const [history, setHistory] = useState([]);
       const [selectedCell, setSelectedCell] = useState(null);
       const [noteMode, setNoteMode] = useState(false);
 
@@ -804,7 +846,6 @@
           [3,4,5,6,7,8,9,1,2],[6,7,8,9,1,2,3,4,5],[9,1,2,3,4,5,6,7,8]
         ].map(r => [...r]);
 
-        // สลับแถวและคอลัมน์ภายในบล็อกเดียวกันเพื่อสร้างกระดานใหม่
         for(let block=0; block<3; block++) {
           for(let i=0; i<3; i++) {
             const r1 = block*3+i, r2 = block*3+rng.nextInt(0,2);
@@ -875,20 +916,14 @@
         setBoard(puzzle.map(r => r.map(val => ({ val, fixed: val !== '', notes: [] }))));
       }, [dateSeed]);
 
-      useEffect(() => {
-        const handleKeyDown = (e) => {
-          if(!selectedCell || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-          const k = e.key;
-          if(/^[1-9]$/.test(k)) handleNumpad(parseInt(k));
-          else if(k === 'Backspace' || k === 'Delete') handleNumpad('DEL');
-          else if(k === 'ArrowUp') setSelectedCell(p => p ? [Math.max(0, p[0]-1), p[1]] : [8,0]);
-          else if(k === 'ArrowDown') setSelectedCell(p => p ? [Math.min(8, p[0]+1), p[1]] : [0,0]);
-          else if(k === 'ArrowLeft') setSelectedCell(p => p ? [p[0], Math.max(0, p[1]-1)] : [0,8]);
-          else if(k === 'ArrowRight') setSelectedCell(p => p ? [p[0], Math.min(8, p[1]+1)] : [0,0]);
-        };
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [selectedCell, board, noteMode]);
+      const cloneBoard = (b) => b.map(row => row.map(cell => ({ ...cell, notes: [...cell.notes] })));
+
+      const handleUndo = () => {
+        if (history.length === 0) return;
+        playGameSfx('undo');
+        setBoard(history[history.length - 1]);
+        setHistory(prev => prev.slice(0, -1));
+      };
 
       const checkWin = (b) => {
         for(let r=0; r<9; r++) {
@@ -902,6 +937,7 @@
           }
           if(rSet.size !== 9 || cSet.size !== 9 || bSet.size !== 9) return false;
         }
+        playGameSfx('win');
         onEnd('won');
       };
 
@@ -915,20 +951,24 @@
       };
 
       const handleNumpad = (num) => {
-        if(!selectedCell) return;
+        if(!selectedCell || !board) return;
         const [r, c] = selectedCell;
         if(board[r][c].fixed) return;
 
-        const newB = board.map(row => row.map(cell => ({...cell, notes: [...cell.notes]})));
+        setHistory(prev => [...prev.slice(-39), cloneBoard(board)]);
+        const newB = cloneBoard(board);
         
         if(num === 'DEL') {
+          playGameSfx('undo');
           newB[r][c].val = ''; newB[r][c].notes = [];
         } else if(noteMode) {
+          playGameSfx('tap');
           const nSet = new Set(newB[r][c].notes);
           if(nSet.has(num)) nSet.delete(num); else nSet.add(num);
           newB[r][c].notes = Array.from(nSet).sort();
           newB[r][c].val = '';
         } else {
+          playGameSfx('tap');
           newB[r][c].val = num; newB[r][c].notes = [];
           cleanNotes(newB, r, c, num);
         }
@@ -936,8 +976,36 @@
         if(num !== 'DEL' && !noteMode) checkWin(newB);
       };
 
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            handleUndo();
+            return;
+          }
+          if(!selectedCell) return;
+          const k = e.key;
+          if(/^[1-9]$/.test(k)) handleNumpad(parseInt(k));
+          else if(k === 'Backspace' || k === 'Delete') handleNumpad('DEL');
+          else if(k === 'ArrowUp') { e.preventDefault(); setSelectedCell(p => p ? [Math.max(0, p[0]-1), p[1]] : [8,0]); }
+          else if(k === 'ArrowDown') { e.preventDefault(); setSelectedCell(p => p ? [Math.min(8, p[0]+1), p[1]] : [0,0]); }
+          else if(k === 'ArrowLeft') { e.preventDefault(); setSelectedCell(p => p ? [p[0], Math.max(0, p[1]-1)] : [0,8]); }
+          else if(k === 'ArrowRight') { e.preventDefault(); setSelectedCell(p => p ? [p[0], Math.min(8, p[1]+1)] : [0,0]); }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [selectedCell, board, noteMode, history]);
+
       if(!board) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
       const selVal = selectedCell ? board[selectedCell[0]][selectedCell[1]].val : null;
+
+      // นับจำนวนตัวเลขแต่ละตัวที่เติมไปแล้วเพื่อแสดงจำนวนที่เหลือ (0-9)
+      const digitCounts = {};
+      for (let n = 1; n <= 9; n++) digitCounts[n] = 0;
+      board.forEach(row => row.forEach(cell => {
+        if (cell.val >= 1 && cell.val <= 9) digitCounts[cell.val]++;
+      }));
 
       return (
         <div className="flex flex-col items-center space-y-3 w-full h-full justify-center px-1">
@@ -947,14 +1015,21 @@
                 {row.map((cell, c) => {
                   const isSel = selectedCell && selectedCell[0] === r && selectedCell[1] === c;
                   const isHi = !isSel && selVal && cell.val === selVal;
+                  const isCross = !isSel && selectedCell && (
+                    selectedCell[0] === r ||
+                    selectedCell[1] === c ||
+                    (Math.floor(selectedCell[0] / 3) === Math.floor(r / 3) && Math.floor(selectedCell[1] / 3) === Math.floor(c / 3))
+                  );
                   const brR = c%3===2 && c!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
                   const brB = r%3===2 && r!==8 ? '2px solid #3B82F6' : '1px solid #1E3A5F';
                   let bg = cell.fixed ? '#0B1325' : '#050811';
                   let txt = cell.fixed ? '#60A5FA' : '#ffffff';
-                  if(isSel) bg = 'rgba(59,130,246,0.6)'; else if(isHi) bg = 'rgba(59,130,246,0.2)';
+                  if(isSel) bg = 'rgba(59,130,246,0.65)';
+                  else if(isHi) bg = 'rgba(56,189,248,0.3)';
+                  else if(isCross) bg = 'rgba(59,130,246,0.13)';
                   
                   return (
-                    <div key={c} onClick={() => setSelectedCell([r, c])} style={{ backgroundColor:bg, color:txt, borderRight:brR, borderBottom:brB }} className="w-full h-full flex items-center justify-center text-base sm:text-lg font-bold cursor-pointer overflow-hidden select-none">
+                    <div key={c} onClick={() => setSelectedCell([r, c])} style={{ backgroundColor:bg, color:txt, borderRight:brR, borderBottom:brB }} className="w-full h-full flex items-center justify-center text-base sm:text-lg font-bold cursor-pointer overflow-hidden select-none transition-colors duration-75">
                       {cell.val ? cell.val : <div className="notes-grid">{[1,2,3,4,5,6,7,8,9].map(n => <div key={n} className="note-item">{cell.notes.includes(n)?n:''}</div>)}</div>}
                     </div>
                   );
@@ -964,13 +1039,35 @@
           </div>
           <div className="w-full max-w-[340px] space-y-2 mt-2">
             <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
-              <button onClick={() => setNoteMode(false)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
-              <button onClick={() => setNoteMode(true)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
+              <button onClick={() => setNoteMode(false)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${!noteMode ? 'bg-sky-500 text-white' : 'text-slate-400'}`}>✒️ กรอกเลข</button>
+              <button onClick={() => setNoteMode(true)} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${noteMode ? 'bg-amber-500 text-[#050811]' : 'text-slate-400'}`}>📝 ทดเลข</button>
+              <button onClick={handleUndo} disabled={history.length === 0} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-[#0F2547] text-sky-200 border border-[#1E3A5F] disabled:opacity-40 hover:bg-sky-900 transition-colors" title="ย้อนกลับ (Ctrl+Z)">↩️</button>
             </div>
             <div className="grid grid-cols-5 gap-1.5">
-              {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumpad(n)} className="bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-10 sm:h-12 text-lg font-bold">{n}</button>)}
-              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 text-red-300 border border-red-900/50 rounded-lg h-10 sm:h-12 text-xs font-bold">DEL</button>
-              <button onClick={() => { if(confirm('ต้องการล้างกระดานทั้งหมดใช่หรือไม่?')) setBoard(board.map(r => r.map(c => c.fixed ? c : { ...c, val: '', notes: [] }))); }} className="col-span-5 mt-1 bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-900/50 rounded-lg h-10 text-xs font-bold transition-colors">🗑️ เคลียร์กระดาน (Clear All)</button>
+              {[1,2,3,4,5,6,7,8,9].map(n => {
+                const rem = Math.max(0, 9 - (digitCounts[n] || 0));
+                const isDone = rem === 0;
+                return (
+                  <button
+                    key={n}
+                    onClick={() => handleNumpad(n)}
+                    className={`bg-[#0F2547] active:bg-white active:text-[#050811] border border-[#1E3A5F] rounded-lg h-11 sm:h-12 flex flex-col items-center justify-center leading-none transition-opacity ${isDone ? 'opacity-40' : ''}`}
+                  >
+                    <span className="text-base sm:text-lg font-bold">{n}</span>
+                    <span className={`text-[9px] font-mono mt-0.5 ${isDone ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {isDone ? '✓' : rem}
+                    </span>
+                  </button>
+                );
+              })}
+              <button onClick={() => handleNumpad('DEL')} className="bg-red-950/60 active:bg-red-500 text-red-300 border border-red-900/50 rounded-lg h-11 sm:h-12 text-xs font-bold">DEL</button>
+              <button onClick={() => {
+                if(confirm('ต้องการล้างกระดานทั้งหมดใช่หรือไม่?')) {
+                  setHistory(prev => [...prev.slice(-39), cloneBoard(board)]);
+                  playGameSfx('undo');
+                  setBoard(board.map(r => r.map(c => c.fixed ? c : { ...c, val: '', notes: [] })));
+                }
+              }} className="col-span-5 mt-1 bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-900/50 rounded-lg h-9 text-xs font-bold transition-colors">🗑️ เคลียร์กระดาน (Clear All)</button>
             </div>
           </div>
         </div>
@@ -978,7 +1075,7 @@
     }
 
     // ------------------------------------------
-    // 4.2 Minesweeper Game
+    // 4.2 Minesweeper Game (Chording + Touch Long-Press Flag)
     // ------------------------------------------
     function MinesweeperGame({ dateSeed, onEnd, onFirstMove }) {
       const COLS = 9, ROWS = 9;
@@ -986,7 +1083,11 @@
       const [grid, setGrid] = useStickyState(null, `bma_ms_grid_${dateSeed}`);
       const [revealed, setRevealed] = useStickyState(null, `bma_ms_rev_${dateSeed}`);
       const [flagged, setFlagged] = useStickyState(null, `bma_ms_flag_${dateSeed}`);
-      const [mode, setMode] = useState('dig'); 
+      const [mode, setMode] = useState('dig');
+
+      const endedRef = useRef(false);
+      const longPressTimerRef = useRef(null);
+      const longPressFiredRef = useRef(false);
 
       useEffect(() => {
         if (grid) return;
@@ -1044,37 +1145,120 @@
         setFlagged(Array(ROWS).fill().map(()=>Array(COLS).fill(false)));
       }, [dateSeed]);
 
-      const handleAction = (r, c, act) => {
-        if(onFirstMove) onFirstMove(); 
-        
-        if(!revealed || revealed[r][c]) return;
-        if(act === 'flag') {
-          const newF = [...flagged.map(row=>[...row])];
-          newF[r][c] = !newF[r][c];
-          setFlagged(newF); return;
-        }
-        if(flagged[r][c]) return; 
+      useEffect(() => {
+        return () => { if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current); };
+      }, []);
 
-        if(grid[r][c] === 'M') {
-          const newR = [...revealed.map(row=>[...row])];
-          for(let i=0;i<ROWS;i++) for(let j=0;j<COLS;j++) if(grid[i][j]==='M') newR[i][j] = true;
+      const triggerBombEnd = (baseRev) => {
+        endedRef.current = true;
+        playGameSfx('bomb');
+        const newR = baseRev.map(row => [...row]);
+        for(let i=0; i<ROWS; i++) for(let j=0; j<COLS; j++) if(grid[i][j]==='M') newR[i][j] = true;
+        setRevealed(newR);
+        setTimeout(() => onEnd('bomb'), 800);
+      };
+
+      const checkWinBoard = (revBoard) => {
+        let revCount = 0;
+        revBoard.forEach(row => row.forEach(v => { if(v) revCount++; }));
+        if(revCount === ROWS * COLS - numMines) {
+          endedRef.current = true;
+          playGameSfx('win');
+          onEnd('won');
+        }
+      };
+
+      const handleAction = (r, c, act) => {
+        if (endedRef.current || !revealed || !grid) return;
+        if (onFirstMove) onFirstMove();
+
+        // ระบบ Chording: คลิกช่องตัวเลขที่เปิดแล้ว เพื่อเปิดช่องรอบข้างทันทีเมื่อปักธงครบตามเลข
+        if (revealed[r][c]) {
+          if (act === 'flag') return;
+          const num = grid[r][c];
+          if (typeof num !== 'number' || num <= 0) return;
+
+          let adjFlags = 0;
+          const hiddenNeighbors = [];
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                if (flagged[nr][nc]) adjFlags++;
+                else if (!revealed[nr][nc]) hiddenNeighbors.push([nr, nc]);
+              }
+            }
+          }
+
+          if (adjFlags !== num || hiddenNeighbors.length === 0) return;
+
+          // หากปักธงผิดแล้วเปิดไปโดนระเบิด -> ระเบิดทันที
+          if (hiddenNeighbors.some(([nr, nc]) => grid[nr][nc] === 'M')) {
+            triggerBombEnd(revealed);
+            return;
+          }
+
+          const newR = revealed.map(row => [...row]);
+          const flood = (rr, cc) => {
+            if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || newR[rr][cc] || flagged[rr][cc]) return;
+            newR[rr][cc] = true;
+            if (grid[rr][cc] === 0) {
+              for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) flood(rr + dr, cc + dc);
+            }
+          };
+          hiddenNeighbors.forEach(([nr, nc]) => flood(nr, nc));
+          playGameSfx('merge');
           setRevealed(newR);
-          setTimeout(() => onEnd('bomb'), 800);
+          checkWinBoard(newR);
           return;
         }
 
-        const newR = [...revealed.map(row=>[...row])];
+        if (act === 'flag') {
+          const newF = flagged.map(row => [...row]);
+          newF[r][c] = !newF[r][c];
+          playGameSfx('flag');
+          setFlagged(newF);
+          return;
+        }
+
+        if (flagged[r][c]) return;
+
+        if (grid[r][c] === 'M') {
+          triggerBombEnd(revealed);
+          return;
+        }
+
+        const newR = revealed.map(row => [...row]);
         const flood = (rr, cc) => {
-          if(rr<0 || rr>=ROWS || cc<0 || cc>=COLS || newR[rr][cc]) return;
+          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || newR[rr][cc] || flagged[rr][cc]) return;
           newR[rr][cc] = true;
-          if(grid[rr][cc] === 0) {
-            for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) flood(rr+dr, cc+dc);
+          if (grid[rr][cc] === 0) {
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) flood(rr + dr, cc + dc);
           }
         };
-        flood(r, c); setRevealed(newR);
-        
-        let revCount = 0; newR.forEach(row => row.forEach(v => { if(v) revCount++; }));
-        if(revCount === ROWS*COLS - numMines) onEnd('won');
+        flood(r, c);
+        playGameSfx('tap');
+        setRevealed(newR);
+        checkWinBoard(newR);
+      };
+
+      const startTouchFlag = (r, c) => {
+        if (endedRef.current || !revealed || revealed[r][c]) return;
+        longPressFiredRef.current = false;
+        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = setTimeout(() => {
+          longPressFiredRef.current = true;
+          if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) {} }
+          handleAction(r, c, 'flag');
+        }, 380);
+      };
+
+      const cancelTouchFlag = () => {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
       };
 
       if(!grid) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
@@ -1098,7 +1282,20 @@
                   let bg = isRev ? (val==='M' ? '#7F1D1D' : '#050811') : '#0F2547';
                   let content = isFlg ? '🚩' : (isRev ? (val==='M' ? '💥' : (val===0?'':val)) : '');
                   return (
-                    <div key={c} onClick={() => handleAction(r, c, mode)} onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }} className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer ${isRev && val !== 'M' ? colors[val] : ''}`} style={{ backgroundColor: bg }}>
+                    <div
+                      key={c}
+                      onTouchStart={() => startTouchFlag(r, c)}
+                      onTouchEnd={cancelTouchFlag}
+                      onTouchMove={cancelTouchFlag}
+                      onTouchCancel={cancelTouchFlag}
+                      onClick={() => {
+                        if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+                        handleAction(r, c, isRev ? 'dig' : mode);
+                      }}
+                      onContextMenu={(e) => { e.preventDefault(); handleAction(r, c, 'flag'); }}
+                      className={`w-9 h-9 sm:w-10 sm:h-10 border-[0.5px] border-[#1E3A5F]/40 flex items-center justify-center font-bold text-sm sm:text-base cursor-pointer active:brightness-125 ${isRev && val !== 'M' ? colors[val] : ''}`}
+                      style={{ backgroundColor: bg }}
+                    >
                       {content}
                     </div>
                   );
@@ -1106,15 +1303,17 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 px-4 text-center">💡 มือถือ: กดปุ่มเลือกโหมดด้านบน | PC: คลิกซ้ายขุด คลิกขวาปักธง</div>
+          <div className="text-[10px] text-slate-400 px-4 text-center leading-relaxed">
+            💡 มือถือ: แตะค้างเพื่อปักธงได้ทันที • ปักธงครบตามเลขแล้วแตะซ้ำที่ตัวเลขเพื่อเปิดรอบข้าง (Chording)
+          </div>
         </div>
       );
     }
 
     // ------------------------------------------
-    // 4.3 Flag Guesser Game
+    // 4.3 Flag Guesser Game (with 50/50 Lifeline +15s)
     // ------------------------------------------
-    function FlagGuesserGame({ dateSeed, onEnd }) {
+    function FlagGuesserGame({ dateSeed, onEnd, onAddPenalty }) {
       const ALL_FLAGS = [
         {c:'th',n:'Thailand'},{c:'jp',n:'Japan'},{c:'kr',n:'South Korea'},{c:'us',n:'USA'},
         {c:'gb',n:'UK'},{c:'cn',n:'China'},{c:'fr',n:'France'},{c:'de',n:'Germany'},
@@ -1138,6 +1337,9 @@
       const [rounds, setRounds] = useStickyState([], `bma_fg_rds_${dateSeed}`);
       const [currentRound, setCurrentRound] = useStickyState(0, `bma_fg_curr_${dateSeed}`);
       const [wrongGuess, setWrongGuess] = useStickyState(null, `bma_fg_wrong_${dateSeed}`);
+      const [used5050, setUsed5050] = useStickyState(false, `bma_fg_5050_${dateSeed}`);
+      const [elimCodes, setElimCodes] = useStickyState([], `bma_fg_elim_${dateSeed}`);
+      const [penaltyFlash, setPenaltyFlash] = useState(false);
 
       useEffect(() => {
         if (rounds.length > 0) return;
@@ -1156,44 +1358,99 @@
       if(!rounds.length) return null;
       const rd = rounds[currentRound];
 
+      const handleUse5050 = () => {
+        if (used5050 || wrongGuess) return;
+        const wrongOpts = rd.options.filter(o => o.c !== rd.target.c);
+        const rng = new PRNG(`${dateSeed}_5050_${currentRound}`);
+        const picked = rng.shuffle(wrongOpts).slice(0, 2).map(o => o.c);
+        setElimCodes(picked);
+        setUsed5050(true);
+        playGameSfx('bonus');
+        if (onAddPenalty) onAddPenalty(15);
+        setPenaltyFlash(true);
+        setTimeout(() => setPenaltyFlash(false), 1800);
+      };
+
       const handleGuess = (code) => {
-        if(wrongGuess) return;
+        if(wrongGuess || elimCodes.includes(code)) return;
         if(code === rd.target.c) {
-          if(currentRound === 2) onEnd('won', { score: 3 }); 
-          else setCurrentRound(c => c+1);
+          if(currentRound === 2) {
+            playGameSfx('win');
+            onEnd('won', { score: 3 });
+          } else {
+            playGameSfx('merge');
+            setElimCodes([]);
+            setCurrentRound(c => c+1);
+          }
         } else {
+          playGameSfx('lose');
           setWrongGuess(code);
           setTimeout(() => onEnd('lost', { score: currentRound }), 2500);
         }
       };
 
       return (
-        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full">
-          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">ด่านที่ {currentRound + 1} / 3</div>
+        <div className="flex flex-col items-center justify-center space-y-5 w-full h-full relative">
+          <div className="flex items-center gap-2.5 flex-wrap justify-center">
+            <div className="font-bold text-amber-300 text-base bg-[#0F2547] px-4 py-1.5 rounded-full border border-[#1E3A5F]">
+              ด่านที่ {currentRound + 1} / 3
+            </div>
+            <button
+              type="button"
+              onClick={handleUse5050}
+              disabled={used5050 || !!wrongGuess}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1.5 ${used5050 ? 'bg-[#050811] text-slate-500 border-[#1E3A5F] cursor-not-allowed line-through opacity-60' : 'bg-amber-500/20 text-amber-300 border-amber-400/60 hover:bg-amber-400 hover:text-[#050811] shadow'}`}
+              title="ตัดตัวเลือกผิดออก 2 ข้อ (ใช้ได้ 1 ครั้งต่อวัน แลกเวลาเพิ่ม +15 วินาที)"
+            >
+              <i className="fas fa-cut"></i>
+              <span>ตัวช่วย 50/50 (+15 วิ)</span>
+            </button>
+          </div>
+
+          {penaltyFlash && (
+            <div className="text-xs font-mono font-bold text-amber-300 bg-amber-950/70 border border-amber-400/60 px-3 py-1 rounded-full animate-bounce">
+              ✂️ ตัดตัวเลือกผิดออก 2 ข้อแล้ว (+15 วินาที)
+            </div>
+          )}
+
           <img src={`https://flagcdn.com/w320/${rd.target.c}.png`} alt="flag" className="h-32 sm:h-44 border-4 border-white/10 rounded-lg shadow-2xl object-cover" />
-          <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-4">
+          <div className="grid grid-cols-2 gap-3 w-full max-w-sm mt-2">
             {rd.options.map(opt => {
-              let bg = "bg-white text-[#050811]";
+              const isElim = elimCodes.includes(opt.c);
+              let bg = "bg-white text-[#050811] hover:scale-[1.02]";
               if (wrongGuess) {
                 if (opt.c === rd.target.c) bg = "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]";
                 else if (opt.c === wrongGuess) bg = "bg-red-500 text-white";
                 else bg = "bg-white/10 text-white/50";
+              } else if (isElim) {
+                bg = "bg-[#0B1325] text-slate-600 border border-[#1E3A5F] line-through opacity-35 cursor-not-allowed";
               }
-              return <button key={opt.c} onClick={() => handleGuess(opt.c)} className={`font-bold rounded-xl text-sm py-3 transition-all shadow-lg ${bg}`}>{opt.n}</button>;
+              return (
+                <button
+                  key={opt.c}
+                  disabled={isElim || !!wrongGuess}
+                  onClick={() => handleGuess(opt.c)}
+                  className={`font-bold rounded-xl text-sm py-3 transition-all shadow-lg ${bg}`}
+                >
+                  {opt.n}
+                </button>
+              );
             })}
           </div>
           {wrongGuess && <div className="text-red-400 font-bold animate-pulse">❌ ผิดครับ! เกมจบลงทันที</div>}
         </div>
       );
     }
+
     // ------------------------------------------
-    // 4.4 Solitaire Game
+    // 4.4 Solitaire Game (with Auto-Complete)
     // ------------------------------------------
     function SolitaireGame({ dateSeed, onEnd }) {
       const [st, setSt] = useStickyState(null, `bma_sol_${dateSeed}`);
       const [history, setHistory] = useState([]);
       const [initialSt, setInitialSt] = useStickyState(null, `bma_sol_init_${dateSeed}`);
       const [drag, setDrag] = useState(null);
+      const [autoCompleting, setAutoCompleting] = useState(false);
 
       useEffect(() => {
         if(st) return;
@@ -1223,7 +1480,8 @@
       };
 
       const handleUndo = () => {
-        if (history.length > 0) {
+        if (history.length > 0 && !autoCompleting) {
+            playGameSfx('undo');
             const prev = history[history.length - 1];
             setSt(prev);
             setHistory(history.slice(0, -1));
@@ -1231,16 +1489,25 @@
       };
 
       const handleReset = () => {
-        if (initialSt) {
+        if (initialSt && !autoCompleting) {
+            playGameSfx('undo');
             setSt(JSON.parse(JSON.stringify(initialSt)));
             setHistory([]);
         }
       };
 
-      const checkWin = (ns) => { if(ns.fnd.every(f => f.length === 13)) onEnd('won'); };
+      const checkWin = (ns) => {
+        if(ns.fnd.every(f => f.length === 13)) {
+          setAutoCompleting(false);
+          playGameSfx('win');
+          onEnd('won');
+        }
+      };
 
       const handleStock = () => {
+        if (autoCompleting) return;
         saveHistory(st);
+        playGameSfx('tap');
         let ns = {...st, stock: [...st.stock], waste: [...st.waste]};
         if(ns.stock.length) { let c = ns.stock.pop(); c.up = true; ns.waste.push(c); } 
         else { ns.stock = ns.waste.reverse().map(c => ({...c, up: false})); ns.waste = []; }
@@ -1267,6 +1534,7 @@
       };
 
       const handleAutoMove = (area, colIdx, cardIdx) => {
+        if (autoCompleting) return;
         let ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
         let stack = [];
         if(area === 'waste') { if(!ns.waste.length) return; stack = [ns.waste.pop()]; }
@@ -1289,12 +1557,66 @@
         
         if(moved) {
           saveHistory(st);
+          playGameSfx('card');
           if(area === 'tab' && ns.tab[colIdx].length) ns.tab[colIdx][ns.tab[colIdx].length-1].up = true;
           setSt(ns); checkWin(ns);
         } else {
           setSt({...st}); 
         }
       };
+
+      // โหมดเก็บไพ่อัตโนมัติ (ทำงานเมื่อไพ่ในตารางหงายครบหมดแล้ว และกองจั่วว่าง)
+      const canAutoComplete = st && !autoCompleting &&
+        st.stock.length === 0 && st.waste.length <= 1 &&
+        st.tab.every(col => col.every(c => c.up)) &&
+        !st.fnd.every(f => f.length === 13);
+
+      useEffect(() => {
+        if (!autoCompleting || !st) return;
+        const timer = setTimeout(() => {
+          const suits = ['♠','♥','♣','♦'];
+          const ns = { stock: [...st.stock], waste: [...st.waste], fnd: st.fnd.map(f=>[...f]), tab: st.tab.map(t=>[...t]) };
+          let moved = false;
+
+          // เช็กไพ่ใบบนสุดของ waste ก่อน
+          if (ns.waste.length > 0) {
+            const topW = ns.waste[ns.waste.length - 1];
+            const fIdx = suits.indexOf(topW.s);
+            if ((ns.fnd[fIdx].length === 0 && topW.r === 1) || (ns.fnd[fIdx].length > 0 && ns.fnd[fIdx][ns.fnd[fIdx].length - 1].r === topW.r - 1)) {
+              ns.fnd[fIdx].push(ns.waste.pop());
+              moved = true;
+            }
+          }
+
+          // หาไพ่เลขน้อยสุดบนยอดตารางที่ขึ้นกองบนได้
+          if (!moved) {
+            let bestCol = -1, bestRank = 99;
+            for (let i = 0; i < 7; i++) {
+              const col = ns.tab[i];
+              if (!col.length) continue;
+              const c = col[col.length - 1];
+              const fIdx = suits.indexOf(c.s);
+              const f = ns.fnd[fIdx];
+              const ok = (f.length === 0 && c.r === 1) || (f.length > 0 && f[f.length - 1].r === c.r - 1);
+              if (ok && c.r < bestRank) { bestRank = c.r; bestCol = i; }
+            }
+            if (bestCol !== -1) {
+              const card = ns.tab[bestCol].pop();
+              ns.fnd[suits.indexOf(card.s)].push(card);
+              moved = true;
+            }
+          }
+
+          if (moved) {
+            playGameSfx('card');
+            setSt(ns);
+            checkWin(ns);
+          } else {
+            setAutoCompleting(false);
+          }
+        }, 85);
+        return () => clearTimeout(timer);
+      }, [autoCompleting, st]);
 
       useEffect(() => {
         const handleMove = e => { 
@@ -1328,6 +1650,7 @@
                  
                  if(tryMove(ns, stack, drag.area, drag.colIdx, tArea, tIdx)) {
                     saveHistory(st);
+                    playGameSfx('card');
                     if(drag.area === 'tab' && ns.tab[drag.colIdx].length) ns.tab[drag.colIdx][ns.tab[drag.colIdx].length-1].up = true;
                     setSt(ns); checkWin(ns);
                  } else { setSt({...st}); } 
@@ -1356,13 +1679,14 @@
         return (
           <div 
             onPointerDown={(e) => {
-              if (e.button && e.button !== 0) return;
+              if (autoCompleting || (e.button && e.button !== 0)) return;
               e.stopPropagation(); e.preventDefault();
               let stack = area === 'waste' ? [c] : (area === 'fnd' ? [c] : st.tab[col].slice(idx));
               const rect = e.currentTarget.getBoundingClientRect();
               setDrag({ area, colIdx: col, cardIdx: idx, cards: stack, startX: e.clientX, startY: e.clientY, baseX: rect.left, baseY: rect.top, dx: 0, dy: 0 });
             }}
             onTouchStart={(e) => {
+              if (autoCompleting) return;
               e.stopPropagation();
               let stack = area === 'waste' ? [c] : (area === 'fnd' ? [c] : st.tab[col].slice(idx));
               const rect = e.currentTarget.getBoundingClientRect();
@@ -1390,11 +1714,19 @@
             </div>
           )}
 
-          <div className="flex justify-between mb-4">
+          <div className="flex justify-between items-center gap-2 mb-4 flex-wrap">
             <div className="flex gap-2">
-              <button onClick={handleUndo} disabled={history.length === 0} className="px-3 py-1 bg-[#0F2547] text-white rounded text-[10px] border border-[#1E3A5F] disabled:opacity-50 font-bold shadow-md hover:bg-sky-900 transition-colors">↩️ Undo</button>
-              <button onClick={handleReset} disabled={!initialSt} className="px-3 py-1 bg-red-900/50 text-red-200 rounded text-[10px] border border-red-900/50 disabled:opacity-50 font-bold shadow-md hover:bg-red-900 transition-colors">🔄 Reset</button>
+              <button onClick={handleUndo} disabled={history.length === 0 || autoCompleting} className="px-3 py-1 bg-[#0F2547] text-white rounded text-[10px] border border-[#1E3A5F] disabled:opacity-50 font-bold shadow-md hover:bg-sky-900 transition-colors">↩️ Undo</button>
+              <button onClick={handleReset} disabled={!initialSt || autoCompleting} className="px-3 py-1 bg-red-900/50 text-red-200 rounded text-[10px] border border-red-900/50 disabled:opacity-50 font-bold shadow-md hover:bg-red-900 transition-colors">🔄 Reset</button>
             </div>
+            {canAutoComplete && (
+              <button
+                onClick={() => { playGameSfx('bonus'); setAutoCompleting(true); }}
+                className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#050811] text-[10px] font-bold shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse transition-transform active:scale-95"
+              >
+                ✨ เก็บไพ่อัตโนมัติ
+              </button>
+            )}
           </div>
           <div className="flex justify-between mb-6">
             <div className="flex gap-2">
@@ -1417,23 +1749,43 @@
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-slate-400 text-center mt-6">💡 ลากไพ่ไปวาง หรือ แตะที่ไพ่เพื่อย้ายอัตโนมัติ</div>
+          <div className="text-[10px] text-slate-400 text-center mt-6">💡 ลากไพ่ไปวาง หรือแตะที่ไพ่เพื่อย้ายอัตโนมัติ • เปิดไพ่คว่ำหมดแล้วกดเก็บอัตโนมัติได้</div>
         </div>
       );
     }
 
     // ------------------------------------------
-    // 4.5 Wordle Game
+    // 4.5 Wordle Game (340+ Words + Shake + Emoji Share Grid)
     // ------------------------------------------
     function WordleGame({ dateSeed, onEnd }) {
-      const WORDS = ["APPLE","BRAIN","CRANE","DREAM","EAGLE","FLAME","GHOST","HEART","IMAGE","JUICE","KNIFE","LEMON","MOUSE","NIGHT","OCEAN","PLANT","QUEEN","RIVER","SNAKE","TRAIN","UNION","VOICE","WATER","YOUTH","ZEBRA","ALIEN","BREAD","CHAIR","DANCE","EARTH","FRUIT","GRAPE","HOUSE","JUMBO","KINGS","LIGHT","MONEY","NURSE","ONION","PAPER","QUIET","RIGHT","SUGAR","TABLE","UNCLE","VIDEO","WATCH","YACHT","STORM","WORLD"];
-      
+      const WORDS = (
+        "ABOUT ABOVE ACTOR ADMIT ADOPT ADULT AFTER AGAIN AGENT AGREE AHEAD ALARM ALBUM ALERT ALIEN ALIVE ALLOW ALONE ALONG AMBER AMONG ANGEL ANGER ANGLE ANGRY APART APPLE APPLY ARENA ARGUE ARISE ARMOR AROMA ARROW AUDIO AVOID AWAKE AWARD AWARE " +
+        "BADGE BAKER BASIC BEACH BEARD BEAST BEGIN BEING BELLY BELOW BENCH BERRY BIRTH BLACK BLADE BLAME BLANK BLAST BLAZE BLEND BLESS BLIND BLINK BLOCK BLOOD BLOOM BOARD BONUS BOOST BOOTH BOUND BRAIN BRAND BRAVE BREAD BREAK BRICK BRIDE BRIEF BRING BROAD BROKE BROOK BROWN BRUSH BUILD BUILT BUNCH BURST BUYER " +
+        "CABIN CABLE CAMEL CANAL CANDY CARGO CARRY CARVE CATCH CAUSE CEDAR CHAIN CHAIR CHALK CHAMP CHAOS CHARM CHART CHASE CHEAP CHEAT CHECK CHEEK CHEER CHESS CHEST CHICK CHIEF CHILD CHILL CHINA CHOIR CHORD CHOSE CIDER CIVIL CLAIM CLASH CLASS CLEAN CLEAR CLERK CLICK CLIFF CLIMB CLOAK CLOCK CLONE CLOSE CLOTH CLOUD CLOWN COACH COAST COBRA COCOA COLOR COMBO COMET COMIC CORAL COUCH COULD COUNT COURT COVER CRACK CRAFT CRANE CRASH CRATE CRAWL CRAZY CREAM CREEK CREEP CREST CRISP CROSS CROWD CROWN CRUEL CRUSH CRUST CURRY CURVE CYCLE " +
+        "DAILY DAIRY DAISY DANCE DEBUT DECAY DECOR DELAY DELTA DENSE DEPTH DIARY DIGIT DINER DISCO DIVER DIZZY DODGE DONUT DOUBT DOUGH DOZEN DRAFT DRAIN DRAMA DREAM DRESS DRIFT DRILL DRINK DRIVE DRONE DROWN DWARF " +
+        "EAGER EAGLE EARLY EARTH EIGHT ELBOW ELDER ELECT ELITE EMAIL EMBER EMPTY ENEMY ENJOY ENTER ENTRY EQUAL EQUIP ERASE ERROR ESSAY EVENT EVERY EXACT EXTRA " +
+        "FABLE FAINT FAIRY FAITH FALSE FANCY FAULT FAVOR FEAST FENCE FERRY FETCH FEVER FIBER FIELD FIERY FIFTH FIFTY FIGHT FINAL FIRST FLAME FLASH FLASK FLEET FLESH FLICK FLINT FLOAT FLOCK FLOOD FLOOR FLORA FLOUR FLUID FLUSH FLUTE FOCUS FOGGY FORCE FORGE FORTH FORTY FORUM FOUND FRAME FRANK FRESH FRIED FRONT FROST FROWN FROZE FRUIT FUDGE FULLY FUNNY FUZZY " +
+        "GAMER GHOST GIANT GIVEN GLARE GLASS GLAZE GLEAM GLIDE GLOBE GLOOM GLORY GLOSS GLOVE GNOME GOOSE GRACE GRADE GRAIN GRAND GRANT GRAPE GRAPH GRASP GRASS GRAVE GRAVY GREAT GREEN GREET GRIEF GRILL GRIND GROOM GROUP GROVE GROWL GROWN GUARD GUESS GUEST GUIDE GUILD " +
+        "HABIT HAPPY HARDY HARSH HASTE HATCH HAVEN HEART HEAVY HEDGE HELLO HIPPO HOBBY HONEY HONOR HORSE HOTEL HOUND HOUSE HOVER HUMAN HUMID HUMOR HURRY HUSKY " +
+        "ICING IDEAL IGLOO IMAGE INDEX INDIE INNER INPUT IRONY ISSUE IVORY JELLY JEWEL JOINT JOKER JOLLY JUDGE JUICE JUICY JUMBO KAYAK KEBAB KNEEL KNIFE KNOCK KNOWN KOALA " +
+        "LABEL LABOR LARGE LASER LATCH LATER LATTE LAUGH LAYER LEARN LEASE LEAST LEAVE LEDGE LEGAL LEMON LEVEL LEVER LIGHT LILAC LIMIT LINEN LLAMA LOBBY LOCAL LODGE LOFTY LOGIC LOOSE LOTUS LOVER LOWER LOYAL LUCID LUCKY LUNAR LUNCH LYRIC " +
+        "MAGIC MAGMA MAJOR MAKER MANGA MANGO MANOR MAPLE MARCH MARRY MARSH MATCH MAYOR MEDAL MEDIA MEDIC MELON MERCY MERGE MERIT MERRY METAL METER METRO MICRO MIDST MIGHT MILKY MIMIC MINER MINOR MINUS MOCHA MODEL MODEM MOIST MONEY MONTH MOODY MOOSE MORAL MOTEL MOTIF MOTOR MOTTO MOUND MOUNT MOUSE MOUTH MOVIE MUDDY MUMMY MUNCH MURAL MUSIC " +
+        "NACHO NAIVE NERVE NEVER NEWER NEWLY NICHE NIECE NIGHT NINJA NINTH NOBLE NOISE NOISY NOMAD NORTH NOTCH NOVEL NUDGE NURSE NYLON OASIS OCEAN OFFER OFTEN OLDER OLIVE OMEGA ONION ONSET OPERA OPTIC ORBIT ORDER ORGAN OTHER OTTER OUNCE OUTER OWNER OXIDE OZONE " +
+        "PAINT PANDA PANEL PANIC PAPER PARKA PARTY PASTA PASTE PATCH PATIO PAUSE PEACE PEACH PEARL PECAN PEDAL PENNY PERCH PERIL PESTO PETAL PHASE PHONE PHOTO PIANO PIECE PILOT PINCH PIPER PITCH PIVOT PIXEL PIXIE PIZZA PLACE PLAID PLAIN PLANE PLANK PLANT PLATE PLAZA PLEAD PLUCK PLUMB PLUME PLUMP PLUSH POINT POISE POKER POLAR POLKA POPPY PORCH POUCH POUND POWER PRANK PRAWN PRESS PRICE PRIDE PRIME PRINT PRIOR PRISM PRIZE PROBE PRONE PROOF PROSE PROUD PROVE PROWL PROXY PRUNE PULSE PUNCH PUPIL PUPPY PUREE PURGE PURSE " +
+        "QUAKE QUART QUEEN QUERY QUEST QUEUE QUICK QUIET QUILL QUILT QUIRK QUITE QUOTA QUOTE RADAR RADIO RAINY RAISE RALLY RAMEN RANCH RANGE RAPID RATIO RAVEN REACH REACT READY REALM REBEL RECAP REFER REGAL REIGN RELAX RELAY RELIC REMIX RENEW REPAY REPLY RESET RESIN RETRO RETRY REUSE RHINO RHYME RIDER RIDGE RIGHT RIGID RINSE RIPEN RISEN RISKY RIVAL RIVER ROAST ROBIN ROBOT ROCKY RODEO ROGUE ROOMY ROUGH ROUND ROUTE ROVER ROYAL RUGBY RULER RUMBA RUMOR RURAL RUSTY " +
+        "SAINT SALAD SALON SALSA SALTY SANDY SANTA SATIN SAUCE SAUNA SAVOR SAVVY SCALE SCARE SCARF SCARY SCENE SCENT SCOOP SCOPE SCORE SCOUT SCRAP SCREW SCRUB SEDAN SENSE SERVE SETUP SEVEN SHADE SHADY SHAFT SHAKE SHALL SHAME SHAPE SHARD SHARE SHARK SHARP SHAVE SHAWL SHEEP SHEER SHEET SHELF SHELL SHIFT SHINE SHINY SHIRT SHOCK SHOOT SHORE SHORT SHOUT SHOVE SHOWN SHRUB SHRUG SIGHT SIGMA SILKY SILLY SINCE SIREN SIXTH SIXTY SKATE SKIER SKILL SKIRT SKULL SKUNK SLACK SLANG SLANT SLASH SLATE SLEEK SLEEP SLEET SLICE SLICK SLIDE SLIME SLING SLOPE SLOTH SLUMP SLURP SLUSH SMACK SMALL SMART SMASH SMEAR SMELL SMILE SMIRK SMITH SMOKE SMOKY SNACK SNAIL SNAKE SNARE SNARL SNEAK SNEER SNIFF SNIPE SNOOP SNORE SNORT SNOUT SNOWY SOAPY SOBER SOGGY SOLAR SOLID SOLVE SONAR SONIC SORRY SOUND SOUTH SPACE SPADE SPARE SPARK SPAWN SPEAK SPEAR SPECK SPEED SPELL SPEND SPENT SPICE SPICY SPIKE SPILL SPINE SPIRE SPITE SPLIT SPOIL SPOKE SPOOF SPOOK SPOOL SPOON SPORE SPORT SPOUT SPRAY SPREE SQUAD SQUAT STACK STAFF STAGE STAIN STAIR STAKE STALE STALK STALL STAMP STAND STARE STARK START STASH STATE STEAD STEAK STEAL STEAM STEEL STEEP STEER STERN STICK STIFF STILL STING STINK STOCK STOIC STOLE STOMP STONE STONY STOOD STOOL STOOP STORE STORK STORM STORY STOUT STOVE STRAP STRAW STRAY STRIP STRUT STUCK STUDY STUFF STUMP STUNG STUNT STYLE SUAVE SUGAR SUITE SUNNY SUPER SURGE SUSHI SWAMP SWARM SWEAR SWEAT SWEEP SWEET SWELL SWEPT SWIFT SWING SWIRL SWISH SWOOP SWORD SWORE SWORN SYRUP " +
+        "TABLE TABOO TACKY TAKEN TALLY TALON TANGO TANGY TAPER TARDY TAROT TASTE TASTY TAUNT TEACH TEARY TEASE TEDDY TEETH TEMPO TENOR TENSE TENTH TERRA THANK THEFT THEIR THEME THERE THESE THETA THICK THIEF THING THINK THIRD THORN THOSE THREE THREW THROB THROW THUMB THUMP THYME TIARA TIDAL TIGER TIGHT TIMER TIMID TITAN TITLE TOAST TODAY TOKEN TONAL TONIC TOOTH TOPAZ TOPIC TORCH TORSO TOTAL TOTEM TOUCH TOUGH TOWEL TOWER TOXIC TRACE TRACK TRACT TRADE TRAIL TRAIN TRAIT TRASH TREAD TREAT TREND TRIAD TRIAL TRIBE TRICK TRIED TROLL TROOP TROUT TROVE TRUCE TRUCK TRULY TRUMP TRUNK TRUST TRUTH TULIP TUNIC TURBO TUTOR TWANG TWEAK TWEED TWEET TWICE TWINE TWIRL TWIST " +
+        "ULTRA UNCLE UNDER UNDUE UNFIT UNIFY UNION UNITE UNITY UNLIT UNTIL UNZIP UPPER UPSET URBAN USAGE USHER USING USUAL UTTER VAGUE VALET VALID VALOR VALUE VALVE VAPOR VAULT VEGAN VENOM VENUE VERGE VERSE VIDEO VIGIL VIGOR VILLA VINYL VIOLA VIPER VIRAL VIRUS VISIT VISOR VISTA VITAL VIVID VOCAL VODKA VOGUE VOICE VOILA VOTER VOUCH VOWEL " +
+        "WACKY WAFER WAGER WAGON WAIST WAIVE WALTZ WASTE WATCH WATER WAVER WEARY WEAVE WEDGE WEIGH WEIRD WHACK WHALE WHARF WHEAT WHEEL WHERE WHICH WHIFF WHILE WHINE WHIRL WHISK WHITE WHOLE WHOOP WHOSE WIDEN WIDER WIDOW WIDTH WIELD WINCE WINCH WINDY WISER WITCH WITTY WOMAN WOMEN WOODY WORLD WORRY WORSE WORST WORTH WOULD WOUND WOVEN WRATH WREAK WRECK WRING WRIST WRITE WRONG WROTE YACHT YEARN YEAST YIELD YOUNG YOUTH ZEBRA ZESTY"
+      ).split(' ');
+
       const [target, setTarget] = useState("");
       const [guesses, setGuesses] = useStickyState([], `bma_wdl_g_${dateSeed}`);
       const [curr, setCurr] = useStickyState("", `bma_wdl_c_${dateSeed}`);
       const [isChecking, setIsChecking] = useState(false);
       const [wordErr, setWordErr] = useState('');
-      const [validDict, setValidDict] = useState(new Set(WORDS));
+      const [shakeRow, setShakeRow] = useState(false);
+      const [validDict, setValidDict] = useState(() => new Set(WORDS));
 
       useEffect(() => {
         fetch('https://raw.githubusercontent.com/charlesreid1/five-letter-words/master/sgb-words.txt')
@@ -1442,93 +1794,122 @@
             const wordList = text.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length === 5);
             setValidDict(new Set([...WORDS, ...wordList]));
           })
-          .catch(e => console.warn("ไม่สามารถโหลดพจนานุกรมสำรองได้ ใช้ฐานข้อมูลหลักแทน"));
+          .catch(() => console.warn("ไม่สามารถโหลดพจนานุกรมสำรองได้ ใช้ฐานข้อมูลหลักแทน"));
       }, []);
 
       useEffect(() => {
-        const rng = new PRNG(dateSeed + '_wordle2');
-        setTarget(WORDS[rng.nextInt(0, WORDS.length-1)]);
+        const rng = new PRNG(dateSeed + '_wordle3');
+        setTarget(WORDS[rng.nextInt(0, WORDS.length - 1)]);
       }, [dateSeed]);
 
+      const evaluateGuess = (guessStr) => {
+        const res = Array(5).fill('absent');
+        const targetChars = target.split('');
+        for (let i = 0; i < 5; i++) {
+          if (guessStr[i] === targetChars[i]) {
+            res[i] = 'correct';
+            targetChars[i] = null;
+          }
+        }
+        for (let i = 0; i < 5; i++) {
+          if (res[i] === 'correct') continue;
+          const idx = targetChars.indexOf(guessStr[i]);
+          if (idx !== -1) {
+            res[i] = 'present';
+            targetChars[idx] = null;
+          }
+        }
+        return res;
+      };
+
+      const buildShareGrid = (guessList) => {
+        return guessList
+          .map(g => evaluateGuess(g).map(st => st === 'correct' ? '🟩' : st === 'present' ? '🟨' : '⬛').join(''))
+          .join('\n');
+      };
+
+      const triggerShakeError = (msg) => {
+        playGameSfx('error');
+        setWordErr(msg);
+        setShakeRow(true);
+        setTimeout(() => setShakeRow(false), 600);
+        setTimeout(() => setWordErr(''), 2000);
+      };
+
       const onKey = async (k) => {
-        if(isChecking) return;
-        if(k === 'ENTER') {
-          if(curr.length !== 5) return;
+        if (isChecking || !target) return;
+        if (k === 'ENTER') {
+          if (curr.length !== 5) {
+            triggerShakeError('กรุณาพิมพ์ให้ครบ 5 ตัวอักษร');
+            return;
+          }
           setIsChecking(true);
-          
           const isValid = validDict.has(curr);
           setIsChecking(false);
-          
-          if(!isValid) {
-             setWordErr('คำนี้ไม่มีอยู่ในพจนานุกรม');
-             setTimeout(() => setWordErr(''), 2000);
-             return;
+
+          if (!isValid) {
+            triggerShakeError('คำนี้ไม่มีอยู่ในพจนานุกรม');
+            return;
           }
-          
+
           const newG = [...guesses, curr];
           setGuesses(newG);
           setCurr("");
-          if(curr === target) onEnd('won', { score: newG.length, answer: target });
-          else if(newG.length >= 6) onEnd('lost', { score: 6, answer: target });
-        } else if(k === 'DEL') {
+          const shareGrid = buildShareGrid(newG);
+
+          if (curr === target) {
+            playGameSfx('win');
+            onEnd('won', { score: newG.length, answer: target, shareGrid });
+          } else if (newG.length >= 6) {
+            playGameSfx('lose');
+            onEnd('lost', { score: 6, answer: target, shareGrid });
+          } else {
+            playGameSfx('merge');
+          }
+        } else if (k === 'DEL') {
+          if (curr.length > 0) playGameSfx('undo');
           setCurr(curr.slice(0, -1));
-        } else if(curr.length < 5) {
+        } else if (curr.length < 5) {
+          playGameSfx('tap');
           setCurr(curr + k);
         }
       };
 
       useEffect(() => {
         const handleKeyDown = (e) => {
-          if(e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key.toUpperCase();
-          if(key === 'ENTER') onKey('ENTER');
-          else if(key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
-          else if(/^[A-Z]$/.test(key)) onKey(key);
+          if (key === 'ENTER') onKey('ENTER');
+          else if (key === 'BACKSPACE' || key === 'DELETE') onKey('DEL');
+          else if (/^[A-Z]$/.test(key)) onKey(key);
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
       }, [curr, guesses, target, onEnd, isChecking, validDict]);
 
-      if(!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+      if (!target) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
-      const getStatuses = (guessStr) => {
-        const statuses = Array(5).fill('bg-slate-700 text-slate-300 border-slate-700 opacity-60');
-        const targetChars = target.split('');
-        
-        for(let i = 0; i < 5; i++) {
-          if(guessStr[i] === targetChars[i]) {
-            statuses[i] = 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
-            targetChars[i] = null; 
-          }
-        }
-        
-        for(let i = 0; i < 5; i++) {
-          if(statuses[i].includes('bg-emerald-500')) continue;
-          
-          const targetIndex = targetChars.indexOf(guessStr[i]);
-          if(targetIndex !== -1) {
-             statuses[i] = 'bg-amber-500 text-white border-amber-500';
-             targetChars[targetIndex] = null; 
-          }
-        }
-        return statuses;
+      const statusToCls = (st) => {
+        if (st === 'correct') return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]';
+        if (st === 'present') return 'bg-amber-500 text-white border-amber-500';
+        return 'bg-slate-700 text-slate-300 border-slate-700 opacity-60';
       };
 
       const rows = [];
-      for(let i=0; i<6; i++) {
-        if(i < guesses.length) {
-          const statuses = getStatuses(guesses[i]);
+      for (let i = 0; i < 6; i++) {
+        if (i < guesses.length) {
+          const evals = evaluateGuess(guesses[i]);
           rows.push(
             <div key={i} className="flex gap-1.5 justify-center">
               {guesses[i].split('').map((char, j) => (
-                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 transition-all duration-700 ease-in-out transform ${statuses[j]}`} style={{ animation: `flipIn 0.6s ease forwards ${j * 0.15}s` }}>{char}</div>
+                <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 transition-all duration-500 ${statusToCls(evals[j])}`} style={{ animation: `flipIn 0.45s ease forwards ${j * 0.08}s` }}>{char}</div>
               ))}
             </div>
           );
-        } else if(i === guesses.length) {
+        } else if (i === guesses.length) {
           rows.push(
-            <div key={i} className="flex gap-1.5 justify-center">
-              {[0,1,2,3,4].map(j => (
+            <div key={i} className={`flex gap-1.5 justify-center ${shakeRow ? 'animate-shake' : ''}`}>
+              {[0, 1, 2, 3, 4].map(j => (
                 <div key={j} className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-xl font-bold rounded border-2 transition-all duration-100 ${curr[j] ? 'border-sky-400 scale-105 drop-shadow-[0_0_5px_rgba(56,189,248,0.5)]' : 'border-[#1E3A5F]'} bg-[#050811]`}>{curr[j] || ''}</div>
               ))}
             </div>
@@ -1536,36 +1917,38 @@
         } else {
           rows.push(
             <div key={i} className="flex gap-1.5 justify-center">
-              {[0,1,2,3,4].map(j => <div key={j} className="w-10 h-10 sm:w-12 sm:h-12 rounded border-2 border-[#1E3A5F]/40 bg-[#050811]/50"></div>)}
+              {[0, 1, 2, 3, 4].map(j => <div key={j} className="w-10 h-10 sm:w-12 sm:h-12 rounded border-2 border-[#1E3A5F]/40 bg-[#050811]/50"></div>)}
             </div>
           );
         }
       }
 
       const keyColor = (char) => {
-        let stat = 'bg-[#0F2547] text-white border border-[#1E3A5F]';
-        for(let g of guesses) {
-          const statuses = getStatuses(g);
-          for(let i=0; i<5; i++) {
-            if(g[i] === char) {
-              if(statuses[i].includes('bg-emerald-500')) return 'bg-emerald-500 text-white border border-emerald-400';
-              if(statuses[i].includes('bg-amber-500')) stat = 'bg-amber-500 text-white border border-amber-400';
-              else if(stat !== 'bg-amber-500 text-white border border-amber-400') stat = 'bg-slate-800 text-slate-500 border border-slate-700';
+        let best = 'unused';
+        for (let g of guesses) {
+          const evals = evaluateGuess(g);
+          for (let i = 0; i < 5; i++) {
+            if (g[i] === char) {
+              if (evals[i] === 'correct') return 'bg-emerald-500 text-white border border-emerald-400';
+              if (evals[i] === 'present') best = 'present';
+              else if (best === 'unused') best = 'absent';
             }
           }
         }
-        return stat;
+        if (best === 'present') return 'bg-amber-500 text-white border border-amber-400';
+        if (best === 'absent') return 'bg-slate-800 text-slate-500 border border-slate-700';
+        return 'bg-[#0F2547] text-white border border-[#1E3A5F]';
       };
 
       return (
         <div className="flex flex-col items-center justify-center space-y-6 w-full h-full relative">
-          {wordErr && <div className="absolute top-0 bg-red-500 text-white font-bold px-4 py-2 rounded-lg z-50 shadow-xl">{wordErr}</div>}
+          {wordErr && <div className="absolute top-0 bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs z-50 shadow-xl animate-bounce">{wordErr}</div>}
           <div className="space-y-1.5">{rows}</div>
           <div className="w-full max-w-[360px] space-y-1.5 mt-4">
             {[['Q','W','E','R','T','Y','U','I','O','P'],['A','S','D','F','G','H','J','K','L'],['ENTER','Z','X','C','V','B','N','M','DEL']].map((row, i) => (
               <div key={i} className="flex justify-center gap-1">
                 {row.map(k => (
-                  <button key={k} onClick={()=>onKey(k)} className={`h-11 sm:h-12 rounded font-bold text-xs flex items-center justify-center transition-colors active:scale-95 ${k.length>1?'px-2':'flex-1'} ${keyColor(k)}`}>{k}</button>
+                  <button key={k} onClick={() => onKey(k)} className={`h-11 sm:h-12 rounded font-bold text-xs flex items-center justify-center transition-colors active:scale-95 ${k.length > 1 ? 'px-2' : 'flex-1'} ${keyColor(k)}`}>{k}</button>
                 ))}
               </div>
             ))}
@@ -1575,30 +1958,68 @@
     }
 
     // ------------------------------------------
-    // 4.6 Snake Game
+    // 4.6 Snake Game (Daily Seed Map + Golden Apple + Swipe)
     // ------------------------------------------
     function SnakeGame({ dateSeed, isPlaying, isPaused, onEnd }) {
       const ROWS = 15;
       const COLS = 15;
+
+      // สร้างกำแพงสิ่งกีดขวางประจำวัน (ทุกคนได้แผนที่เดียวกัน, เว้นแถวเริ่มและรอบจุดเกิดให้ปลอดภัย)
+      const walls = React.useMemo(() => {
+        const rng = new PRNG(dateSeed + '_snake_walls_v1');
+        const count = rng.nextInt(5, 6);
+        const list = [];
+        let guard = 0;
+        while (list.length < count && guard < 200) {
+          guard++;
+          const r = rng.nextInt(1, ROWS - 2);
+          const c = rng.nextInt(1, COLS - 2);
+          if (r === 7) continue; // เว้นเลนแนวนอนเริ่มต้น
+          if (Math.abs(r - 7) <= 2 && Math.abs(c - 7) <= 2) continue;
+          if (list.some(w => Math.abs(w.r - r) + Math.abs(w.c - c) < 2)) continue;
+          list.push({ r, c });
+        }
+        return list;
+      }, [dateSeed]);
+
+      const spawnSeededFood = useCallback((currSnake, step, extraExclude = null) => {
+        const empty = [];
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const blocked =
+              walls.some(w => w.r === r && w.c === c) ||
+              currSnake.some(s => s.r === r && s.c === c) ||
+              (extraExclude && extraExclude.r === r && extraExclude.c === c);
+            if (!blocked) empty.push({ r, c });
+          }
+        }
+        if (empty.length === 0) return null;
+        const rng = new PRNG(`${dateSeed}_snake_food_${step}`);
+        return empty[rng.nextInt(0, empty.length - 1)];
+      }, [dateSeed, walls]);
+
       const [snake, setSnake] = useStickyState([{ r: 7, c: 7 }], `bma_snake_s_${dateSeed}`);
-      const [food, setFood] = useStickyState({ r: 3, c: 3 }, `bma_snake_f_${dateSeed}`);
+      const [foodStep, setFoodStep] = useStickyState(0, `bma_snake_step_${dateSeed}`);
+      const [food, setFood] = useStickyState(() => spawnSeededFood([{ r: 7, c: 7 }], 0), `bma_snake_f_${dateSeed}`);
+      const [goldFood, setGoldFood] = useStickyState(null, `bma_snake_gf_${dateSeed}`);
       const [dir, setDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_d_${dateSeed}`);
       const [nextDir, setNextDir] = useStickyState({ r: 0, c: 1 }, `bma_snake_nd_${dateSeed}`);
       const [isGameOver, setIsGameOver] = useStickyState(false, `bma_snake_go_${dateSeed}`);
       const [score, setScore] = useStickyState(0, `bma_snake_sc_${dateSeed}`);
+      const [bonusToast, setBonusToast] = useState(false);
 
-      const spawnFood = (currSnake) => {
-        let r, c, isSafe;
-        do {
-          r = Math.floor(Math.random() * ROWS);
-          c = Math.floor(Math.random() * COLS);
-          isSafe = !currSnake.some(s => s.r === r && s.c === c);
-        } while(!isSafe);
-        return { r, c };
-      };
+      const touchStartRef = useRef(null);
+
+      // ป้องกันกรณีอาหารค้างจากเวอร์ชันเก่าไปทับกำแพง
+      useEffect(() => {
+        if (!food || walls.some(w => w.r === food.r && w.c === food.c)) {
+          setFood(spawnSeededFood(snake, foodStep));
+        }
+      }, [walls]);
 
       useEffect(() => {
         const handleKeyDown = (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           const key = e.key;
           if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) e.preventDefault();
           if (['ArrowUp', 'w', 'W'].includes(key) && dir.r !== 1) setNextDir({ r: -1, c: 0 });
@@ -1612,61 +2033,148 @@
 
       useEffect(() => {
         if (isGameOver || !isPlaying || isPaused) return;
-        
+
         const interval = setInterval(() => {
-            const head = snake[0];
-            const d = nextDir;
-            let newR = (head.r + d.r + ROWS) % ROWS;
-            let newC = (head.c + d.c + COLS) % COLS;
-            
-            const newHead = { r: newR, c: newC };
-            
-            if (snake.some((s, idx) => idx !== snake.length - 1 && s.r === newR && s.c === newC)) {
+          const head = snake[0];
+          const d = nextDir;
+          const newR = (head.r + d.r + ROWS) % ROWS;
+          const newC = (head.c + d.c + COLS) % COLS;
+          const newHead = { r: newR, c: newC };
+
+          const hitSelf = snake.some((s, idx) => idx !== snake.length - 1 && s.r === newR && s.c === newC);
+          const hitWall = walls.some(w => w.r === newR && w.c === newC);
+
+          if (hitSelf || hitWall) {
+            playGameSfx('bomb');
+            setIsGameOver(true);
+            onEnd('ended', { score });
+            return;
+          }
+
+          const newSnake = [newHead, ...snake];
+          let nextScore = score;
+          let grew = false;
+          let nextGold = goldFood ? { ...goldFood, ticksLeft: goldFood.ticksLeft - 1 } : null;
+
+          // กินแอปเปิลทองคำ (+3 แต้ม)
+          if (goldFood && newR === goldFood.r && newC === goldFood.c) {
+            nextScore += 3;
+            grew = true;
+            nextGold = null;
+            playGameSfx('bonus');
+            setBonusToast(true);
+            setTimeout(() => setBonusToast(false), 1100);
+          }
+
+          // กินแอปเปิลแดงปกติ (+1 แต้ม)
+          if (food && newR === food.r && newC === food.c) {
+            nextScore += 1;
+            grew = true;
+            playGameSfx('merge');
+            const nextStep = foodStep + 1;
+            setFoodStep(nextStep);
+            const spawned = spawnSeededFood(newSnake, nextStep, nextGold);
+            if (!spawned) {
+              setScore(nextScore);
               setIsGameOver(true);
-              onEnd('ended', { score: score });
+              playGameSfx('win');
+              onEnd('ended', { score: nextScore });
               return;
             }
-            
-            const newSnake = [newHead, ...snake];
-            if (newR === food.r && newC === food.c) {
-              setScore(score + 1);
-              setFood(spawnFood(newSnake));
-            } else {
-              newSnake.pop();
+            setFood(spawned);
+
+            // ทุกๆ 4 ลูกที่กิน จะสุ่มเกิดแอปเปิลทองคำจับเวลา 32 จังหวะ
+            if (nextStep % 4 === 0 && !nextGold) {
+              const gSpot = spawnSeededFood(newSnake, nextStep + 1000, spawned);
+              if (gSpot) nextGold = { ...gSpot, ticksLeft: 32 };
             }
-            
-            setSnake(newSnake);
-            setDir(d);
+          }
+
+          if (!grew) newSnake.pop();
+          if (nextGold && nextGold.ticksLeft <= 0) nextGold = null;
+
+          if (nextScore !== score) setScore(nextScore);
+          setGoldFood(nextGold);
+          setSnake(newSnake);
+          setDir(d);
         }, 150);
+
         return () => clearInterval(interval);
-      }, [snake, nextDir, food, isGameOver, score, isPlaying, isPaused, onEnd]);
+      }, [snake, nextDir, food, goldFood, foodStep, walls, isGameOver, score, isPlaying, isPaused, onEnd, spawnSeededFood]);
+
+      const onTouchStart = (e) => {
+        if (!e.touches?.[0]) return;
+        touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      };
+
+      const onTouchEnd = (e) => {
+        if (!touchStartRef.current || !e.changedTouches?.[0]) return;
+        const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+        const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx > 0 && dir.c !== -1) setNextDir({ r: 0, c: 1 });
+          else if (dx < 0 && dir.c !== 1) setNextDir({ r: 0, c: -1 });
+        } else {
+          if (dy > 0 && dir.r !== -1) setNextDir({ r: 1, c: 0 });
+          else if (dy < 0 && dir.r !== 1) setNextDir({ r: -1, c: 0 });
+        }
+      };
 
       return (
-        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none touch-none">
-          <div className="font-bold text-emerald-400 text-lg bg-[#0F2547] px-6 py-1.5 rounded-full border border-[#1E3A5F]">
-            คะแนน: {score} 🍎
+        <div
+          className="flex flex-col items-center justify-center space-y-3 w-full h-full select-none touch-none relative"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            <div className="font-bold text-emerald-400 text-base bg-[#0F2547] px-5 py-1.5 rounded-full border border-[#1E3A5F]">
+              คะแนน: {score} 🍎
+            </div>
+            {goldFood && (
+              <div className="font-mono font-bold text-xs text-amber-300 bg-amber-950/60 px-3 py-1.5 rounded-full border border-amber-400/60 animate-pulse">
+                🌟 +3 แต้ม ({Math.ceil(goldFood.ticksLeft * 0.15)}s)
+              </div>
+            )}
           </div>
+
+          {bonusToast && (
+            <div className="absolute top-12 z-30 px-3 py-1 rounded-full bg-amber-400 text-[#050811] text-xs font-bold shadow-lg animate-bounce">
+              🌟 โบนัส +3 แต้ม!
+            </div>
+          )}
+
           <div className="bg-slate-800 border-4 border-[#1E3A5F] rounded-lg p-1 relative w-full max-w-[320px] aspect-square mx-auto">
             {Array.from({ length: ROWS }).map((_, r) => (
-              <div key={r} className="flex" style={{ height: `${100/ROWS}%` }}>
+              <div key={r} className="flex" style={{ height: `${100 / ROWS}%` }}>
                 {Array.from({ length: COLS }).map((_, c) => {
                   const isSnake = snake.some(s => s.r === r && s.c === c);
                   const isHead = snake[0].r === r && snake[0].c === c;
-                  const isFood = food.r === r && food.c === c;
-                  
+                  const isFood = food && food.r === r && food.c === c;
+                  const isGold = goldFood && goldFood.r === r && goldFood.c === c;
+                  const isWall = walls.some(w => w.r === r && w.c === c);
+
                   return (
-                    <div key={c} className="flex-1 border-[0.5px] border-slate-700/30" style={{
-                      backgroundColor: isHead ? '#34D399' : isSnake ? '#10B981' : 'transparent',
-                      borderRadius: isHead ? '20%' : isSnake ? '10%' : '0'
-                    }}>
-                      {isFood && <div className="w-full h-full bg-red-500 rounded-full scale-[0.6] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
+                    <div
+                      key={c}
+                      className="flex-1 border-[0.5px] border-slate-700/30 flex items-center justify-center"
+                      style={{
+                        backgroundColor: isWall ? '#475569' : isHead ? '#34D399' : isSnake ? '#10B981' : 'transparent',
+                        borderRadius: isWall ? '20%' : isHead ? '25%' : isSnake ? '12%' : '0',
+                        boxShadow: isWall ? 'inset 0 0 0 1px rgba(255,255,255,0.2)' : 'none'
+                      }}
+                    >
+                      {isFood && <div className="w-full h-full bg-red-500 rounded-full scale-[0.62] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.85)]" />}
+                      {isGold && <div className="w-full h-full bg-amber-300 rounded-full scale-[0.78] animate-ping shadow-[0_0_12px_rgba(251,191,36,1)]" />}
                     </div>
                   );
                 })}
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-3 gap-2 w-48 mt-4">
+
+          <div className="grid grid-cols-3 gap-2 w-48 mt-2">
             <div></div>
             <button onClick={(e) => { e.preventDefault(); if (dir.r !== 1) setNextDir({ r: -1, c: 0 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">⬆️</button>
             <div></div>
@@ -1674,148 +2182,175 @@
             <button onClick={(e) => { e.preventDefault(); if (dir.r !== -1) setNextDir({ r: 1, c: 0 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">⬇️</button>
             <button onClick={(e) => { e.preventDefault(); if (dir.c !== -1) setNextDir({ r: 0, c: 1 }); }} className="bg-[#0F2547] border border-[#1E3A5F] active:bg-white active:text-[#050811] rounded-lg p-3 text-xl">➡️</button>
           </div>
-          <div className="text-[10px] text-slate-400 mt-2 text-center">💡 ใช้ลูกศรหรือ W A S D บนคีย์บอร์ด หรือปุ่มบนหน้าจอ<br/>งูสามารถเดินทะลุขอบได้</div>
+          <div className="text-[10px] text-slate-400 text-center leading-relaxed">
+            💡 ปัดนิ้วบนกระดาน, ใช้ปุ่มลูกศร หรือ W A S D • ทะลุขอบได้แต่ห้ามชนกำแพงสีเทาประจำวัน
+          </div>
         </div>
       );
     }
 
     // ------------------------------------------
-    // 4.7 Game 2048
+    // 4.7 Game 2048 (Pop Animation + 10-Move Warning + Smooth Swipe)
     // ------------------------------------------
     function Game2048({ dateSeed, onEnd }) {
-      const [board, setBoard] = useStickyState(Array(4).fill().map(()=>Array(4).fill(0)), `bma_2048_b_${dateSeed}`);
+      const [board, setBoard] = useStickyState(Array(4).fill().map(() => Array(4).fill(0)), `bma_2048_b_${dateSeed}`);
       const [score, setScore] = useStickyState(0, `bma_2048_s_${dateSeed}`);
       const [moves, setMoves] = useStickyState(100, `bma_2048_m_${dateSeed}`);
       const [maxTile, setMaxTile] = useStickyState(0, `bma_2048_max_${dateSeed}`);
       const [isFirst, setIsFirst] = useStickyState(true, `bma_2048_f_${dateSeed}`);
       const [rngState, setRngState] = useStickyState(0, `bma_2048_r_${dateSeed}`);
-      
+      const [poppedSet, setPoppedSet] = useState([]);
+      const [moveTick, setMoveTick] = useState(0);
+
+      const touchStartRef = useRef(null);
       const rng = useRef(new PRNG(dateSeed + '_2048'));
       useEffect(() => {
-         for(let i=0; i<rngState; i++) rng.current.next();
+        for (let i = 0; i < rngState; i++) rng.current.next();
       }, []);
 
       const addRandomTile = (b) => {
-        let empty = [];
-        for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(b[r][c] === 0) empty.push({r, c});
-        if(empty.length === 0) return b;
-        
-        let spot = empty[rng.current.nextInt(0, empty.length - 1)];
-        let val = rng.current.nextFloat() < 0.9 ? 2 : 4;
+        const empty = [];
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (b[r][c] === 0) empty.push({ r, c });
+        if (empty.length === 0) return { board: b, spot: null };
+
+        const spot = empty[rng.current.nextInt(0, empty.length - 1)];
+        const val = rng.current.nextFloat() < 0.9 ? 2 : 4;
         setRngState(p => p + 2);
         b[spot.r][spot.c] = val;
-        return b;
+        return { board: b, spot };
       };
 
       useEffect(() => {
         if (isFirst) {
-          let b = Array(4).fill().map(()=>Array(4).fill(0));
-          b = addRandomTile(b);
-          b = addRandomTile(b);
+          let b = Array(4).fill().map(() => Array(4).fill(0));
+          b = addRandomTile(b).board;
+          b = addRandomTile(b).board;
           setBoard(b);
           setIsFirst(false);
           let mT = 0;
-          for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(b[r][c] > mT) mT = b[r][c];
+          for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (b[r][c] > mT) mT = b[r][c];
           setMaxTile(mT);
         }
       }, [isFirst]);
 
       const handleMove = (dir) => {
-         if (moves <= 0) return;
-         let b = board.map(row => [...row]);
-         let moved = false;
-         let gainedScore = 0;
+        if (moves <= 0) return;
+        let moved = false;
+        let gainedScore = 0;
 
-         const rotateLeft = (matrix) => {
-            const result = [];
-            for(let c=3; c>=0; c--) {
-               const newRow = [];
-               for(let r=0; r<4; r++) newRow.push(matrix[r][c]);
-               result.push(newRow);
-            }
-            return result;
-         };
-         
-         const rotateRight = (matrix) => {
-            const result = [];
-            for(let c=0; c<4; c++) {
-               const newRow = [];
-               for(let r=3; r>=0; r--) newRow.push(matrix[r][c]);
-               result.push(newRow);
-            }
-            return result;
-         };
+        const rotateLeft = (matrix) => {
+          const result = [];
+          for (let c = 3; c >= 0; c--) {
+            const newRow = [];
+            for (let r = 0; r < 4; r++) newRow.push(matrix[r][c]);
+            result.push(newRow);
+          }
+          return result;
+        };
 
-         let workBoard = b;
-         if (dir === 'Right') { workBoard = rotateRight(rotateRight(b)); }
-         else if (dir === 'Up') { workBoard = rotateLeft(b); }
-         else if (dir === 'Down') { workBoard = rotateRight(b); }
+        const rotateRight = (matrix) => {
+          const result = [];
+          for (let c = 0; c < 4; c++) {
+            const newRow = [];
+            for (let r = 3; r >= 0; r--) newRow.push(matrix[r][c]);
+            result.push(newRow);
+          }
+          return result;
+        };
 
-         for(let r=0; r<4; r++) {
-            let row = workBoard[r].filter(val => val !== 0);
-            for(let i=0; i<row.length-1; i++) {
-               if(row[i] !== 0 && row[i] === row[i+1]) {
-                  row[i] *= 2;
-                  gainedScore += row[i];
-                  row[i+1] = 0;
-                  moved = true;
-               }
-            }
-            let newRow = row.filter(val => val !== 0);
-            while(newRow.length < 4) newRow.push(0);
-            for(let c=0; c<4; c++) {
-               if (workBoard[r][c] !== newRow[c]) moved = true;
-               workBoard[r][c] = newRow[c];
-            }
-         }
+        // ห่อค่าตัวเลขเป็น { v, m } เพื่อติดตามตำแหน่งที่รวมบล็อกได้แม่นยำทุกทิศทาง
+        let workBoard = board.map(row => row.map(v => ({ v, m: false })));
+        if (dir === 'Right') workBoard = rotateRight(rotateRight(workBoard));
+        else if (dir === 'Up') workBoard = rotateLeft(workBoard);
+        else if (dir === 'Down') workBoard = rotateRight(workBoard);
 
-         if (dir === 'Right') { workBoard = rotateRight(rotateRight(workBoard)); }
-         else if (dir === 'Up') { workBoard = rotateRight(workBoard); }
-         else if (dir === 'Down') { workBoard = rotateLeft(workBoard); }
-
-         if (moved) {
-            let finalB = addRandomTile(workBoard);
-            setBoard(finalB);
-            setScore(p => p + gainedScore);
-            setMoves(m => m - 1);
-            
-            let maxT = maxTile;
-            for(let r=0; r<4; r++) for(let c=0; c<4; c++) if(finalB[r][c] > maxT) maxT = finalB[r][c];
-            setMaxTile(maxT);
-            
-            if (moves - 1 <= 0) {
-               onEnd('ended', { score: score + gainedScore, maxTile: maxT });
-            } else {
-               let canMove = false;
-               for(let r=0; r<4; r++) for(let c=0; c<4; c++) {
-                  if(finalB[r][c] === 0) canMove = true;
-                  if(r<3 && finalB[r][c] === finalB[r+1][c]) canMove = true;
-                  if(c<3 && finalB[r][c] === finalB[r][c+1]) canMove = true;
-               }
-               if(!canMove) onEnd('ended', { score: score + gainedScore, maxTile: maxT });
+        for (let r = 0; r < 4; r++) {
+          const row = workBoard[r].filter(cell => cell.v !== 0);
+          for (let i = 0; i < row.length - 1; i++) {
+            if (row[i].v !== 0 && row[i].v === row[i + 1].v) {
+              row[i] = { v: row[i].v * 2, m: true };
+              gainedScore += row[i].v;
+              row[i + 1] = { v: 0, m: false };
+              moved = true;
             }
-         }
+          }
+          const newRow = row.filter(cell => cell.v !== 0);
+          while (newRow.length < 4) newRow.push({ v: 0, m: false });
+          for (let c = 0; c < 4; c++) {
+            if (workBoard[r][c].v !== newRow[c].v) moved = true;
+            workBoard[r][c] = newRow[c];
+          }
+        }
+
+        if (dir === 'Right') workBoard = rotateRight(rotateRight(workBoard));
+        else if (dir === 'Up') workBoard = rotateRight(workBoard);
+        else if (dir === 'Down') workBoard = rotateLeft(workBoard);
+
+        if (moved) {
+          const popped = [];
+          const numBoard = workBoard.map((row, r) =>
+            row.map((cell, c) => {
+              if (cell.m) popped.push(r * 4 + c);
+              return cell.v;
+            })
+          );
+
+          const { board: finalB, spot } = addRandomTile(numBoard);
+          if (spot) popped.push(spot.r * 4 + spot.c);
+
+          setBoard(finalB);
+          setPoppedSet(popped);
+          setMoveTick(t => t + 1);
+          setScore(p => p + gainedScore);
+          setMoves(m => m - 1);
+
+          let maxT = maxTile;
+          for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (finalB[r][c] > maxT) maxT = finalB[r][c];
+          setMaxTile(maxT);
+
+          let canMove = false;
+          for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+              if (finalB[r][c] === 0) canMove = true;
+              if (r < 3 && finalB[r][c] === finalB[r + 1][c]) canMove = true;
+              if (c < 3 && finalB[r][c] === finalB[r][c + 1]) canMove = true;
+            }
+          }
+
+          if (moves - 1 <= 0 || !canMove) {
+            playGameSfx('win');
+            onEnd('ended', { score: score + gainedScore, maxTile: maxT });
+          } else {
+            playGameSfx(gainedScore > 0 ? 'merge' : 'tap');
+          }
+        }
       };
 
       useEffect(() => {
         const onKeyDown = (e) => {
-           if(['ArrowUp','w','W'].includes(e.key)) handleMove('Up');
-           if(['ArrowDown','s','S'].includes(e.key)) handleMove('Down');
-           if(['ArrowLeft','a','A'].includes(e.key)) handleMove('Left');
-           if(['ArrowRight','d','D'].includes(e.key)) handleMove('Right');
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+          if (['ArrowUp', 'w', 'W'].includes(e.key)) handleMove('Up');
+          if (['ArrowDown', 's', 'S'].includes(e.key)) handleMove('Down');
+          if (['ArrowLeft', 'a', 'A'].includes(e.key)) handleMove('Left');
+          if (['ArrowRight', 'd', 'D'].includes(e.key)) handleMove('Right');
         };
-        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keydown', onKeyDown, { passive: false });
         return () => window.removeEventListener('keydown', onKeyDown);
-      }, [board, moves]);
-      
-      let startX, startY;
-      const onTouchStart = (e) => { startX = e.touches[0].clientX; startY = e.touches[0].clientY; };
+      }, [board, moves, score, maxTile]);
+
+      const onTouchStart = (e) => {
+        if (!e.touches?.[0]) return;
+        touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      };
+
       const onTouchEnd = (e) => {
-         if(!startX || !startY) return;
-         let dx = e.changedTouches[0].clientX - startX;
-         let dy = e.changedTouches[0].clientY - startY;
-         if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) handleMove(dx > 0 ? 'Right' : 'Left');
-         else if(Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 30) handleMove(dy > 0 ? 'Down' : 'Up');
+        if (!touchStartRef.current || !e.changedTouches?.[0]) return;
+        const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+        const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 25) handleMove(dx > 0 ? 'Right' : 'Left');
+        else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 25) handleMove(dy > 0 ? 'Down' : 'Up');
       };
 
       const colors = {
@@ -1824,199 +2359,494 @@
         512: 'bg-yellow-500 text-amber-950 drop-shadow-[0_0_16px_rgba(234,179,8,1)]', 1024: 'bg-emerald-400 text-emerald-950', 2048: 'bg-sky-400 text-sky-950'
       };
 
-      return (
-         <div className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-            <div className="flex gap-4 w-full max-w-[300px] justify-between text-center font-bold">
-               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-sky-300">คะแนน</div><div className="text-xl">{score}</div></div>
-               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-emerald-300">สูงสุด</div><div className="text-xl text-emerald-400">{maxTile}</div></div>
-               <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-4 py-2 flex-1"><div className="text-[10px] text-amber-300">ขยับได้อีก</div><div className="text-xl text-amber-400">{moves}</div></div>
-            </div>
-            
-            <div className="bg-[#1E3A5F] p-2 rounded-xl border-[4px] border-[#0F2547] shadow-xl w-full max-w-[300px] aspect-square grid grid-cols-4 grid-rows-4 gap-2">
-               {board.flat().map((val, i) => (
-                  <div key={i} className={`flex items-center justify-center rounded-lg font-bold text-2xl transition-all duration-150 ${colors[val] || 'bg-fuchsia-500 text-white drop-shadow-[0_0_20px_rgba(217,70,239,1)]'}`}>
-                     {val !== 0 ? val : ''}
-                  </div>
-               ))}
-            </div>
-            <div className="text-[10px] text-slate-400 text-center">💡 ปัดหน้าจอ หรือใช้ลูกศรบนคีย์บอร์ดเพื่อเลื่อน<br/>เมื่อขยับครบ 100 ครั้ง เกมจะสิ้นสุดลงเพื่อวัดผลประจำวัน</div>
-         </div>
-      );
-    }
-
-    // ------------------------------------------
-    // 4.8 Daily 24 Game
-    // ------------------------------------------
-    function Game24({ dateSeed, onEnd }) {
-      const [nums, setNums] = useStickyState([], `bma_24_n_${dateSeed}`);
-      const [expr, setExpr] = useState('');
-      const [msg, setMsg] = useState('');
-
-      const check24 = (arr) => {
-        if(arr.length === 1) return Math.abs(arr[0] - 24) < 0.001;
-        for(let i=0; i<arr.length; i++) {
-          for(let j=0; j<arr.length; j++) {
-            if(i===j) continue;
-            let rem = arr.filter((_, idx) => idx!==i && idx!==j);
-            let a=arr[i], b=arr[j];
-            let next = [a+b, a-b, b-a, a*b];
-            if(b!==0) next.push(a/b);
-            if(a!==0) next.push(b/a);
-            for(let val of next) {
-              if(check24([...rem, val])) return true;
-            }
-          }
-        }
-        return false;
-      };
-
-      useEffect(() => {
-        if(nums.length > 0) return;
-        const rng = new PRNG(dateSeed + '_24game');
-        let valid = false;
-        let generated = [];
-        while(!valid) {
-          generated = [rng.nextInt(1,9), rng.nextInt(1,9), rng.nextInt(1,9), rng.nextInt(1,9)];
-          valid = check24(generated);
-        }
-        setNums(generated);
-      }, [dateSeed]);
-
-      const handleSubmit = () => {
-        const sanitized = expr.replace(/\s/g, '');
-        if(!/^[1-9+\-*/()]+$/.test(sanitized)) return setMsg('❌ ใช้ได้เฉพาะตัวเลขและเครื่องหมาย +, -, *, /, (, )');
-        
-        const usedNums = sanitized.replace(/[^1-9]/g, '').split('').map(Number).sort();
-        const requiredNums = [...nums].sort();
-        if(usedNums.join(',') !== requiredNums.join(',')) {
-          return setMsg('❌ ต้องใช้ตัวเลขที่กำหนดให้ครบ 4 ตัว (และใช้ตัวละ 1 ครั้งเท่านั้น)');
-        }
-
-        try {
-          const res = new Function('return ' + sanitized)();
-          if(Math.abs(res - 24) < 0.001) {
-             onEnd('won', { score: 24, answer: sanitized });
-          } else {
-             setMsg(`❌ ได้ผลลัพธ์เป็น ${res} (ไม่ใช่ 24)`);
-          }
-        } catch(e) {
-          setMsg('❌ รูปแบบสมการไม่ถูกต้อง');
-        }
-      };
-
-      if(!nums.length) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+      const isLowMoves = moves <= 10 && moves > 0;
 
       return (
-        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full p-4">
-          <div className="font-bold text-amber-300 text-lg bg-[#0F2547] px-6 py-2 rounded-full border border-[#1E3A5F]">เลขที่สุ่มได้วันนี้</div>
-          <div className="flex gap-4">
-            {nums.map((n,i) => <div key={i} className="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center bg-[#1E3A5F] border-2 border-sky-400 rounded-xl text-3xl font-bold shadow-[0_0_15px_rgba(56,189,248,0.3)]">{n}</div>)}
+        <div
+          className="flex flex-col items-center justify-center space-y-4 w-full h-full select-none touch-none"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          <div className="flex gap-3 w-full max-w-[300px] justify-between text-center font-bold">
+            <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-3 py-2 flex-1">
+              <div className="text-[10px] text-sky-300">คะแนน</div>
+              <div className="text-xl font-mono">{score}</div>
+            </div>
+            <div className="bg-[#0F2547] border border-[#1E3A5F] rounded-xl px-3 py-2 flex-1">
+              <div className="text-[10px] text-emerald-300">สูงสุด</div>
+              <div className="text-xl font-mono text-emerald-400">{maxTile}</div>
+            </div>
+            <div className={`rounded-xl px-3 py-2 flex-1 border transition-colors ${isLowMoves ? 'bg-red-950/70 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.45)] animate-pulse' : 'bg-[#0F2547] border-[#1E3A5F]'}`}>
+              <div className={`text-[10px] ${isLowMoves ? 'text-red-300' : 'text-amber-300'}`}>ขยับได้อีก</div>
+              <div className={`text-xl font-mono ${isLowMoves ? 'text-red-400' : 'text-amber-400'}`}>{moves}</div>
+            </div>
           </div>
-          <div className="w-full max-w-[320px] space-y-3">
-             <input type="text" value={expr} onChange={e=>setExpr(e.target.value)} placeholder="เช่น (8-4)*6*1" className="w-full inp text-center text-xl font-mono py-3" />
-             {msg && <div className="text-red-400 text-sm text-center font-bold">{msg}</div>}
-             <button onClick={handleSubmit} className="w-full btn-b text-lg py-3 hover:bg-sky-600 transition-colors">ตรวจสอบคำตอบ</button>
-             <button onClick={()=>onEnd('lost', {score: 0})} className="w-full btn-d mt-2 hover:bg-red-950 hover:text-red-300 border-red-900/50">ยอมแพ้</button>
+
+          {isLowMoves && (
+            <div className="text-[11px] font-bold text-red-300 bg-red-950/50 border border-red-500/40 px-3 py-1 rounded-full animate-pulse">
+              ⚠️ โค้งสุดท้าย! เหลืออีกเพียง {moves} ครั้ง
+            </div>
+          )}
+
+          <div className="bg-[#1E3A5F] p-2 rounded-xl border-[4px] border-[#0F2547] shadow-xl w-full max-w-[300px] aspect-square grid grid-cols-4 grid-rows-4 gap-2">
+            {board.flat().map((val, i) => {
+              const isPop = poppedSet.includes(i) && val !== 0;
+              return (
+                <div
+                  key={`${i}-${isPop ? moveTick : 0}`}
+                  className={`flex items-center justify-center rounded-lg font-bold transition-colors duration-150 ${val >= 1024 ? 'text-lg' : val >= 128 ? 'text-xl' : 'text-2xl'} ${colors[val] || 'bg-fuchsia-500 text-white drop-shadow-[0_0_20px_rgba(217,70,239,1)]'} ${isPop ? 'animate-tile-pop' : ''}`}
+                >
+                  {val !== 0 ? val : ''}
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-slate-400 text-center">
+            💡 ปัดหน้าจอ หรือใช้ลูกศร / W A S D เพื่อเลื่อน<br />เมื่อขยับครบ 100 ครั้ง เกมจะสิ้นสุดลงเพื่อวัดผลประจำวัน
           </div>
         </div>
       );
     }
 
     // ------------------------------------------
-    // 4.9 Resistor Code Game
+    // 4.8 Daily 24 Game (Tap-to-Combine Cards + Auto Solver)
+    // ------------------------------------------
+    function Game24({ dateSeed, onEnd }) {
+      const [nums, setNums] = useStickyState([], `bma_24_n_${dateSeed}`);
+      const [cards, setCards] = useState([]);
+      const [history, setHistory] = useState([]);
+      const [selIdx, setSelIdx] = useState(null);
+      const [selOp, setSelOp] = useState(null);
+      const [msg, setMsg] = useState('');
+      const [revealedSol, setRevealedSol] = useState(null);
+
+      // หาเฉลยสมการจริง 1 รูปแบบ (ใช้ทั้งตอนสุ่มโจทย์และตอนเฉลย)
+      const solve24Expr = (arr) => {
+        const items = arr.map(v => ({ val: v, expr: String(v) }));
+        const dfs = (list) => {
+          if (list.length === 1) return Math.abs(list[0].val - 24) < 1e-4 ? list[0].expr : null;
+          for (let i = 0; i < list.length; i++) {
+            for (let j = 0; j < list.length; j++) {
+              if (i === j) continue;
+              const rem = list.filter((_, idx) => idx !== i && idx !== j);
+              const a = list[i], b = list[j];
+              const candidates = [
+                { val: a.val + b.val, expr: `(${a.expr} + ${b.expr})` },
+                { val: a.val - b.val, expr: `(${a.expr} - ${b.expr})` },
+                { val: a.val * b.val, expr: `(${a.expr} × ${b.expr})` }
+              ];
+              if (Math.abs(b.val) > 1e-9) {
+                candidates.push({ val: a.val / b.val, expr: `(${a.expr} ÷ ${b.expr})` });
+              }
+              for (const c of candidates) {
+                const found = dfs([...rem, c]);
+                if (found) return found;
+              }
+            }
+          }
+          return null;
+        };
+        const raw = dfs(items);
+        return raw ? raw.replace(/^\((.*)\)$/, '$1') : null;
+      };
+
+      useEffect(() => {
+        if (nums.length > 0) return;
+        const rng = new PRNG(dateSeed + '_24game');
+        let generated = [];
+        while (true) {
+          generated = [rng.nextInt(1, 9), rng.nextInt(1, 9), rng.nextInt(1, 9), rng.nextInt(1, 9)];
+          if (solve24Expr(generated)) break;
+        }
+        setNums(generated);
+      }, [dateSeed]);
+
+      useEffect(() => {
+        if (nums.length > 0 && cards.length === 0) {
+          setCards(nums.map((n, i) => ({ id: `init-${i}`, val: n, expr: String(n) })));
+        }
+      }, [nums]);
+
+      const fmtVal = (v) => {
+        if (Math.abs(v - Math.round(v)) < 1e-6) return String(Math.round(v));
+        return String(Number(v.toFixed(2)));
+      };
+
+      const handleReset = () => {
+        playGameSfx('undo');
+        setCards(nums.map((n, i) => ({ id: `init-${i}`, val: n, expr: String(n) })));
+        setHistory([]);
+        setSelIdx(null);
+        setSelOp(null);
+        setMsg('');
+      };
+
+      const handleUndo = () => {
+        if (history.length === 0) return;
+        playGameSfx('undo');
+        setCards(history[history.length - 1]);
+        setHistory(history.slice(0, -1));
+        setSelIdx(null);
+        setSelOp(null);
+        setMsg('');
+      };
+
+      const handleCardTap = (idx) => {
+        if (revealedSol) return;
+        setMsg('');
+
+        if (selIdx === null) {
+          playGameSfx('tap');
+          setSelIdx(idx);
+          return;
+        }
+        if (selIdx === idx) {
+          playGameSfx('tap');
+          setSelIdx(null);
+          setSelOp(null);
+          return;
+        }
+        if (!selOp) {
+          playGameSfx('tap');
+          setSelIdx(idx);
+          return;
+        }
+
+        const a = cards[selIdx];
+        const b = cards[idx];
+        let resVal = 0;
+        let sym = selOp;
+        if (selOp === '+') resVal = a.val + b.val;
+        else if (selOp === '-') resVal = a.val - b.val;
+        else if (selOp === '*') { resVal = a.val * b.val; sym = '×'; }
+        else if (selOp === '/') {
+          if (Math.abs(b.val) < 1e-9) {
+            playGameSfx('error');
+            setMsg('❌ ไม่สามารถหารด้วย 0 ได้');
+            return;
+          }
+          resVal = a.val / b.val;
+          sym = '÷';
+        }
+
+        const newCard = {
+          id: 'c-' + Date.now() + '-' + Math.random().toString(36).slice(2, 5),
+          val: resVal,
+          expr: `(${a.expr} ${sym} ${b.expr})`,
+          merged: true
+        };
+
+        const nextCards = [];
+        cards.forEach((c, i) => {
+          if (i === selIdx) return;
+          if (i === idx) nextCards.push(newCard);
+          else nextCards.push({ ...c, merged: false });
+        });
+
+        setHistory(prev => [...prev, cards]);
+        setCards(nextCards);
+        setSelIdx(null);
+        setSelOp(null);
+
+        if (nextCards.length === 1) {
+          if (Math.abs(resVal - 24) < 1e-4) {
+            playGameSfx('win');
+            const cleanExpr = newCard.expr.replace(/^\((.*)\)$/, '$1');
+            setTimeout(() => onEnd('won', { score: 24, answer: cleanExpr }), 350);
+          } else {
+            playGameSfx('error');
+            setMsg(`ได้ผลลัพธ์ ${fmtVal(resVal)} (ยังไม่เท่ากับ 24) — กดย้อนกลับหรือเริ่มใหม่ได้`);
+          }
+        } else {
+          playGameSfx('merge');
+        }
+      };
+
+      const handleOpTap = (op) => {
+        if (revealedSol) return;
+        if (selIdx === null) {
+          setMsg('แตะเลือกการ์ดตัวเลขใบแรกก่อน แล้วค่อยเลือกเครื่องหมาย');
+          return;
+        }
+        playGameSfx('tap');
+        setSelOp(selOp === op ? null : op);
+        setMsg('');
+      };
+
+      const handleGiveUp = () => {
+        if (revealedSol) return;
+        playGameSfx('lose');
+        const sol = solve24Expr(nums) || '-';
+        setRevealedSol(sol);
+        setTimeout(() => onEnd('lost', { score: 0, answer: sol }), 2000);
+      };
+
+      if (!nums.length || !cards.length) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+
+      const OPS = [
+        { id: '+', label: '+' },
+        { id: '-', label: '−' },
+        { id: '*', label: '×' },
+        { id: '/', label: '÷' }
+      ];
+
+      return (
+        <div className="flex flex-col items-center justify-center space-y-5 w-full h-full p-2 sm:p-4 select-none">
+          <div className="text-center space-y-1">
+            <div className="font-bold text-amber-300 text-sm bg-[#0F2547] px-5 py-1.5 rounded-full border border-[#1E3A5F] inline-block">
+              รวมการ์ดทั้ง 4 ใบให้ได้ 24 พอดี
+            </div>
+            <div className="text-[11px] text-slate-400 h-4 font-mono">
+              {selIdx !== null
+                ? `${fmtVal(cards[selIdx].val)} ${selOp ? (selOp === '*' ? '×' : selOp === '/' ? '÷' : selOp) : '?'} ...`
+                : 'แตะการ์ดใบแรก → แตะเครื่องหมาย → แตะการ์ดใบที่สอง'}
+            </div>
+          </div>
+
+          {/* การ์ดตัวเลข */}
+          <div className="grid grid-cols-2 gap-3 w-full max-w-[270px]">
+            {cards.map((card, i) => {
+              const isSel = selIdx === i;
+              const isTarget24 = cards.length === 1 && Math.abs(card.val - 24) < 1e-4;
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => handleCardTap(i)}
+                  className={`h-20 sm:h-24 rounded-2xl border-2 flex flex-col items-center justify-center transition-all shadow-lg ${card.merged ? 'animate-tile-pop' : ''} ${isTarget24 ? 'col-span-2 bg-emerald-600/30 border-emerald-400 text-emerald-300 shadow-[0_0_25px_rgba(16,185,129,0.45)]' : isSel ? 'bg-sky-500/30 border-amber-300 text-white scale-105 shadow-[0_0_20px_rgba(251,191,36,0.35)]' : 'bg-[#0F2547] border-[#1E3A5F] hover:border-sky-400 text-white'}`}
+                >
+                  <span className="text-2xl sm:text-3xl font-bold font-mono leading-none">{fmtVal(card.val)}</span>
+                  {card.expr !== String(card.val) && (
+                    <span className="text-[10px] text-sky-300/80 font-mono mt-1 px-2 truncate max-w-full">{card.expr}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ปุ่มเครื่องหมายคณิตศาสตร์ */}
+          <div className="grid grid-cols-4 gap-2.5 w-full max-w-[270px]">
+            {OPS.map((op) => (
+              <button
+                key={op.id}
+                type="button"
+                onClick={() => handleOpTap(op.id)}
+                className={`h-12 rounded-xl border-2 text-2xl font-bold transition-all active:scale-95 ${selOp === op.id ? 'bg-amber-400 text-[#050811] border-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.5)] scale-105' : 'bg-[#0B1325] text-sky-300 border-[#1E3A5F] hover:border-sky-400 hover:text-white'}`}
+              >
+                {op.label}
+              </button>
+            ))}
+          </div>
+
+          {msg && <div className="text-amber-300 text-xs text-center font-bold bg-amber-950/40 border border-amber-500/30 px-3 py-1.5 rounded-xl">{msg}</div>}
+
+          {revealedSol && (
+            <div className="w-full max-w-[290px] p-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/60 text-center space-y-1 animate-fade-in">
+              <div className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">เฉลยตัวอย่าง</div>
+              <div className="text-lg font-mono font-bold text-white">{revealedSol} = 24</div>
+            </div>
+          )}
+
+          {/* ปุ่มควบคุม Undo / Reset / ยอมแพ้ */}
+          <div className="flex gap-2 w-full max-w-[270px] pt-1">
+            <button type="button" onClick={handleUndo} disabled={history.length === 0 || !!revealedSol} className="flex-1 btn-b py-2 text-xs disabled:opacity-40">↩️ ย้อนกลับ</button>
+            <button type="button" onClick={handleReset} disabled={history.length === 0 || !!revealedSol} className="flex-1 btn-d py-2 text-xs disabled:opacity-40">🔄 เริ่มใหม่</button>
+          </div>
+          <button type="button" onClick={handleGiveUp} disabled={!!revealedSol} className="w-full max-w-[270px] btn-d py-2 text-xs text-red-300 hover:bg-red-950 border-red-900/50 disabled:opacity-40">
+            🏳️ ยอมแพ้และดูเฉลย
+          </button>
+        </div>
+      );
+    }
+
+    // ------------------------------------------
+    // 4.9 Resistor Code Game (Editable Bands + Solution Reveal)
     // ------------------------------------------
     function ResistorGame({ dateSeed, onEnd }) {
       const [targetVal, setTargetVal] = useStickyState(null, `bma_res_t_${dateSeed}`);
       const [targetTol, setTargetTol] = useStickyState(null, `bma_res_tol_${dateSeed}`);
-      const [colors, setColors] = useStickyState([], `bma_res_c_${dateSeed}`);
+      const [colors, setColors] = useStickyState([null, null, null, null], `bma_res_c_${dateSeed}`);
       const [expected, setExpected] = useStickyState([], `bma_res_exp_${dateSeed}`);
       const [lives, setLives] = useStickyState(3, `bma_res_l_${dateSeed}`);
+      const [activeBand, setActiveBand] = useState(0);
       const [isExploding, setIsExploding] = useState(false);
       const [errAnim, setErrAnim] = useState(false);
 
       const COLORS = ['Black', 'Brown', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet', 'Gray', 'White', 'Gold', 'Silver'];
       const COL_HEX = ['#000000', '#8B4513', '#FF0000', '#FFA500', '#FFFF00', '#008000', '#0000FF', '#EE82EE', '#808080', '#FFFFFF', '#FFD700', '#C0C0C0'];
+      const BAND_LABELS = ['หลักที่ 1', 'หลักที่ 2', 'ตัวคูณ', 'คลาดเคลื่อน'];
       const E12 = [10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82];
 
       useEffect(() => {
-        if(targetVal) return;
+        if (targetVal) return;
         const rng = new PRNG(dateSeed + '_resistor');
-        const base = E12[rng.nextInt(0, E12.length-1)];
-        const multIdx = rng.nextInt(0, 6); 
+        const base = E12[rng.nextInt(0, E12.length - 1)];
+        const multIdx = rng.nextInt(0, 6);
         const val = base * Math.pow(10, multIdx);
-        const tol = rng.nextInt(0,1) === 0 ? 'Gold' : 'Silver';
-        
-        const b1 = Math.floor(base/10);
-        const b2 = base%10;
+        const tol = rng.nextInt(0, 1) === 0 ? 'Gold' : 'Silver';
+
+        const b1 = Math.floor(base / 10);
+        const b2 = base % 10;
         const exp = [COLORS[b1], COLORS[b2], COLORS[multIdx], tol];
-        
-        setTargetVal(val); setTargetTol(tol==='Gold'?'5%':'10%'); setExpected(exp); setLives(3);
+
+        setTargetVal(val);
+        setTargetTol(tol === 'Gold' ? '5%' : '10%');
+        setExpected(exp);
+        setColors([null, null, null, null]);
+        setLives(3);
       }, [dateSeed]);
 
+      const bands = [0, 1, 2, 3].map(i => (Array.isArray(colors) ? colors[i] || null : null));
+      const allFilled = bands.every(Boolean);
+
       const formatVal = (v) => {
-        if(v >= 1000000) return (v/1000000) + ' MΩ';
-        if(v >= 1000) return (v/1000) + ' kΩ';
+        if (v >= 1000000) return (v / 1000000) + ' MΩ';
+        if (v >= 1000) return (v / 1000) + ' kΩ';
         return v + ' Ω';
       };
 
       const handlePick = (c) => {
-        if(colors.length >= 4 || lives <= 0 || isExploding) return;
-        const nC = [...colors, c];
-        setColors(nC);
-        if(nC.length === 4) {
-           if(nC.join(',') === expected.join(',')) {
-              setTimeout(()=>onEnd('won', {score: lives * 100}), 800);
-           } else {
-              if (lives > 1) {
-                  setErrAnim(true);
-                  setTimeout(() => {
-                      setLives(l => l - 1);
-                      setColors([]);
-                      setErrAnim(false);
-                  }, 800);
-              } else {
-                  setLives(0);
-                  setIsExploding(true);
-                  setTimeout(()=>onEnd('lost', {score: 0}), 1500);
-              }
-           }
+        if (lives <= 0 || isExploding) return;
+        playGameSfx('tap');
+        const nextBands = [...bands];
+        nextBands[activeBand] = c;
+        setColors(nextBands);
+
+        // เลื่อนไปช่องว่างถัดไปอัตโนมัติ (ถ้ามี)
+        const nextEmpty = nextBands.findIndex((b, idx) => idx > activeBand && !b);
+        if (nextEmpty !== -1) setActiveBand(nextEmpty);
+        else {
+          const anyEmpty = nextBands.findIndex(b => !b);
+          if (anyEmpty !== -1) setActiveBand(anyEmpty);
         }
       };
 
-      if(!targetVal) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
+      const handleCheck = () => {
+        if (!allFilled || lives <= 0 || isExploding) return;
+        if (bands.join(',') === expected.join(',')) {
+          playGameSfx('win');
+          setTimeout(() => onEnd('won', { score: lives * 100, answer: expected.join(' - ') }), 550);
+        } else {
+          if (lives > 1) {
+            playGameSfx('error');
+            setErrAnim(true);
+            setTimeout(() => {
+              setLives(l => l - 1);
+              setErrAnim(false);
+            }, 650);
+          } else {
+            playGameSfx('bomb');
+            setLives(0);
+            setIsExploding(true);
+            setTimeout(() => onEnd('lost', { score: 0, answer: expected.join(' - ') }), 2400);
+          }
+        }
+      };
+
+      if (!targetVal) return <div className="py-10 animate-pulse text-sky-400 font-mono">Loading...</div>;
 
       return (
-        <div className="flex flex-col items-center justify-center space-y-6 w-full h-full p-4 select-none">
-           <div className="text-center bg-[#0F2547] p-4 rounded-xl border border-[#1E3A5F]">
-              <div className="text-sm text-slate-300">ค่าความต้านทานเป้าหมาย</div>
-              <div className="text-2xl sm:text-3xl font-bold text-amber-300 tracking-wider font-mono">{formatVal(targetVal)} ± {targetTol}</div>
-              <div className="mt-2 text-xs font-bold text-red-400">โอกาสตอบ: {lives} / 3 ครั้ง</div>
-           </div>
-           
-           <div className={`relative w-64 h-24 sm:w-80 sm:h-28 flex items-center justify-center my-4 ${errAnim ? 'animate-shake' : ''}`}>
-              <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
-              <div className={`relative w-40 sm:w-48 h-16 sm:h-20 bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-3 shadow-inner transition-all ${isExploding ? 'brightness-50 grayscale' : ''}`}>
-                 <div className="w-4 h-full" style={{ backgroundColor: colors[0] ? COL_HEX[COLORS.indexOf(colors[0])] : 'transparent' }}></div>
-                 <div className="w-4 h-full" style={{ backgroundColor: colors[1] ? COL_HEX[COLORS.indexOf(colors[1])] : 'transparent' }}></div>
-                 <div className="w-4 h-full" style={{ backgroundColor: colors[2] ? COL_HEX[COLORS.indexOf(colors[2])] : 'transparent' }}></div>
-                 <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
-                 <div className="w-4 h-full" style={{ backgroundColor: colors[3] ? COL_HEX[COLORS.indexOf(colors[3])] : 'transparent' }}></div>
-                 {isExploding && <div className="absolute inset-0 flex items-center justify-center text-5xl z-20 animate-ping">💥</div>}
-              </div>
-           </div>
+        <div className="flex flex-col items-center justify-center space-y-4 w-full h-full p-2 sm:p-4 select-none">
+          <div className="text-center bg-[#0F2547] px-5 py-3 rounded-xl border border-[#1E3A5F] w-full max-w-[340px]">
+            <div className="text-xs text-slate-300">ค่าความต้านทานเป้าหมาย</div>
+            <div className="text-2xl sm:text-3xl font-bold text-amber-300 tracking-wider font-mono">{formatVal(targetVal)} ± {targetTol}</div>
+            <div className="mt-1.5 text-xs font-bold text-red-400">โอกาสทดสอบวงจร: {lives} / 3 ครั้ง</div>
+          </div>
 
-           <div className="text-xs text-slate-400">เรียงลำดับ: หลักที่ 1 → หลักที่ 2 → ตัวคูณ → เปอร์เซ็นต์ความคลาดเคลื่อน</div>
-           <div className="flex gap-2">
-             <button onClick={()=>setColors([])} className="btn-d py-1.5 px-4 text-xs font-bold text-red-300 border-red-900/50 hover:bg-red-950">ล้างสีทั้งหมด (Clear)</button>
-           </div>
-           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 w-full max-w-[340px]">
-              {COLORS.map(c => (
-                 <button key={c} onClick={()=>handlePick(c)} style={{backgroundColor: COL_HEX[COLORS.indexOf(c)], color: ['Black','Blue','Brown','Green','Red'].includes(c)?'#fff':'#000'}} className="h-10 rounded shadow-md border border-white/20 text-[10px] font-bold active:scale-95 transition-transform">{c}</button>
+          {/* ตัวต้านทานที่คลิกเลือกแก้ทีละแถบได้โดยตรง */}
+          <div className={`relative w-64 h-24 sm:w-80 sm:h-28 flex items-center justify-center my-1 ${errAnim ? 'animate-shake' : ''}`}>
+            <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
+            <div className={`relative w-44 sm:w-52 h-16 sm:h-20 bg-[#f4a460] rounded-[30px] border-2 border-amber-800 z-10 flex items-center justify-between px-3.5 shadow-inner transition-all ${isExploding ? 'brightness-50 grayscale' : ''}`}>
+              {[0, 1, 2].map(idx => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => { if (!isExploding) { playGameSfx('tap'); setActiveBand(idx); } }}
+                  title={`คลิกเพื่อแก้ไขแถบ: ${BAND_LABELS[idx]}`}
+                  className={`w-5 h-full cursor-pointer transition-all relative ${activeBand === idx && !isExploding ? 'ring-2 ring-white scale-y-110 z-20 shadow-[0_0_12px_rgba(255,255,255,0.9)]' : 'border-x border-dashed border-amber-950/40'}`}
+                  style={{ backgroundColor: bands[idx] ? COL_HEX[COLORS.indexOf(bands[idx])] : 'rgba(0,0,0,0.12)' }}
+                />
               ))}
-           </div>
+              <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
+              <button
+                type="button"
+                onClick={() => { if (!isExploding) { playGameSfx('tap'); setActiveBand(3); } }}
+                title={`คลิกเพื่อแก้ไขแถบ: ${BAND_LABELS[3]}`}
+                className={`w-5 h-full cursor-pointer transition-all relative ${activeBand === 3 && !isExploding ? 'ring-2 ring-white scale-y-110 z-20 shadow-[0_0_12px_rgba(255,255,255,0.9)]' : 'border-x border-dashed border-amber-950/40'}`}
+                style={{ backgroundColor: bands[3] ? COL_HEX[COLORS.indexOf(bands[3])] : 'rgba(0,0,0,0.12)' }}
+              />
+              {isExploding && <div className="absolute inset-0 flex items-center justify-center text-5xl z-20 animate-ping">💥</div>}
+            </div>
+          </div>
+
+          {/* แถบเลือกตำแหน่ง (คลิกสลับแก้ไขแถบที่ 1-4 ได้ตลอด) */}
+          <div className="grid grid-cols-4 gap-1.5 w-full max-w-[340px]">
+            {BAND_LABELS.map((lbl, idx) => (
+              <button
+                key={lbl}
+                type="button"
+                onClick={() => { if (!isExploding) { playGameSfx('tap'); setActiveBand(idx); } }}
+                className={`py-1.5 px-1 rounded-lg border text-[10px] font-bold transition-all flex flex-col items-center gap-0.5 ${activeBand === idx && !isExploding ? 'bg-sky-500/25 border-sky-400 text-white shadow' : 'bg-[#0B1325] border-[#1E3A5F] text-slate-400 hover:text-white'}`}
+              >
+                <span>{lbl}</span>
+                <span className="text-[9px] font-mono text-amber-300">{bands[idx] || 'ว่าง'}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* เฉลยแถบสีที่ถูกต้องเมื่อวงจรระเบิด */}
+          {isExploding && expected.length === 4 && (
+            <div className="w-full max-w-[340px] p-3 rounded-xl bg-red-950/60 border border-red-500/60 space-y-2 animate-fade-in">
+              <div className="text-[11px] font-bold text-amber-300 text-center">💥 วงจรระเบิด! แถบสีที่ถูกต้องคือ:</div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {expected.map((cName, idx) => (
+                  <div key={idx} className="flex flex-col items-center gap-1 bg-[#050811] p-1.5 rounded-lg border border-white/10">
+                    <span className="w-full h-3.5 rounded" style={{ backgroundColor: COL_HEX[COLORS.indexOf(cName)] }}></span>
+                    <span className="text-[9px] font-bold text-white">{cName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* แผงเลือกสี */}
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 w-full max-w-[340px]">
+            {COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => handlePick(c)}
+                disabled={isExploding}
+                style={{ backgroundColor: COL_HEX[COLORS.indexOf(c)], color: ['Black', 'Blue', 'Brown', 'Green', 'Red'].includes(c) ? '#fff' : '#000' }}
+                className="h-9 rounded-lg shadow-md border border-white/25 text-[10px] font-bold active:scale-95 transition-transform disabled:opacity-40"
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 w-full max-w-[340px]">
+            <button
+              type="button"
+              onClick={() => { playGameSfx('undo'); setColors([null, null, null, null]); setActiveBand(0); }}
+              disabled={isExploding}
+              className="btn-d py-2 px-3 text-xs font-bold text-red-300 border-red-900/50 hover:bg-red-950 disabled:opacity-40"
+            >
+              ล้างสี
+            </button>
+            <button
+              type="button"
+              onClick={handleCheck}
+              disabled={!allFilled || isExploding}
+              className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all shadow-lg ${allFilled && !isExploding ? 'bg-emerald-500 hover:bg-emerald-400 text-[#050811] shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-[#0F2547] text-slate-500 border border-[#1E3A5F] cursor-not-allowed'}`}
+            >
+              ⚡ ทดสอบวงจร (ตรวจคำตอบ)
+            </button>
+          </div>
         </div>
       );
     }
+
     // ==========================================
     // 5. CHAT GAMES COMPONENTS (มินิเกมในช่องแชต)
     // ==========================================
@@ -8353,56 +9183,111 @@
     const GAME_RULES = {
       sudoku: [
         'เติมตัวเลข 1–9 ลงในช่องว่าง โดยห้ามซ้ำกันในแถวแนวนอน แนวตั้ง และตารางย่อย 3×3',
-        'สลับระหว่างโหมด "กรอกเลข" กับ "ทดเลข" เพื่อจดตัวเลือกที่เป็นไปได้',
+        'มีไฮไลต์แถว/หลัก/บล็อก, ปุ่มย้อนกลับ (Undo / Ctrl+Z) และตัวเลขบอกจำนวนที่ยังเหลือบนแป้นกด',
         'PC: ใช้แป้นพิมพ์เลข 1–9, ปุ่มลูกศร และ Backspace เพื่อเล่นได้เร็วขึ้น'
       ],
       minesweeper: [
         'เปิดช่องที่ปลอดภัยทั้งหมดบนกระดาน 9×9 (มีระเบิดสุ่ม 10–16 ลูกต่อวัน)',
-        'ตัวเลขที่ปรากฏคือจำนวนระเบิดที่อยู่รอบช่องนั้นทั้ง 8 ทิศ',
-        'เวลาจะเริ่มเดินเมื่อขุดหรือปักธงครั้งแรก • PC: คลิกซ้ายขุด / คลิกขวาปักธง'
+        'Chording: เมื่อปักธงรอบช่องตัวเลขครบตามจำนวนแล้ว แตะซ้ำที่ตัวเลขเพื่อเปิดช่องรอบข้างทันที',
+        'มือถือ: แตะค้างที่ช่องเพื่อปักธงได้ทันที • PC: คลิกซ้ายขุด / คลิกขวาปักธง'
       ],
       flag: [
-        'ทายชื่อประเทศจากภาพธงชาติให้ถูกต้องต่อเนื่องครบ 3 ด่าน',
-        'ตอบผิดแม้แต่ครั้งเดียวเกมจะจบลงทันที',
+        'ทายชื่อประเทศจากภาพธงชาติให้ถูกต้องต่อเนื่องครบ 3 ด่าน (ตอบผิดครั้งเดียวจบ)',
+        'มีตัวช่วย 50/50 ตัดตัวเลือกผิดออก 2 ข้อ ใช้ได้ 1 ครั้งต่อวัน โดยแลกกับเวลาเพิ่ม +15 วินาที',
         'จัดอันดับจากจำนวนด่านที่ตอบถูก หากเท่ากันวัดกันที่เวลาเร็วที่สุด'
       ],
       solitaire: [
         'เรียงไพ่จาก A → K แยกตามดอกทั้ง 4 ช่องด้านบนให้ครบสำรับ',
         'ลากไพ่ไปวาง หรือแตะที่ไพ่ 1 ครั้งเพื่อให้ระบบย้ายให้อัตโนมัติ',
-        'มีปุ่ม Undo ย้อนตาเดิน และปุ่ม Reset เริ่มเรียงสำรับเดิมใหม่ (เวลายังเดินต่อ)'
+        'เมื่อเปิดไพ่คว่ำหมดและกองจั่วว่าง ปุ่ม "เก็บไพ่อัตโนมัติ" จะปรากฏขึ้นให้กดจบเกมได้ทันที'
       ],
       wordle: [
-        'ทายคำศัพท์ภาษาอังกฤษ 5 ตัวอักษรให้ถูกต้องภายใน 6 ครั้ง',
+        'ทายคำศัพท์ภาษาอังกฤษ 5 ตัวอักษรให้ถูกต้องภายใน 6 ครั้ง (คลังคำศัพท์ 340+ คำ)',
         'สีเขียว = ถูกตัวและถูกตำแหน่ง • สีเหลือง = มีตัวนี้ในคำแต่ผิดตำแหน่ง • สีเทา = ไม่มีในคำ',
-        'PC: พิมพ์ตัวอักษร A–Z, Enter และ Backspace บนคีย์บอร์ดได้โดยตรง'
+        'แชร์ผลลง Board หรือ Chat จะแนบตารางสี 🟩🟨⬛ ให้เพื่อนลุ้นโดยไม่สปอยล์คำเฉลย'
       ],
       snake: [
-        'บังคับงูเก็บแอปเปิลสีแดงเพื่อทำคะแนนสูงสุด ห้ามชนลำตัวงูเอง',
-        'งูสามารถเดินทะลุขอบกระดานไปโผล่อีกฝั่งได้',
-        'ใช้ปุ่มลูกศร / W A S D บนคีย์บอร์ด หรือกดปุ่มทิศทางบนหน้าจอ'
+        'บังคับงูเก็บแอปเปิลแดง (+1) และแอปเปิลทองคำจับเวลา (+3) บนแผนที่กำแพงประจำวัน',
+        'งูสามารถเดินทะลุขอบกระดานไปโผล่อีกฝั่งได้ แต่ห้ามชนลำตัวงูเองหรือกำแพงสีเทา',
+        'มือถือ: ปัดนิ้วบนกระดานหรือกดปุ่มลูกศร • PC: ใช้ปุ่มลูกศร หรือ W A S D'
       ],
       '2048': [
         'เลื่อนกระดานเพื่อรวมบล็อกตัวเลขเดียวกันให้ค่าเพิ่มขึ้นเรื่อยๆ',
-        'มีโควตาการขยับทั้งหมด 100 ครั้งต่อวัน เมื่อครบโควตาหรือเดินต่อไม่ได้จะสรุปคะแนนทันที',
+        'มีโควตาการขยับทั้งหมด 100 ครั้งต่อวัน (มีสัญญาณเตือนเมื่อเข้าสู่ 10 ตาสุดท้าย)',
         'ปัดหน้าจอบนมือถือ หรือใช้ปุ่มลูกศร / W A S D บนคีย์บอร์ด'
       ],
       '24game': [
-        'นำตัวเลข 4 ตัวที่สุ่มได้ประจำวันมาคำนวณให้ได้ผลลัพธ์เท่ากับ 24 พอดี',
-        'ใช้ได้เฉพาะเครื่องหมาย +, -, *, /, ( ) และต้องใช้ตัวเลขให้ครบทั้ง 4 ตัว ตัวละ 1 ครั้ง',
+        'แตะการ์ดใบแรก → แตะเครื่องหมาย (+ − × ÷) → แตะการ์ดใบที่สอง เพื่อรวมเลขทั้ง 4 ใบให้ได้ 24 พอดี',
+        'มีปุ่มย้อนกลับ (Undo) และเริ่มใหม่ (Reset) สามารถกดยอมแพ้เพื่อดูเฉลยตัวอย่างได้',
         'ทุกโจทย์ประจำวันผ่านการตรวจสอบแล้วว่ามีคำตอบที่ทำได้ 24 แน่นอน'
       ],
       resistor: [
-        'เลือกแถบสี 4 แถบ (หลักที่ 1 → หลักที่ 2 → ตัวคูณ → ความคลาดเคลื่อน) ให้ตรงค่าเป้าหมาย',
-        'มีโอกาสตอบทั้งหมด 3 ครั้ง หากตอบผิดครบ 3 ครั้งวงจรจะระเบิดทันที',
-        'ยิ่งตอบถูกในจำนวนครั้งน้อย ยิ่งได้คะแนนอันดับสูงขึ้น'
+        'เลือกแถบสี 4 แถบ (หลักที่ 1 → หลักที่ 2 → ตัวคูณ → ความคลาดเคลื่อน) แล้วกดทดสอบวงจร',
+        'แตะที่แถบสีบนตัวต้านทานหรือป้ายด้านล่างเพื่อแก้เฉพาะแถบที่ต้องการได้ทันที',
+        'มีโอกาสทดสอบ 3 ครั้ง หากพลาดครบ 3 ครั้งวงจรจะระเบิดพร้อมเฉลยแถบสีที่ถูกต้อง'
       ]
     };
+
+    // Helper คำนวณวันก่อนหน้า & นับ Daily Streak (ต่อเนื่องจากวันก่อนหรือวันนี้)
+    const getPrevDateStr = (dateStr) => {
+      if (!dateStr) return '';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      dt.setUTCDate(dt.getUTCDate() - 1);
+      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+    };
+
+    const getUserActiveStreak = (user, todayStr) => {
+      const ds = user?.dailyStreak;
+      if (!ds || !ds.lastDate || !ds.count) return 0;
+      if (ds.lastDate === todayStr || ds.lastDate === getPrevDateStr(todayStr)) return ds.count;
+      return 0;
+    };
+
+    // ตารางคำนวณคะแนนรวม F1-Style (อันดับ 1-8+ ได้ 10,8,6,5,4,3,2,1 + โบนัสเคลียร์เกมละ 2 แต้ม)
+    const F1_RANK_PTS = [10, 8, 6, 5, 4, 3, 2, 1];
+    const computeOverallStandings = (scoresList, sortScoresFn) => {
+      const byDate = {};
+      scoresList.forEach(s => {
+        if (!s || !s.date || !s.userId) return;
+        if (!byDate[s.date]) byDate[s.date] = [];
+        byDate[s.date].push(s);
+      });
+
+      const totals = {};
+      Object.entries(byDate).forEach(([dateKey, dayList]) => {
+        for (let gIdx = 0; gIdx < 9; gIdx++) {
+          const gScores = dayList.filter(s => s.gameIndex === gIdx);
+          const valid = gScores.filter(s => !(s.status === 'lost_bomb' || s.timeMs === Infinity || (s.status === 'lost' && !(gIdx === 2 && (s.score || 0) > 0))));
+          const ranked = sortScoresFn([...valid], gIdx);
+          ranked.forEach((rec, rIdx) => {
+            if (!totals[rec.userId]) {
+              totals[rec.userId] = { userId: rec.userId, points: 0, clears: 0, firsts: 0, daysSet: new Set() };
+            }
+            const rankPt = F1_RANK_PTS[rIdx] ?? 1;
+            totals[rec.userId].points += rankPt + 2; // +2 โบนัสเคลียร์เกม
+            totals[rec.userId].clears += 1;
+            if (rIdx === 0) totals[rec.userId].firsts += 1;
+            totals[rec.userId].daysSet.add(dateKey);
+          });
+        }
+      });
+
+      return Object.values(totals)
+        .map(t => ({ ...t, daysPlayed: t.daysSet.size }))
+        .sort((a, b) => b.points - a.points || b.clears - a.clears || b.firsts - a.firsts);
+    };
+
     function DailyArcadeLobby({
       GAMES, gameAppSt, allTodayScores, currentUser, getAuthor,
-      sortScores, fmtTime, todayStr, onSelectGame, setMemberModal
+      sortScores, fmtTime, todayStr, onSelectGame, setMemberModal,
+      db, sfxMuted, onToggleSfx
     }) {
       const [lobbyFilter, setLobbyFilter] = useState('ALL'); // 'ALL' | 'TODO' | 'DONE'
       const [countdown, setCountdown] = useState('--:--:--');
+      const [overallTab, setOverallTab] = useState('daily'); // 'daily' | 'monthly'
+      const [monthScoresAll, setMonthScoresAll] = useState([]);
+      const [monthLoading, setMonthLoading] = useState(false);
 
       useEffect(() => {
         const calcTimeToReset = () => {
@@ -8423,6 +9308,35 @@
         return () => clearInterval(t);
       }, []);
 
+      // โหลดคะแนนรวมทั้งเดือนเมื่อเลือกแท็บประจำเดือน (ใช้ Range Query บนฟิลด์ date ไม่ต้องสร้าง Index เพิ่ม)
+      useEffect(() => {
+        if (overallTab !== 'monthly' || !db) return;
+        let cancelled = false;
+        setMonthLoading(true);
+        const monthPrefix = todayStr.substring(0, 7);
+        db.collection('bma_daily_scores')
+          .where('date', '>=', `${monthPrefix}-01`)
+          .where('date', '<=', `${monthPrefix}-31`)
+          .get()
+          .then(snap => {
+            if (!cancelled) {
+              setMonthScoresAll(snap.docs.map(d => d.data()));
+              setMonthLoading(false);
+            }
+          })
+          .catch(() => { if (!cancelled) setMonthLoading(false); });
+        return () => { cancelled = true; };
+      }, [overallTab, todayStr, db]);
+
+      const overallStandings = React.useMemo(() => {
+        const src = overallTab === 'daily' ? allTodayScores : monthScoresAll;
+        return computeOverallStandings(src, sortScores);
+      }, [overallTab, allTodayScores, monthScoresAll, sortScores]);
+
+      const myOverallIdx = currentUser ? overallStandings.findIndex(x => x.userId === currentUser.id) : -1;
+      const myStreak = currentUser ? getUserActiveStreak(currentUser, todayStr) : 0;
+      const myBestStreak = currentUser?.dailyStreak?.best || myStreak;
+
       const formatStat = (gIdx, rec) => {
         if (!rec) return '-';
         if (rec.status === 'lost_bomb' || rec.timeMs === Infinity) return 'Bomb';
@@ -8434,13 +9348,12 @@
         return fmtTime(rec.timeMs);
       };
 
-      // สรุปสถานะของผู้เล่นปัจจุบันทั้ง 9 เกม (เช็กทั้งจาก Firestore และ LocalStorage)
       const gameCards = GAMES.map((g, idx) => {
         const gScores = allTodayScores.filter(s => s.gameIndex === idx);
         const myDbScore = currentUser ? gScores.find(s => s.userId === currentUser.id) : null;
         const myLocal = gameAppSt[idx];
 
-        let stateType = 'todo'; // 'todo' | 'playing' | 'won' | 'lost'
+        let stateType = 'todo';
         let myStatText = '';
 
         if (myDbScore) {
@@ -8456,7 +9369,6 @@
           myStatText = fmtTime(myLocal.time || 0);
         }
 
-        // หาแชมป์อันดับ 1 ของวันนั้น (คัดคนแพ้/ระเบิดออกก่อนจัดอันดับ)
         const validWinners = gScores.filter(s => s.status !== 'lost_bomb' && s.status !== 'lost' && s.timeMs !== Infinity);
         const sortedWinners = sortScores([...validWinners], idx);
         const leader = sortedWinners[0] || null;
@@ -8477,27 +9389,51 @@
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-gradient-to-b from-[#050811] to-[#030509]">
           <div className="max-w-6xl mx-auto space-y-6 pb-10">
 
-            {/* Header Banner + Daily Progress + Countdown */}
+            {/* Header Banner + Streak + SFX + Countdown */}
             <div className="card p-5 sm:p-6 bg-gradient-to-br from-[#0B1325] via-[#0A1428] to-[#050811] border-[#1E3A5F] shadow-2xl relative overflow-hidden">
               <div className="absolute -top-16 -right-16 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
                 <div>
-                  <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-sky-950/60 border border-sky-500/30 text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-2">
-                    <i className="fas fa-gamepad"></i> Daily Arcade Hub • {todayStr}
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-sky-950/60 border border-sky-500/30 text-[10px] font-bold text-sky-300 uppercase tracking-wider">
+                      <i className="fas fa-gamepad"></i> Daily Arcade Hub • {todayStr}
+                    </div>
+                    {currentUser && (
+                      <div
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold ${myStreak > 0 ? 'bg-orange-950/60 border-orange-500/50 text-orange-300 shadow-[0_0_12px_rgba(249,115,22,0.25)]' : 'bg-[#050811] border-[#1E3A5F] text-slate-400'}`}
+                        title={`สถิติสูงสุดของคุณ: ${myBestStreak} วันติด`}
+                      >
+                        <span>🔥</span>
+                        <span>{myStreak > 0 ? `${myStreak} วันติด` : 'เริ่มเก็บ Streak วันนี้'}</span>
+                        {myBestStreak > myStreak && <span className="text-[9px] text-slate-400 font-mono">(Best {myBestStreak})</span>}
+                      </div>
+                    )}
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">The Blue Moon Daily Games</h2>
                   <p className="text-xs text-slate-400 mt-1">ประลองความไวและความแม่นยำประจำวัน เล่นได้เกมละ 1 รอบต่อวัน</p>
                 </div>
 
-                {/* Reset Countdown Box */}
-                <div className="bg-[#050811]/90 border border-[#1E3A5F] rounded-2xl px-4 py-3 flex items-center gap-3 shrink-0 shadow-inner">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-400 flex items-center justify-center text-base">
-                    <i className="fas fa-hourglass-half"></i>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">รีเซ็ตกระดาน (06:00 น.)</div>
-                    <div className="text-xl font-mono font-bold text-amber-300 leading-tight">{countdown}</div>
+                {/* Reset Countdown + SFX Toggle */}
+                <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto">
+                  <button
+                    type="button"
+                    onClick={onToggleSfx}
+                    className={`h-14 px-3.5 rounded-2xl border flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-colors ${sfxMuted ? 'bg-[#050811]/90 border-[#1E3A5F] text-slate-500' : 'bg-[#050811]/90 border-sky-500/40 text-sky-300 hover:border-sky-400'}`}
+                    title={sfxMuted ? 'เปิดเสียงเอฟเฟกต์เกม' : 'ปิดเสียงเอฟเฟกต์เกม'}
+                  >
+                    <i className={`fas ${sfxMuted ? 'fa-volume-mute' : 'fa-volume-up'} text-sm`}></i>
+                    <span>{sfxMuted ? 'ปิดเสียง' : 'SFX เปิด'}</span>
+                  </button>
+
+                  <div className="bg-[#050811]/90 border border-[#1E3A5F] rounded-2xl px-4 py-2.5 h-14 flex items-center gap-3 shadow-inner">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-400 flex items-center justify-center text-sm">
+                      <i className="fas fa-hourglass-half"></i>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">รีเซ็ตกระดาน (06:00 น.)</div>
+                      <div className="text-lg font-mono font-bold text-amber-300 leading-tight">{countdown}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8518,6 +9454,97 @@
                   />
                 </div>
               </div>
+            </div>
+
+            {/* Overall F1-Style Leaderboard Panel */}
+            <div className="card p-4 sm:p-5 bg-[#0B1325] border-[#1E3A5F] shadow-xl space-y-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#1E3A5F]/70">
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-amber-300 flex items-center gap-2">
+                    <i className="fas fa-crown"></i>
+                    <span>ตารางแชมป์คะแนนรวม (Overall F1 Ranking)</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    อันดับ 1–8+ ในแต่ละเกมรับ 10, 8, 6, 5, 4, 3, 2, 1 แต้ม + โบนัสเคลียร์เกมละ 2 แต้ม
+                  </p>
+                </div>
+                <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setOverallTab('daily')}
+                    className={`px-3 py-1 rounded-lg transition-colors ${overallTab === 'daily' ? 'bg-white text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    ประจำวัน
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOverallTab('monthly')}
+                    className={`px-3 py-1 rounded-lg transition-colors ${overallTab === 'monthly' ? 'bg-amber-400 text-[#050811] shadow' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    สะสมประจำเดือน
+                  </button>
+                </div>
+              </div>
+
+              {overallTab === 'monthly' && monthLoading ? (
+                <div className="py-6 text-center text-xs text-sky-400 font-bold animate-pulse">
+                  <i className="fas fa-spinner fa-spin mr-1.5"></i> กำลังรวมคะแนนประจำเดือน...
+                </div>
+              ) : overallStandings.length === 0 ? (
+                <div className="py-5 text-center text-xs text-slate-500 border border-dashed border-[#1E3A5F] rounded-xl">
+                  ยังไม่มีผู้เคลียร์เกมในรอบนี้ — เคลียร์เกมแรกเพื่อขึ้นครองจ่าฝูงเลย!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                  {overallStandings.slice(0, 5).map((row, i) => {
+                    const u = getAuthor(row.userId);
+                    const uStreak = getUserActiveStreak(u, todayStr);
+                    const isMe = currentUser && row.userId === currentUser.id;
+                    const rankBadge = i === 0
+                      ? 'bg-amber-400 text-[#050811]'
+                      : i === 1
+                        ? 'bg-slate-200 text-[#050811]'
+                        : i === 2
+                          ? 'bg-amber-700 text-amber-100'
+                          : 'bg-[#0F2547] text-sky-300';
+
+                    return (
+                      <div
+                        key={row.userId}
+                        onClick={() => setMemberModal && setMemberModal(u)}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-2 ${isMe ? 'bg-sky-950/40 border-sky-400/70' : 'bg-[#050811] border-[#1E3A5F] hover:border-amber-400/50'}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`w-6 h-6 rounded-lg font-mono text-[11px] font-bold flex items-center justify-center shrink-0 ${rankBadge}`}>
+                            {i + 1}
+                          </span>
+                          <Avatar user={u} size="xs" />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-white truncate flex items-center gap-1">
+                              <span className="truncate">{u.displayName}</span>
+                              {uStreak >= 2 && <span className="text-[9px] text-orange-400 font-mono shrink-0">🔥{uStreak}</span>}
+                            </div>
+                            <div className="text-[9px] text-slate-400 truncate">
+                              เคลียร์ {row.clears} เกม{row.firsts > 0 ? ` • #1×${row.firsts}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-bold text-sm text-amber-300 leading-none">{row.points}</div>
+                          <div className="text-[8px] text-slate-500 uppercase font-bold mt-0.5">PTS</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {currentUser && myOverallIdx >= 5 && (
+                <div className="pt-2 border-t border-[#1E3A5F]/60 flex items-center justify-between text-xs text-sky-200">
+                  <span>อันดับคะแนนรวมของคุณ: <strong className="font-mono text-white">#{myOverallIdx + 1}</strong> (เคลียร์ {overallStandings[myOverallIdx].clears} เกม)</span>
+                  <span className="font-mono font-bold text-amber-300">{overallStandings[myOverallIdx].points} PTS</span>
+                </div>
+              )}
             </div>
 
             {!currentUser && (
@@ -8562,17 +9589,15 @@
                 return (
                   <div
                     key={g.id}
-                    onClick={() => onSelectGame(idx)}
+                    onClick={() => { playGameSfx('tap'); onSelectGame(idx); }}
                     className={`group card p-4 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-300 border-[#1E3A5F] bg-[#0B1325] hover:-translate-y-1 ${g.hoverCls}`}
                   >
-                    {/* Card Top */}
                     <div>
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center text-xl shrink-0 transition-transform duration-300 group-hover:scale-110 ${g.iconCls}`}>
                           <i className={g.faIcon || 'fas fa-gamepad'}></i>
                         </div>
 
-                        {/* Status Badge */}
                         <div className="flex flex-col items-end gap-1">
                           {stateType === 'won' && (
                             <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold flex items-center gap-1">
@@ -8604,7 +9629,6 @@
                       <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">{g.desc}</p>
                     </div>
 
-                    {/* Card Bottom: #1 Champion + Play CTA */}
                     <div className="space-y-3 pt-3 border-t border-[#1E3A5F]/70">
                       <div className="bg-[#050811] rounded-xl p-2.5 border border-[#1E3A5F]/70 flex items-center justify-between gap-2">
                         {leader && leaderUser ? (
@@ -11088,6 +12112,15 @@
       const [gameFocusMode, setGameFocusMode] = useState(false);
       const [gameRulesOpen, setGameRulesOpen] = useState(false);
       const [shareChatRoom, setShareChatRoom] = useState('global-lobby');
+      const [gameSfxMuted, setGameSfxMuted] = useState(() => isGameSfxMuted());
+      const toggleGameSfx = useCallback(() => {
+        setGameSfxMuted(prev => {
+          const next = !prev;
+          try { localStorage.setItem('tbma_game_sfx_muted', next ? '1' : '0'); } catch (e) {}
+          if (!next) setTimeout(() => playGameSfx('tap'), 30);
+          return next;
+        });
+      }, []);
 
       // ==========================================
       // AUTOMATIC CHECKERS (Birthdays & Old Files)
@@ -12407,6 +13440,15 @@
          });
       }, [activeGameTab]);
 
+      const handleAddGamePenalty = useCallback((sec) => {
+         if (activeGameTab === null) return;
+         setGameAppSt(prev => {
+            const c = prev[activeGameTab] || {};
+            if (!c.isPlaying || c.status !== 'pending') return prev;
+            return { ...prev, [activeGameTab]: { ...c, time: (c.time || 0) + sec } };
+         });
+      }, [activeGameTab]);
+
       useEffect(() => {
         if (activeGameTab === null) return;
         let intv = setInterval(() => {
@@ -12461,6 +13503,22 @@
         const st = result === 'bomb' ? 'lost_bomb' : result;
         const sVal = payload.score || 0;
         let fTime;
+
+        // อัปเดต Daily Streak ของสมาชิก (นับวันละ 1 ครั้งเมื่อจบเกมใดก็ได้ในวันนั้น)
+        if (currentUser) {
+          const ds = currentUser.dailyStreak || {};
+          if (ds.lastDate !== todayStr) {
+            const prevDay = getPrevDateStr(todayStr);
+            const nextCount = ds.lastDate === prevDay ? (ds.count || 0) + 1 : 1;
+            const nextStreak = {
+              count: nextCount,
+              lastDate: todayStr,
+              best: Math.max(ds.best || 0, nextCount)
+            };
+            setCurrentUser(prev => (prev ? { ...prev, dailyStreak: nextStreak } : prev));
+            db.collection('bma_users').doc(currentUser.id).update({ dailyStreak: nextStreak }).catch(() => {});
+          }
+        }
         
         setGameAppSt(prev => {
           const c = prev[activeGameTab] || {};
@@ -12480,33 +13538,46 @@
             if(up) {
               db.collection('bma_daily_scores').doc(`${todayStr}_${activeGameTab}_${currentUser.id}`).set({
                 userId: currentUser.id, displayName: currentUser.displayName, date: todayStr,
-                timeMs: fTime, status: st, gameIndex: activeGameTab, score: sVal, maxTile: payload.maxTile || null, timestamp: Date.now()
+                timeMs: fTime, status: st, gameIndex: activeGameTab, score: sVal,
+                maxTile: payload.maxTile || null, shareGrid: payload.shareGrid || null, timestamp: Date.now()
               });
             }
           }
-          return { ...prev, [activeGameTab]: { ...c, isPlaying: false, status: st, score: sVal, time: fTime, showModal: true, answer: payload.answer || null, maxTile: payload.maxTile || null } };
+          return {
+            ...prev,
+            [activeGameTab]: {
+              ...c, isPlaying: false, status: st, score: sVal, time: fTime, showModal: true,
+              answer: payload.answer || null, maxTile: payload.maxTile || null, shareGrid: payload.shareGrid || null
+            }
+          };
         });
       };
 
       const shareGameResult = async () => {
         if(!currentUser) return;
-        const t = currGameSt.time;
+        const myScore = gameScores.find(x => x.userId === currentUser.id);
+        const t = myScore ? myScore.timeMs : currGameSt.time;
+        const st = myScore ? myScore.status : currGameSt.status;
+        const sc = myScore ? (myScore.score || 0) : (currGameSt.score || 0);
+        const mTile = myScore ? myScore.maxTile : currGameSt.maxTile;
+        const gridStr = currGameSt.shareGrid || myScore?.shareGrid || '';
+
         let msg = '';
-        if (currGameSt.status === 'lost_bomb') msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
-        else if (currGameSt.status === 'lost' && activeGameTab === 2) msg = `ทายธงพลาด! ถูกไปแค่ ${currGameSt.score}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} 🏳️`;
-        else if (currGameSt.status === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่นะ 🔤`;
-        else if (currGameSt.status === 'lost' && activeGameTab === 8) msg = `ต่อวงจรระเบิดตู้ม! ทายผิด 3 ครั้งในเกม ${GAMES[activeGameTab].name} 💥`; 
-        else if (activeGameTab === 2) msg = `ทายถูก ${currGameSt.score}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
-        else if (activeGameTab === 4) msg = `ทายคำศัพท์สำเร็จใน ${currGameSt.score} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔤`;
-        else if (activeGameTab === 5) msg = `ทำคะแนนได้ ${currGameSt.score} 🍎 ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🐍`;
-        else if (activeGameTab === 6) msg = `ทำคะแนนรวมไปได้ ${currGameSt.score} คะแนน โดยได้เลขสูงสุดคือ [${currGameSt.maxTile || 0}] 🟨 ในเกม ${GAMES[activeGameTab].name}! 😎`;
-        else if (activeGameTab === 8) msg = `ต่อวงจรสำเร็จใน ${4 - (currGameSt.score/100)} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔌`; 
+        if (st === 'lost_bomb' || t === Infinity) msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name}! พรุ่งนี้เอาใหม่ 😭💣`;
+        else if (st === 'lost' && activeGameTab === 2) msg = `ทายธงพลาด! ถูกไปแค่ ${sc}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} 🏳️`;
+        else if (st === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name} (${todayStr})! พรุ่งนี้เอาใหม่นะ 🔤${gridStr ? `\n\n${gridStr}` : ''}`;
+        else if (st === 'lost' && activeGameTab === 8) msg = `ต่อวงจรระเบิดตู้ม! ทายผิด 3 ครั้งในเกม ${GAMES[activeGameTab].name} 💥`; 
+        else if (activeGameTab === 2) msg = `ทายถูก ${sc}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🏳️`;
+        else if (activeGameTab === 4) msg = `Wordle (${todayStr}) ${sc}/6 • ใช้เวลา ${fmtTime(t)} 🔤${gridStr ? `\n\n${gridStr}` : ''}`;
+        else if (activeGameTab === 5) msg = `ทำคะแนนได้ ${sc} 🍎 ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🐍`;
+        else if (activeGameTab === 6) msg = `ทำคะแนนรวมไปได้ ${sc} คะแนน โดยได้เลขสูงสุดคือ [${mTile || 0}] 🟨 ในเกม ${GAMES[activeGameTab].name}! 😎`;
+        else if (activeGameTab === 8) msg = `ต่อวงจรสำเร็จใน ${Math.max(1, 4 - Math.floor(sc/100))} ครั้ง! ใช้เวลา ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! 🔌`; 
         else msg = `ทำเวลาไปได้ ${fmtTime(t)} ในเกม ${GAMES[activeGameTab].name}! ใครว่างมาท้าดวลกัน 😎`;
 
         const postId = 'post-' + Date.now();
         await db.collection('bma_posts').doc(postId).set({
           id: postId, authorId: currentUser.id, title: `แชร์สถิติ Daily Game: ${GAMES[activeGameTab].name}`, content: msg,
-          dailyGameShare: { gameIndex: activeGameTab, timeMs: t, score: currGameSt.score, dateStr: todayStr },
+          dailyGameShare: { gameIndex: activeGameTab, timeMs: t, score: sc, dateStr: todayStr },
           isGuestAllowed: true, category: 'General', attachments: [], mutedBy: [], 
           createdAt: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
           timestamp: Date.now(), serverCreatedAt: svrTs(), likes: [], bookmarks: [], comments: []
@@ -12523,14 +13594,15 @@
         const sc = myScore ? (myScore.score || 0) : (currGameSt.score || 0);
         const t = myScore ? myScore.timeMs : currGameSt.time;
         const mTile = myScore ? myScore.maxTile : currGameSt.maxTile;
+        const gridStr = currGameSt.shareGrid || myScore?.shareGrid || '';
 
         let msg = '';
         if (st === 'lost_bomb' || t === Infinity) msg = `พลาดเหยียบระเบิดในเกม ${GAMES[activeGameTab].name} วันนี้! ใครรอดบ้างมาอวดหน่อย`;
         else if (st === 'lost' && activeGameTab === 2) msg = `ทายธงได้ ${sc}/3 ประเทศ ในเกม ${GAMES[activeGameTab].name} ใครทำได้ครบมาท้าดวลกัน!`;
-        else if (st === 'lost' && activeGameTab === 4) msg = `ทายคำศัพท์ไม่ถูกใน ${GAMES[activeGameTab].name} วันนี้ ใครทายออกช่วยด้วย!`;
+        else if (st === 'lost' && activeGameTab === 4) msg = `Wordle (${todayStr}) X/6 ใครทายออกช่วยด้วย!${gridStr ? `\n${gridStr}` : ''}`;
         else if (st === 'lost' && activeGameTab === 8) msg = `ต่อวงจรระเบิดใน ${GAMES[activeGameTab].name}! ใครแม่นแถบสีมาลองดู`;
         else if (activeGameTab === 2) msg = `ทายธงถูก ${sc}/3 ประเทศ ใช้เวลา ${fmtTime(t)} ใน ${GAMES[activeGameTab].name} มาท้าดวลกัน!`;
-        else if (activeGameTab === 4) msg = `ทายคำศัพท์ ${GAMES[activeGameTab].name} สำเร็จใน ${sc} ครั้ง (${fmtTime(t)}) ใครเร็วกว่านี้มาลอง!`;
+        else if (activeGameTab === 4) msg = `Wordle (${todayStr}) ${sc}/6 (${fmtTime(t)}) ใครเร็วกว่านี้มาลอง!${gridStr ? `\n${gridStr}` : ''}`;
         else if (activeGameTab === 5) msg = `ทำคะแนน ${GAMES[activeGameTab].name} ไปได้ ${sc} แต้ม (${fmtTime(t)}) มาทำลายสถิติกัน!`;
         else if (activeGameTab === 6) msg = `ทำคะแนน ${GAMES[activeGameTab].name} ได้ ${sc} pt (เลขสูงสุด ${mTile || 0}) มาลองสู้กัน!`;
         else if (activeGameTab === 8) msg = `ต่อวงจร ${GAMES[activeGameTab].name} สำเร็จใน ${Math.max(1, 4 - Math.floor(sc / 100))} ครั้ง (${fmtTime(t)})!`;
@@ -12572,10 +13644,10 @@
         const prefixMap = {
           0: ['bma_sudoku_v2_'],
           1: ['bma_ms_mines_', 'bma_ms_grid_', 'bma_ms_rev_', 'bma_ms_flag_'],
-          2: ['bma_fg_rds_', 'bma_fg_curr_', 'bma_fg_wrong_'],
+          2: ['bma_fg_rds_', 'bma_fg_curr_', 'bma_fg_wrong_', 'bma_fg_5050_', 'bma_fg_elim_'],
           3: ['bma_sol_', 'bma_sol_init_'],
           4: ['bma_wdl_g_', 'bma_wdl_c_'],
-          5: ['bma_snake_s_', 'bma_snake_f_', 'bma_snake_d_', 'bma_snake_nd_', 'bma_snake_go_', 'bma_snake_sc_'],
+          5: ['bma_snake_s_', 'bma_snake_f_', 'bma_snake_d_', 'bma_snake_nd_', 'bma_snake_go_', 'bma_snake_sc_', 'bma_snake_step_', 'bma_snake_gf_'],
           6: ['bma_2048_b_', 'bma_2048_s_', 'bma_2048_m_', 'bma_2048_max_', 'bma_2048_f_', 'bma_2048_r_'],
           7: ['bma_24_n_'],
           8: ['bma_res_t_', 'bma_res_tol_', 'bma_res_c_', 'bma_res_exp_', 'bma_res_l_']
@@ -14375,6 +15447,9 @@
               todayStr={todayStr}
               onSelectGame={(idx) => setActiveGameTab(idx)}
               setMemberModal={openMemberProfile}
+              db={db}
+              sfxMuted={gameSfxMuted}
+              onToggleSfx={toggleGameSfx}
             />
           )}
 
@@ -14453,6 +15528,14 @@
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+		    <button
+                      type="button"
+                      onClick={toggleGameSfx}
+                      className={`py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1 ${gameSfxMuted ? 'bg-[#050811] text-slate-500 border-[#1E3A5F]' : 'bg-[#050811] text-sky-300 border-sky-500/40 hover:border-sky-400'}`}
+                      title={gameSfxMuted ? 'เปิดเสียงเอฟเฟกต์เกม' : 'ปิดเสียงเอฟเฟกต์เกม'}
+                    >
+                      <i className={`fas ${gameSfxMuted ? 'fa-volume-mute' : 'fa-volume-up'}`}></i>
+                    </button>
                     <button
                       onClick={() => setGameFocusMode(!gameFocusMode)}
                       className={`py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1.5 ${gameFocusMode ? 'bg-sky-500 text-white border-sky-400 shadow-[0_0_12px_rgba(14,165,233,0.4)]' : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:text-white hover:border-sky-500/60'}`}
@@ -14593,7 +15676,7 @@
                                 <div className={`flex-1 flex flex-col justify-center relative overflow-hidden ${isEndedView ? 'opacity-80 pointer-events-none' : ''}`}>
                                   {activeGameTab === 0 && <SudokuGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                                   {activeGameTab === 1 && <MinesweeperGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onFirstMove={handleFirstMove} />}
-                                  {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
+                                  {activeGameTab === 2 && <FlagGuesserGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} onAddPenalty={handleAddGamePenalty} />}
                                   {activeGameTab === 3 && <SolitaireGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                                   {activeGameTab === 4 && <WordleGame dateSeed={todayStr} onEnd={(res, p) => handleGameWinLose(res, p)} />}
                                   {activeGameTab === 5 && <SnakeGame dateSeed={todayStr} isPlaying={currGameSt.isPlaying} isPaused={currGameSt.isPaused} onEnd={(res, p) => handleGameWinLose(res, p)} />}
@@ -14734,11 +15817,34 @@
                                         <div className="text-[11px] text-slate-300">{subStatLabel}</div>
                                       </div>
 
-                                      {/* Wordle Answer Reveal */}
-                                      {currGameSt.answer && activeGameTab === 4 && (
-                                        <div className="p-2.5 rounded-xl bg-[#070C18] border border-sky-500/40 flex items-center justify-between px-3.5">
-                                          <span className="text-slate-400">คำศัพท์ประจำวันนี้</span>
-                                          <span className="font-mono font-bold text-base tracking-widest text-sky-300">{currGameSt.answer}</span>
+                                      {/* Wordle Emoji Grid & Answer Reveal */}
+                                      {activeGameTab === 4 && (currGameSt.shareGrid || myScore?.shareGrid) && (
+                                        <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] text-center space-y-2">
+                                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">ตารางผลทาย (แชร์ได้แบบไม่สปอยล์)</div>
+                                          <div className="text-base leading-snug tracking-widest whitespace-pre-line select-all">
+                                            {currGameSt.shareGrid || myScore?.shareGrid}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const txt = `The Blue Moon Wordle (${todayStr}) ${isLost ? 'X' : finalScore}/6\n${currGameSt.shareGrid || myScore?.shareGrid}`;
+                                              navigator.clipboard.writeText(txt);
+                                              alert('คัดลอกตารางสี Wordle เรียบร้อยแล้ว!');
+                                            }}
+                                            className="btn-d py-1 px-3 text-[10px] text-sky-300 hover:text-white"
+                                          >
+                                            <i className="fas fa-copy mr-1"></i> คัดลอกตารางสี
+                                          </button>
+                                        </div>
+                                      )}
+                                      {currGameSt.answer && [4, 7, 8].includes(activeGameTab) && (
+                                        <div className="p-2.5 rounded-xl bg-[#070C18] border border-sky-500/40 flex items-center justify-between gap-2 px-3.5">
+                                          <span className="text-slate-400 shrink-0">
+                                            {activeGameTab === 4 ? 'คำศัพท์ประจำวันนี้' : activeGameTab === 7 ? 'สมการคำตอบ' : 'แถบสีที่ถูกต้อง'}
+                                          </span>
+                                          <span className="font-mono font-bold text-xs sm:text-sm tracking-wider text-sky-300 text-right truncate">
+                                            {currGameSt.answer}
+                                          </span>
                                         </div>
                                       )}
 
@@ -15774,7 +16880,21 @@
                      🎂 วันเกิด: {new Date(memberModal.birthDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long' })}
                    </div>
                 )}
-                
+                {(() => {
+                  const sNow = getUserActiveStreak(memberModal, todayStr);
+                  const sBest = memberModal.dailyStreak?.best || sNow;
+                  if (sNow <= 0 && sBest <= 0) return null;
+                  return (
+                    <div className="px-3.5 py-1.5 bg-orange-950/50 border border-orange-500/50 rounded-full text-xs font-bold text-orange-300 shadow-md flex items-center gap-1.5">
+                      <span>🔥</span>
+                      <span>
+                        {sNow > 0 ? `Daily Games ต่อเนื่อง ${sNow} วันติด` : `สถิติ Daily Games สูงสุด ${sBest} วันติด`}
+                      </span>
+                      {sNow > 0 && sBest > sNow && <span className="text-[10px] text-slate-400 font-mono">(Best {sBest})</span>}
+                    </div>
+                  );
+                })()}
+
                 <div className="w-full bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] text-sm text-slate-200 mt-2">
                   {memberModal.bio || 'ยังไม่มีคำแนะนำตัว'}
                 </div>
