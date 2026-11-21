@@ -9949,8 +9949,7 @@
               {visibleCards.map(({ g, idx, stateType, myStatText, leader, playerCount }) => {
                 const leaderUser = leader ? getAuthor(leader.userId) : null;
 
-                return (
-                  const handleGameCardCtx = (e) => {
+                const handleGameCardCtx = (e) => {
                   const items = [
                     { icon: 'fas fa-play', label: stateType === 'playing' ? 'เล่นเกมต่อ' : 'เข้าเล่นเกมนี้', accent: true, onClick: () => { playGameSfx('tap'); onSelectGame(idx); } },
                     { icon: 'fas fa-book-open', label: 'ดูวิธีเล่นและกติกา', onClick: () => setHubRuleGame(g) },
