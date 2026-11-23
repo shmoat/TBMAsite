@@ -115,7 +115,7 @@
         .toast.warning { background: #FFF3E0; color: #EF6C00; border: 1px solid #FFE0B2; display: block; }
 
         /* Game 1: Hide & Seek */
-        #play-canvas {
+        #play-canvas-1 {
             width: 100%; height: 300px; background: #C8E6C9; border-radius: 8px; position: relative; overflow: hidden; border: 2px dashed #81C784;
         }
 
@@ -202,11 +202,108 @@
             color: var(--text-muted); 
         }
         .close-modal:hover { color: var(--danger); }
+
+	/* Animations & FX */
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            50% { transform: scale(1.02); box-shadow: 0 6px 14px rgba(76, 175, 80, 0.35); }
+        }
+        @keyframes propShake {
+            0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+            25% { transform: translate(-50%, -50%) rotate(-14deg) scale(1.1); }
+            75% { transform: translate(-50%, -50%) rotate(14deg) scale(1.1); }
+        }
+        .prop-shaking { animation: propShake 0.35s ease; }
+
+        /* Game 2: Progress Bar & Floating Score */
+        .g2-progress-wrap { width: 100%; height: 10px; background: #E0E0E0; border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+        #g2-progress-bar { width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), var(--success)); transition: width 0.2s ease; }
+        .float-score {
+            position: absolute; font-weight: 700; font-size: 20px; pointer-events: none; z-index: 25;
+            transform: translateX(-50%); animation: floatUp 0.65s ease-out forwards;
+            text-shadow: 0 1px 3px rgba(255,255,255,0.9);
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -45px) scale(1.25); }
+        }
+
+        /* Game 3: ปุ่มกด ผิด/ถูก และตัวนับการ์ด */
+        .g3-counter { text-align: right; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+        .g3-actions { display: flex; gap: 12px; margin-top: 14px; }
+        .g3-choice-btn {
+            flex: 1; padding: 12px; border-radius: 12px; border: 2px solid; background: #fff;
+            font-family: 'Prompt', sans-serif; font-size: 18px; font-weight: 700; cursor: pointer;
+            transition: transform 0.15s, background 0.15s;
+        }
+        .g3-choice-btn:active { transform: scale(0.96); }
+        .g3-choice-btn.wrong { border-color: var(--danger); color: var(--danger); }
+        .g3-choice-btn.wrong:hover { background: #FFEBEE; }
+        .g3-choice-btn.right { border-color: var(--success); color: var(--success); }
+        .g3-choice-btn.right:hover { background: #E8F5E9; }
+
+        /* Game 4: ปรับความสูงเลนให้ตรงกริด 7 แถวเป๊ะ */
+        .g4-road, .g4-grass, .g4-water { height: 14.3% !important; box-sizing: border-box; }
+
+        /* Stage 5: Single-Question Quiz UI */
+        .quiz-progress-wrap { width: 100%; height: 8px; background: var(--border-color); border-radius: 99px; overflow: hidden; margin-bottom: 8px; }
+        #quiz-progress-fill { width: 0%; height: 100%; background: var(--accent); transition: width 0.25s ease; }
+        .quiz-progress-text { text-align: right; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px; }
+        .quiz-nav { display: flex; gap: 10px; margin-top: 15px; }
+        .quiz-nav .btn { flex: 1; padding: 12px; font-size: 15px; }
+        .btn-outline { background: #fff; color: var(--text-muted); border: 2px solid var(--border-color); box-shadow: none; }
+        .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Mobile Responsive */
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .container { padding: 18px 14px; border-radius: 14px; }
+            h1 { font-size: 24px; }
+            .header { margin-bottom: 16px; padding-bottom: 10px; }
+            .dpad-btn { width: 60px; height: 60px; font-size: 28px; }
+            .dpad-row { gap: 10px; }
+            .dpad-container { gap: 8px; }
+            .question-card { padding: 16px 14px; }
+        }
+
+	/* ปุ่มเปิด-ปิดเสียง FX มุมขวาบน (ปิดเป็นค่าเริ่มต้น) */
+        .sound-btn {
+            position: absolute; top: 14px; right: 14px;
+            width: 38px; height: 38px; border-radius: 50%;
+            border: 2px solid var(--border-color); background: #fff;
+            font-size: 18px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: 0.2s; z-index: 10;
+        }
+        .sound-btn.active { border-color: var(--accent); background: #F1F8E9; }
+
+        /* กล่องสายพันธุ์เพื่อนซี้ & คู่ปรับ (หน้าผลลัพธ์) */
+        .match-grid { display: flex; gap: 10px; margin-bottom: 18px; text-align: center; }
+        .match-box { flex: 1; padding: 10px 8px; border-radius: 12px; border: 1.5px solid; }
+        .match-box.bestie { background: #E8F5E9; border-color: #A5D6A7; }
+        .match-box.rival { background: #FFF3E0; border-color: #FFCC80; }
+        .match-label { font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+        .match-box.bestie .match-label { color: #2E7D32; }
+        .match-box.rival .match-label { color: #EF6C00; }
+        .match-name { font-size: 13px; font-weight: 700; color: var(--text-main); line-height: 1.35; }
+
+        /* แถบนาฬิกา LIVE สำหรับสตาฟ */
+        .live-badge {
+            margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(0,0,0,0.18); padding: 3px 12px; border-radius: 99px;
+            font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .live-dot {
+            width: 8px; height: 8px; background: #FFEB3B; border-radius: 50%;
+            display: inline-block; animation: liveBlink 1s infinite;
+        }
+        @keyframes liveBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
     </style>
 </head>
 <body>
 
     <div class="container">
+        <button id="sound-toggle" class="sound-btn" onclick="toggleSound()" title="เปิด/ปิดเสียงเอฟเฟกต์" aria-label="เปิดหรือปิดเสียงเอฟเฟกต์">🔇</button>
         <div class="header">
             <h1>BOOTH HERE HERE</h1>
             <p class="subtitle">สวนธนบุรีรมย์ (A3-02)</p>
@@ -246,7 +343,7 @@
             
             <div id="toast-msg-1" class="toast"></div>
             
-            <div id="play-canvas-1" style="background:#C8E6C9; border: 2px dashed #81C784; height: 300px; position: relative; border-radius: 8px;"></div>
+            <div id="play-canvas-1"></div>
             <div class="score-board" style="margin-top:15px;">
                 <span>ภารกิจ: จับตัวเงินตัวทอง</span>
                 <span style="color:var(--accent);">เจอแล้ว: <span id="g1-score">0</span> / 3</span>
@@ -272,6 +369,9 @@
                 <div>คะแนน: <span id="g2-score" style="color:var(--accent)">0</span></div>
                 <div>เวลา: <span id="g2-time" style="color:var(--warning)">20</span>s</div>
             </div>
+	    <div class="g2-progress-wrap">
+                <div id="g2-progress-bar"></div>
+            </div>
             <div id="catcher-canvas">
                 <div id="catcher-lizard">🦎</div>
                 <div id="g2-overlay" class="game-overlay">
@@ -292,18 +392,19 @@
             
             <div id="toast-msg-3" class="toast"></div>
             
+            <div id="g3-counter" class="g3-counter">เหลือการ์ดอีก 5 ใบ</div>
             <div id="tinder-container">
                 <div id="tinder-glow"></div>
                 <div id="cards-stack"></div>
                 <div id="g3-overlay" class="game-overlay" style="display:none; padding:15px;">
-		    <h3 style="color:var(--success); margin-top:0; flex-shrink:0;">🎉 สรุปความรู้ (Key Findings)</h3>
-		    <ul id="g3-summary-list" style="color:var(--text-main); font-size:13px; text-align:left; padding-left:15px; margin:0; line-height:1.5; flex-grow:1; overflow-y:auto; min-height:0; width:100%; padding-right:10px;"></ul>
-		    <button class="btn btn-play" style="margin-top:15px; flex-shrink:0;" onclick="setStage(4)">➡️ ไปด่าน 4: สมดุลป่าคอนกรีต</button>
-		</div>
+                    <h3 style="color:var(--success); margin-top:0; flex-shrink:0;">🎉 สรุปความรู้ (Key Findings)</h3>
+                    <ul id="g3-summary-list" style="color:var(--text-main); font-size:13px; text-align:left; padding-left:15px; margin:0; line-height:1.5; flex-grow:1; overflow-y:auto; min-height:0; width:100%; padding-right:10px;"></ul>
+                    <button class="btn btn-play" style="margin-top:15px; flex-shrink:0;" onclick="setStage(4)">➡️ ไปด่าน 4: สมดุลป่าคอนกรีต</button>
+                </div>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-top:15px; padding:0 20px;">
-                <div style="text-align:center;"><span style="color:var(--danger); font-size:24px; font-weight:bold;">⬅️ ผิด</span></div>
-                <div style="text-align:center;"><span style="color:var(--success); font-size:24px; font-weight:bold;">ถูก ➡️</span></div>
+            <div class="g3-actions">
+                <button type="button" class="g3-choice-btn wrong" onclick="triggerG3Button(false)">⬅️ ผิด</button>
+                <button type="button" class="g3-choice-btn right" onclick="triggerG3Button(true)">ถูก ➡️</button>
             </div>
         </div>
 
@@ -320,13 +421,13 @@
                 <div>กำจัดหนู: <span id="g4-score" style="color:var(--accent)">0</span></div>
             </div>
             <div id="crossy-canvas">
-                <div class="g4-grass" style="top: 0%;"></div>
-                <div class="g4-water" style="top: 14%;"></div>
-                <div class="g4-road" style="top: 28%;"></div>
-                <div class="g4-road" style="top: 42%;"></div>
-                <div class="g4-grass" style="top: 56%;"></div>
-                <div class="g4-road" style="top: 70%;"></div>
-                <div class="g4-grass" style="top: 84%;"></div>
+                <div class="g4-water" style="top: 0%; display:flex; align-items:center; justify-content:center; color:#006064; font-weight:700; font-size:13px;">🏁 สระน้ำ (กลับตรงนี้หลังกินหนูครบ)</div>
+                <div class="g4-grass" style="top: 14.285%;"></div>
+                <div class="g4-road" style="top: 28.57%;"></div>
+                <div class="g4-road" style="top: 42.855%;"></div>
+                <div class="g4-grass" style="top: 57.14%;"></div>
+                <div class="g4-road" style="top: 71.425%;"></div>
+                <div class="g4-grass" style="top: 85.71%;"></div>
                 
                 <div id="g4-lizard" class="g4-entity">🦎</div>
                 
@@ -355,32 +456,53 @@
             <h2 style="color:var(--accent); text-align:center;">คุณคล้ายตัวเงินตัวทองสายพันธุ์ไหน?</h2>
             <p style="text-align:center; font-size:14px; color:var(--text-muted); margin-bottom: 25px;">ให้คะแนนตัวเอง (1 = ไม่ตรงเลย, 5 = ตรงมากที่สุด)</p>
             
+            <div id="toast-msg-5" class="toast"></div>
+            <div class="quiz-progress-wrap"><div id="quiz-progress-fill"></div></div>
+            <div id="quiz-progress-text" class="quiz-progress-text">ข้อ 1 / 12</div>
+
             <form id="quiz-form">
                 <div id="questions-container"></div>
-                <button type="submit" class="btn btn-play" style="padding: 16px; font-size: 18px; margin-top: 30px;">ประมวลผลลัพธ์</button>
+                <div class="quiz-nav">
+                    <button type="button" id="quiz-prev-btn" class="btn btn-outline" onclick="changeQuizStep(-1)">⬅️ ข้อก่อนหน้า</button>
+                    <button type="button" id="quiz-next-btn" class="btn btn-play" onclick="changeQuizStep(1)">ข้อถัดไป ➡️</button>
+                </div>
+                <button type="submit" id="quiz-submit-btn" class="btn btn-success" style="padding: 16px; font-size: 18px; margin-top: 15px; display: none;">✨ ประมวลผลลัพธ์</button>
             </form>
         </div>
 
         <!-- STAGE 6: RESULT -->
         <div id="stage-6" class="stage-section">
-            <div style="text-align: center; background: #fff; border: 2px solid var(--accent); padding: 25px 20px; border-radius: 16px;">
+            <div style="text-align: center; background: #fff; border: 2px solid var(--accent); padding: 25px 18px; border-radius: 16px;">
                 <img id="result-img" src="" alt="ภาพสายพันธุ์ของคุณ" style="width: 220px; height: 220px; object-fit: contain; border-radius: 16px; border: 3px solid var(--border-color); background: #fff; margin: 0 auto 15px auto; display: block; box-shadow: 0 4px 12px rgba(62, 39, 35, 0.1);">
-                <div id="result-title" style="font-size: 24px; font-weight: 700; color: var(--accent); margin-bottom: 12px;"></div>
-                <div id="result-desc" style="font-size: 15px; color: var(--text-main); line-height: 1.8; margin-bottom: 20px;"></div>
+                <div id="result-title" style="font-size: 24px; font-weight: 700; color: var(--accent); margin-bottom: 10px;"></div>
+                <div id="result-desc" style="font-size: 15px; color: var(--text-main); line-height: 1.75; margin-bottom: 18px;"></div>
+
+                <!-- สายพันธุ์เพื่อนซี้ & คู่ปรับ -->
+                <div class="match-grid">
+                    <div class="match-box bestie">
+                        <div class="match-label">💚 สายพันธุ์เพื่อนซี้</div>
+                        <div id="result-bestie" class="match-name">-</div>
+                    </div>
+                    <div class="match-box rival">
+                        <div class="match-label">⚡ สายพันธุ์คู่ปรับ</div>
+                        <div id="result-rival" class="match-name">-</div>
+                    </div>
+                </div>
                 
                 <!-- ปุ่มแชร์ลงสตอรี่ -->
                 <button id="btn-share-story" class="btn" onclick="shareToStory()" style="background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); margin-bottom: 15px; font-size: 16px;">
                     📸 แชร์ลงสตอรี่ (IG / FB)
                 </button>
 
-                <!-- ข้อความรับของที่ระลึก -->
-                <div style="background: var(--success); color: #fff; padding: 15px; border-radius: 8px; font-weight: 600; font-size: 16px; animation: pulse 1.5s infinite; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    🎁 ยื่นหน้าจอนี้ให้สตาฟในบูธเพื่อรับของที่ระลึก
+                <!-- ข้อความรับของที่ระลึก + นาฬิกา LIVE กันแคปจอ -->
+                <div style="background: var(--success); color: #fff; padding: 14px; border-radius: 10px; font-weight: 600; font-size: 16px; animation: pulse 1.5s infinite; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div>🎁 ยื่นหน้าจอนี้ให้สตาฟในบูธเพื่อรับของที่ระลึก</div>
+                    <div class="live-badge"><span class="live-dot"></span> LIVE <span id="staff-live-clock">--:--:--</span></div>
                 </div>
             </div>
-            <button class="btn btn-warning" onclick="resetAllData()" style="margin-top: 20px; padding: 16px; font-size: 16px;">🔄 เริ่มกิจกรรมใหม่ (สำหรับคนต่อไป)</button>
+            <button class="btn btn-warning" onclick="confirmReset()" style="margin-top: 20px; padding: 16px; font-size: 16px;">🔄 เริ่มกิจกรรมใหม่ (สำหรับคนต่อไป)</button>
         </div>
-    </div> <!-- ปิด .container ให้ครบสมบูรณ์ -->
+    </div>
 
     <!-- QR Generator Modal (Admin) -->
     <div class="modal" id="qr-modal">
@@ -414,6 +536,76 @@
     </div>
 
     <script>
+        // --- Opt-in Sound FX (Web Audio API) & Haptics ---
+        let soundEnabled = false;
+        let audioCtx = null;
+
+        window.toggleSound = function() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('sound-toggle');
+            if (btn) {
+                btn.innerText = soundEnabled ? '🔊' : '🔇';
+                btn.classList.toggle('active', soundEnabled);
+            }
+            if (soundEnabled) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass && !audioCtx) audioCtx = new AudioContextClass();
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                playSfx('pop');
+            }
+        };
+
+        function playTone(freq, duration, type = 'sine', delay = 0, vol = 0.14) {
+            if (!soundEnabled || !audioCtx) return;
+            const now = audioCtx.currentTime + delay;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(vol, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        function playSfx(kind) {
+            if (navigator.vibrate) {
+                if (kind === 'bad') navigator.vibrate([40, 30, 40]);
+                else if (kind === 'win') navigator.vibrate([30, 40, 60]);
+                else navigator.vibrate(18);
+            }
+            if (!soundEnabled || !audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            if (kind === 'pop') {
+                playTone(540, 0.08, 'sine', 0, 0.12);
+                playTone(720, 0.09, 'sine', 0.05, 0.1);
+            } else if (kind === 'good') {
+                playTone(523, 0.09, 'triangle', 0, 0.14);
+                playTone(784, 0.14, 'triangle', 0.07, 0.14);
+            } else if (kind === 'bad') {
+                playTone(230, 0.12, 'sawtooth', 0, 0.09);
+                playTone(165, 0.18, 'sawtooth', 0.09, 0.09);
+            } else if (kind === 'win') {
+                [523, 659, 784, 1046].forEach((f, i) => playTone(f, 0.16, 'triangle', i * 0.08, 0.14));
+            }
+        }
+
+        // --- Staff Live Clock (Stage 6) ---
+        let liveClockTimer = null;
+        function updateStaffLiveClock() {
+            const el = document.getElementById('staff-live-clock');
+            if (el) el.innerText = new Date().toLocaleTimeString('th-TH', { hour12: false });
+        }
+        function toggleLiveClock(active) {
+            clearInterval(liveClockTimer);
+            if (active) {
+                updateStaffLiveClock();
+                liveClockTimer = setInterval(updateStaffLiveClock, 1000);
+            }
+        }
         // --- Core Flow Logic ---
         let currentStage = parseInt(localStorage.getItem('boothHereFlowStage')) || 0;
 
@@ -424,19 +616,21 @@
             
             if(stageNum === 1) initGame1();
             if(stageNum === 3) initGame3();
+            if(stageNum === 5) renderQuizQuestion();
         }
 
         function renderView() {
-            // Hide all
             for(let i=0; i<=6; i++) {
                 let el = document.getElementById('stage-'+i);
                 if(el) el.style.display = 'none';
             }
-            // Show current
             let currentEl = document.getElementById('stage-'+currentStage);
             if(currentEl) currentEl.style.display = 'block';
 
-            // Update Progress dots (0 is home, 1-4 are games, 5 is quiz, 6 is result)
+            // ซ่อน Progress Bar ในหน้าแรก (Stage 0)
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) progressBar.style.display = currentStage === 0 ? 'none' : 'flex';
+
             for(let i=1; i<=5; i++) {
                 let dot = document.getElementById('dot-'+i);
                 if(dot) {
@@ -444,13 +638,13 @@
                     else dot.classList.remove('active');
                 }
             }
-            
-            window.scrollTo(0,0);
-	// เพิ่มต่อท้ายก่อนคำสั่ง window.scrollTo(0,0);
+
+            toggleLiveClock(currentStage === 6);
             if (currentStage === 6) {
                 const saved = JSON.parse(localStorage.getItem('boothHereResult') || 'null');
                 if (saved) applyResultToUI(saved);
             }
+            window.scrollTo(0,0);
         }
 
         function showToast(id, msg, type) {
@@ -465,6 +659,22 @@
         let g1Total = 3;
         let g1Initialized = false;
 
+        const propHintMsgs = [
+            '🌿 แหวกดูแล้ว ไม่มีน้องซ่อนอยู่ตรงนี้!',
+            '🪨 ใต้หินมีแต่มด ลองหาจุดอื่นดูนะ',
+            '🌳 นี่ต้นไม้ ไม่ใช่ตัวเงินตัวทอง!',
+            '👀 เกือบแล้วๆ ลองแตะดูรอบๆ อีกที'
+        ];
+
+        window.tapProp1 = function(el) {
+	    playSfx('bad');
+            el.classList.remove('prop-shaking');
+            void el.offsetWidth;
+            el.classList.add('prop-shaking');
+            const msg = propHintMsgs[Math.floor(Math.random() * propHintMsgs.length)];
+            showToast('toast-msg-1', msg, 'warning');
+        };
+
         function initGame1() {
             if(g1Initialized) return;
             g1Initialized = true;
@@ -476,14 +686,14 @@
             
             for(let i=0; i<15; i++) {
                 let e = props[Math.floor(Math.random() * props.length)];
-                let x = Math.floor(Math.random() * 90) + 5;
-                let y = Math.floor(Math.random() * 90) + 5;
+                let x = Math.floor(Math.random() * 82) + 9;
+                let y = Math.floor(Math.random() * 80) + 10;
                 let size = Math.floor(Math.random() * 25) + 30;
                 elements.push({ e: e, x: x, y: y, isLizard: false, size: size });
             }
             for(let i=0; i<g1Total; i++) {
-                let x = Math.floor(Math.random() * 90) + 5;
-                let y = Math.floor(Math.random() * 90) + 5;
+                let x = Math.floor(Math.random() * 80) + 10;
+                let y = Math.floor(Math.random() * 78) + 11;
                 let size = Math.floor(Math.random() * 10) + 35;
                 elements.push({ e: '🦎', x: x, y: y, isLizard: true, size: size });
             }
@@ -491,10 +701,9 @@
             elements.sort(() => Math.random() - 0.5);
 
             elements.forEach((el) => {
-                let clickEvt = el.isLizard ? 'onclick="catchLizard1(this)"' : '';
-                let ptrEvent = el.isLizard ? 'pointer-events: auto; cursor: pointer;' : 'pointer-events: none; opacity: 0.9;';
-                let zIndex = el.isLizard ? 'z-index: 5;' : `z-index: ${Math.floor(Math.random()*4)};`;
-                html += `<div style="position:absolute; left:${el.x}%; top:${el.y}%; font-size:${el.size}px; transform:translate(-50%,-50%); user-select:none; ${ptrEvent} ${zIndex} transition: all 0.3s;" ${clickEvt}>${el.e}</div>`;
+                let clickEvt = el.isLizard ? 'onclick="catchLizard1(this)"' : 'onclick="tapProp1(this)"';
+                let zIndex = el.isLizard ? 'z-index: 5;' : `z-index: ${Math.floor(Math.random()*4) + 1};`;
+                html += `<div style="position:absolute; left:${el.x}%; top:${el.y}%; font-size:${el.size}px; transform:translate(-50%,-50%); user-select:none; cursor:pointer; ${zIndex} transition: opacity 0.3s, transform 0.3s;" ${clickEvt}>${el.e}</div>`;
             });
             
             document.getElementById('play-canvas-1').innerHTML = html;
@@ -505,6 +714,7 @@
             el.style.opacity = '0';
             el.style.transform = 'translate(-50%,-50%) scale(2)';
             g1Found++;
+            playSfx(g1Found >= g1Total ? 'win' : 'good');
             document.getElementById('g1-score').innerText = g1Found;
             showToast('toast-msg-1', '✅ จับได้ 1 ตัว! ซ่อนเนียนมาก', 'success');
             if(g1Found >= g1Total) {
@@ -541,14 +751,30 @@
         canvas2.addEventListener('touchmove', (e) => { if(isDragging2 && currentStage===2) { e.preventDefault(); moveCatcher(e.touches[0].clientX); } }, {passive: false});
         window.addEventListener('touchend', () => isDragging2 = false);
 
+        function showFloatingScore(point) {
+            const pop = document.createElement('div');
+            pop.className = 'float-score';
+            pop.innerText = point > 0 ? `+${point}` : `${point}`;
+            pop.style.color = point > 0 ? '#2E7D32' : '#C62828';
+            pop.style.left = catcherX + '%';
+            pop.style.bottom = '65px';
+            canvas2.appendChild(pop);
+            setTimeout(() => pop.remove(), 650);
+        }
+
         window.startGame2 = function() {
+            clearInterval(window.g2Loop);
+            clearInterval(window.g2Spawn);
+            window.g2Tick = 0;
+
             document.getElementById('g2-overlay').style.display = 'none';
             document.getElementById('g2-success').style.display = 'none';
             g2Score = 0; g2Time = 20; fallingItems = [];
             catcherX = 50; document.getElementById('catcher-lizard').style.left = '50%';
             document.getElementById('g2-score').innerText = g2Score;
             document.getElementById('g2-time').innerText = g2Time;
-            document.querySelectorAll('.falling-item').forEach(el => el.remove());
+            document.getElementById('g2-progress-bar').style.width = '0%';
+            document.querySelectorAll('.falling-item, .float-score').forEach(el => el.remove());
 
             window.g2Spawn = setInterval(spawnFood, 700);
             window.g2Loop = setInterval(updateGame2, 50); 
@@ -565,8 +791,7 @@
         }
 
         function updateGame2() {
-            let tickCount = window.g2Tick || 0;
-            window.g2Tick = tickCount + 1;
+            window.g2Tick = (window.g2Tick || 0) + 1;
             if(window.g2Tick % 20 === 0) {
                 g2Time--;
                 document.getElementById('g2-time').innerText = g2Time;
@@ -579,12 +804,17 @@
                 item.el.style.top = item.y + '%';
 
                 if(item.y > 80 && item.y < 95 && Math.abs(item.x - catcherX) < 15) {
-                    g2Score += item.def.point;
+                    g2Score = Math.max(0, g2Score + item.def.point);
                     document.getElementById('g2-score').innerText = g2Score;
+                    document.getElementById('g2-progress-bar').style.width = Math.min(100, (g2Score / TARGET_SCORE) * 100) + '%';
+                    showFloatingScore(item.def.point);
+
                     let lizard = document.getElementById('catcher-lizard');
                     if(item.def.type === 'good') {
+			playSfx('good');
                         lizard.innerText = '😋'; setTimeout(() => lizard.innerText = '🦎', 300);
                     } else {
+			playSfx('bad')
                         lizard.innerText = '🤮'; setTimeout(() => lizard.innerText = '🦎', 300);
                     }
                     item.el.remove();
@@ -599,6 +829,7 @@
 
         function endGame2() {
             clearInterval(window.g2Loop); clearInterval(window.g2Spawn);
+            playSfx(g2Score >= TARGET_SCORE ? 'win' : 'bad');
             const overlay = document.getElementById('g2-overlay');
             overlay.style.display = 'flex';
             if(g2Score >= TARGET_SCORE) {
@@ -621,8 +852,8 @@
         let g3Questions = [];
         let g3Summary = [];
         let g3Initialized = false;
+        let g3IsAnimating = false;
 
-        // ข้อมูลอ้างอิงจาก Board Narrative Layout
         const allG3Questions = [
             { q: 'ตัวเงินตัวทองไซส์เล็ก มักจะมีนิสัยดุร้ายและพุ่งเข้าใส่คนก่อนเสมอ?', a: false, exp: 'ตัวเล็กที่พบนั้นรักสงบและไม่ยุ่งกับคนก่อน ส่วนตัวใหญ่จะค่อนข้างดุ' },
             { q: 'ตัวเงินตัวทองสามารถปีนต้นไม้ เพื่อไปกินไข่นกหรือลูกนกได้?', a: true, exp: 'พวกมันปีนต้นไม้เก่งและสามารถกินไข่นกหรือลูกนกเป็นอาหารได้' },
@@ -634,6 +865,7 @@
         function initGame3() {
             if(g3Initialized) return;
             g3Initialized = true;
+            g3IsAnimating = false;
             g3Questions = [...allG3Questions].sort(() => Math.random() - 0.5);
             g3Summary = [];
             renderG3Cards();
@@ -641,6 +873,9 @@
 
         function renderG3Cards() {
             const stack = document.getElementById('cards-stack');
+            const counter = document.getElementById('g3-counter');
+            if (counter) counter.innerText = `เหลือการ์ดอีก ${g3Questions.length} ใบ`;
+
             stack.innerHTML = '';
             for (let i = g3Questions.length - 1; i >= 0; i--) {
                 const q = g3Questions[i];
@@ -660,12 +895,20 @@
             }
         }
 
+        window.triggerG3Button = function(choice) {
+            if (g3IsAnimating || g3Questions.length === 0 || currentStage !== 3) return;
+            const topCard = document.getElementById('cards-stack').lastElementChild;
+            if (!topCard) return;
+            topCard.style.transition = 'transform 0.3s ease-out';
+            handleSwipe(topCard, g3Questions[0], choice);
+        };
+
         function makeSwipeable(el, qData) {
             let startX = 0, currentX = 0, isDragging = false;
             const glow = document.getElementById('tinder-glow');
 
             const onMove = (e) => {
-                if (!isDragging || currentStage !== 3) return;
+                if (!isDragging || g3IsAnimating || currentStage !== 3) return;
                 e.preventDefault(); 
                 const x = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
                 currentX = x - startX;
@@ -677,7 +920,7 @@
                 glow.style.opacity = Math.min(Math.abs(currentX) / 100, 1);
             };
 
-            const onEnd = (e) => {
+            const onEnd = () => {
                 if (!isDragging) return;
                 isDragging = false; el.style.cursor = 'grab';
                 document.removeEventListener('mousemove', onMove); document.removeEventListener('touchmove', onMove);
@@ -692,7 +935,7 @@
             };
 
             const onStart = (e) => {
-                if(currentStage !== 3) return;
+                if(currentStage !== 3 || g3IsAnimating) return;
                 isDragging = true; el.style.transition = 'none'; el.style.cursor = 'grabbing';
                 startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
                 document.addEventListener('mousemove', onMove, {passive: false}); document.addEventListener('touchmove', onMove, {passive: false});
@@ -703,21 +946,29 @@
         }
 
         function handleSwipe(el, qData, choice) {
+            if (g3IsAnimating) return;
+            g3IsAnimating = true;
+
             const endX = choice ? window.innerWidth : -window.innerWidth;
             el.style.transform = `translate(calc(-50% + ${endX}px), -50%) rotate(${choice ? 30 : -30}deg)`;
             
             setTimeout(() => {
                 g3Questions.shift(); 
                 if (choice === qData.a) {
+		    playSfx(g3Questions.length === 0 ? 'win' : 'good');
                     showToast('toast-msg-3', '✅ ถูกต้อง!', 'success');
                     g3Summary.push(`<li style="margin-bottom:10px;"><b>${qData.q}</b><br><span style="color:var(--success)">✅ ${qData.exp}</span></li>`);
                 } else {
+		    playSfx('bad');
                     showToast('toast-msg-3', '❌ ผิด! เอาไปต่อคิวหลังสุดนะ', 'error');
                     g3Questions.push(qData);
                 }
                 
-                if (g3Questions.length > 0) { renderG3Cards(); } 
-                else {
+                g3IsAnimating = false;
+                if (g3Questions.length > 0) {
+                    renderG3Cards();
+                } else {
+                    document.getElementById('g3-counter').innerText = 'ตอบครบทั้งหมดแล้ว! 🎉';
                     document.getElementById('g3-summary-list').innerHTML = g3Summary.join('');
                     document.getElementById('g3-overlay').style.display = 'flex';
                 }
@@ -742,6 +993,7 @@
         });
 
         window.startGame4 = function() {
+            clearInterval(window.g4Loop);
             document.getElementById('g4-overlay').style.display = 'none';
             document.getElementById('g4-success').style.display = 'none';
             
@@ -753,15 +1005,21 @@
             document.querySelectorAll('.g4-rat, .g4-car').forEach(e => e.remove());
             
             const canvas = document.getElementById('crossy-canvas');
+            const usedPos = new Set();
             for(let i=0; i<totalRats; i++) {
-                let rx = Math.floor(Math.random() * 7);
-                let ry = Math.floor(Math.random() * 5); 
+                let rx, ry, key;
+                do {
+                    rx = Math.floor(Math.random() * 7);
+                    ry = Math.floor(Math.random() * 5) + 1; // สุ่มเฉพาะแถว 1-5 (ไม่เกิดในสระน้ำหรือจุดเริ่มต้น)
+                    key = `${rx},${ry}`;
+                } while (usedPos.has(key));
+                usedPos.add(key);
                 
                 let ratEl = document.createElement('div');
                 ratEl.className = 'g4-entity g4-rat';
                 ratEl.innerText = '🐀';
-                ratEl.style.left = `calc(${rx * 14.28}% + 5px)`;
-                ratEl.style.top = `calc(${ry * 14.28}% + 10px)`;
+                ratEl.style.left = `calc(${rx * 14.285}% + 5px)`;
+                ratEl.style.top = `calc(${ry * 14.285}% + 8px)`;
                 canvas.appendChild(ratEl);
                 g4Rats.push({x: rx, y: ry, el: ratEl, active: true});
             }
@@ -783,19 +1041,20 @@
 
         function updateLizardPos() {
             const liz = document.getElementById('g4-lizard');
-            liz.style.left = `calc(${g4Lizard.x * 14.28}% + 5px)`;
-            liz.style.top = `calc(${g4Lizard.y * 14.28}% + 10px)`;
+            liz.style.left = `calc(${g4Lizard.x * 14.285}% + 5px)`;
+            liz.style.top = `calc(${g4Lizard.y * 14.285}% + 8px)`;
             
             if(g4Lizard.y === 0 && ratCount >= totalRats) {
                 endGame4(true);
             } else if (g4Lizard.y === 0) {
-                showToast('toast-msg-4', "ต้องกินหนูให้หมดก่อนถึงจะผ่านได้!", "warning");
+                showToast('toast-msg-4', "ต้องกินหนูให้หมดก่อนถึงจะลงสระน้ำได้!", "warning");
             }
         }
 
         function checkRatCollision() {
             for(let rat of g4Rats) {
                 if(rat.active && rat.x === g4Lizard.x && rat.y === g4Lizard.y) {
+		    playSfx('good');
                     rat.active = false;
                     rat.el.style.opacity = '0';
                     rat.el.style.transform = 'scale(0)';
@@ -818,10 +1077,11 @@
                 let car = document.createElement('div');
                 car.className = 'g4-entity g4-car';
                 car.innerText = ['🚗', '🚕', '🚙'][Math.floor(Math.random()*3)];
-                car.style.top = `calc(${row * 14.28}% + 10px)`;
+                car.style.top = `calc(${row * 14.285}% + 8px)`;
                 car.style.left = dir === 1 ? '-10%' : '110%';
                 
-                if(dir === -1) car.style.transform = 'scaleX(-1)';
+                // อีโมจิรถหันหน้าไปทางซ้ายอยู่แล้ว จึงกลับด้านเฉพาะตอนวิ่งไปทางขวา (dir === 1)
+                if(dir === 1) car.style.transform = 'scaleX(-1)';
                 
                 canvas.appendChild(car);
                 g4Cars.push({ el: car, row: row, pos: dir === 1 ? -10 : 110, dir: dir, active: true });
@@ -833,7 +1093,7 @@
                 car.pos += (car.dir * 4);
                 car.el.style.left = car.pos + '%';
                 
-                let carGridX = Math.floor((car.pos + 5) / 14.28); 
+                let carGridX = Math.floor((car.pos + 5) / 14.285); 
                 if(car.row === g4Lizard.y && carGridX === g4Lizard.x) { endGame4(false); }
                 
                 if((car.dir === 1 && car.pos > 110) || (car.dir === -1 && car.pos < -10)) {
@@ -843,6 +1103,7 @@
         }
 
         function endGame4(win) {
+	    playSfx(win ? 'win' : 'bad');
             clearInterval(window.g4Loop);
             const overlay = document.getElementById('g4-overlay');
             overlay.style.display = 'flex';
@@ -880,53 +1141,138 @@
         ];
 
         const qContainer = document.getElementById('questions-container');
-        quizQuestions.forEach((q, index) => {
-            const num = index + 1;
-            qContainer.innerHTML += `
-                <div class="question-card">
-                    <div class="question-text">${num}. ${q}</div>
-                    <div class="options-container">
-                        <label class="option"><input type="radio" name="q${num}" value="1" required><span>1</span></label>
-                        <label class="option"><input type="radio" name="q${num}" value="2"><span>2</span></label>
-                        <label class="option"><input type="radio" name="q${num}" value="3"><span>3</span></label>
-                        <label class="option"><input type="radio" name="q${num}" value="4"><span>4</span></label>
-                        <label class="option"><input type="radio" name="q${num}" value="5"><span>5</span></label>
-                    </div>
+        let quizAnswers = new Array(quizQuestions.length).fill(null);
+        let currentQuizIdx = 0;
+        let quizAutoNextTimer = null;
+
+        function renderQuizQuestion() {
+            const total = quizQuestions.length;
+            const num = currentQuizIdx + 1;
+            const selected = quizAnswers[currentQuizIdx];
+
+            document.getElementById('quiz-progress-text').innerText = `ข้อ ${num} / ${total}`;
+            document.getElementById('quiz-progress-fill').style.width = `${(num / total) * 100}%`;
+
+            let optionsHtml = '';
+            for (let v = 1; v <= 5; v++) {
+                const checked = selected === v ? 'checked' : '';
+                optionsHtml += `
+                    <label class="option">
+                        <input type="radio" name="current-q" value="${v}" ${checked} onclick="selectQuizAnswer(${v})">
+                        <span>${v}</span>
+                    </label>
+                `;
+            }
+
+            qContainer.innerHTML = `
+                <div class="question-card" style="animation: fadeIn 0.25s ease-out;">
+                    <div class="question-text">${num}. ${quizQuestions[currentQuizIdx]}</div>
+                    <div class="options-container">${optionsHtml}</div>
                     <div class="labels"><span>ไม่ตรงเลย</span><span>ตรงมากที่สุด</span></div>
                 </div>
             `;
-        });
+
+            const prevBtn = document.getElementById('quiz-prev-btn');
+            const nextBtn = document.getElementById('quiz-next-btn');
+            const submitBtn = document.getElementById('quiz-submit-btn');
+
+            prevBtn.disabled = currentQuizIdx === 0;
+            if (currentQuizIdx === total - 1) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+        }
+
+        window.selectQuizAnswer = function(val) {
+            quizAnswers[currentQuizIdx] = val;
+            playSfx('pop');
+            clearTimeout(quizAutoNextTimer);
+            if (currentQuizIdx < quizQuestions.length - 1) {
+                quizAutoNextTimer = setTimeout(() => {
+                    currentQuizIdx++;
+                    renderQuizQuestion();
+                }, 220);
+            }
+        };
+
+        window.changeQuizStep = function(delta) {
+            clearTimeout(quizAutoNextTimer);
+            if (delta > 0 && quizAnswers[currentQuizIdx] === null) {
+                showToast('toast-msg-5', 'กรุณาเลือกคะแนน 1–5 ก่อนไปข้อถัดไปนะครับ', 'warning');
+                return;
+            }
+            const nextIdx = currentQuizIdx + delta;
+            if (nextIdx >= 0 && nextIdx < quizQuestions.length) {
+                currentQuizIdx = nextIdx;
+                renderQuizQuestion();
+            }
+        };
 
         // ตั้งค่าโฟลเดอร์เก็บภาพ (ถ้าวางภาพไว้หน้าเดียวกับไฟล์ HTML ให้เปลี่ยนเป็น '')
         const IMG_BASE_PATH = 'images/';
         let currentResultData = null;
 
-        function applyResultToUI(result) {
+        const SPECIES_MATCH_MAP = {
+            'เหี้ยลายดอก (The Survivor)': { bestie: 'มังกรดำ (The Dark Mode)', rival: 'ตะกวด (The Introvert)' },
+            'มังกรดำ (The Dark Mode)': { bestie: 'เหี้ยลายดอก (The Survivor)', rival: 'เห่าช้าง (The Tsundere)' },
+            'แลนดอน (The Grounded)': { bestie: 'ตุ๊ดตู่ (The Slow-Life)', rival: 'เหี้ยลายดอก (The Survivor)' },
+            'เห่าช้าง (The Tsundere)': { bestie: 'ตะกวด (The Introvert)', rival: 'มังกรดำ (The Dark Mode)' },
+            'ตะกวด (The Introvert)': { bestie: 'เห่าช้าง (The Tsundere)', rival: 'เหี้ยลายดอก (The Survivor)' },
+            'ตุ๊ดตู่ (The Slow-Life)': { bestie: 'แลนดอน (The Grounded)', rival: 'เห่าช้าง (The Tsundere)' }
+        };
+
+        function enrichResultData(result) {
+            if (!result) return null;
+            const match = SPECIES_MATCH_MAP[result.name] || { bestie: '-', rival: '-' };
+            return { ...result, bestie: result.bestie || match.bestie, rival: result.rival || match.rival };
+        }
+
+        function applyResultToUI(rawResult) {
+            const result = enrichResultData(rawResult);
             if (!result) return;
             currentResultData = result;
             document.getElementById('result-title').innerText = result.name;
             document.getElementById('result-desc').innerText = result.desc;
+            document.getElementById('result-bestie').innerText = result.bestie;
+            document.getElementById('result-rival').innerText = result.rival;
             document.getElementById('result-img').src = IMG_BASE_PATH + encodeURIComponent(result.img);
         }
 
         document.getElementById('quiz-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            const getVal = (name) => parseInt(document.querySelector(`input[name="${name}"]:checked`).value);
+            const missingIdx = quizAnswers.indexOf(null);
+            if (missingIdx !== -1) {
+                currentQuizIdx = missingIdx;
+                renderQuizQuestion();
+                playSfx('bad');
+                showToast('toast-msg-5', `ยังไม่ได้ตอบข้อที่ ${missingIdx + 1} นะครับ`, 'error');
+                return;
+            }
+
+            const getVal = (num) => quizAnswers[num - 1];
             const scores = [
-                { name: 'เหี้ยลายดอก (The Survivor)', img: 'The_Survivor.png', score: getVal('q1') + getVal('q7'), desc: 'คุณคือสุดยอดนักสู้ชีวิต หน้ามึน อยู่ง่ายกินง่าย ยืดหยุ่นได้กับทุกสถานการณ์ เอาตัวรอดเก่งเป็นที่หนึ่ง และไม่ปล่อยให้คำวิจารณ์ของใครมาทำลายความสุขในแต่ละวันของคุณ' },
-                { name: 'มังกรดำ (The Dark Mode)', img: 'The_Dark_Mode.png', score: getVal('q2') + getVal('q11'), desc: 'คุณมีสไตล์ที่โดดเด่นชัดเจน รักความเรียบเท่และสุขุม ภายนอกดูดาร์กๆ ลึกลับ และอาจจะดูเข้าถึงยากในตอนแรก แต่เนื้อแท้แล้วคุณเป็นคนปรับตัวเก่งและชิลล์กว่าที่หลายคนคิด' },
-                { name: 'แลนดอน (The Grounded)', img: 'The_Grounded.png', score: getVal('q3') + getVal('q9'), desc: 'คุณคือสายซัพพอร์ตความมั่นคง ติดดิน ไม่ชอบความหวือหวาหรือการไหลไปตามกระแสนิยม คุณชอบสร้างรากฐานชีวิตให้แข็งแรง และมีความสุขกับการอยู่ในพื้นที่แห้งๆ ปลอดภัยของตัวเอง' },
-                { name: 'เห่าช้าง (The Tsundere)', img: 'The_Tsundere.png', score: getVal('q4') + getVal('q8'), desc: 'คุณคือคนหน้าดุสไตล์ซึนเดเระ ชอบสร้างเกราะป้องกันตัวเองด้วยความเสียงดังหรือท่าทีแข็งกร้าว แต่จริงๆ แล้วข้างในใจบางมาก รักสงบ และเกลียดความขัดแย้งที่สุด' },
-                { name: 'ตะกวด (The Introvert)', img: 'The_Introvert.png', score: getVal('q5') + getVal('q12'), desc: 'คุณคือสายโลกส่วนตัวสูง ขี้อาย และตกใจง่าย คุณมีเรดาร์ตรวจจับความวุ่นวายที่ไวมาก ถ้าบรรยากาศเริ่มไม่ดีหรือคนเริ่มเยอะ คุณพร้อมจะสับเกียร์หมาหนีกลับไปชาร์จแบตในเซฟโซนทันที' },
-                { name: 'ตุ๊ดตู่ (The Slow-Life)', img: 'The_slow_life.png', score: getVal('q6') + getVal('q10'), desc: 'คุณคือสายติดบ้านที่น่าทะนุถนอมที่สุดในกลุ่ม คุณมีจังหวะชีวิตที่ค่อยเป็นค่อยไป ไม่ชอบการแข่งขันหรือความเร่งรีบ เป็นคนซอฟต์ๆ ที่ใครอยู่ใกล้ก็รู้สึกสบายใจและปลอดภัย' }
+                { name: 'เหี้ยลายดอก (The Survivor)', img: 'The_Survivor.png', bestie: 'มังกรดำ (The Dark Mode)', rival: 'ตะกวด (The Introvert)', score: getVal(1) + getVal(7), desc: 'คุณคือสุดยอดนักสู้ชีวิต หน้ามึน อยู่ง่ายกินง่าย ยืดหยุ่นได้กับทุกสถานการณ์ เอาตัวรอดเก่งเป็นที่หนึ่ง และไม่ปล่อยให้คำวิจารณ์ของใครมาทำลายความสุขในแต่ละวันของคุณ' },
+                { name: 'มังกรดำ (The Dark Mode)', img: 'The_Dark_Mode.png', bestie: 'เหี้ยลายดอก (The Survivor)', rival: 'เห่าช้าง (The Tsundere)', score: getVal(2) + getVal(11), desc: 'คุณมีสไตล์ที่โดดเด่นชัดเจน รักความเรียบเท่และสุขุม ภายนอกดูดาร์กๆ ลึกลับ และอาจจะดูเข้าถึงยากในตอนแรก แต่เนื้อแท้แล้วคุณเป็นคนปรับตัวเก่งและชิลล์กว่าที่หลายคนคิด' },
+                { name: 'แลนดอน (The Grounded)', img: 'The_Grounded.png', bestie: 'ตุ๊ดตู่ (The Slow-Life)', rival: 'เหี้ยลายดอก (The Survivor)', score: getVal(3) + getVal(9), desc: 'คุณคือสายซัพพอร์ตความมั่นคง ติดดิน ไม่ชอบความหวือหวาหรือการไหลไปตามกระแสนิยม คุณชอบสร้างรากฐานชีวิตให้แข็งแรง และมีความสุขกับการอยู่ในพื้นที่แห้งๆ ปลอดภัยของตัวเอง' },
+                { name: 'เห่าช้าง (The Tsundere)', img: 'The_Tsundere.png', bestie: 'ตะกวด (The Introvert)', rival: 'มังกรดำ (The Dark Mode)', score: getVal(4) + getVal(8), desc: 'คุณคือคนหน้าดุสไตล์ซึนเดเระ ชอบสร้างเกราะป้องกันตัวเองด้วยความเสียงดังหรือท่าทีแข็งกร้าว แต่จริงๆ แล้วข้างในใจบางมาก รักสงบ และเกลียดความขัดแย้งที่สุด' },
+                { name: 'ตะกวด (The Introvert)', img: 'The_Introvert.png', bestie: 'เห่าช้าง (The Tsundere)', rival: 'เหี้ยลายดอก (The Survivor)', score: getVal(5) + getVal(12), desc: 'คุณคือสายโลกส่วนตัวสูง ขี้อาย และตกใจง่าย คุณมีเรดาร์ตรวจจับความวุ่นวายที่ไวมาก ถ้าบรรยากาศเริ่มไม่ดีหรือคนเริ่มเยอะ คุณพร้อมจะสับเกียร์หมาหนีกลับไปชาร์จแบตในเซฟโซนทันที' },
+                { name: 'ตุ๊ดตู่ (The Slow-Life)', img: 'The_slow_life.png', bestie: 'แลนดอน (The Grounded)', rival: 'เห่าช้าง (The Tsundere)', score: getVal(6) + getVal(10), desc: 'คุณคือสายติดบ้านที่น่าทะนุถนอมที่สุดในกลุ่ม คุณมีจังหวะชีวิตที่ค่อยเป็นค่อยไป ไม่ชอบการแข่งขันหรือความเร่งรีบ เป็นคนซอฟต์ๆ ที่ใครอยู่ใกล้ก็รู้สึกสบายใจและปลอดภัย' }
             ];
 
+            for (let i = scores.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [scores[i], scores[j]] = [scores[j], scores[i]];
+            }
             scores.sort((a, b) => b.score - a.score);
             const result = scores[0];
 
             localStorage.setItem('boothHereResult', JSON.stringify(result));
             applyResultToUI(result);
-            setStage(6); // Go to Result Stage
+            playSfx('win');
+            setStage(6);
         });
 
         // --- Story Card Generator & Share ---
@@ -974,7 +1320,23 @@
             });
         }
 
-        async function generateStoryBlob(result) {
+        function getBoothShareUrl() {
+            const customUrl = document.getElementById('base-url-input')?.value?.trim();
+            if (customUrl) return customUrl;
+            if (window.location.protocol.startsWith('http')) {
+                return window.location.origin + window.location.pathname;
+            }
+            return 'https://tbmasite.vercel.app/boothherehere.html';
+        }
+
+        function splitSpeciesName(fullName) {
+            const idx = fullName.indexOf(' (');
+            if (idx === -1) return [fullName, ''];
+            return [fullName.slice(0, idx), fullName.slice(idx + 1)];
+        }
+
+        async function generateStoryBlob(rawResult) {
+            const result = enrichResultData(rawResult);
             if (document.fonts && document.fonts.ready) await document.fonts.ready;
 
             const canvas = document.createElement('canvas');
@@ -997,43 +1359,43 @@
             // 2. หัวข้อด้านบน
             ctx.textAlign = 'center';
             ctx.fillStyle = '#689F38';
-            ctx.font = '700 60px Prompt, sans-serif';
-            ctx.fillText('BOOTH HERE HERE', 540, 145);
+            ctx.font = '700 58px Prompt, sans-serif';
+            ctx.fillText('BOOTH HERE HERE', 540, 118);
 
             ctx.fillStyle = '#795548';
-            ctx.font = '600 32px Prompt, sans-serif';
-            ctx.fillText('สวนธนบุรีรมย์ (A3-02)', 540, 200);
+            ctx.font = '600 30px Prompt, sans-serif';
+            ctx.fillText('สวนธนบุรีรมย์ (A3-02)', 540, 170);
 
-            // 3. การ์ดหลักสีขาวขอบน้ำตาล
+            // 3. การ์ดหลักสีขาวขอบน้ำตาล (y: 210 -> 1600)
             ctx.save();
-            ctx.shadowColor = 'rgba(62, 39, 35, 0.15)';
-            ctx.shadowBlur = 35;
-            ctx.shadowOffsetY = 12;
-            drawRoundRect(ctx, 80, 255, 920, 1410, 40);
+            ctx.shadowColor = 'rgba(62, 39, 35, 0.14)';
+            ctx.shadowBlur = 30;
+            ctx.shadowOffsetY = 10;
+            drawRoundRect(ctx, 70, 210, 940, 1390, 38);
             ctx.fillStyle = '#FFFFFF';
             ctx.fill();
             ctx.restore();
 
-            drawRoundRect(ctx, 80, 255, 920, 1410, 40);
-            ctx.lineWidth = 8;
+            drawRoundRect(ctx, 70, 210, 940, 1390, 38);
+            ctx.lineWidth = 7;
             ctx.strokeStyle = '#8D6E63';
             ctx.stroke();
 
             // คำโปรยในการ์ด
             ctx.fillStyle = '#795548';
-            ctx.font = '600 32px Prompt, sans-serif';
-            ctx.fillText('ฉันคือตัวเงินตัวทองสายพันธุ์...', 540, 330);
+            ctx.font = '600 30px Prompt, sans-serif';
+            ctx.fillText('ฉันคือตัวเงินตัวทองสายพันธุ์...', 540, 276);
 
-            // 4. กรอบและภาพตัวละคร (600x600)
-            const imgX = 240, imgY = 375, imgSize = 600;
-            drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 32);
+            // 4. กรอบและภาพตัวละคร (520x520)
+            const imgX = 280, imgY = 312, imgSize = 520;
+            drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 30);
             ctx.fillStyle = '#FFFFFF';
             ctx.fill();
 
             try {
                 const img = await loadImageForCanvas(IMG_BASE_PATH + encodeURIComponent(result.img));
                 ctx.save();
-                drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 32);
+                drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 30);
                 ctx.clip();
                 const scale = Math.min(imgSize / img.width, imgSize / img.height);
                 const drawW = img.width * scale;
@@ -1041,49 +1403,156 @@
                 ctx.drawImage(img, imgX + (imgSize - drawW) / 2, imgY + (imgSize - drawH) / 2, drawW, drawH);
                 ctx.restore();
             } catch (err) {
-                ctx.font = '180px sans-serif';
-                ctx.fillText('🦎', 540, 720);
+                ctx.font = '160px sans-serif';
+                ctx.fillText('🦎', 540, 625);
             }
 
-            drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 32);
+            drawRoundRect(ctx, imgX, imgY, imgSize, imgSize, 30);
             ctx.lineWidth = 6;
             ctx.strokeStyle = '#C5E1A5';
             ctx.stroke();
 
             // 5. ชื่อสายพันธุ์
             ctx.fillStyle = '#689F38';
-            ctx.font = '700 46px Prompt, sans-serif';
-            ctx.fillText(result.name, 540, 1060);
+            ctx.font = '700 44px Prompt, sans-serif';
+            ctx.fillText(result.name, 540, 912);
 
             // เส้นประคั่น
             ctx.save();
             ctx.setLineDash([12, 10]);
             ctx.beginPath();
-            ctx.moveTo(160, 1105);
-            ctx.lineTo(920, 1105);
+            ctx.moveTo(140, 952);
+            ctx.lineTo(940, 952);
             ctx.strokeStyle = '#D7CCC8';
             ctx.lineWidth = 4;
             ctx.stroke();
             ctx.restore();
 
-            // 6. คำอธิบายนิสัย (ตัดคำภาษาไทยอัตโนมัติ)
+            // 6. คำอธิบายนิสัย
             ctx.fillStyle = '#3E2723';
-            ctx.font = '400 32px Prompt, sans-serif';
-            const lines = wrapThaiText(ctx, result.desc, 780);
-            let textY = 1175;
+            ctx.font = '400 30px Prompt, sans-serif';
+            const lines = wrapThaiText(ctx, result.desc, 820);
+            let textY = 1012;
             lines.forEach(line => {
                 ctx.fillText(line, 540, textY);
-                textY += 54;
+                textY += 48;
             });
 
-            // 7. ข้อความปิดท้ายด้านล่าง
-            ctx.fillStyle = '#795548';
-            ctx.font = '600 32px Prompt, sans-serif';
-            ctx.fillText('🌿 มาค้นหาสายพันธุ์ของคุณได้ที่ BoothHereๆ 🦎', 540, 1755);
+            // 7. กล่องสายพันธุ์เพื่อนซี้ & คู่ปรับ (ด้านล่างในการ์ดหลัก)
+            const [bestieTh, bestieEn] = splitSpeciesName(result.bestie);
+            const [rivalTh, rivalEn] = splitSpeciesName(result.rival);
 
-            ctx.fillStyle = '#689F38';
+            // กล่องซ้าย: เพื่อนซี้
+            drawRoundRect(ctx, 118, 1378, 408, 174, 24);
+            ctx.fillStyle = '#E8F5E9';
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#A5D6A7';
+            ctx.stroke();
+
+            ctx.fillStyle = '#2E7D32';
+            ctx.font = '700 26px Prompt, sans-serif';
+            ctx.fillText('💚 สายพันธุ์เพื่อนซี้', 322, 1428);
+            ctx.fillStyle = '#3E2723';
             ctx.font = '700 30px Prompt, sans-serif';
-            ctx.fillText('#BoothHereHere  #สวนธนบุรีรมย์', 540, 1815);
+            ctx.fillText(bestieTh, 322, 1482);
+            if (bestieEn) {
+                ctx.fillStyle = '#5D4037';
+                ctx.font = '600 22px Prompt, sans-serif';
+                ctx.fillText(bestieEn, 322, 1522);
+            }
+
+            // กล่องขวา: คู่ปรับ
+            drawRoundRect(ctx, 554, 1378, 408, 174, 24);
+            ctx.fillStyle = '#FFF3E0';
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#FFCC80';
+            ctx.stroke();
+
+            ctx.fillStyle = '#EF6C00';
+            ctx.font = '700 26px Prompt, sans-serif';
+            ctx.fillText('⚡ สายพันธุ์คู่ปรับ', 758, 1428);
+            ctx.fillStyle = '#3E2723';
+            ctx.font = '700 30px Prompt, sans-serif';
+            ctx.fillText(rivalTh, 758, 1482);
+            if (rivalEn) {
+                ctx.fillStyle = '#5D4037';
+                ctx.font = '600 22px Prompt, sans-serif';
+                ctx.fillText(rivalEn, 758, 1522);
+            }
+
+            // 8. แถบ Footer ด้านล่าง: QR Code + ลิงก์เว็บคู่กัน (y: 1632 -> 1862)
+            const shareUrl = getBoothShareUrl();
+            const displayUrl = shareUrl.replace(/^https?:\/\//, '');
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(62, 39, 35, 0.1)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetY = 6;
+            drawRoundRect(ctx, 70, 1632, 940, 230, 30);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+            ctx.restore();
+
+            drawRoundRect(ctx, 70, 1632, 940, 230, 30);
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#C5E1A5';
+            ctx.stroke();
+
+            // วาด QR Code ด้านซ้ายของแถบ Footer (182x182)
+            const qrX = 104, qrY = 1656, qrSize = 182;
+            const qrApiUrl = `https://quickchart.io/qr?text=${encodeURIComponent(shareUrl)}&size=240&margin=1&dark=3E2723&light=FFFFFF`;
+            try {
+                const qrImg = await loadImageForCanvas(qrApiUrl);
+                ctx.save();
+                drawRoundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
+                ctx.clip();
+                ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+                ctx.restore();
+
+                drawRoundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#D7CCC8';
+                ctx.stroke();
+            } catch (err) {
+                // กรณีโหลด QR ไม่สำเร็จ ให้แสดงไอคอนแทนโดยไม่ให้การสร้างภาพพัง
+                drawRoundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
+                ctx.fillStyle = '#F1F8E9';
+                ctx.fill();
+                ctx.font = '80px sans-serif';
+                ctx.fillText('🦎', qrX + qrSize / 2, qrY + 120);
+            }
+
+            // ข้อความ + ลิงก์เว็บด้านขวาของ QR Code
+            ctx.textAlign = 'left';
+            const footerTextX = 318;
+
+            ctx.fillStyle = '#3E2723';
+            ctx.font = '700 28px Prompt, sans-serif';
+            ctx.fillText('🌿 สแกนหรือเข้าลิงก์เพื่อลองเล่น!', footerTextX, 1705);
+
+            // กล่องลิงก์เว็บ (ย่อขนาดฟอนต์อัตโนมัติถ้ายาวเกิน)
+            let urlFontSize = 24;
+            ctx.font = `600 ${urlFontSize}px Prompt, sans-serif`;
+            while (ctx.measureText(displayUrl).width > 620 && urlFontSize > 16) {
+                urlFontSize--;
+                ctx.font = `600 ${urlFontSize}px Prompt, sans-serif`;
+            }
+
+            drawRoundRect(ctx, footerTextX, 1726, 654, 54, 14);
+            ctx.fillStyle = '#F1F8E9';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#C5E1A5';
+            ctx.stroke();
+
+            ctx.fillStyle = '#558B2F';
+            ctx.fillText('🔗 ' + displayUrl, footerTextX + 16, 1762);
+
+            ctx.fillStyle = '#795548';
+            ctx.font = '600 23px Prompt, sans-serif';
+            ctx.fillText('#BoothHereHere   #สวนธนบุรีรมย์', footerTextX, 1826);
 
             return new Promise((resolve, reject) => {
                 canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('สร้างไฟล์ภาพไม่สำเร็จ')), 'image/png');
@@ -1146,6 +1615,12 @@
                 alert("รหัสผ่านไม่ถูกต้อง");
             }
         }
+
+	window.confirmReset = function() {
+            if (confirm('ต้องการเริ่มกิจกรรมใหม่ใช่ไหม?\n(หากยังไม่ได้รับของที่ระลึก กรุณายื่นหน้าจอนี้ให้สตาฟก่อนนะ!)')) {
+                resetAllData();
+            }
+        };
 
         window.resetAllData = function() {
             localStorage.removeItem('boothHereFlowStage');
