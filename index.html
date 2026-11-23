@@ -129,7 +129,7 @@
       position: fixed;
       top: 0;
       pointer-events: none;
-      z-index: 35;
+      z-index: 0;
       animation: loyLanternRise var(--ldur, 16s) linear infinite;
       animation-delay: var(--ldelay, 0s);
       will-change: transform;
@@ -219,7 +219,7 @@
       position: fixed;
       top: -24px;
       pointer-events: none;
-      z-index: 35;
+      z-index: 0;
       animation: xmasSnowFall var(--dur, 12s) linear infinite;
       animation-delay: var(--delay, 0s);
       will-change: transform;
@@ -14229,7 +14229,7 @@
       }, [riverKrathongs, krathongSearch, krathongSort]);
 
       return (
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-6 bg-gradient-to-b from-[#040914] via-[#071124] to-[#040914]">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-6">
           <div className="max-w-6xl mx-auto space-y-5 pb-24 lg:pb-12">
 
             {/* Header Bar */}
@@ -17782,10 +17782,10 @@
       if (qrLoading) return <div className="fixed inset-0 z-[200] bg-[#050811] flex flex-col items-center justify-center text-sky-400 font-bold animate-pulse"><i className="fas fa-qrcode text-4xl mb-4"></i><div>กำลังเชื่อมต่อข้อมูล QR Code...</div></div>;
 
       return (
-        <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden">
+        <div className="bg-[#050811] text-white flex flex-col h-screen overflow-hidden isolate">
           {/* CHRISTMAS SNOWFALL LAYER */}
           {IS_CHRISTMAS && snowEnabled && (
-            <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden" aria-hidden="true">
+            <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden" aria-hidden="true">
               {snowFlakes.map((f) => (
                 <div
                   key={f.id}
@@ -17820,7 +17820,7 @@
           )}
           {/* LOY KRATHONG YEE PENG LANTERNS LAYER */}
           {IS_LOY_KRATHONG && lanternEnabled && (
-            <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden" aria-hidden="true">
+            <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden" aria-hidden="true">
               {loyLanterns.map((l) => (
                 <div
                   key={l.id}
