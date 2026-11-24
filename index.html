@@ -15929,34 +15929,87 @@
       const localCrossfadeRef = useRef(localCrossfade);
       useEffect(() => { localCrossfadeRef.current = localCrossfade; }, [localCrossfade]);
 
+      const lastSeekRef = useRef({ A: 0, B: 0 });
+      const isIOSDevice = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
       const handleToggleLocalAudio = () => {
-          const nextPausedState = !isLocalPaused;
-          setIsLocalPaused(nextPausedState);
+        const nextPausedState = !isLocalPaused;
+        isLocalPausedRef.current = nextPausedState;
+        setIsLocalPaused(nextPausedState);
 
-          if (!nextPausedState) {
-              if (typeof navigator !== 'undefined' && navigator.audioSession) {
-                  try { navigator.audioSession.type = 'playback'; } catch (e) {}
-              }
-              const closedNow = isFullyClosedSyncRef.current;
-              const cVal = localCrossfadeRef.current;
-              const volA = closedNow ? 100 : (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2));
-              const volB = closedNow ? 0 : (cVal > 50 ? 100 : cVal * 2);
-
-              const vA = Math.max(0, (volA * localVolumeRef.current) / 100);
-              const vB = Math.max(0, (volB * localVolumeRef.current) / 100);
-
-              setTimeout(() => {
-                  if (ytA.current && ytA.current.unMute) {
-                      if (vA > 0) { ytA.current.unMute(); ytA.current.setVolume(vA); }
-                      else if (ytA.current.mute) ytA.current.mute();
-                      if (closedNow && ytA.current.playVideo) ytA.current.playVideo();
-                  }
-                  if (ytB.current && ytB.current.unMute) {
-                      if (vB > 0) { ytB.current.unMute(); ytB.current.setVolume(vB); }
-                      else if (ytB.current.mute) ytB.current.mute();
-                  }
-              }, 50);
+        if (!nextPausedState) {
+          if (typeof navigator !== 'undefined' && navigator.audioSession) {
+            try { navigator.audioSession.type = 'playback'; } catch (e) {}
           }
+          const nowMs = Date.now();
+          const closedNow = isFullyClosedSyncRef.current;
+          const cVal = localCrossfadeRef.current;
+          const spd = djState.speed || 1;
+          const volA = closedNow ? 100 : (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2));
+          const volB = closedNow ? 0 : (cVal > 50 ? 100 : cVal * 2);
+
+          const vA = Math.max(0, (volA * localVolumeRef.current) / 100);
+          const vB = Math.max(0, (volB * localVolumeRef.current) / 100);
+
+          if (ytA.current) {
+            try {
+              if (vA > 0) {
+                ytA.current.unMute && ytA.current.unMute();
+                ytA.current.setVolume && ytA.current.setVolume(vA);
+              } else {
+                ytA.current.mute && ytA.current.mute();
+              }
+
+              if (closedNow) {
+                const targetTime = (nowMs % 163000) / 1000;
+                const curId = ytA.current.getVideoData ? ytA.current.getVideoData()?.video_id : null;
+                lastSeekRef.current.A = nowMs;
+                if (curId !== CLOSED_SONG_ID) {
+                  loadedIdA.current = CLOSED_SONG_ID;
+                  ytA.current.loadVideoById({ videoId: CLOSED_SONG_ID, startSeconds: targetTime });
+                } else {
+                  ytA.current.seekTo && ytA.current.seekTo(targetTime, true);
+                  ytA.current.playVideo && ytA.current.playVideo();
+                }
+              } else if (djState.playA?.isPlaying && djState.deckA?.id && vA > 0) {
+                const expA = Math.max(0, ((nowMs - (djState.playA.startedAt || nowMs)) / 1000) * spd);
+                const curId = ytA.current.getVideoData ? ytA.current.getVideoData()?.video_id : null;
+                lastSeekRef.current.A = nowMs;
+                if (curId !== djState.deckA.id) {
+                  loadedIdA.current = djState.deckA.id;
+                  ytA.current.loadVideoById({ videoId: djState.deckA.id, startSeconds: expA });
+                } else {
+                  ytA.current.playVideo && ytA.current.playVideo();
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (ytB.current) {
+            try {
+              if (vB > 0) {
+                ytB.current.unMute && ytB.current.unMute();
+                ytB.current.setVolume && ytB.current.setVolume(vB);
+              } else {
+                ytB.current.mute && ytB.current.mute();
+              }
+
+              if (!closedNow && djState.playB?.isPlaying && djState.deckB?.id && vB > 0) {
+                const expB = Math.max(0, ((nowMs - (djState.playB.startedAt || nowMs)) / 1000) * spd);
+                const curId = ytB.current.getVideoData ? ytB.current.getVideoData()?.video_id : null;
+                lastSeekRef.current.B = nowMs;
+                if (curId !== djState.deckB.id) {
+                  ytB.current.loadVideoById({ videoId: djState.deckB.id, startSeconds: expB });
+                } else {
+                  ytB.current.playVideo && ytB.current.playVideo();
+                }
+              }
+            } catch (e) {}
+          }
+        } else {
+          try { ytA.current?.mute?.(); } catch (e) {}
+          try { ytB.current?.mute?.(); } catch (e) {}
+        }
       };
 
       const setIsDjMuted = useCallback((valOrFn) => {
@@ -16043,7 +16096,17 @@
           const conf = {
             height: '1',
             width: '1',
-            playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1, origin: window.location.origin }
+            playerVars: {
+              autoplay: 0,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              iv_load_policy: 3,
+              modestbranding: 1,
+              playsinline: 1,
+              rel: 0,
+              origin: window.location.origin
+            },
           };
           const handleStateChange = (deckKey) => (e) => {
             const st = typeof djStateRef !== 'undefined' ? djStateRef.current : djState;
@@ -16067,42 +16130,29 @@
               try { e.target.playVideo(); } catch (err) {}
             }
             if (e.data === 1) {
-              if (typeof navigator !== 'undefined' && navigator.audioSession) {
-                try { navigator.audioSession.type = 'playback'; } catch (err) {}
-              }
               if (paused) {
-                 e.target.mute();
+                if (e.target.mute) e.target.mute();
               } else {
-                  const closedNow = (typeof isFullyClosedSyncRef !== 'undefined' && isFullyClosedSyncRef.current) || (!st.deckA?.id && !st.deckB?.id);
-                  const cVal = typeof localCrossfadeRef !== 'undefined' ? localCrossfadeRef.current : 0;
-                  const currentLocalVol = typeof localVolumeRef !== 'undefined' ? localVolumeRef.current : 50;
+                const closedNow = (typeof isFullyClosedSyncRef !== 'undefined' && isFullyClosedSyncRef.current) || (!st.deckA?.id && !st.deckB?.id);
+                const cVal = typeof localCrossfadeRef !== 'undefined' ? localCrossfadeRef.current : 0;
+                const currentLocalVol = typeof localVolumeRef !== 'undefined' ? localVolumeRef.current : 50;
 
-                  let vTarget = 0;
-                  if (closedNow) {
-                      vTarget = deckKey === 'A' ? 100 : 0;
-                  } else {
-                      if (deckKey === 'A') vTarget = cVal < 50 ? 100 : 100 - ((cVal - 50) * 2);
-                      if (deckKey === 'B') vTarget = cVal > 50 ? 100 : cVal * 2;
-                  }
+                let vTarget = 0;
+                if (closedNow) {
+                  vTarget = deckKey === 'A' ? 100 : 0;
+                } else {
+                  if (deckKey === 'A') vTarget = cVal < 50 ? 100 : 100 - ((cVal - 50) * 2);
+                  if (deckKey === 'B') vTarget = cVal > 50 ? 100 : cVal * 2;
+                }
 
-                  const finalVol = Math.max(0, (vTarget * currentLocalVol) / 100);
-                  if (finalVol > 0) {
-                      if (e.target.isMuted && e.target.isMuted()) e.target.unMute();
-                  } else if (e.target.mute) {
-                      e.target.mute();
-                  }
-
-                  if (e.target.setVolume) {
-                     e.target.setVolume(finalVol);
-                     setTimeout(() => {
-                         if (!isLocalPausedRef.current && finalVol > 0) {
-                             if (e.target.isMuted && e.target.isMuted()) e.target.unMute();
-                             if (e.target.getVolume && e.target.getVolume() !== finalVol) {
-                                 e.target.setVolume(finalVol);
-                             }
-                         }
-                     }, 250);
-                  }
+                const finalVol = Math.max(0, (vTarget * currentLocalVol) / 100);
+                if (e.target.setVolume) e.target.setVolume(finalVol);
+                if (finalVol > 0) {
+                  if (e.target.isMuted && e.target.isMuted()) e.target.unMute();
+                } else if (isIOSDevice && e.target.mute) {
+                  // บน iOS/iPadOS ปรับ setVolume(0) ไม่ได้ ต้องใช้ mute เฉพาะฝั่งที่เงียบ
+                  e.target.mute();
+                }
               }
             }
           };
@@ -16336,32 +16386,57 @@
              const isAutoMode = (djState.djMode || 'auto') === 'auto';
              const canAutoRun = canManageAudio || isAutoMode;
              const currentSpeed = djState.speed || 1;
+             const nowMs = Date.now();
+             const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+             const isIOS = /iPad|iPhone|iPod/.test(ua) || (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+             const isSafari = /^((?!chrome|android).)*safari/i.test(ua) || isIOS;
 
              if (isFullyClosedSync) {
                  if (ytA.current?.getPlayerState) {
                      const songDurationMs = 163000;
-                     const targetTime = (Date.now() % songDurationMs) / 1000;
+                     const targetTime = (nowMs % songDurationMs) / 1000;
                      const curId = ytA.current.getVideoData ? ytA.current.getVideoData()?.video_id : null;
                      const state = ytA.current.getPlayerState();
                      const cur = ytA.current.getCurrentTime ? ytA.current.getCurrentTime() : 0;
 
                      if (isLocalPaused) {
                          if (ytA.current.isMuted && !ytA.current.isMuted()) ytA.current.mute();
-                     } else {
+                         // โหลดเตรียมไว้แบบปิดเสียงล่วงหน้า เพื่อให้ตอนกดรับเสียงบน Safari เล่นได้ทันทีไม่ต้องรอโหลดใหม่
+                         if (curId !== CLOSED_SONG_ID && ytA.current.cueVideoById) {
+                             loadedIdA.current = CLOSED_SONG_ID;
+                             ytA.current.cueVideoById({ videoId: CLOSED_SONG_ID, startSeconds: targetTime });
+                         }
+                     } else if (state !== 3) {
+                         const driftLimit = isSafari ? 6 : 4;
+                         const seekCooldown = isSafari ? 6000 : 4000;
+
                          if (curId !== CLOSED_SONG_ID) {
                              loadedIdA.current = CLOSED_SONG_ID;
+                             lastSeekRef.current.A = nowMs;
                              ytA.current.loadVideoById({ videoId: CLOSED_SONG_ID, startSeconds: targetTime });
-                         } else if (state === 0 || state === 2 || state === -1 || state === 5 || Math.abs(targetTime - cur) > 4) {
+                         } else if (state === 0 || state === 5) {
+                             lastSeekRef.current.A = nowMs;
                              if (ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
                              if (ytA.current.playVideo) ytA.current.playVideo();
+                         } else if (Math.abs(targetTime - cur) > driftLimit && (nowMs - lastSeekRef.current.A > seekCooldown)) {
+                             lastSeekRef.current.A = nowMs;
+                             if (ytA.current.seekTo) ytA.current.seekTo(targetTime, true);
+                             if (state !== 1 && ytA.current.playVideo) ytA.current.playVideo();
+                         } else if (state === 2 && (nowMs - lastSeekRef.current.A > seekCooldown)) {
+                             lastSeekRef.current.A = nowMs;
+                             if (ytA.current.playVideo) ytA.current.playVideo();
                          }
-                         // คงระดับเสียงและปลด mute ตลอดทุกวินาทีและทุกรอบที่วนซ้ำ
+
                          const vol = localVolumeRef.current;
-                         if (vol > 0) {
-                             if (ytA.current.isMuted && ytA.current.isMuted()) ytA.current.unMute();
-                             if (ytA.current.getVolume && ytA.current.getVolume() !== vol) ytA.current.setVolume(vol);
-                         } else if (ytA.current.mute) {
-                             ytA.current.mute();
+                         if (vol <= 0) {
+                             if (ytA.current.isMuted && !ytA.current.isMuted()) ytA.current.mute();
+                         } else {
+                             if (ytA.current.setVolume && ytA.current.getVolume && ytA.current.getVolume() !== vol) {
+                                 ytA.current.setVolume(vol);
+                             }
+                             if ((!isSafari || state === 1) && ytA.current.isMuted && ytA.current.isMuted()) {
+                                 ytA.current.unMute();
+                             }
                          }
                      }
                  }
@@ -16381,7 +16456,7 @@
 
              // 1. ปิดงาน Crossfade เมื่อครบเวลา (กันค่า fadeCommand ค้างหากมีคนปิดหน้าเว็บกลางคัน)
              if (djState.fadeCommand) {
-                 const fadeElapsed = Date.now() - (djState.fadeCommand.startTime || 0);
+                 const fadeElapsed = nowMs - (djState.fadeCommand.startTime || 0);
                  const fadeDur = djState.fadeCommand.duration || 5000;
                  if (canAutoRun && fadeElapsed >= fadeDur + 400 && !isFadingRef.current) {
                      isFadingRef.current = true;
@@ -16414,10 +16489,9 @@
                  const loadedVidA = ytA.current?.getVideoData ? ytA.current.getVideoData()?.video_id : null;
                  const loadedVidB = ytB.current?.getVideoData ? ytB.current.getVideoData()?.video_id : null;
 
-                 const globalExpA = djState.playA?.startedAt ? ((Date.now() - djState.playA.startedAt) / 1000) * currentSpeed : 0;
-                 const globalExpB = djState.playB?.startedAt ? ((Date.now() - djState.playB.startedAt) / 1000) * currentSpeed : 0;
+                 const globalExpA = djState.playA?.startedAt ? ((nowMs - djState.playA.startedAt) / 1000) * currentSpeed : 0;
+                 const globalExpB = djState.playB?.startedAt ? ((nowMs - djState.playB.startedAt) / 1000) * currentSpeed : 0;
 
-                 // เช็กว่าเพลงตรงกับ video_id ปัจจุบัน และเล่นไปแล้วอย่างน้อย 2 วินาที เพื่อกันสถานะเก่าจากเพลงก่อนหน้า
                  const isSameA = !!djState.deckA?.id && loadedVidA === djState.deckA.id;
                  const isSameB = !!djState.deckB?.id && loadedVidB === djState.deckB.id;
 
@@ -16425,7 +16499,6 @@
                  const isEndedB = isSameB && globalExpB > 2 && (stateB === 0 || (durB > 0 && durB - curB <= 0.6) || (durB > 0 && globalExpB >= durB + 1.5));
                  const activeIsEnded = isDeckA ? isEndedA : isEndedB;
 
-                 // กรณีทั้ง 2 Deck ว่าง/หยุด แต่ยังมีเพลงรออยู่ในคิว -> ดึงเพลงแรกมาเล่นทันที
                  if (!djState.playA?.isPlaying && !djState.playB?.isPlaying) {
                      if (isAutoMode && djState.queue?.length > 0) {
                          advanceDjQueue(isDeckA ? 'A' : 'B', false, null);
@@ -16447,7 +16520,6 @@
                      }
                  }
 
-                 // เคลียร์ Deck รองที่เล่นจบไปแล้ว (กรณีไม่ได้เปิดวนซ้ำ)
                  let cleared = false;
                  const upClear = {};
                  if (isEndedA && !isDeckA && !djState.playA?.isLooping) {
@@ -16464,53 +16536,87 @@
              const syncPlayer = (player, deckData, playData, isActive, deckId) => {
                  if (!player?.getCurrentTime || !playData?.isPlaying || !deckData?.id) return;
 
-                 const expRaw = ((Date.now() - (playData.startedAt || Date.now())) / 1000) * currentSpeed;
+                 const expRaw = ((nowMs - (playData.startedAt || nowMs)) / 1000) * currentSpeed;
                  const exp = Math.max(0, expRaw);
                  const cur = player.getCurrentTime();
                  const dur = player.getDuration ? player.getDuration() : 0;
                  const state = player.getPlayerState ? player.getPlayerState() : -1;
                  const loadedVid = player.getVideoData ? player.getVideoData()?.video_id : null;
 
-                 if (state === -1 || state === 2 || state === 5) {
-                     player.playVideo();
-                     if (player.setPlaybackRate) player.setPlaybackRate(currentSpeed);
-                 } else if (state === 0 && dur > 0 && exp < dur - 2) {
-                     // รองรับกรณีเปิด Loop แล้ววิดีโอจบไปก่อน
+                 // 1) จัดการ Mute / Volume ก่อนสั่ง playVideo เสมอ (ห้าม unMute ฝั่งที่เสียงเป็น 0 เพื่อไม่ให้ Safari ตัดเสียงอีก Deck)
+                 const cVal = localCrossfadeRef.current;
+                 const targetVol = deckId === 'A'
+                     ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2))
+                     : (cVal > 50 ? 100 : cVal * 2);
+                 const finalVol = isLocalPaused ? 0 : Math.max(0, (targetVol * localVolumeRef.current) / 100);
+
+                 if (isLocalPaused || finalVol <= 0) {
+                     if (player.isMuted && !player.isMuted()) player.mute();
+                     if (player.setVolume && player.getVolume && player.getVolume() !== 0) player.setVolume(0);
+                 } else {
+                     if (player.setVolume && player.getVolume && player.getVolume() !== finalVol) {
+                         player.setVolume(finalVol);
+                     }
+                     // บน Safari ปลด mute เฉพาะเมื่อกำลังเล่นแล้วเท่านั้น เพื่อไม่ให้โดน Autoplay Guard สั่งหยุด
+                     if ((!isSafari || state === 1) && player.isMuted && player.isMuted()) {
+                         player.unMute();
+                     }
+                 }
+
+                 // บน Safari/iOS หยุดแทรกแซง Deck ที่ไม่ได้ออนแอร์และไม่ได้เฟด เพื่อไม่ให้แย่งสิทธิ์เสียงกับ Deck หลัก
+                 if (isSafari && !isActive && finalVol <= 0 && !djState.fadeCommand) {
+                     return;
+                 }
+
+                 // 2) สั่งเล่น/ปรับความเร็วเฉพาะเมื่อจำเป็น (เว้นระยะ Cooldown กัน Safari ค้าง)
+                 const seekCooldown = isSafari ? 6000 : 3500;
+                 const lastAct = lastSeekRef.current[deckId] || 0;
+
+                 if (state === 3) return; // กำลัง Buffering ห้ามสั่ง seek/play แทรก
+
+                 if (state === -1 || state === 5) {
+                     if (!isSafari || nowMs - lastAct > seekCooldown) {
+                         lastSeekRef.current[deckId] = nowMs;
+                         player.playVideo();
+                     }
+                 } else if (state === 2) {
+                     // ถ้า Safari สั่ง Pause ไว้ ให้เว้นระยะก่อนลองสั่งเล่นใหม่ (ถ้าปิดเสียงอยู่เล่นได้เลย)
+                     if (isLocalPaused || nowMs - lastAct > seekCooldown) {
+                         lastSeekRef.current[deckId] = nowMs;
+                         player.playVideo();
+                     }
+                 } else if (state === 0 && dur > 0 && exp < dur - 2 && (nowMs - lastAct > seekCooldown)) {
+                     lastSeekRef.current[deckId] = nowMs;
                      player.seekTo(exp, true);
                      player.playVideo();
                  }
 
-                 if (isLocalPaused) {
-                     if (player.isMuted && !player.isMuted()) player.mute();
-                 } else {
-                     if (player.isMuted && player.isMuted()) player.unMute();
-                     const cVal = localCrossfadeRef.current;
-                     const targetVol = deckId === 'A' ? (cVal < 50 ? 100 : 100 - ((cVal - 50) * 2)) : (cVal > 50 ? 100 : cVal * 2);
-                     const finalVol = Math.max(0, (targetVol * localVolumeRef.current) / 100);
-                     if (player.getVolume && player.getVolume() !== finalVol) {
-                         if (player.setVolume) player.setVolume(finalVol);
-                     }
+                 if (player.setPlaybackRate && player.getPlaybackRate && player.getPlaybackRate() !== currentSpeed) {
+                     player.setPlaybackRate(currentSpeed);
                  }
 
                  if (loadedVid !== deckData.id) return;
 
-                 if (dur > 0 && dur - cur >= 2 && Math.abs(exp - cur) > 4 && state !== 3 && state !== 0 && !isSeekingRef.current) {
+                 // 3) ซิงก์เวลา (เพิ่มระยะทนดริฟต์และ Cooldown บน Safari เพื่อไม่ให้รีเซ็ตบัฟเฟอร์จนค้าง)
+                 const driftLimit = isSafari ? 6 : 4;
+                 if (dur > 0 && dur - cur >= 2 && Math.abs(exp - cur) > driftLimit && state !== 0 && !isSeekingRef.current && (nowMs - lastAct > seekCooldown)) {
                      if (expRaw >= 0 || cur >= 15) {
                          isSeekingRef.current = true;
+                         lastSeekRef.current[deckId] = nowMs;
                          player.seekTo(exp, true);
-                         player.playVideo();
-                         setTimeout(() => { isSeekingRef.current = false; }, 2000);
+                         if (state !== 1) player.playVideo();
+                         setTimeout(() => { isSeekingRef.current = false; }, isSafari ? 4000 : 2000);
                      }
                  }
 
-                 // เริ่ม Auto Crossfade เมื่อใกล้จบเพลง
+                 // 4) เริ่ม Auto Crossfade เมื่อใกล้จบเพลง
                  const fadeSec = Math.max(1, djState.fadeDuration || 5);
                  if (canAutoRun && isActive && !isFadingRef.current && exp > 3 && dur > fadeSec + 2 && (dur - cur) <= fadeSec * currentSpeed) {
                      if (playData.isLooping) {
                          isFadingRef.current = true;
                          const up = {};
-                         if (deckId === 'A') up.playA = { ...djState.playA, startedAt: Date.now(), pausedPos: 0 };
-                         else up.playB = { ...djState.playB, startedAt: Date.now(), pausedPos: 0 };
+                         if (deckId === 'A') up.playA = { ...djState.playA, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
+                         else up.playB = { ...djState.playB, isPlaying: true, startedAt: Date.now(), pausedPos: 0 };
                          updateDjState(up);
                          setTimeout(() => { isFadingRef.current = false; }, 1500);
                      } else if (isAutoMode && djState.queue?.length > 0) {
@@ -18059,9 +18165,12 @@
             </div>
           )}
 
-          <div className="hidden">
-             <div id="yt-player-a"></div>
-             <div id="yt-player-b"></div>
+          <div
+            className="fixed bottom-0 left-0 w-[200px] h-[200px] opacity-[0.001] pointer-events-none -z-50 overflow-hidden"
+            aria-hidden="true"
+          >
+            <div id="yt-player-a"></div>
+            <div id="yt-player-b"></div>
           </div>
           
           {/* FLOATING PLAYER */}
