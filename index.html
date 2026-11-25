@@ -412,6 +412,61 @@
   <div id="root"></div>
 
   <script type="text/babel">
+        // กรอง URL ป้องกันลิงก์อันตราย (javascript:, data:text/html, vbscript:)
+    const safeUrl = (raw) => {
+      if (!raw || typeof raw !== 'string') return '';
+      const trimmed = raw.trim();
+      if (!trimmed) return '';
+      // อนุญาตเฉพาะรูปภาพ/เสียงที่เป็น data URI ที่ระบบอัปโหลดเอง และลิงก์ http/https เท่านั้น
+      if (/^data:(image\/(png|jpeg|jpg|gif|webp)|audio\/(webm|mpeg|mp4|ogg));base64,/i.test(trimmed)) {
+        return trimmed;
+      }
+      try {
+        const parsed = new URL(trimmed, window.location.origin);
+        if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+          return parsed.href;
+        }
+      } catch (e) {}
+      return '';
+    };
+
+    // ตรวจลิงก์จากช่อง prompt ก่อนแนบลงโพสต์/คอมเมนต์/แชต
+    const promptSafeUrl = (message = 'วางลิงก์ (ต้องขึ้นต้นด้วย https://)') => {
+      const input = prompt(message);
+      if (!input) return null;
+      const clean = safeUrl(input);
+      if (!clean || !/^https?:\/\//i.test(clean)) {
+        alert('ลิงก์ไม่ถูกต้องหรือไม่ได้ขึ้นต้นด้วย https:// (ระบบบล็อกเพื่อความปลอดภัย)');
+        return null;
+      }
+      return clean;
+    };
+     // เกราะป้องกันลิงก์ XSS และบังคับ rel="noopener noreferrer" อัตโนมัติทั้งเว็บ
+    if (!window.__tbmaLinkGuardInstalled) {
+      window.__tbmaLinkGuardInstalled = true;
+      document.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a) return;
+        const rawHref = (a.getAttribute('href') || '').trim();
+        if (!rawHref || rawHref.startsWith('#') || rawHref.startsWith('/')) return;
+
+        // บล็อกลิงก์อันตรายทุกจุดในเว็บ (ไม่กระทบปุ่มดาวน์โหลด PNG / TXT ของระบบ)
+        if (/^(javascript:|vbscript:|data:\s*text\/html|data:\s*image\/svg\+xml)/i.test(rawHref)) {
+          e.preventDefault();
+          e.stopPropagation();
+          alert('ระบบบล็อกลิงก์นี้เนื่องจากอาจไม่ปลอดภัย');
+          return;
+        }
+
+        // เติม rel="noopener noreferrer" อัตโนมัติให้ทุกลิงก์ที่เปิดแท็บใหม่
+        if (a.getAttribute('target') === '_blank') {
+          const curRel = (a.getAttribute('rel') || '').toLowerCase();
+          if (!curRel.includes('noopener') || !curRel.includes('noreferrer')) {
+            a.setAttribute('rel', 'noopener noreferrer');
+          }
+        }
+      }, true);
+    }
     const { useState, useEffect, useRef, useCallback } = React;
     
     // ==========================================
@@ -614,7 +669,9 @@
 
     // คอมโพเนนต์สำหรับแสดงไฟล์แนบ (รูป, วิดีโอ, เสียง, YouTube, Google Drive)
     function SmartMedia({ att, onContextMenu }) {
-      const [url, setUrl] = useState(att.url || '');
+      const safeAttUrl = safeUrl(att?.url);
+      if (!safeAttUrl) return null;
+      const [url, setUrl] = useState(safeAttUrl || '');
       const [loading, setLoading] = useState(false);
 
       useEffect(() => {
@@ -646,7 +703,7 @@
           label: 'ดาวน์โหลด / เปิดไฟล์',
           onClick: () => {
             const a = document.createElement('a');
-            a.href = url;
+            a.href = safeAttUrl;
             a.download = att.name || 'file';
             a.target = '_blank';
             a.rel = 'noreferrer';
@@ -10337,7 +10394,7 @@
                                               <div className="flex items-center gap-1.5">
                                                 <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
                                                 <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[9px]"><i className="fas fa-image mr-1"></i>แนบไฟล์</button>
-                                                <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[9px]"><i className="fas fa-link mr-1"></i>แนบลิงก์</button>
+                                                <button type="button" onClick={() => { const u = promptSafeUrl("ใส่ลิงก์รูปภาพ หรือ วิดีโอ (https://...)"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[9px]"><i className="fas fa-link mr-1"></i>แนบลิงก์</button>
                                               </div>
                                           </div>
                                         </div>
@@ -21155,7 +21212,7 @@
                                     <div className="flex flex-wrap items-center gap-1.5 relative">
                                       <input type="file" multiple id={`file-upload-${post.id}`} onChange={async (e) => { const fl = Array.from(e.target.files || []); e.target.value = ''; for (const f of fl) { try { const a = await uploadChunked(f); handleAddComment(post.id, a); } catch (err) { alert(err.message); } } }} className="hidden" />
                                       <button type="button" onClick={() => document.getElementById(`file-upload-${post.id}`)?.click()} className="btn-d py-1 text-[10px]"><i className="fas fa-image mr-1"></i>แนบไฟล์</button>
-                                      <button type="button" onClick={() => { const u = prompt("ใส่ลิงก์รูปภาพ หรือ วิดีโอ"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[10px]"><i className="fas fa-link mr-1"></i>แนบลิงก์</button>
+                                      <button type="button" onClick={() => { const u = promptSafeUrl("ใส่ลิงก์รูปภาพ หรือ วิดีโอ (https://...)"); if(u) { handleAddComment(post.id, { id: 'att-' + Date.now(), name: 'Link', type: 'image', url: u, size: 'URL' }); } }} className="btn-d py-1 text-[10px]"><i className="fas fa-link mr-1"></i>แนบลิงก์</button>
 
                                        {/* ปุ่ม GIF */}
                                       <div className="relative">
