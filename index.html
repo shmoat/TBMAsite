@@ -412,17 +412,23 @@
   <div id="root"></div>
 
   <script type="text/babel">
-        // กรอง URL ป้องกันลิงก์อันตราย (javascript:, data:text/html, vbscript:)
+        // กรอง URL ป้องกันลิงก์อันตราย (javascript:, data:text/html, vbscript:) และเติม https:// ให้อัตโนมัติหากลืมใส่
     const safeUrl = (raw) => {
       if (!raw || typeof raw !== 'string') return '';
       const trimmed = raw.trim();
       if (!trimmed) return '';
-      // อนุญาตเฉพาะรูปภาพ/เสียงที่เป็น data URI ที่ระบบอัปโหลดเอง และลิงก์ http/https เท่านั้น
       if (/^data:(image\/(png|jpeg|jpg|gif|webp)|audio\/(webm|mpeg|mp4|ogg));base64,/i.test(trimmed)) {
         return trimmed;
       }
+      const noCtrl = trimmed.replace(/[\u0000-\u001F\u007F\s]+/g, '');
+      if (/^(javascript|vbscript|data|file):/i.test(noCtrl)) {
+        return '';
+      }
+      const candidate = /^https?:\/\//i.test(trimmed)
+        ? trimmed
+        : (trimmed.startsWith('/') ? trimmed : 'https://' + trimmed);
       try {
-        const parsed = new URL(trimmed, window.location.origin);
+        const parsed = new URL(candidate, window.location.origin);
         if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
           return parsed.href;
         }
@@ -515,7 +521,6 @@
     };
     
     const getTags = (u) => Array.isArray(u?.memberTags) && u.memberTags.length ? u.memberTags : [u?.memberTag || 'Others'];
-    const safeUrl = (u) => (!u ? '#' : /^https?:\/\//i.test(u.trim()) ? u.trim() : 'https://' + u.trim());
     const fmtTime = (s) => (!isFinite(s) || s === Infinity) ? "Bomb" : `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
     
     function getGameDateStr() {
