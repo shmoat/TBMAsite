@@ -1129,13 +1129,12 @@
 
       useEffect(() => {
         let active = true;
-        const GIPHY_API_KEY = "HymTPQjbFhMhsiWiO1GzKSVeLlPCeecm";
         const run = async () => {
           setLoading(true);
           try {
             const url = q.trim()
-              ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(q.trim())}&limit=12`
-              : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12`;
+              ? `/api/giphy?type=search&q=${encodeURIComponent(q.trim())}&limit=12&rating=pg-13`
+              : `/api/giphy?type=trending&limit=12&rating=pg-13`;
             const res = await fetch(url);
             const data = res.ok ? await res.json() : null;
             if (active) setItems((data?.data || []).map(g => g.images?.fixed_height_small?.url).filter(Boolean));
@@ -15510,9 +15509,6 @@
           let isMounted = true;
           if (gifDebounceRef.current) clearTimeout(gifDebounceRef.current);
           
-          // ใช้ Public Key ของ Giphy (สามารถเปลี่ยนเป็น Key ของตัวเองได้หากนำไปใช้ระยะยาว)
-          const GIPHY_API_KEY = "HymTPQjbFhMhsiWiO1GzKSVeLlPCeecm";
-          
           const fetchGifs = async (url) => {
               setIsGifLoading(true);
               setGifResults([]); 
@@ -15537,11 +15533,11 @@
 
           if (!gifSearch.trim()) {
               // แสดงภาพฮิต (Trending) ถ้ายังไม่ได้พิมพ์อะไร
-              fetchGifs(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=12`);
+              fetchGifs(`/api/giphy?type=trending&limit=20&rating=pg-13`);
           } else {
               // ค้นหา
               gifDebounceRef.current = setTimeout(() => {
-                  fetchGifs(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(gifSearch)}&limit=12`);
+                  fetchGifs(`/api/giphy?type=search&q=${encodeURIComponent(gifSearch.trim())}&limit=20&rating=pg-13`);
               }, 600); // หน่วงเวลา 0.6 วิ
           }
           
