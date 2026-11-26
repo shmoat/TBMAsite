@@ -19,6 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
@@ -640,6 +641,39 @@
     }
 
     const db = firebase.firestore(app);
+
+    // ==========================================
+    // FIREBASE AUTH (Custom Token + Anonymous Guest)
+    // ==========================================
+    const auth = firebase.auth(app);
+
+    // ให้ Guest ได้รับสิทธิ์ Anonymous Session อัตโนมัติเมื่อเข้าเว็บ
+    auth.onAuthStateChanged((fbUser) => {
+      if (!fbUser) {
+        auth.signInAnonymously().catch((err) => console.warn('Anonymous auth skipped:', err));
+      }
+    });
+
+    // ตัวช่วยเรียก /api/auth พร้อมแนบ Token อัตโนมัติ
+    window.tbmaAuthRequest = async (payload) => {
+      const headers = { 'Content-Type': 'application/json' };
+      if (auth.currentUser) {
+        const idToken = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${idToken}`;
+      }
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'ดำเนินการไม่สำเร็จ');
+      if (data.customToken) {
+        await auth.signInWithCustomToken(data.customToken);
+      }
+      return data;
+    };
+
     const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
     let openZoom = () => {};
     let openGuestPrompt = () => {};
@@ -9175,7 +9209,6 @@
           isOnline: false,
           lastActive: 0,
           username: '',
-          password: '',
           displayName: `รออนุมัติ (${id})`,
           bio: hostMemberId ? `ผู้ติดตามของสมาชิก ${hostMemberId}` : '',
           avatarUrl: '',
@@ -10047,7 +10080,11 @@
                 <button 
                   onClick={async () => {
                     if (!newPassVal.trim()) return alert('กรุณาระบุรหัสผ่าน');
-                    await db.collection('bma_users').doc(resetPassU.id).update({ password: newPassVal.trim() });
+                    await window.tbmaAuthRequest({
+		      action: 'admin_reset_password',
+		      targetId: resetPassU.id,
+		      newPassword: newPassVal.trim()
+		    });
                     logAdminAudit({
                       action: 'RESET_PASSWORD',
                       target: String(resetPassU.id || '-'),
@@ -17062,51 +17099,159 @@
       const activeGrp = activeRoom.type === 'group' ? groups.find((g) => g.id === activeRoom.id) : null;
       const activeDmUser = activeRoom.type === 'dm' ? getAuthor(activeRoom.id) : null;
       const isModOrAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'mod');
-      const saveSess = (u) => { if (remMe) { localStorage.setItem('tbma_saved_user_id', u.id); sessionStorage.removeItem('tbma_session_user_id'); } else { sessionStorage.setItem('tbma_session_user_id', u.id); localStorage.removeItem('tbma_saved_user_id'); } };
+      const saveSess = (u) => {
+        if (remMe) {
+          localStorage.setItem('tbma_saved_user_id', u.id);
+          sessionStorage.removeItem('tbma_session_user_id');
+        } else {
+          sessionStorage.setItem('tbma_session_user_id', u.id);
+          localStorage.removeItem('tbma_saved_user_id');
+        }
+      };
 
       const handleSignIn = async (e) => {
-        e.preventDefault(); setAuthErr('');
-        if (!isUsersLoaded) return setAuthErr('กำลังเชื่อมต่อฐานข้อมูล กรุณารอสักครู่...');
-        const f = users.find((u) => u.isActivated && u.username?.toLowerCase() === lUser.trim().toLowerCase() && u.password === lPass);
-        if (!f) return setAuthErr('Username หรือ Password ไม่ถูกต้อง');
-        
-        setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() }); 
-        saveSess(f);
-        await db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
-        setLUser(''); setLPass(''); 
-        setCurrentView('feed');
+        e.preventDefault();
+        setAuthErr('');
+        if (!lUser.trim() || !lPass) {
+          return setAuthErr('กรุณากรอก Username และ Password');
+        }
+
+        try {
+          const { user: f } = await window.tbmaAuthRequest({
+            action: 'login',
+            identifier: lUser.trim(),
+            password: lPass
+          });
+
+          setCurrentUser({ ...f, isOnline: true, lastActive: Date.now() });
+          saveSess(f);
+          await db.collection('bma_users').doc(f.id).update({ isOnline: true, lastActive: Date.now() }).catch(() => {});
+          setLUser('');
+          setLPass('');
+          setCurrentView('feed');
+        } catch (err) {
+          setAuthErr(err.message || 'Username หรือ Password ไม่ถูกต้อง');
+        }
       };
 
       const handleActivate = async (e) => {
-        e.preventDefault(); setAuthErr('');
-        const id = actId.trim().toUpperCase(), uName = actU.trim(), pass = actP.trim(), dName = actN.trim() || ('Member #' + id);
-        const t = users.find((u) => String(u.id).toUpperCase() === id);
-        if (!t) return setAuthErr('ไม่พบรหัส "' + id + '" ในระบบ');
-        if (t.isActivated) return setAuthErr('รหัสนี้ถูกเปิดใช้งานไปแล้ว');
-        if (users.some((u) => u.id !== t.id && u.username?.toLowerCase() === uName.toLowerCase())) return setAuthErr('Username นี้มีผู้ใช้แล้ว');
-        const up = { ...t, username: uName, password: pass, displayName: dName, isActivated: true, isOnline: true, lastActive: Date.now(), socialLinks: [], usernameChangeHistory: [], notifPrefs: { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false }, joinedAt: new Date().toISOString().split('T')[0] };
-        await db.collection('bma_users').doc(t.id).set(up);
-        setCurrentUser(up); saveSess(up); setActId(''); setActU(''); setActP(''); setActN(''); setCurrentView('feed');
-        
-        users.filter(u => u.role === 'admin' || u.role === 'mod').forEach(async (adminUser) => {
-             await sendNotif({ recipientId: adminUser.id, actorId: up.id, category: 'members', subType: 'new_member', title: '🎉 มีสมาชิกใหม่เปิดใช้งานรหัส', body: `${up.displayName} (${up.id}) ได้เข้ามาในสมาคมแล้ว!`, targetView: 'members', targetRoomId: up.id });
-        });
+        e.preventDefault();
+        setAuthErr('');
+        const id = actId.trim().toUpperCase();
+        const uName = actU.trim();
+        const pass = actP.trim();
+        const dName = actN.trim() || ('Member #' + id);
+
+        if (!id || !uName || pass.length < 4) {
+          return setAuthErr('กรุณากรอกข้อมูลให้ครบ และตั้งรหัสผ่านอย่างน้อย 4 ตัวอักษร');
+        }
+
+        try {
+          // 1) ให้เซิร์ฟเวอร์ตรวจรหัส เข้ารหัสผ่านลง bma_users_private และล็อกอิน Firebase Auth อัตโนมัติ
+          const { user: activated } = await window.tbmaAuthRequest({
+            action: 'activate',
+            id,
+            username: uName,
+            password: pass,
+            displayName: dName
+          });
+
+          // 2) อัปเดตฟิลด์โปรไฟล์เริ่มต้น (ใช้ .update เพื่อไม่ให้แตะฟิลด์ที่ล็อกไว้ใน Rules และไม่มี password)
+          const extra = {
+            isOnline: true,
+            lastActive: Date.now(),
+            socialLinks: activated.socialLinks || [],
+            usernameChangeHistory: activated.usernameChangeHistory || [],
+            notifPrefs: activated.notifPrefs || { muteOwnPosts: false, muteGlobalChat: false, mutePrivateChat: false },
+            joinedAt: new Date().toISOString().split('T')[0]
+          };
+          await db.collection('bma_users').doc(activated.id).update(extra).catch(() => {});
+
+          const up = { ...activated, ...extra };
+          setCurrentUser(up);
+          saveSess(up);
+          setActId('');
+          setActU('');
+          setActP('');
+          setActN('');
+          setCurrentView('feed');
+
+          users
+            .filter(u => ['owner', 'admin', 'vice', 'mod'].includes(String(u.role || '').toLowerCase()))
+            .forEach(async (adminUser) => {
+              await sendNotif({
+                recipientId: adminUser.id,
+                actorId: up.id,
+                category: 'members',
+                subType: 'new_member',
+                title: '🎉 มีสมาชิกใหม่เปิดใช้งานรหัส',
+                body: `${up.displayName} (${up.id}) ได้เข้ามาในสมาคมแล้ว!`,
+                targetView: 'members',
+                targetRoomId: up.id
+              });
+            });
+        } catch (err) {
+          setAuthErr(err.message || 'ไม่สามารถเปิดใช้งานรหัสได้');
+        }
       };
 
       const recentChg = (u) => (u?.usernameChangeHistory || []).filter((ts) => Date.now() - ts < 1209600000);
       
       const handleSaveProfile = async (e) => {
-        e.preventDefault(); setProfErr('');
-        const uName = eUser.trim(), pass = ePass.trim();
-        if (!eName.trim() || !uName || !pass) return setProfErr('กรุณากรอกข้อมูลให้ครบ');
+        e.preventDefault();
+        setProfErr('');
+        const uName = eUser.trim();
+        const pass = ePass.trim();
+
+        if (!eName.trim() || !uName) {
+          return setProfErr('กรุณากรอกชื่อที่แสดงและ Username ให้ครบ');
+        }
+        if (pass && pass.length < 4) {
+          return setProfErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 4 ตัวอักษร');
+        }
+
         let hist = recentChg(currentUser);
         if (uName !== currentUser.username) {
-          if (users.some((u) => u.id !== currentUser.id && u.username?.toLowerCase() === uName.toLowerCase())) return setProfErr('Username ซ้ำกับสมาชิกอื่น');
-          if (hist.length >= 2) return setProfErr('เปลี่ยน Username ครบ 2 ครั้งใน 14 วันแล้ว');
+          if (users.some((u) => u.id !== currentUser.id && u.username?.toLowerCase() === uName.toLowerCase())) {
+            return setProfErr('Username ซ้ำกับสมาชิกอื่น');
+          }
+          if (hist.length >= 2) {
+            return setProfErr('เปลี่ยน Username ครบ 2 ครั้งใน 14 วันแล้ว');
+          }
           hist = [...hist, Date.now()];
         }
-        const up = { ...currentUser, displayName: eName.trim(), bio: eBio.trim(), avatarUrl: eAv, username: uName, password: pass, usernameChangeHistory: hist, socialLinks: eSocs, birthDate: eBd };
-        await db.collection('bma_users').doc(up.id).set(up); setCurrentUser(up); setEditProf(false);
+
+        try {
+          // 1) หากกรอกรหัสผ่านใหม่ ให้ยืนยันรหัสเดิมและอัปเดตผ่าน /api/auth
+          if (pass) {
+            const oldPassword = window.prompt('กรุณากรอกรหัสผ่านเดิมเพื่อยืนยันการเปลี่ยนรหัสผ่าน:');
+            if (oldPassword === null) return;
+            await window.tbmaAuthRequest({
+              action: 'change_password',
+              oldPassword,
+              newPassword: pass
+            });
+          }
+
+          // 2) อัปเดตเฉพาะฟิลด์โปรไฟล์ใน bma_users (ห้ามส่ง password และฟิลด์ยศ)
+          const profileUpdates = {
+            displayName: eName.trim(),
+            bio: eBio.trim(),
+            avatarUrl: eAv || '',
+            username: uName,
+            usernameChangeHistory: hist,
+            socialLinks: eSocs || [],
+            birthDate: eBd || ''
+          };
+          await db.collection('bma_users').doc(currentUser.id).update(profileUpdates);
+
+          const { password: _removed, ...cleanCurrent } = currentUser;
+          setCurrentUser({ ...cleanCurrent, ...profileUpdates });
+          setEPass('');
+          setEditProf(false);
+        } catch (err) {
+          setProfErr(err.message || 'ไม่สามารถบันทึกการตั้งค่าโปรไฟล์ได้');
+        }
       };
 
       const handleEditPostReq = (post) => {
@@ -18317,9 +18462,38 @@
                           <TagBadges user={currentUser} />
                           
                           <div className="w-full border-t border-[#1E3A5F] mt-4 pt-4 space-y-2">
-			      <button onClick={() => { setProfMenuOpen(false); setEName(currentUser.displayName); setEBio(currentUser.bio || ''); setEAv(currentUser.avatarUrl || ''); setEUser(currentUser.username || ''); setEPass(currentUser.password || ''); setESocs(currentUser.socialLinks || []); setEBd(currentUser.birthDate || ''); setProfErr(''); setEditProf(true); }} className="w-full btn-b py-2 text-xs flex justify-center items-center gap-2 hover:bg-sky-600 transition-colors shadow"><i className="fas fa-cog text-sm"></i> ตั้งค่าโปรไฟล์</button>
-			      <button onClick={async () => { setProfMenuOpen(false); await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {}); localStorage.removeItem('tbma_saved_user_id'); sessionStorage.removeItem('tbma_session_user_id'); setCurrentUser(null); setCurrentView('home'); }} className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors text-xs flex justify-center items-center gap-2 shadow"><i className="fas fa-sign-out-alt text-sm"></i> ออกจากระบบ</button>
-			  </div>
+                            <button
+                              onClick={() => {
+                                setProfMenuOpen(false);
+                                setEName(currentUser.displayName);
+                                setEBio(currentUser.bio || '');
+                                setEAv(currentUser.avatarUrl || '');
+                                setEUser(currentUser.username || '');
+                                setEPass('');
+                                setESocs(currentUser.socialLinks || []);
+                                setEBd(currentUser.birthDate || '');
+                                setProfErr('');
+                                setEditProf(true);
+                              }}
+                              className="w-full btn-b py-2 text-xs flex justify-center items-center gap-2 hover:bg-sky-600 transition-colors shadow"
+                            >
+                              <i className="fas fa-cog text-sm"></i> ตั้งค่าโปรไฟล์
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setProfMenuOpen(false);
+                                await db.collection('bma_users').doc(currentUser.id).update({ isOnline: false }).catch(() => {});
+                                localStorage.removeItem('tbma_saved_user_id');
+                                sessionStorage.removeItem('tbma_session_user_id');
+                                await auth.signOut().catch(() => {});
+                                setCurrentUser(null);
+                                setCurrentView('home');
+                              }}
+                              className="w-full py-2 rounded-lg bg-red-950/40 text-red-400 font-bold border border-red-900/50 hover:bg-red-900 hover:text-white transition-colors text-xs flex justify-center items-center gap-2 shadow"
+                            >
+                              <i className="fas fa-sign-out-alt text-sm"></i> ออกจากระบบ
+                            </button>
+                          </div>
                        </div>
                      )}
                    </div>
@@ -22053,8 +22227,23 @@
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                      <label className="block mb-1 text-slate-400 font-bold">รหัสผ่าน *</label>
-                      <div className="relative flex items-center"><input type={showPass ? 'text' : 'password'} value={ePass} onChange={(e) => setEPass(e.target.value)} className="w-full inp pr-16 font-mono" required /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325] text-[10px]">{showPass ? '🙈 ซ่อน' : '👁️ ดู'}</button></div>
+                    <label className="block mb-1 text-slate-400 font-bold">เปลี่ยนรหัสผ่านใหม่ (เว้นว่างไว้หากไม่เปลี่ยน)</label>
+                    <div className="relative flex items-center">
+                      <input
+                        type={showPass ? 'text' : 'password'}
+                        value={ePass}
+                        onChange={(e) => setEPass(e.target.value)}
+                        placeholder="กรอกเฉพาะเมื่อต้องการตั้งรหัสผ่านใหม่..."
+                        className="w-full inp pr-16 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPass(!showPass)}
+                        className="absolute right-2 px-2 py-0.5 rounded bg-[#0B1325] text-[10px]"
+                      >
+                        {showPass ? '🙈 ซ่อน' : '👁️ ดู'}
+                      </button>
+                    </div>
                   </div>
                   <div><label className="block mb-1 text-slate-400 font-bold">วันเกิด</label><input type="date" value={eBd} onChange={(e) => setEBd(e.target.value)} className="w-full inp font-mono text-slate-300" /></div>
                 </div>
