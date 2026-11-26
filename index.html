@@ -18,6 +18,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
@@ -473,6 +474,92 @@
         }
       }, true);
     }
+
+       // บันทึกประวัติคำสั่งสำคัญของผู้ดูแลระบบ (Audit Log แบบแก้ย้อนหลังไม่ได้)
+    const logAdminAudit = async ({ action, target = '-', detail = '', actor = null }) => {
+      try {
+        if (!action) return;
+        const now = new Date();
+        const payload = {
+          action: String(action).slice(0, 80),
+          target: String(target || '-').slice(0, 120),
+          detail: String(detail || '').slice(0, 400),
+          actorId: String(actor?.id || 'SYSTEM').slice(0, 60),
+          actorName: String(actor?.displayName || actor?.username || actor?.name || 'System').slice(0, 80),
+          actorRole: String(actor?.role || 'Unknown').slice(0, 30),
+          createdAt: now.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+          ts: Date.now()
+        };
+        if (typeof db !== 'undefined' && db && typeof db.collection === 'function') {
+          await db.collection('bma_audit_logs').add(payload);
+        } else if (typeof addDoc === 'function' && typeof collection === 'function' && typeof db !== 'undefined') {
+          await addDoc(collection(db, 'bma_audit_logs'), payload);
+        }
+      } catch (err) {
+        console.warn('Audit log skipped:', err);
+      }
+    };
+
+    function AuditLogPanel() {
+      const [logs, setLogs] = useState([]);
+      const [loading, setLoading] = useState(false);
+
+      const loadLogs = async () => {
+        setLoading(true);
+        try {
+          let rows = [];
+          if (typeof db !== 'undefined' && db && typeof db.collection === 'function') {
+            const snap = await db.collection('bma_audit_logs').orderBy('ts', 'desc').limit(50).get();
+            rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          } else if (typeof getDocs === 'function' && typeof query === 'function' && typeof collection === 'function' && typeof orderBy === 'function' && typeof limit === 'function') {
+            const snap = await getDocs(query(collection(db, 'bma_audit_logs'), orderBy('ts', 'desc'), limit(50)));
+            rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          }
+          setLogs(rows);
+        } catch (err) {
+          console.error('Load audit logs failed:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      useEffect(() => { loadLogs(); }, []);
+
+      return (
+        <div className="p-4 rounded-2xl bg-[#0A162C]/90 border border-amber-500/35 space-y-3">
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-amber-500/20">
+            <div className="font-bold text-amber-300 text-sm">🛡️ ประวัติการจัดการระบบ (Audit Log ล่าสุด 50 รายการ)</div>
+            <button
+              type="button"
+              onClick={loadLogs}
+              disabled={loading}
+              className="px-3 py-1 rounded-xl bg-[#040914] hover:bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-bold transition-colors"
+            >
+              {loading ? 'กำลังโหลด...' : 'รีเฟรช'}
+            </button>
+          </div>
+          <div className="max-h-72 overflow-y-auto custom-scrollbar space-y-1.5 text-xs pr-1">
+            {logs.length === 0 ? (
+              <div className="text-center text-slate-400 py-6">ยังไม่มีประวัติการบันทึก</div>
+            ) : (
+              logs.map(item => (
+                <div key={item.id} className="p-2.5 rounded-xl bg-[#040914] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div className="min-w-0">
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] mr-1.5">{item.action}</span>
+                    <span className="text-white font-bold">{item.target}</span>
+                    {item.detail && <span className="text-slate-300 ml-1.5">— {item.detail}</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono shrink-0">
+                    โดย {item.actorName} ({item.actorId}) · {item.createdAt}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
     const { useState, useEffect, useRef, useCallback } = React;
     
     // ==========================================
@@ -488,6 +575,70 @@
       measurementId: "G-JDW0E0S138" 
     };
     const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+
+    // เปิดใช้งาน Firebase App Check (Fraud Defense / reCAPTCHA Enterprise) สำหรับ Compat SDK
+    const RECAPTCHA_ENTERPRISE_SITE_KEY = '6Lc6STMuAAAAAEoaBemOcdQOXtbXHlwTUDjxOAZ9';
+    if (firebase.appCheck && RECAPTCHA_ENTERPRISE_SITE_KEY && !RECAPTCHA_ENTERPRISE_SITE_KEY.includes('ใส่_SITE_KEY') && !window.__tbmaAppCheckActivated) {
+      window.__tbmaAppCheckActivated = true;
+      try {
+        const loadRecaptchaEnterprise = () => new Promise((resolve, reject) => {
+          if (window.grecaptcha && window.grecaptcha.enterprise) return resolve(window.grecaptcha.enterprise);
+          const existing = document.querySelector('script[src*="recaptcha/enterprise.js"]');
+          const waitReady = () => {
+            const started = Date.now();
+            const timer = setInterval(() => {
+              if (window.grecaptcha && window.grecaptcha.enterprise) {
+                clearInterval(timer);
+                resolve(window.grecaptcha.enterprise);
+              } else if (Date.now() - started > 10000) {
+                clearInterval(timer);
+                reject(new Error('reCAPTCHA Enterprise load timeout'));
+              }
+            }, 100);
+          };
+          if (existing) return waitReady();
+          const s = document.createElement('script');
+          s.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(RECAPTCHA_ENTERPRISE_SITE_KEY)}`;
+          s.async = true;
+          s.onload = waitReady;
+          s.onerror = () => reject(new Error('Failed to load reCAPTCHA Enterprise script'));
+          document.head.appendChild(s);
+        });
+
+        firebase.appCheck(app).activate({
+          getToken: async () => {
+            const enterprise = await loadRecaptchaEnterprise();
+            const rcToken = await new Promise((resolve, reject) => {
+              enterprise.ready(() => {
+                enterprise.execute(RECAPTCHA_ENTERPRISE_SITE_KEY, { action: 'fire_app_check' })
+                  .then(resolve)
+                  .catch(reject);
+              });
+            });
+            const res = await fetch(
+              `https://content-firebaseappcheck.googleapis.com/v1/projects/${firebaseConfig.projectId}/apps/${firebaseConfig.appId}:exchangeRecaptchaEnterpriseToken?key=${firebaseConfig.apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recaptcha_enterprise_token: rcToken })
+              }
+            );
+            const data = await res.json();
+            if (!res.ok || !data.token) {
+              throw new Error(data?.error?.message || 'App Check exchange failed');
+            }
+            const ttlSec = parseFloat(String(data.ttl || '3600s').replace('s', '')) || 3600;
+            return {
+              token: data.token,
+              expireTimeMillis: Date.now() + ttlSec * 1000
+            };
+          }
+        }, true);
+      } catch (e) {
+        console.warn('App Check init skipped:', e);
+      }
+    }
+
     const db = firebase.firestore(app);
     const svrTs = () => firebase.firestore.FieldValue.serverTimestamp();
     let openZoom = () => {};
@@ -9035,6 +9186,12 @@
 
         await db.collection('bma_users').doc(id).set(newUserObj);
         setLastCreatedUser(newUserObj);
+	logAdminAudit({
+          action: 'CREATE_MEMBER_ID',
+          target: id,
+          detail: `ประเภท: ${idType === 'F' ? 'Follower' : 'Member'} | หมวดหมู่: ${newUserObj.memberTags.join(', ')}${hostMemberId ? ` | ผูกกับ ${hostMemberId}` : ''}`,
+          actor: currentUser
+        });
         if (idType === 'M') setNewMId(getNextMId());
         else setHostMemberId('');
       };
@@ -9369,6 +9526,7 @@
                     </div>
                   </div>
                 </div>
+                <AuditLogPanel />
               </div>
             </div>
           )}
@@ -9850,8 +10008,14 @@
                   ))}
                 </div>
                 <button 
-                  onClick={() => { 
-                    db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); 
+                  onClick={async () => { 
+                    await db.collection('bma_users').doc(editTagU.id).update({ memberTag: editTagL[0], memberTags: editTagL }); 
+                    logAdminAudit({
+                      action: 'UPDATE_MEMBER_TAGS',
+                      target: String(editTagU.id || '-'),
+                      detail: `อัปเดตหมวดหมู่ของ ${editTagU.displayName || editTagU.id} เป็น: ${editTagL.join(', ')}`,
+                      actor: currentUser
+                    });
                     setEditTagU(null); 
                   }} 
                   className="w-full btn-w py-2.5 mt-2"
@@ -9884,6 +10048,12 @@
                   onClick={async () => {
                     if (!newPassVal.trim()) return alert('กรุณาระบุรหัสผ่าน');
                     await db.collection('bma_users').doc(resetPassU.id).update({ password: newPassVal.trim() });
+                    logAdminAudit({
+                      action: 'RESET_PASSWORD',
+                      target: String(resetPassU.id || '-'),
+                      detail: `รีเซ็ตรหัสผ่านของ ${resetPassU.displayName || resetPassU.id} โดยผู้ดูแล`,
+                      actor: currentUser
+                    });
                     alert(`อัปเดตรหัสผ่านของ ${resetPassU.displayName} เรียบร้อยแล้ว`);
                     setResetPassU(null);
                   }} 
@@ -21762,6 +21932,12 @@
                     onClick={async () => {
                       const col = delTgt.roomType === 'channel' ? 'bma_channels' : 'bma_groups';
                       await db.collection(col).doc(delTgt.id).delete();
+                      logAdminAudit({
+                        action: 'DELETE_CHAT_ROOM',
+                        target: String(delTgt.id || '-'),
+                        detail: `ลบ${delTgt.roomType === 'channel' ? 'ห้องแชตรวม' : 'กลุ่มแชต'}: ${delTgt.name || delTgt.id}`,
+                        actor: currentUser
+                      });
                       if (activeRoom.id === delTgt.id) setActiveRoom({ type: 'channel', id: 'global-lobby' });
                       setDelTgt(null);
                     }}
