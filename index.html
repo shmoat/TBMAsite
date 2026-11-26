@@ -647,13 +647,6 @@
     // ==========================================
     const auth = firebase.auth(app);
 
-    // ให้ Guest ได้รับสิทธิ์ Anonymous Session อัตโนมัติเมื่อเข้าเว็บ
-    auth.onAuthStateChanged((fbUser) => {
-      if (!fbUser) {
-        auth.signInAnonymously().catch((err) => console.warn('Anonymous auth skipped:', err));
-      }
-    });
-
     // ตัวช่วยเรียก /api/auth พร้อมแนบ Token อัตโนมัติ
     window.tbmaAuthRequest = async (payload) => {
       const headers = { 'Content-Type': 'application/json' };
@@ -22689,8 +22682,45 @@
     // ==========================================
     // RENDER APPLICATION
     // ==========================================
+    function AuthGate({ children }) {
+      const [authReady, setAuthReady] = React.useState(false);
+
+      React.useEffect(() => {
+        let active = true;
+        const fbAuth = firebase.auth();
+        const unsub = fbAuth.onAuthStateChanged(async (fbUser) => {
+          if (!fbUser) {
+            if (active) setAuthReady(false);
+            try {
+              await fbAuth.signInAnonymously();
+            } catch (err) {
+              console.error('Anonymous sign-in failed:', err);
+              if (active) setAuthReady(true);
+            }
+          } else {
+            if (active) setAuthReady(true);
+          }
+        });
+        return () => { active = false; unsub(); };
+      }, []);
+
+      if (!authReady) {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-[#050811] text-sky-300 gap-3">
+            <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xs font-mono tracking-wider">กำลังเชื่อมต่อระบบ...</p>
+          </div>
+        );
+      }
+      return children;
+    }
+
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    root.render(
+      <AuthGate>
+        <App />
+      </AuthGate>
+    );
   </script>
 </body>
 </html>
