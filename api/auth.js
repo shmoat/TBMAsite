@@ -213,8 +213,8 @@ module.exports = async function handler(req, res) {
       }
       const callerDoc = await db.collection('bma_users').doc(caller.uid).get();
       const callerRole = String(callerDoc.data()?.role || caller.role || '').toLowerCase();
-      if (callerRole !== 'owner') {
-        return res.status(403).json({ error: 'เฉพาะ Owner เท่านั้นที่รีเซ็ตรหัสผ่านได้' });
+      if (!['owner', 'admin'].includes(callerRole)) {
+        return res.status(403).json({ error: 'เฉพาะ Owner/Admin เท่านั้นที่ดำเนินการได้' });
       }
 
       const targetId = String(body.targetId || '').trim().toUpperCase();
@@ -242,8 +242,9 @@ module.exports = async function handler(req, res) {
         return res.status(401).json({ error: 'ไม่มีสิทธิ์ดำเนินการ' });
       }
       const callerDoc = await db.collection('bma_users').doc(caller.uid).get();
-      if (String(callerDoc.data()?.role || caller.role || '').toLowerCase() !== 'owner') {
-        return res.status(403).json({ error: 'เฉพาะ Owner เท่านั้น' });
+      const callerRole = String(callerDoc.data()?.role || caller.role || '').toLowerCase();
+      if (!['owner', 'admin'].includes(callerRole)) {
+        return res.status(403).json({ error: 'เฉพาะ Owner/Admin เท่านั้นที่ดำเนินการได้' });
       }
 
       const snap = await db.collection('bma_users').get();
