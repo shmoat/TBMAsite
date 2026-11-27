@@ -1,0 +1,148 @@
+/* ================= HALLOWEEN THEME ================= */
+body.halloween-theme, .halloween-theme.bg-\[\#050811\], .halloween-theme .bg-\[\#050811\] { background-color: #110419 !important; }
+.halloween-theme.bg-\[\#0B1325\], .halloween-theme .bg-\[\#0B1325\] { background-color: #260a37 !important; }
+.halloween-theme.bg-\[\#0F2547\], .halloween-theme .bg-\[\#0F2547\] { background-color: #3b1156 !important; }
+.halloween-theme.border-\[\#1E3A5F\], .halloween-theme .border-\[\#1E3A5F\] { border-color: #EA580C !important; }
+.halloween-theme .text-sky-300, .halloween-theme .text-blue-200 { color: #FDBA74 !important; }
+.halloween-theme .text-sky-400, .halloween-theme .text-blue-300 { color: #F97316 !important; }
+.halloween-theme .text-sky-500, .halloween-theme .text-blue-400 { color: #EA580C !important; }
+.halloween-theme .bg-sky-400 { background-color: #F97316 !important; }
+.halloween-theme .bg-sky-500 { background-color: #EA580C !important; }
+.halloween-theme .bg-sky-600 { background-color: #C2410C !important; }
+.halloween-theme .border-sky-400, .halloween-theme .border-blue-400 { border-color: #F97316 !important; }
+.halloween-theme .border-sky-500, .halloween-theme .border-blue-400\/50 { border-color: #EA580C !important; }
+.halloween-theme .inp { background-color: #110419 !important; border-color: #EA580C !important; }
+.halloween-theme .card { background-color: #260a37 !important; border-color: #EA580C !important; }
+.halloween-theme .btn-b { background-color: #3b1156 !important; border-color: #EA580C !important; }
+.halloween-theme .btn-d { background-color: #110419 !important; border-color: #EA580C !important; }
+.halloween-theme ::-webkit-scrollbar-track { background: #110419 !important; }
+.halloween-theme ::-webkit-scrollbar-thumb { background: #EA580C !important; }
+.halloween-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #F97316, #C2410C 45%, #260a37 80%, #110419 100%) !important; box-shadow: 0 0 60px rgba(234,88,12,0.65) !important; }
+.halloween-theme .orbit-sys svg path { fill: #260a37 !important; stroke: #F97316 !important; }
+.halloween-theme .msg-left .msg-content::before { background: #3b1156; border-color: #EA580C; }
+.halloween-theme .msg-right .msg-content::after { background: #C2410C; }
+.halloween-theme .bg-sky-700 { background-color: #9A3412 !important; }
+.halloween-theme header, .halloween-theme .bg-\[\#070C18\] { background-color: rgba(22, 6, 33, 0.96) !important; }
+.halloween-theme .bg-\[\#050811\]\/90 { background-color: rgba(17, 4, 25, 0.9) !important; }
+.halloween-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #110419, #09020e) !important; }
+.halloween-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #260a37, #1c072b 55%, #110419) !important; }
+.halloween-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #3b1156, #260a37 55%, #110419) !important; }
+.halloween-theme .bg-sky-950\/60 { background-color: rgba(154, 52, 18, 0.45) !important; }
+.halloween-theme .border-sky-500\/30 { border-color: rgba(234, 88, 12, 0.5) !important; }
+.halloween-theme .bg-sky-500\/10 { background-color: rgba(249, 115, 22, 0.14) !important; }
+.halloween-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #EA580C, #FDBA74) !important; }
+
+@keyframes floatGhost { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 50% { transform: translateY(-20px) scale(1.1); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 0.8; } }
+.ghost-hunt { position: fixed; font-size: 2.5rem; cursor: crosshair; animation: floatGhost 3s ease-in-out infinite; z-index: 60; user-select: none; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
+@keyframes jumpScare { 0% { transform: scale(0.1); opacity: 0; } 50% { transform: scale(3); opacity: 1; } 100% { transform: scale(8); opacity: 0; } }
+.jump-scare-overlay { position: fixed; inset: 0; z-index: 9999; pointer-events: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.85); }
+.scare-img { font-size: 10rem; animation: jumpScare 1.2s ease-out forwards; text-shadow: 0 0 50px red; }
+
+/* ================= LOY KRATHONG THEME ================= */
+.river-reflection {
+  position: absolute; top: 0; left: 0; right: 0; height: 100%;
+  background: repeating-linear-gradient(0deg, transparent, transparent 15px, rgba(251, 191, 36, 0.08) 15px, rgba(251, 191, 36, 0.08) 30px);
+  animation: waterMove 5s linear infinite;
+}
+@keyframes waterMove { from { transform: translateY(0); } to { transform: translateY(30px); } }
+.full-moon {
+  width: 100px; height: 100px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #FEF08A, #F59E0B 60%, #B45309 90%, #040914 100%);
+  box-shadow: 0 0 80px rgba(245, 158, 11, 0.8), inset -10px -10px 20px rgba(0,0,0,0.5);
+  margin: 0.5rem auto; animation: pulseMoon 4s infinite alternate;
+}
+@keyframes pulseMoon {
+  0% { box-shadow: 0 0 60px rgba(245, 158, 11, 0.6), inset -10px -10px 20px rgba(0,0,0,0.5); transform: scale(1); }
+  100% { box-shadow: 0 0 100px rgba(245, 158, 11, 0.9), inset -10px -10px 20px rgba(0,0,0,0.5); transform: scale(1.03); }
+}
+@keyframes floatGameItem { 0% { left: -50px; transform: rotate(0deg); } 100% { left: 100%; transform: rotate(360deg); } }
+
+body.loykrathong-theme, .loykrathong-theme.bg-\[\#050811\], .loykrathong-theme .bg-\[\#050811\] { background-color: #040914 !important; }
+.loykrathong-theme.bg-\[\#0B1325\], .loykrathong-theme .bg-\[\#0B1325\] { background-color: #0A162C !important; }
+.loykrathong-theme.bg-\[\#0F2547\], .loykrathong-theme .bg-\[\#0F2547\] { background-color: #13284C !important; }
+.loykrathong-theme.border-\[\#1E3A5F\], .loykrathong-theme .border-\[\#1E3A5F\] { border-color: #D97706 !important; }
+.loykrathong-theme .text-sky-300, .loykrathong-theme .text-blue-200 { color: #FDE68A !important; }
+.loykrathong-theme .text-sky-400, .loykrathong-theme .text-blue-300 { color: #FBBF24 !important; }
+.loykrathong-theme .text-sky-500, .loykrathong-theme .text-blue-400 { color: #F59E0B !important; }
+.loykrathong-theme .bg-sky-400, .loykrathong-theme .bg-sky-500 { background-color: #D97706 !important; }
+.loykrathong-theme .bg-sky-600 { background-color: #B45309 !important; }
+.loykrathong-theme .bg-sky-700 { background-color: #92400E !important; }
+.loykrathong-theme .inp { background-color: #040914 !important; border-color: #D97706 !important; }
+.loykrathong-theme .card { background-color: #0A162C !important; border-color: #D97706 !important; }
+.loykrathong-theme .btn-b { background-color: #13284C !important; border-color: #F59E0B !important; }
+.loykrathong-theme .orbit-sys > div:first-child { background: radial-gradient(circle at 30% 30%, #FEF08A, #F59E0B 45%, #B45309 80%, #040914 100%) !important; box-shadow: 0 0 70px rgba(251,191,36,0.75) !important; }
+.loykrathong-theme .orbit-sys svg path { fill: #0A162C !important; stroke: #FBBF24 !important; }
+.loykrathong-theme .msg-left .msg-content::before { background: #13284C; border-color: #D97706; }
+.loykrathong-theme .msg-right .msg-content::after { background: #B45309; }
+.loykrathong-theme header, .loykrathong-theme .bg-\[\#070C18\] { background-color: rgba(6, 13, 28, 0.96) !important; }
+.loykrathong-theme .bg-\[\#050811\]\/90 { background-color: rgba(4, 9, 20, 0.9) !important; }
+.loykrathong-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #040914, #02050c) !important; }
+.loykrathong-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #0A162C, #081224 55%, #040914) !important; }
+.loykrathong-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #13284C, #0A162C 55%, #040914) !important; }
+.loykrathong-theme .bg-sky-950\/60 { background-color: rgba(180, 83, 9, 0.35) !important; }
+.loykrathong-theme .border-sky-500\/30 { border-color: rgba(245, 158, 11, 0.45) !important; }
+.loykrathong-theme .bg-sky-500\/10 { background-color: rgba(251, 191, 36, 0.14) !important; }
+.loykrathong-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #D97706, #FDE68A) !important; }
+
+@keyframes loyLanternRise { 0% { transform: translate3d(0, 108vh, 0) scale(0.75); opacity: 0; } 12% { opacity: 0.78; } 88% { opacity: 0.65; } 100% { transform: translate3d(var(--ldrift, 30px), -14vh, 0) scale(1.08); opacity: 0; } }
+.loy-lantern { position: fixed; top: 0; pointer-events: none; z-index: 0; animation: loyLanternRise var(--ldur, 16s) linear infinite; animation-delay: var(--ldelay, 0s); will-change: transform; }
+@keyframes chatLanternRise { 0% { transform: translate3d(0, 112%, 0) scale(0.75); opacity: 0; } 15% { opacity: 0.95; } 85% { opacity: 0.9; } 100% { transform: translate3d(var(--lx, 20px), -18%, 0) scale(1.1); opacity: 0; } }
+.chat-burst-lantern { position: absolute; bottom: -24px; pointer-events: none; animation: chatLanternRise var(--ldur, 3.6s) ease-out forwards; animation-delay: var(--ldel, 0s); }
+@keyframes loyRiverDrift { 0% { left: -90px; } 100% { left: calc(100% + 90px); } }
+@keyframes loyBob { 0%, 100% { transform: translateY(0px) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+.loy-river-item { position: absolute; animation: loyRiverDrift var(--rdur, 22s) linear infinite; animation-delay: var(--rdel, 0s); }
+.loy-river-item:hover { animation-play-state: paused; z-index: 40 !important; }
+.loy-bob { animation: loyBob 3.2s ease-in-out infinite; }
+.avatar-loy-lotus { display: none; pointer-events: none; z-index: 15; }
+body.loykrathong-theme .avatar-loy-lotus { display: block; }
+body.loykrathong-theme .avatar-loy-ring { box-shadow: 0 0 12px rgba(251, 191, 36, 0.55); border-color: rgba(253, 230, 138, 0.85) !important; }
+
+/* ================= CHRISTMAS THEME ================= */
+body.christmas-theme, .christmas-theme.bg-\[\#050811\], .christmas-theme .bg-\[\#050811\] { background-color: #040D0E !important; }
+.christmas-theme.bg-\[\#070C18\], .christmas-theme .bg-\[\#070C18\], .christmas-theme header { background-color: rgba(6, 20, 21, 0.96) !important; }
+.christmas-theme.bg-\[\#0B1325\], .christmas-theme .bg-\[\#0B1325\] { background-color: #081C1B !important; }
+.christmas-theme.bg-\[\#0F2547\], .christmas-theme .bg-\[\#0F2547\] { background-color: #10322E !important; }
+.christmas-theme.border-\[\#1E3A5F\], .christmas-theme .border-\[\#1E3A5F\] { border-color: rgba(217, 119, 6, 0.55) !important; }
+.christmas-theme .text-sky-300, .christmas-theme .text-blue-200 { color: #BAE6FD !important; }
+.christmas-theme .text-sky-400, .christmas-theme .text-blue-300 { color: #FDE68A !important; }
+.christmas-theme .text-sky-500, .christmas-theme .text-blue-400 { color: #F59E0B !important; }
+.christmas-theme .bg-sky-400 { background-color: #E11D48 !important; }
+.christmas-theme .bg-sky-500 { background-color: #DC2626 !important; }
+.christmas-theme .bg-sky-600 { background-color: #B91C1C !important; }
+.christmas-theme .bg-sky-700 { background-color: #991B1B !important; }
+.christmas-theme .border-sky-400, .christmas-theme .border-blue-400 { border-color: #FDE68A !important; }
+.christmas-theme .border-sky-500, .christmas-theme .border-blue-400\/50 { border-color: #D97706 !important; }
+.christmas-theme .inp { background-color: #040D0E !important; border-color: rgba(217, 119, 6, 0.55) !important; }
+.christmas-theme .card { background-color: #081C1B !important; border-color: rgba(217, 119, 6, 0.5) !important; }
+.christmas-theme .btn-b { background-color: #10322E !important; border-color: rgba(253, 230, 138, 0.45) !important; }
+.christmas-theme .btn-d { background-color: #040D0E !important; border-color: rgba(217, 119, 6, 0.5) !important; }
+.christmas-theme ::-webkit-scrollbar-track { background: #040D0E !important; }
+.christmas-theme ::-webkit-scrollbar-thumb { background: #B45309 !important; }
+.christmas-theme .orbit-sys > div:first-child {
+  background: radial-gradient(circle at 32% 28%, #E0F2FE, #38BDF8 38%, #0E3A4D 72%, #040D0E 100%) !important;
+  box-shadow: 0 0 65px rgba(186, 230, 253, 0.65), 0 0 24px rgba(253, 230, 138, 0.45), inset 0 0 22px rgba(255, 255, 255, 0.55) !important;
+  border: 2px solid rgba(253, 230, 138, 0.75) !important;
+}
+.christmas-theme .orbit-sys svg path { fill: #081C1B !important; stroke: #FDE68A !important; }
+.christmas-theme .orbit-sys > div:not(:first-child) { border-style: dashed !important; border-color: rgba(253, 230, 138, 0.35) !important; }
+.christmas-theme .msg-left .msg-content::before { background: #10322E; border-color: rgba(217, 119, 6, 0.55); }
+.christmas-theme .msg-right .msg-content::after { background: #B91C1C; }
+.christmas-theme .bg-\[\#050811\]\/90 { background-color: rgba(4, 13, 14, 0.9) !important; }
+.christmas-theme .from-\[\#050811\].to-\[\#030509\] { background-image: linear-gradient(to bottom, #040D0E, #020809) !important; }
+.christmas-theme .from-\[\#0B1325\] { background-image: linear-gradient(135deg, #081C1B, #061515 55%, #040D0E) !important; }
+.christmas-theme .from-\[\#0F2547\] { background-image: linear-gradient(135deg, #10322E, #081C1B 55%, #040D0E) !important; }
+.christmas-theme .bg-sky-950\/60 { background-color: rgba(153, 27, 27, 0.48) !important; }
+.christmas-theme .border-sky-500\/30 { border-color: rgba(217, 119, 6, 0.5) !important; }
+.christmas-theme .bg-sky-500\/10 { background-color: rgba(253, 230, 138, 0.12) !important; }
+.christmas-theme .from-sky-500.to-blue-400 { background-image: linear-gradient(to right, #DC2626, #FDE68A) !important; }
+
+@keyframes xmasSnowFall { 0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; } 10% { opacity: 0.85; } 90% { opacity: 0.75; } 100% { transform: translate3d(var(--drift, 25px), 108vh, 0) rotate(360deg); opacity: 0; } }
+.xmas-snowflake { position: fixed; top: -24px; pointer-events: none; z-index: 0; animation: xmasSnowFall var(--dur, 12s) linear infinite; animation-delay: var(--delay, 0s); will-change: transform; }
+@keyframes fairyTwinkleA { 0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); } 50% { opacity: 0.35; filter: none; } }
+@keyframes fairyTwinkleB { 0%, 100% { opacity: 0.35; filter: none; } 50% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); } }
+.fairy-bulb-a { animation: fairyTwinkleA 2.2s ease-in-out infinite; }
+.fairy-bulb-b { animation: fairyTwinkleB 2.2s ease-in-out infinite; }
+.avatar-santa-hat { display: none; pointer-events: none; z-index: 15; }
+body.christmas-theme .avatar-santa-hat { display: block; }
+@keyframes chatBurstFall { 0% { transform: translate3d(0, -10%, 0) rotate(0deg) scale(0.75); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 0.9; } 100% { transform: translate3d(var(--bx, 20px), 115%, 0) rotate(320deg) scale(1.1); opacity: 0; } }
+.chat-burst-flake { position: absolute; top: -18px; pointer-events: none; animation: chatBurstFall var(--bdur, 3.2s) ease-in forwards; animation-delay: var(--bdel, 0s); }
