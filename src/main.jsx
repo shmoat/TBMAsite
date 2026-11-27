@@ -6,6 +6,7 @@ import { auth } from './lib/firebase';
 import { installLinkGuard } from './lib/security';
 import { AuthProvider } from './contexts/AuthContext';
 import { UIProvider } from './contexts/UIContext';
+import { RadioProvider } from './contexts/RadioContext';
 import App from './App';
 
 installLinkGuard();
@@ -46,7 +47,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <AuthGate>
     <AuthProvider>
       <UIProvider>
-        <App />
+        <RadioProvider>
+          <App />
+        </RadioProvider>
       </UIProvider>
     </AuthProvider>
   </AuthGate>
