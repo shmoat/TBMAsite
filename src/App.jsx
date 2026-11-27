@@ -58,6 +58,7 @@ export default function App() {
   const [sharedTreeCode, setSharedTreeCode] = useState(null);
   const [activeRoom, setActiveRoom] = useState({ type: 'channel', id: 'global-lobby' });
   const [navPill, setNavPill] = useState({ left: 4, width: 0 });
+  const navRef = useRef(null);
 
   // Header & Overlays
   const [profMenuOpen, setProfMenuOpen] = useState(false);
@@ -278,14 +279,46 @@ export default function App() {
   useEffect(() => {
     const updatePill = () => {
       const el = document.getElementById('nav-' + currentView);
-      if (el) setNavPill({ left: el.offsetLeft, width: el.offsetWidth });
-      else setNavPill({ left: 4, width: 0 });
+      if (el) {
+        setNavPill((prev) =>
+          prev.left === el.offsetLeft && prev.width === el.offsetWidth
+            ? prev
+            : { left: el.offsetLeft, width: el.offsetWidth }
+        );
+      } else {
+        setNavPill((prev) => (prev.width === 0 ? prev : { left: 4, width: 0 }));
+      }
     };
+
     updatePill();
-    const t = setTimeout(updatePill, 80);
+    const rafId = requestAnimationFrame(updatePill);
+    const t1 = setTimeout(updatePill, 150);
+    const t2 = setTimeout(updatePill, 350);
+
+    const navEl = navRef.current;
+    let ro = null;
+    if (navEl && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(updatePill);
+      ro.observe(navEl);
+      navEl.querySelectorAll('button').forEach((btn) => ro.observe(btn));
+    }
+
+    const onTransitionEnd = (e) => {
+      if (e.target !== navEl) updatePill();
+    };
+    navEl?.addEventListener('transitionend', onTransitionEnd);
     window.addEventListener('resize', updatePill);
-    return () => { clearTimeout(t); window.removeEventListener('resize', updatePill); };
-  }, [currentView, currentUser?.role]);
+    document.fonts?.ready?.then(updatePill);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro?.disconnect();
+      navEl?.removeEventListener('transitionend', onTransitionEnd);
+      window.removeEventListener('resize', updatePill);
+    };
+  }, [currentView, currentUser?.id, currentUser?.role]);
 
   // Close profile dropdown on outside click
   useEffect(() => {
