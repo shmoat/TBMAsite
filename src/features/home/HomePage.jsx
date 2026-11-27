@@ -29,7 +29,7 @@ export default function HomePage({
       { r: 125, items: r1, rc: 'or1', cc: 'cr1' },
       { r: 190, items: r2, rc: 'or2', cc: 'cr2' },
       { r: 260, items: r3, rc: 'or3', cc: 'cr3' },
-      { r: 335, items: r4, rc: 'or2', cc: 'cr2' }
+      { r: 335, items: r4, rc: 'or4', cc: 'cr4' }
     ];
   }, [activeMembers, users]);
 
@@ -58,12 +58,17 @@ export default function HomePage({
           <span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span>
         </div>
 
-        {rings.map((ring, ri) => (
-          <div
-            key={ri}
-            className={'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' + ring.rc}
-            style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}
-          >
+        {rings.map((ring, ri) => {
+          const ringKey = `${ri}-${ring.items.map((m) => m.id).join('_')}`;
+          return (
+            <div
+              key={ringKey}
+              className={
+                'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' +
+                (ring.items.length > 0 ? ring.rc : '-translate-x-1/2 -translate-y-1/2')
+              }
+              style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}
+            >
             {ring.items.map((m, mi) => {
               const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
               return (
