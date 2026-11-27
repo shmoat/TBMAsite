@@ -1,0 +1,993 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+export const AdvancedUnitConverter = () => {
+  const CATEGORIES = {
+    'Length (ความยาว)': { m: 1, cm: 100, mm: 1000, km: 0.001, in: 39.3701, ft: 3.28084, yd: 1.09361, mile: 0.000621371, 'วา (wa)': 0.5, 'ศอก (sok)': 2, 'คืบ (khuep)': 4, 'เส้น (sen)': 0.025, 'โยชน์ (yot)': 0.0000625 },
+    'Area (พื้นที่)': { 'm²': 1, 'cm²': 10000, 'km²': 1e-6, hectare: 1e-4, acre: 0.000247105, 'sq ft': 10.7639, 'ตารางวา (sq wa)': 0.25, 'งาน (ngan)': 0.0025, 'ไร่ (rai)': 0.000625 },
+    'Mass (น้ำหนัก)': { kg: 1, g: 1000, mg: 1e6, lb: 2.20462, oz: 35.274, ton: 0.001, 'ขีด (khit)': 10, 'บาท (ทอง)': 65.59958, 'สลึง (ทอง)': 262.3983, 'ตำลึง': 16.39989 },
+    'Volume (ปริมาตร)': { L: 1, mL: 1000, 'm³': 0.001, 'cm³': 1000, 'gal (US)': 0.264172, 'qt (US)': 1.05669, 'fl oz (US)': 33.814, 'ถัง (thang)': 0.05, 'เกวียน (kwian)': 0.0005, 'ทะนาน (thanan)': 1 },
+    'Force (แรง)': { N: 1, kN: 1e-3, kgf: 0.10197, lbf: 0.224809 },
+    'Pressure (ความดัน)': { Pa: 1, kPa: 1e-3, MPa: 1e-6, bar: 1e-5, psi: 0.000145038, atm: 0.0000098692 },
+    'Energy (พลังงาน)': { J: 1, kJ: 1e-3, cal: 0.239006, kcal: 0.000239006, Wh: 0.000277778, kWh: 2.77778e-7, eV: 6.242e18 },
+    'Torque (แรงบิด)': { 'N·m': 1, 'lbf·ft': 0.737562, 'kgf·m': 0.101972, 'ozf·in': 141.6119 },
+    'Power (กำลัง)': { W: 1, kW: 1e-3, HP: 0.00134102, 'BTU/hr': 3.41214 },
+    'Velocity (ความเร็ว)': { 'm/s': 1, 'km/h': 3.6, mph: 2.23694, knot: 1.94384, 'ft/s': 3.28084 },
+    'Data Storage (ข้อมูล)': { Byte: 1, KB: 1e-3, MB: 1e-6, GB: 1e-9, TB: 1e-12 },
+    'Angle (มุม)': { Degree: 1, Radian: 0.0174533, Gradian: 1.11111 },
+    'Temperature (อุณหภูมิ)': 'special',
+    'Custom (พิมพ์หน่วยเอง)': 'compound'
+  };
+
+  const BASE_UNITS = {
+    kg: { type: 'mass', val: 1 }, g: { type: 'mass', val: 1000 }, lb: { type: 'mass', val: 2.20462 },
+    m: { type: 'length', val: 1 }, cm: { type: 'length', val: 100 }, mm: { type: 'length', val: 1000 }, km: { type: 'length', val: 0.001 }, in: { type: 'length', val: 39.3701 }, ft: { type: 'length', val: 3.28084 },
+    s: { type: 'time', val: 1 }, min: { type: 'time', val: 1 / 60 }, h: { type: 'time', val: 1 / 3600 },
+    L: { type: 'volume', val: 1 }, mL: { type: 'volume', val: 1000 }
+  };
+
+  const [category, setCategory] = useState('Length (ความยาว)');
+  const [fromUnit, setFromUnit] = useState('m');
+  const [toUnit, setToUnit] = useState('cm');
+  const [customFrom, setCustomFrom] = useState('kg * m / s^2');
+  const [customTo, setCustomTo] = useState('g * cm / s^2');
+  const [inputValue, setInputValue] = useState('');
+  const [useSciNotation, setUseSciNotation] = useState(false);
+  const [precision, setPrecision] = useState(6);
+  const [copied, setCopied] = useState(false);
+  const [visualContext, setVisualContext] = useState(null);
+
+  useEffect(() => {
+    if (category === 'Temperature (อุณหภูมิ)') {
+      setFromUnit('C');
+      setToUnit('F');
+    } else if (category !== 'Custom (พิมพ์หน่วยเอง)') {
+      const units = Object.keys(CATEGORIES[category]);
+      setFromUnit(units[0]);
+      setToUnit(units[1] || units[0]);
+    }
+    setInputValue('');
+    setVisualContext(null);
+  }, [category]);
+
+  const parseCompoundUnit = (unitStr) => {
+    if (!unitStr) return null;
+    try {
+      let str = unitStr.replace(/\s+/g, '');
+      Object.keys(BASE_UNITS)
+        .sort((a, b) => b.length - a.length)
+        .forEach((u) => {
+          const regex = new RegExp(`(?<![a-zA-Z])${u}(?![a-zA-Z])`, 'g');
+          str = str.replace(regex, BASE_UNITS[u].val);
+        });
+      str = str.replace(/\^/g, '**');
+      if (/[a-zA-Z]/.test(str)) return null;
+      return new Function('return ' + str)();
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    const val = parseFloat(inputValue);
+    if (isNaN(val) || val <= 0 || category === 'Custom (พิมพ์หน่วยเอง)') {
+      setVisualContext(null);
+      return;
+    }
+
+    let ctx = null;
+    if (category === 'Length (ความยาว)' && CATEGORIES[category][fromUnit]) {
+      const meters = val / CATEGORIES[category][fromUnit];
+      if (meters > 1000) ctx = { txt: `เทียบเท่าความยาวสนามฟุตบอล ${(meters / 105).toFixed(1)} สนาม ⚽`, bg: 'bg-emerald-950/40', textCol: 'text-emerald-300' };
+      else if (meters > 10) ctx = { txt: `ความยาวพอๆ กับตึก ${(meters / 3).toFixed(1)} ชั้น 🏢`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+      else if (meters > 0.1) ctx = { txt: `ยาวประมาณไม้บรรทัด ${(meters / 0.3).toFixed(1)} อันต่อกัน 📏`, bg: 'bg-amber-950/40', textCol: 'text-amber-300' };
+    } else if (category === 'Mass (น้ำหนัก)' && CATEGORIES[category][fromUnit]) {
+      const kg = val / CATEGORIES[category][fromUnit];
+      if (kg > 1000) ctx = { txt: `น้ำหนักเทียบเท่าช้างเอเชีย ${(kg / 3000).toFixed(2)} ตัว 🐘`, bg: 'bg-slate-800', textCol: 'text-slate-300' };
+      else if (kg > 50) ctx = { txt: `น้ำหนักพอๆ กับผู้ใหญ่ ${(kg / 65).toFixed(1)} คน 🧑`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+      else if (kg > 1) ctx = { txt: `หนักเท่าแตงโม ${(kg / 3).toFixed(1)} ลูก 🍉`, bg: 'bg-red-950/40', textCol: 'text-red-300' };
+    } else if (category === 'Volume (ปริมาตร)' && CATEGORIES[category][fromUnit]) {
+      const liters = val / CATEGORIES[category][fromUnit];
+      if (liters > 1000) ctx = { txt: `ใส่น้ำเต็มสระว่ายน้ำโอลิมปิกได้ ${(liters / 2500000).toExponential(2)} สระ 🏊‍♂️`, bg: 'bg-blue-950/40', textCol: 'text-blue-300' };
+      else if (liters > 10) ctx = { txt: `เทียบเท่าน้ำขวดใหญ่ (1.5L) จำนวน ${(liters / 1.5).toFixed(0)} ขวด 💧`, bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+    } else if (category === 'Temperature (อุณหภูมิ)') {
+      let celsius = 0;
+      if (fromUnit === 'C') celsius = val;
+      else if (fromUnit === 'F') celsius = ((val - 32) * 5) / 9;
+      else if (fromUnit === 'K') celsius = val - 273.15;
+
+      if (celsius > 100) ctx = { txt: 'อุณหภูมินี้ น้ำจะเดือดจนระเหยเป็นไอ ♨️', bg: 'bg-red-950/40', textCol: 'text-red-400' };
+      else if (celsius > 35) ctx = { txt: 'อุณหภูมิประมาณแดดประเทศไทยตอนเที่ยง 🥵', bg: 'bg-amber-950/40', textCol: 'text-amber-400' };
+      else if (celsius > 20) ctx = { txt: 'อากาศห้องแอร์กำลังเย็นสบาย ❄️', bg: 'bg-sky-950/40', textCol: 'text-sky-300' };
+      else if (celsius < 0) ctx = { txt: 'จุดเยือกแข็ง น้ำกลายเป็นน้ำแข็งแล้ว 🧊', bg: 'bg-blue-950/40', textCol: 'text-blue-200' };
+    }
+
+    setVisualContext(ctx);
+  }, [inputValue, fromUnit, category]);
+
+  const calculateResult = () => {
+    if (inputValue === '') return '';
+    const val = parseFloat(inputValue);
+    if (isNaN(val)) return 'Invalid Input';
+    let resultNum = 0;
+
+    if (category === 'Temperature (อุณหภูมิ)') {
+      if (fromUnit === toUnit) resultNum = val;
+      else if (fromUnit === 'C' && toUnit === 'F') resultNum = (val * 9) / 5 + 32;
+      else if (fromUnit === 'C' && toUnit === 'K') resultNum = val + 273.15;
+      else if (fromUnit === 'F' && toUnit === 'C') resultNum = ((val - 32) * 5) / 9;
+      else if (fromUnit === 'F' && toUnit === 'K') resultNum = ((val - 32) * 5) / 9 + 273.15;
+      else if (fromUnit === 'K' && toUnit === 'C') resultNum = val - 273.15;
+      else if (fromUnit === 'K' && toUnit === 'F') resultNum = ((val - 273.15) * 9) / 5 + 32;
+    } else if (category === 'Custom (พิมพ์หน่วยเอง)') {
+      const factorFrom = parseCompoundUnit(customFrom);
+      const factorTo = parseCompoundUnit(customTo);
+      if (!factorFrom || !factorTo) return 'Unit Error';
+      resultNum = (val / factorFrom) * factorTo;
+    } else {
+      const fromRate = CATEGORIES[category]?.[fromUnit];
+      const toRate = CATEGORIES[category]?.[toUnit];
+      if (!fromRate || !toRate) return '';
+      resultNum = (val / fromRate) * toRate;
+    }
+
+    if (useSciNotation) return resultNum.toExponential(precision > 0 ? precision - 1 : 2);
+    const absVal = Math.abs(resultNum);
+    if (absVal > 0 && (absVal < 0.0001 || absVal > 1e7)) return resultNum.toExponential(precision > 0 ? precision - 1 : 2);
+    if (Number.isInteger(resultNum)) return resultNum.toString();
+    return parseFloat(resultNum.toPrecision(precision)).toString();
+  };
+
+  const handleSwap = () => {
+    if (category === 'Custom (พิมพ์หน่วยเอง)') {
+      const temp = customFrom;
+      setCustomFrom(customTo);
+      setCustomTo(temp);
+    } else {
+      const temp = fromUnit;
+      setFromUnit(toUnit);
+      setToUnit(temp);
+    }
+    const res = calculateResult();
+    if (res && res !== 'Invalid Input' && res !== 'Unit Error') {
+      setInputValue(useSciNotation ? parseFloat(res).toExponential(precision - 1) : parseFloat(res).toString());
+    }
+  };
+
+  const handleCopy = () => {
+    const res = calculateResult();
+    if (res && res !== 'Invalid Input' && res !== 'Unit Error') {
+      navigator.clipboard.writeText(res);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const tempUnits = ['C', 'F', 'K'];
+  const unitOptions = category === 'Temperature (อุณหภูมิ)'
+    ? tempUnits
+    : (typeof CATEGORIES[category] === 'object' ? Object.keys(CATEGORIES[category]) : []);
+
+  return (
+    <div className="flex flex-col gap-5 py-4 w-full max-w-lg mx-auto bg-[#0a101f] p-4 sm:p-6 rounded-2xl border border-[#1E3A5F] shadow-2xl relative overflow-hidden">
+      <div className="absolute -top-10 -right-10 w-32 h-32 bg-sky-500 rounded-full blur-[80px] opacity-20 pointer-events-none"></div>
+
+      <div className="flex justify-between items-center z-10 flex-wrap gap-2">
+        <label className="text-xs text-slate-400 font-bold uppercase tracking-wider">ประเภทหน่วยวัด</label>
+        <div className="flex items-center gap-2">
+          <select value={precision} onChange={(e) => setPrecision(parseInt(e.target.value, 10))} className="bg-[#050811] text-sky-300 text-[10px] px-2 py-1.5 rounded-lg border border-[#1E3A5F] outline-none cursor-pointer font-bold">
+            <option value="4">4 ตำแหน่ง</option>
+            <option value="6">6 ตำแหน่ง</option>
+            <option value="8">8 ตำแหน่ง</option>
+          </select>
+          <label className="flex items-center gap-2 cursor-pointer text-[10px] bg-[#050811] px-2.5 py-1.5 rounded-lg border border-[#1E3A5F]">
+            <input type="checkbox" checked={useSciNotation} onChange={(e) => setUseSciNotation(e.target.checked)} className="rounded bg-slate-800 accent-sky-500" />
+            <span className="text-sky-300 font-bold">1.2e-5</span>
+          </label>
+        </div>
+      </div>
+
+      <select value={category} onChange={(e) => setCategory(e.target.value)} className="inp py-2.5 text-sm text-sky-300 font-bold z-10 bg-[#0B1325] shadow-inner cursor-pointer">
+        {Object.keys(CATEGORIES).map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+
+      <div className="flex flex-col gap-4 z-10 mt-2">
+        <div className="flex flex-col bg-[#050811] rounded-xl border border-[#1E3A5F] p-3 focus-within:border-sky-500 transition-colors">
+          <span className="text-[10px] text-slate-500 font-bold mb-1">จาก (From)</span>
+          <div className="flex items-center gap-2">
+            <input type="number" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full bg-transparent text-2xl font-mono text-white outline-none" placeholder="0" />
+            <div className="w-[1px] h-8 bg-[#1E3A5F] mx-1 shrink-0"></div>
+            {category === 'Custom (พิมพ์หน่วยเอง)' ? (
+              <input type="text" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="w-32 bg-[#0B1325] border border-[#1E3A5F] rounded p-1 text-xs text-sky-200 font-mono text-center outline-none focus:border-sky-500 shrink-0" placeholder="kg*m/s^2" />
+            ) : (
+              <select value={fromUnit} onChange={(e) => setFromUnit(e.target.value)} className="bg-transparent text-sm font-bold text-sky-200 outline-none cursor-pointer w-28 sm:w-32 text-right shrink-0 truncate">
+                {unitOptions.map((u) => <option key={u} value={u} className="bg-[#0B1325]">{u}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-center -my-6 z-20 relative">
+          <button type="button" onClick={handleSwap} className="w-10 h-10 rounded-full bg-[#1E3A5F] border-4 border-[#0a101f] text-white flex items-center justify-center hover:bg-sky-500 hover:scale-110 transition-all shadow-lg group">
+            <span className="group-hover:rotate-180 transition-transform duration-300 font-bold">⇅</span>
+          </button>
+        </div>
+
+        <div className="flex flex-col bg-[#11241a] rounded-xl border border-emerald-900/50 p-3 relative">
+          <span className="text-[10px] text-emerald-600 font-bold mb-1">ผลลัพธ์ (To)</span>
+          <div className="flex items-center gap-2">
+            <div className="w-full bg-transparent text-xl sm:text-2xl font-mono text-emerald-400 min-h-[32px] overflow-hidden text-ellipsis whitespace-nowrap pt-1">
+              {calculateResult() || '0'}
+            </div>
+            <div className="w-[1px] h-8 bg-emerald-900 mx-1 shrink-0"></div>
+            {category === 'Custom (พิมพ์หน่วยเอง)' ? (
+              <input type="text" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="w-32 bg-[#0B1325] border border-emerald-900/50 rounded p-1 text-xs text-emerald-200 font-mono text-center outline-none focus:border-emerald-500 shrink-0" placeholder="g*cm/s^2" />
+            ) : (
+              <select value={toUnit} onChange={(e) => setToUnit(e.target.value)} className="bg-transparent text-sm font-bold text-emerald-200 outline-none cursor-pointer w-28 sm:w-32 text-right shrink-0 truncate">
+                {unitOptions.map((u) => <option key={u} value={u} className="bg-[#0B1325]">{u}</option>)}
+              </select>
+            )}
+          </div>
+
+          <button type="button" onClick={handleCopy} className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded border transition-colors ${copied ? 'bg-emerald-500 text-white border-emerald-400 font-bold' : 'bg-[#0B1325] text-slate-400 border-[#1E3A5F] hover:text-white'}`}>
+            {copied ? '✓ คัดลอกแล้ว' : '📋 Copy'}
+          </button>
+        </div>
+      </div>
+
+      {visualContext && (
+        <div className={`mt-2 p-3 rounded-lg ${visualContext.bg} border border-[#1E3A5F]/50 text-center animate-fade-in shadow-inner z-10`}>
+          <div className={`text-xs font-bold ${visualContext.textCol}`}>{visualContext.txt}</div>
+        </div>
+      )}
+
+      {category === 'Temperature (อุณหภูมิ)' ? (
+        <div className="text-[10px] text-slate-500 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]/50 shadow-inner z-10">
+          สูตร:{' '}
+          {(fromUnit === 'C' && toUnit === 'F') ? '°F = (°C × 9/5) + 32' :
+           (fromUnit === 'F' && toUnit === 'C') ? '°C = (°F - 32) × 5/9' :
+           (fromUnit === 'C' && toUnit === 'K') ? 'K = °C + 273.15' :
+           (fromUnit === 'K' && toUnit === 'C') ? '°C = K - 273.15' :
+           (fromUnit === 'F' && toUnit === 'K') ? 'K = (°F - 32) × 5/9 + 273.15' :
+           (fromUnit === 'K' && toUnit === 'F') ? '°F = (K - 273.15) × 9/5 + 32' :
+           'K = °C + 273.15 | °F = (°C × 9/5) + 32'}
+        </div>
+      ) : category === 'Custom (พิมพ์หน่วยเอง)' ? (
+        <div className="text-[10px] text-slate-400 text-center bg-amber-950/30 py-2 px-3 rounded-lg border border-amber-900/50 shadow-inner leading-relaxed z-10">
+          💡 พิมพ์หน่วยฐานที่ต้องการผสมลงในกล่อง<br />(รองรับ: kg, g, lb, m, cm, mm, km, in, ft, s, min, h, L, mL)<br />ตัวอย่าง: <span className="text-amber-300 font-mono">kg*m/s^2</span>
+        </div>
+      ) : (
+        <div className="text-[10px] text-slate-400 text-center font-mono bg-[#050811] py-1.5 rounded-lg border border-sky-900/50 shadow-inner z-10">
+          <i className="fas fa-info-circle text-sky-400 mr-1"></i>
+          สูตรแปลงหน่วย: 1 {fromUnit} = {(() => {
+            const fromR = CATEGORIES[category]?.[fromUnit];
+            const toR = CATEGORIES[category]?.[toUnit];
+            if (!fromR || !toR) return '-';
+            const rate = toR / fromR;
+            return (rate >= 10000 || rate <= 0.0001) ? rate.toExponential(4) : rate.toLocaleString(undefined, { maximumFractionDigits: 6 });
+          })()} {toUnit}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const GradeCrisisManager = () => {
+  const [midtermFull, setMidtermFull] = useState(30);
+  const [midtermScore, setMidtermScore] = useState(15);
+  const [projectFull, setProjectFull] = useState(30);
+  const [projectScore, setProjectScore] = useState(25);
+  const [finalFull, setFinalFull] = useState(40);
+  const [targetGrade, setTargetGrade] = useState(80);
+
+  const currentScore = midtermScore + projectScore;
+  const totalFullSoFar = midtermFull + projectFull;
+  const needScore = targetGrade - currentScore;
+
+  let status = 'safe';
+  let msg = 'สบายๆ ชิลๆ';
+  let colorClass = 'text-emerald-400';
+  let bgClass = 'bg-emerald-950/30 border-emerald-500/50';
+
+  if (needScore > finalFull) {
+    status = 'impossible';
+    msg = 'ปาฏิหาริย์เท่านั้นที่ช่วยคุณได้ (ต้องการคะแนนมากกว่าคะแนนเต็ม)';
+    colorClass = 'text-red-500 font-bold animate-pulse';
+    bgClass = 'bg-red-950/50 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]';
+  } else if (needScore > finalFull * 0.85) {
+    status = 'danger';
+    msg = 'วิกฤตหนัก! ต้องอ่านหนังสือแบบไม่ได้นอน';
+    colorClass = 'text-red-400';
+    bgClass = 'bg-red-950/30 border-red-500/50';
+  } else if (needScore > finalFull * 0.6) {
+    status = 'warning';
+    msg = 'ต้องตั้งใจอ่านหนังสือแล้วนะ ประมาทไม่ได้';
+    colorClass = 'text-amber-400';
+    bgClass = 'bg-amber-950/30 border-amber-500/50';
+  } else if (needScore <= 0) {
+    status = 'passed';
+    msg = 'ถึงไม่ไปสอบก็ผ่านเป้าหมายแล้ว นอนตีพุงอยู่บ้านได้เลย!';
+    colorClass = 'text-sky-400 font-bold';
+    bgClass = 'bg-sky-950/30 border-sky-500/50';
+  }
+
+  const gaugeWidth = Math.max(0, Math.min(100, (needScore / (finalFull || 1)) * 100));
+
+  return (
+    <div className="flex flex-col gap-6 py-4 w-full max-w-2xl mx-auto text-xs">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+          <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-edit"></i> ใส่คะแนนที่มีปัจจุบัน</div>
+          <div className="flex items-center gap-3">
+            <span className="w-20 text-slate-400 font-bold">มิดเทอม (Mid)</span>
+            <input type="number" value={midtermScore} onChange={(e) => setMidtermScore(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
+            <span className="text-slate-500">/</span>
+            <input type="number" value={midtermFull} onChange={(e) => setMidtermFull(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="w-20 text-slate-400 font-bold">เก็บ/โปรเจกต์</span>
+            <input type="number" value={projectScore} onChange={(e) => setProjectScore(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
+            <span className="text-slate-500">/</span>
+            <input type="number" value={projectFull} onChange={(e) => setProjectFull(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
+          </div>
+          <div className="pt-2 border-t border-[#1E3A5F] flex justify-between items-center bg-[#050811] p-3 rounded-xl mt-2">
+            <span className="text-slate-300 font-bold">คะแนนเก็บรวมตอนนี้</span>
+            <span className="text-xl font-mono font-bold text-white">{currentScore} <span className="text-[10px] text-slate-500">/ {totalFullSoFar}</span></span>
+          </div>
+        </div>
+
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col justify-between">
+          <div>
+            <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-4"><i className="fas fa-bullseye"></i> กำหนดเป้าหมาย</div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-slate-400 font-bold">เป้าหมายเกรดที่อยากได้:</span>
+              <select value={targetGrade} onChange={(e) => setTargetGrade(parseInt(e.target.value, 10))} className="flex-1 inp bg-[#050811] font-bold text-amber-300 text-center">
+                <option value="80">A (80 คะแนน)</option>
+                <option value="75">B+ (75 คะแนน)</option>
+                <option value="70">B (70 คะแนน)</option>
+                <option value="65">C+ (65 คะแนน)</option>
+                <option value="60">C (60 คะแนน)</option>
+                <option value="55">D+ (55 คะแนน)</option>
+                <option value="50">D (50 คะแนน - แค่ผ่าน)</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400 font-bold">คะแนนเต็มไฟนอล (Final):</span>
+              <input type="number" value={finalFull} onChange={(e) => setFinalFull(parseFloat(e.target.value) || 0)} className="w-20 inp font-mono text-center" />
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-500 text-center mt-4">⚠️ ตรวจสอบให้แน่ใจว่าผลรวมคะแนนเต็ม 3 ช่อง = 100 พอดี</div>
+        </div>
+      </div>
+
+      <div className={`p-6 rounded-2xl border ${bgClass} shadow-2xl relative overflow-hidden transition-colors duration-500 text-center flex flex-col items-center justify-center min-h-[200px]`}>
+        <div className="text-slate-300 font-bold mb-2">เพื่อให้ได้เกรดเป้าหมาย คุณต้องทำคะแนนสอบไฟนอลให้ได้:</div>
+        <div className={`text-5xl md:text-6xl font-mono font-bold my-4 ${colorClass}`}>
+          {needScore > 0 ? needScore : 0} <span className="text-xl sm:text-2xl text-slate-400 font-sans">/ {finalFull}</span>
+        </div>
+        <div className={`text-sm md:text-base font-bold mb-6 ${colorClass}`}>"{msg}"</div>
+        <div className="w-full max-w-sm">
+          <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
+            <span className="text-emerald-400">ชิลๆ</span>
+            <span className="text-amber-400">เริ่มเครียด</span>
+            <span className="text-red-400">วิกฤต</span>
+          </div>
+          <div className="h-3 w-full bg-[#050811] rounded-full overflow-hidden border border-slate-700/50">
+            <div className={`h-full transition-all duration-700 ease-out ${status === 'impossible' ? 'bg-red-500' : status === 'danger' ? 'bg-red-400' : status === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${gaugeWidth}%` }}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const FinancialReality = () => {
+  const [mode, setMode] = useState('loan');
+  const [principal, setPrincipal] = useState(3000000);
+  const [rate, setRate] = useState(3.5);
+  const [years, setYears] = useState(30);
+
+  const r = (rate / 100) / 12;
+  const n = years * 12;
+  const monthlyPay = r > 0 && n > 0 ? (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : (n > 0 ? principal / n : 0);
+  const totalPaid = monthlyPay * n;
+  const totalInterest = totalPaid - principal;
+  const interestPct = totalPaid > 0 ? (totalInterest / totalPaid) * 100 : 0;
+
+  const investTotal = principal * Math.pow(1 + rate / 100, years);
+  const investProfit = investTotal - principal;
+  const profitPct = investTotal > 0 ? (investProfit / investTotal) * 100 : 0;
+
+  return (
+    <div className="flex flex-col gap-6 py-4 w-full max-w-3xl mx-auto text-xs">
+      <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold">
+        <button type="button" onClick={() => setMode('loan')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode === 'loan' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><i className="fas fa-home mr-1"></i> ผ่อนบ้าน (ลดต้นลดดอก)</button>
+        <button type="button" onClick={() => setMode('invest')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mode === 'invest' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><i className="fas fa-chart-line mr-1"></i> เงินลงทุน (ดอกเบี้ยทบต้น)</button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+          <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-sliders-h"></i> กรอกข้อมูลตัวเลข</div>
+          <div>
+            <label className="text-slate-400 font-bold mb-1 block">{mode === 'loan' ? 'ยอดกู้ (เงินต้น) / บาท' : 'เงินต้นสำหรับลงทุน (บาท)'}</label>
+            <input type="number" value={principal} onChange={(e) => setPrincipal(parseFloat(e.target.value) || 0)} className="w-full inp font-mono text-lg py-2" />
+          </div>
+          <div className="flex gap-4">
+            <div className="flex-1"><label className="text-slate-400 font-bold mb-1 block">ดอกเบี้ยต่อปี (%)</label><input type="number" step="0.1" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} className="w-full inp font-mono text-center py-2" /></div>
+            <div className="flex-1"><label className="text-slate-400 font-bold mb-1 block">ระยะเวลา (ปี)</label><input type="number" min="1" value={years} onChange={(e) => setYears(parseInt(e.target.value, 10) || 0)} className="w-full inp font-mono text-center py-2" /></div>
+          </div>
+        </div>
+
+        <div className={`p-6 rounded-2xl border shadow-2xl flex flex-col justify-center min-h-[220px] ${mode === 'loan' ? 'bg-gradient-to-br from-[#1a0b0b] to-[#050811] border-red-900/50' : 'bg-gradient-to-br from-[#0b1a11] to-[#050811] border-emerald-900/50'}`}>
+          {mode === 'loan' ? (
+            <>
+              <div className="text-red-400 font-bold text-sm uppercase tracking-widest text-center mb-4">ความจริงของการผ่อนบ้าน</div>
+              <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2"><span className="text-slate-400">เงินต้นทั้งหมด:</span><span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span></div>
+              <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2"><span className="text-slate-400">ดอกเบี้ยที่แบงก์ได้:</span><span className="font-mono text-red-400 text-lg font-bold">{totalInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })} ฿</span></div>
+              <div className="flex justify-between items-end pb-2 mb-4 bg-red-950/30 p-2 rounded"><span className="text-white font-bold">รวมที่ต้องจ่ายจริง:</span><span className="font-mono text-white text-2xl font-bold">{totalPaid.toLocaleString(undefined, { maximumFractionDigits: 0 })} ฿</span></div>
+              <div className="text-center font-bold text-amber-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">ผ่อนเดือนละ: {monthlyPay.toLocaleString(undefined, { maximumFractionDigits: 0 })} ฿ ตลอด {years} ปี</div>
+            </>
+          ) : (
+            <>
+              <div className="text-emerald-400 font-bold text-sm uppercase tracking-widest text-center mb-4">พลังของดอกเบี้ยทบต้น</div>
+              <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2"><span className="text-slate-400">เงินต้นทั้งหมด:</span><span className="font-mono text-white text-lg">{principal.toLocaleString()} ฿</span></div>
+              <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2"><span className="text-slate-400">ผลกำไรที่งอกเงย:</span><span className="font-mono text-emerald-400 text-lg font-bold">+{investProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })} ฿</span></div>
+              <div className="flex justify-between items-end pb-2 mb-4 bg-emerald-950/30 p-2 rounded"><span className="text-white font-bold">รวมเงินสุทธิในปีที่ {years}:</span><span className="font-mono text-white text-2xl font-bold">{investTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })} ฿</span></div>
+              <div className="text-center font-bold text-emerald-300 text-[11px] bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">กำไรโตขึ้นจากเงินต้นถึง {principal > 0 ? ((investProfit / principal) * 100).toLocaleString(undefined, { maximumFractionDigits: 0 }) : 0}%</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#050811] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg mt-2">
+        <div className="text-center text-slate-400 font-bold mb-4 text-[10px]">กราฟแสดงสัดส่วน {mode === 'loan' ? '(เงินต้น vs ดอกเบี้ย)' : '(เงินต้น vs กำไร)'}</div>
+        <div className="w-full h-8 flex rounded-xl overflow-hidden shadow-inner font-mono text-[10px] font-bold text-[#050811] relative">
+          {mode === 'loan' ? (
+            <>
+              <div className="bg-sky-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - interestPct}%` }}>{(100 - interestPct) > 10 ? 'เงินต้น ' + (100 - interestPct).toFixed(1) + '%' : ''}</div>
+              <div className="bg-red-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${interestPct}%` }}>{interestPct > 10 ? 'ดอกเบี้ยแบงก์ ' + interestPct.toFixed(1) + '%' : ''}</div>
+            </>
+          ) : (
+            <>
+              <div className="bg-slate-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${100 - profitPct}%` }}>{(100 - profitPct) > 10 ? 'เงินต้น ' + (100 - profitPct).toFixed(1) + '%' : ''}</div>
+              <div className="bg-emerald-400 h-full flex items-center justify-center transition-all duration-1000 ease-out" style={{ width: `${profitPct}%` }}>{profitPct > 10 ? 'กำไร ' + profitPct.toFixed(1) + '%' : ''}</div>
+            </>
+          )}
+        </div>
+        {mode === 'loan' && interestPct > 40 && (
+          <div className="text-center mt-3 text-[10px] text-red-300 font-bold">⚠️ จ่ายดอกเบี้ยเยอะมาก! ควรวางแผนรีไฟแนนซ์ (Refinance) ทุก 3 ปีเพื่อลดดอกเบี้ยครับ</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const GachaSimulator = () => {
+  const [rate, setRate] = useState(1.0);
+  const [pulls, setPulls] = useState(10);
+  const [balls, setBalls] = useState([]);
+
+  const resultChance = rate <= 0 || pulls <= 0 ? 0 : (1 - Math.pow(1 - rate / 100, pulls)) * 100;
+
+  const triggerAnim = () => {
+    setBalls([]);
+    setTimeout(() => {
+      const newBalls = Array.from({ length: Math.min(pulls, 50) }).map((_, i) => ({
+        id: i,
+        isWin: Math.random() * 100 < rate,
+        delay: Math.random() * 1.5,
+        left: Math.random() * 80 + 10
+      }));
+      setBalls(newBalls);
+    }, 100);
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row gap-6 py-4 w-full max-w-4xl mx-auto text-xs items-center">
+      <div className="w-full md:w-1/2 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+        <div className="text-purple-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-dice"></i> Gacha Rate Reality Check</div>
+        <div>
+          <label className="text-slate-400 font-bold mb-1 block">เรตออกหน้าตู้ (Drop Rate %)</label>
+          <div className="flex items-center gap-2"><input type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} className="w-full inp font-mono text-lg" /><span className="text-xl">%</span></div>
+        </div>
+        <div>
+          <label className="text-slate-400 font-bold mb-1 block">จำนวนครั้งที่กดสุ่ม (Pulls/Rolls)</label>
+          <div className="flex items-center gap-2"><input type="number" min="1" max="1000" value={pulls} onChange={(e) => setPulls(parseInt(e.target.value, 10) || 0)} className="w-full inp font-mono text-lg" /><span className="text-xl whitespace-nowrap">ครั้ง</span></div>
+        </div>
+        <button type="button" onClick={triggerAnim} className="w-full btn-b py-3 font-bold bg-purple-900/40 border-purple-500/50 hover:bg-purple-600 hover:text-white transition-colors text-sm shadow">
+          🎰 กดสุ่มตู้กาชาจำลอง
+        </button>
+        <div className="text-[10px] text-slate-500 bg-[#050811] p-3 rounded-lg border border-[#1E3A5F] mt-4 leading-relaxed">
+          <span className="font-bold text-sky-400">💡 ความจริงของความน่าจะเป็น (Binomial Distribution):</span><br />
+          ต่อให้เรตออกคือ 1% การสุ่ม 100 ครั้ง โอกาสที่จะได้ก็ไม่ใช่ 100% แต่เป็นแค่ 63.4% เท่านั้น เพราะแต่ละครั้งของการสุ่มคือเหตุการณ์อิสระ (Independent Events)
+        </div>
+      </div>
+
+      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#12071a] to-[#050811] rounded-2xl border border-purple-900/50 shadow-2xl relative min-h-[350px]">
+        <div className="text-slate-400 font-bold text-sm uppercase tracking-widest mb-4 z-10 text-center">โอกาสที่คุณจะได้ของชิ้นนี้<br />อย่างน้อย 1 ชิ้น คือ...</div>
+        <div className="relative z-10 text-5xl sm:text-6xl font-mono font-bold my-2 text-purple-400 drop-shadow-[0_0_20px_rgba(168,85,247,0.5)] bg-[#050811]/50 px-4 py-2 rounded-2xl backdrop-blur-sm border border-purple-900/30">
+          {resultChance.toFixed(2)}<span className="text-3xl text-slate-400">%</span>
+        </div>
+        <div className={`mt-6 text-sm font-bold z-10 px-4 py-1.5 rounded-full border ${resultChance > 90 ? 'bg-emerald-950/50 text-emerald-400 border-emerald-900' : resultChance > 50 ? 'bg-amber-950/50 text-amber-400 border-amber-900' : 'bg-red-950/50 text-red-400 border-red-900'}`}>
+          {resultChance > 90 ? 'ออกแน่นอน (เกือบการันตี) 🎉' : resultChance > 50 ? 'มีโอกาสได้สูง ลุยเลย! 🤔' : 'เตรียมตัวเกลือได้เลย 🧂'}
+        </div>
+        <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0 opacity-50">
+          {balls.map((b) => (
+            <div
+              key={b.id}
+              className="absolute top-[-30px] rounded-full shadow-[0_0_15px_currentColor]"
+              style={{
+                left: `${b.left}%`,
+                width: b.isWin ? '24px' : '12px',
+                height: b.isWin ? '24px' : '12px',
+                backgroundColor: b.isWin ? '#eab308' : '#64748b',
+                color: b.isWin ? '#eab308' : '#64748b',
+                animation: `fallDown 2s ease-in forwards ${b.delay}s`,
+                zIndex: b.isWin ? 20 : 10
+              }}
+            />
+          ))}
+        </div>
+        <style>{`@keyframes fallDown { 0% { transform: translateY(-30px) rotate(0deg); opacity: 1; } 80% { opacity: 1; } 100% { transform: translateY(400px) rotate(360deg); opacity: 0; } }`}</style>
+      </div>
+    </div>
+  );
+};
+
+export const InteractiveProjectile = () => {
+  const [v0, setV0] = useState(50);
+  const [angle, setAngle] = useState(45);
+  const [isFlying, setIsFlying] = useState(false);
+
+  const g = 9.81;
+  const rad = angle * (Math.PI / 180);
+  const tTotal = (2 * v0 * Math.sin(rad)) / g;
+  const sMax = (v0 * v0 * Math.sin(2 * rad)) / g;
+  const hMax = (v0 * v0 * Math.sin(rad) * Math.sin(rad)) / (2 * g);
+
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+
+  const drawTrajectory = () => {
+    if (v0 <= 0 || angle <= 0 || angle >= 90) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#1E3A5F';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < w; i += 40) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, h); ctx.stroke(); }
+    for (let i = 0; i < h; i += 40) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(w, i); ctx.stroke(); }
+
+    ctx.strokeStyle = '#34D399';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, h - 5);
+    ctx.lineTo(w, h - 5);
+    ctx.stroke();
+
+    const scale = Math.min((w - 20) / Math.max(10, sMax), (h - 20) / Math.max(10, hMax));
+    let t = 0;
+    setIsFlying(true);
+
+    const animate = () => {
+      if (t > tTotal) { setIsFlying(false); return; }
+      const x = v0 * Math.cos(rad) * t * scale + 10;
+      const y = (h - 5) - ((v0 * Math.sin(rad) * t - 0.5 * g * t * t) * scale);
+      ctx.fillStyle = '#38BDF8';
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+      t += tTotal / 100;
+      animRef.current = requestAnimationFrame(animate);
+    };
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    animate();
+  };
+
+  useEffect(() => () => { if (animRef.current) cancelAnimationFrame(animRef.current); }, []);
+
+  return (
+    <div className="flex flex-col gap-5 py-4 w-full max-w-3xl mx-auto text-xs">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="col-span-1 bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
+          <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-rocket"></i> พารามิเตอร์เริ่มต้น</div>
+          <div><label className="text-slate-400 font-bold mb-1 block">ความเร็วต้น (v₀) - m/s</label><input type="number" min="1" max="500" value={v0} onChange={(e) => setV0(parseFloat(e.target.value) || 0)} className="w-full inp font-mono" /></div>
+          <div>
+            <label className="text-slate-400 font-bold mb-1 block">มุมยิง (θ) - องศา</label>
+            <input type="range" min="1" max="89" value={angle} onChange={(e) => setAngle(parseInt(e.target.value, 10))} className="w-full accent-sky-500 mt-2" />
+            <div className="text-center font-bold text-sky-300 mt-1">{angle}°</div>
+          </div>
+          <button type="button" onClick={drawTrajectory} disabled={isFlying} className="w-full btn-b py-2.5 font-bold shadow-lg mt-2 border-sky-500/50 hover:bg-sky-600 disabled:opacity-50">
+            {isFlying ? '🚀 กำลังลอย...' : '🚀 ยิงจรวดจำลอง'}
+          </button>
+        </div>
+
+        <div className="col-span-2 bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F] shadow-inner relative flex flex-col justify-between">
+          <canvas ref={canvasRef} width="500" height="220" className="w-full h-48 bg-[#0a101f] border border-slate-700 rounded-xl shadow-inner mb-4"></canvas>
+          <div className="grid grid-cols-3 gap-2 text-center font-mono">
+            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]"><div className="text-[9px] text-slate-400 font-sans font-bold">ระยะไกลสุด (Sx)</div><div className="text-base sm:text-lg text-emerald-400 font-bold mt-0.5">{sMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div></div>
+            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]"><div className="text-[9px] text-slate-400 font-sans font-bold">จุดสูงสุด (Sy)</div><div className="text-base sm:text-lg text-sky-400 font-bold mt-0.5">{hMax.toFixed(2)} <span className="text-[10px] font-sans">m</span></div></div>
+            <div className="bg-[#0B1325] p-2 rounded-lg border border-[#1E3A5F]"><div className="text-[9px] text-slate-400 font-sans font-bold">เวลาตกพื้น (t)</div><div className="text-base sm:text-lg text-amber-400 font-bold mt-0.5">{tTotal.toFixed(2)} <span className="text-[10px] font-sans">s</span></div></div>
+          </div>
+          <div className="absolute top-6 left-6 text-[10px] text-slate-500 font-bold">g = 9.81 m/s² (ไม่มีแรงต้านอากาศ)</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const MathSymbolBuilder = () => {
+  const [expression, setExpression] = useState('');
+  const btnGroups = {
+    'เศษส่วน & รูท': [{ l: 'a/b', v: '\\frac{x}{y}' }, { l: '√x', v: '\\sqrt{x}' }, { l: 'ⁿ√x', v: '\\sqrt[n]{x}' }],
+    'เลขยกกำลัง & ห้อย': [{ l: 'x²', v: 'x^2' }, { l: 'xⁿ', v: 'x^n' }, { l: 'xᵢ', v: 'x_i' }],
+    'แคลคูลัส': [{ l: '∫', v: '\\int' }, { l: '∫ limits', v: '\\int_{a}^{b}' }, { l: 'lim', v: '\\lim_{x \\to \\infty}' }, { l: '∑', v: '\\sum_{i=1}^{n}' }],
+    'กรีก & สัญลักษณ์': [{ l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, { l: 'θ', v: '\\theta' }, { l: 'π', v: '\\pi' }, { l: '±', v: '\\pm' }, { l: '∞', v: '\\infty' }, { l: '≈', v: '\\approx' }, { l: '≠', v: '\\neq' }]
+  };
+
+  const previewUrl = expression.trim()
+    ? `https://latex.codecogs.com/svg.image?\\color{white}\\large ${encodeURIComponent(expression)}`
+    : null;
+
+  return (
+    <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+      <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col gap-4">
+        <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+          <span><i className="fas fa-square-root-alt"></i> เครื่องมือสร้างสมการ (LaTeX Builder)</span>
+          {previewUrl && (
+            <button type="button" onClick={() => { navigator.clipboard.writeText(expression); alert('คัดลอกโค้ด LaTeX เรียบร้อยแล้ว'); }} className="btn-d py-1 px-3 text-[10px]">
+              <i className="fas fa-copy"></i> ก๊อปปี้โค้ด LaTeX
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pb-2">
+          {Object.entries(btnGroups).map(([group, btns]) => (
+            <div key={group} className="bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
+              <div className="text-[9px] text-slate-400 font-bold mb-1.5 text-center">{group}</div>
+              <div className="flex flex-wrap gap-1 justify-center">
+                {btns.map((btn, i) => (
+                  <button key={i} type="button" onClick={() => setExpression((prev) => prev + ' ' + btn.v + ' ')} className="px-2 py-1 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded border border-slate-600 transition-colors font-mono text-[10px] shadow-sm">{btn.l}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <label className="text-slate-400 font-bold mb-1 block">โค้ดสมการ (พิมพ์แก้ที่นี่ได้เลย)</label>
+          <textarea rows="3" value={expression} onChange={(e) => setExpression(e.target.value)} placeholder="พิมพ์สมการ หรือคลิกปุ่มด้านบนเพื่อแทรก..." className="w-full inp font-mono text-sky-200 bg-[#050811] resize-none"></textarea>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-br from-[#050811] to-[#0a101f] p-6 rounded-2xl border border-dashed border-sky-500/50 shadow-2xl flex flex-col items-center justify-center min-h-[150px] relative">
+        <div className="absolute top-3 left-4 text-[10px] text-sky-400 font-bold tracking-widest uppercase">Live Preview (พรีวิวภาพสมการ)</div>
+        {previewUrl ? (
+          <div className="mt-4 p-4"><img src={previewUrl} alt="Math Equation" className="max-w-full h-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" /></div>
+        ) : (
+          <div className="text-slate-500 mt-4"><i className="fas fa-laptop-code text-2xl mb-2 block text-center opacity-50"></i>ระบบจะเรนเดอร์ภาพสมการที่นี่</div>
+        )}
+        <div className="absolute bottom-3 right-4 text-[9px] text-slate-500">คุณสามารถคลิกขวาที่ภาพแล้วกด Copy Image ไปวางใน Word/PowerPoint ได้เลย</div>
+      </div>
+    </div>
+  );
+};
+
+export const MatrixSolver = () => {
+  const [mainMode, setMainMode] = useState('equation');
+  const [eqMode, setEqMode] = useState('2x2');
+  const [mat, setMat] = useState([['', '', '', ''], ['', '', '', ''], ['', '', '', '']]);
+  const [quad, setQuad] = useState({ a: '', b: '', c: '' });
+  const [eqResult, setEqResult] = useState(null);
+  const [showSteps, setShowSteps] = useState(false);
+
+  const [matSize, setMatSize] = useState(2);
+  const [matA, setMatA] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
+  const [matB, setMatB] = useState([['', '', ''], ['', '', ''], ['', '', '']]);
+  const [matOp, setMatOp] = useState('add');
+  const [opResult, setOpResult] = useState(null);
+
+  const handleMat = (r, c, val) => {
+    setMat((prev) => prev.map((row, ri) => (ri === r ? row.map((v, ci) => (ci === c ? val : v)) : row)));
+    setEqResult(null);
+  };
+
+  const solve2x2 = () => {
+    const a1 = parseFloat(mat[0][0]), b1 = parseFloat(mat[0][1]), c1 = parseFloat(mat[0][2]);
+    const a2 = parseFloat(mat[1][0]), b2 = parseFloat(mat[1][1]), c2 = parseFloat(mat[1][2]);
+    if ([a1, b1, c1, a2, b2, c2].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+    const det = a1 * b2 - a2 * b1;
+    const detX = c1 * b2 - c2 * b1;
+    const detY = a1 * c2 - a2 * c1;
+    if (det === 0) return setEqResult({ err: detX === 0 && detY === 0 ? 'สมการมีคำตอบนับไม่ถ้วน (เส้นทับกัน)' : 'สมการไม่มีคำตอบ (เส้นขนานกัน)', det: 0 });
+    setEqResult({ type: '2x2', x: detX / det, y: detY / det, det, detX, detY, eq: { a1, b1, c1, a2, b2, c2 } });
+  };
+
+  const solve3x3 = () => {
+    const m = mat.map((row) => row.map((v) => parseFloat(v)));
+    if (m.some((row) => row.some(isNaN))) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+    const getDet3 = (a, b, c, d, e, f, g, h, i) => a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    const det = getDet3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2]);
+    const detX = getDet3(m[0][3], m[0][1], m[0][2], m[1][3], m[1][1], m[1][2], m[2][3], m[2][1], m[2][2]);
+    const detY = getDet3(m[0][0], m[0][3], m[0][2], m[1][0], m[1][3], m[1][2], m[2][0], m[2][3], m[2][2]);
+    const detZ = getDet3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3]);
+    if (det === 0) return setEqResult({ err: 'หาค่าไม่ได้ (Determinant = 0)', det: 0 });
+    setEqResult({ type: '3x3', x: detX / det, y: detY / det, z: detZ / det, det, detX, detY, detZ });
+  };
+
+  const solveQuad = () => {
+    const a = parseFloat(quad.a), b = parseFloat(quad.b), c = parseFloat(quad.c);
+    if ([a, b, c].some(isNaN)) return setEqResult({ err: 'กรุณากรอกตัวเลขให้ครบทุกช่อง' });
+    if (a === 0) return setEqResult({ err: 'ค่า a ต้องไม่เป็น 0 (ไม่ใช่สมการกำลังสอง)' });
+    const D = b * b - 4 * a * c;
+    if (D > 0) setEqResult({ type: 'quad', roots: 2, x1: (-b + Math.sqrt(D)) / (2 * a), x2: (-b - Math.sqrt(D)) / (2 * a), D, a, b, c });
+    else if (D === 0) setEqResult({ type: 'quad', roots: 1, x: -b / (2 * a), D, a, b, c });
+    else setEqResult({ type: 'quad', roots: 0, real: -b / (2 * a), img: Math.sqrt(-D) / (2 * Math.abs(a)), D, a, b, c, isComplex: true });
+  };
+
+  const handleSolveEq = () => {
+    setShowSteps(false);
+    if (eqMode === '2x2') solve2x2();
+    else if (eqMode === '3x3') solve3x3();
+    else solveQuad();
+  };
+
+  const handleMatOpUpdate = (matType, r, c, val) => {
+    const updater = (prev) => prev.map((row, ri) => (ri === r ? row.map((v, ci) => (ci === c ? val : v)) : row));
+    if (matType === 'A') setMatA(updater);
+    else setMatB(updater);
+    setOpResult(null);
+  };
+
+  const calculateMatrixOp = () => {
+    const A = matA.slice(0, matSize).map((r) => r.slice(0, matSize).map((v) => parseFloat(v) || 0));
+    const B = matB.slice(0, matSize).map((r) => r.slice(0, matSize).map((v) => parseFloat(v) || 0));
+    const res = Array(matSize).fill(0).map(() => Array(matSize).fill(0));
+    if (matOp === 'add') for (let i = 0; i < matSize; i++) for (let j = 0; j < matSize; j++) res[i][j] = A[i][j] + B[i][j];
+    else if (matOp === 'sub') for (let i = 0; i < matSize; i++) for (let j = 0; j < matSize; j++) res[i][j] = A[i][j] - B[i][j];
+    else if (matOp === 'mul') for (let i = 0; i < matSize; i++) for (let j = 0; j < matSize; j++) for (let k = 0; k < matSize; k++) res[i][j] += A[i][k] * B[k][j];
+    setOpResult(res);
+  };
+
+  return (
+    <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto">
+      <div className="flex bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] overflow-x-auto no-scrollbar font-bold text-xs">
+        <button type="button" onClick={() => setMainMode('equation')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode === 'equation' ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><i className="fas fa-equals mr-1"></i> Equation Solver</button>
+        <button type="button" onClick={() => setMainMode('matrix_ops')} className={`px-4 py-2 rounded-lg whitespace-nowrap flex-1 transition-all ${mainMode === 'matrix_ops' ? 'bg-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}><i className="fas fa-border-all mr-1"></i> Matrix Operations</button>
+      </div>
+
+      {mainMode === 'equation' && (
+        <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg">
+          <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 mb-6 max-w-sm mx-auto">
+            <button type="button" onClick={() => { setEqMode('2x2'); setEqResult(null); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode === '2x2' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:bg-[#0F2547]'}`}>2 Variables</button>
+            <button type="button" onClick={() => { setEqMode('3x3'); setEqResult(null); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode === '3x3' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:bg-[#0F2547]'}`}>3 Variables</button>
+            <button type="button" onClick={() => { setEqMode('quad'); setEqResult(null); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${eqMode === 'quad' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:bg-[#0F2547]'}`}>Quadratic</button>
+          </div>
+
+          <div className="flex flex-col gap-3 items-center justify-center min-h-[120px]">
+            {eqMode === '2x2' && (
+              <div className="space-y-3 font-mono text-sm sm:text-base text-slate-300 w-full max-w-sm">
+                <div className="flex items-center gap-2"><input type="number" value={mat[0][0]} onChange={(e) => handleMat(0, 0, e.target.value)} className="inp w-16 text-center" placeholder="a1" /> <span>X +</span><input type="number" value={mat[0][1]} onChange={(e) => handleMat(0, 1, e.target.value)} className="inp w-16 text-center" placeholder="b1" /> <span>Y =</span><input type="number" value={mat[0][2]} onChange={(e) => handleMat(0, 2, e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c1" /></div>
+                <div className="flex items-center gap-2"><input type="number" value={mat[1][0]} onChange={(e) => handleMat(1, 0, e.target.value)} className="inp w-16 text-center" placeholder="a2" /> <span>X +</span><input type="number" value={mat[1][1]} onChange={(e) => handleMat(1, 1, e.target.value)} className="inp w-16 text-center" placeholder="b2" /> <span>Y =</span><input type="number" value={mat[1][2]} onChange={(e) => handleMat(1, 2, e.target.value)} className="inp w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="c2" /></div>
+              </div>
+            )}
+            {eqMode === '3x3' && (
+              <div className="space-y-3 font-mono text-xs sm:text-sm text-slate-300 w-full max-w-md">
+                {[0, 1, 2].map((r) => (
+                  <div key={r} className="flex items-center justify-center gap-1.5 w-full">
+                    <input type="number" value={mat[r][0]} onChange={(e) => handleMat(r, 0, e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="a" /> <span>X +</span>
+                    <input type="number" value={mat[r][1]} onChange={(e) => handleMat(r, 1, e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="b" /> <span>Y +</span>
+                    <input type="number" value={mat[r][2]} onChange={(e) => handleMat(r, 2, e.target.value)} className="inp w-14 sm:w-16 text-center" placeholder="c" /> <span>Z =</span>
+                    <input type="number" value={mat[r][3]} onChange={(e) => handleMat(r, 3, e.target.value)} className="inp w-16 sm:w-20 text-center text-sky-200 border-sky-500/50 bg-sky-950/20" placeholder="d" />
+                  </div>
+                ))}
+              </div>
+            )}
+            {eqMode === 'quad' && (
+              <div className="flex items-center gap-2 font-mono text-sm sm:text-base text-amber-400 justify-center">
+                <input type="number" value={quad.a} onChange={(e) => { setQuad({ ...quad, a: e.target.value }); setEqResult(null); }} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="a" /> <span>X² +</span>
+                <input type="number" value={quad.b} onChange={(e) => { setQuad({ ...quad, b: e.target.value }); setEqResult(null); }} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="b" /> <span>X +</span>
+                <input type="number" value={quad.c} onChange={(e) => { setQuad({ ...quad, c: e.target.value }); setEqResult(null); }} className="inp w-16 text-center bg-amber-950/20 border-amber-500/50" placeholder="c" /> <span>= 0</span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-center border-t border-[#1E3A5F] pt-6">
+            <button type="button" onClick={handleSolveEq} className="btn-w py-2.5 px-10 text-sm shadow-[0_0_15px_rgba(255,255,255,0.2)] hover:scale-105 transition-transform"><i className="fas fa-rocket mr-1"></i> ประมวลผลสมการ</button>
+          </div>
+
+          {eqResult && (
+            <div className="mt-6 bg-[#0B1325] border border-sky-500/30 rounded-xl p-5 shadow-2xl animate-fade-in relative">
+              {eqResult.err && !eqResult.isComplex ? (
+                <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded text-center border border-red-900/50">{eqResult.err}</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-sky-300 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
+                    <span>🎯 คำตอบ (Final Answers)</span>
+                    <button type="button" onClick={() => setShowSteps(!showSteps)} className="bg-sky-900/50 text-sky-200 px-3 py-1 rounded-lg text-[10px] border border-sky-500/30 hover:bg-sky-600 transition-colors">
+                      {showSteps ? 'ซ่อนวิธีทำ' : '👁️ ดูวิธีทำ (Show Steps)'}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-4 justify-center font-mono text-xl sm:text-2xl font-bold text-white">
+                    {eqResult.type === '2x2' && (
+                      <>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F]">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div>
+                      </>
+                    )}
+                    {eqResult.type === '3x3' && (
+                      <>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">X = <span className="text-sky-400">{eqResult.x.toFixed(4)}</span></div>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Y = <span className="text-sky-400">{eqResult.y.toFixed(4)}</span></div>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-[#1E3A5F] text-lg">Z = <span className="text-sky-400">{eqResult.z.toFixed(4)}</span></div>
+                      </>
+                    )}
+                    {eqResult.type === 'quad' && eqResult.roots === 2 && (
+                      <>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₁ = <span className="text-amber-400">{eqResult.x1.toFixed(4)}</span></div>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X₂ = <span className="text-amber-400">{eqResult.x2.toFixed(4)}</span></div>
+                      </>
+                    )}
+                    {eqResult.type === 'quad' && eqResult.roots === 1 && (
+                      <div className="bg-[#050811] px-4 py-2 rounded-lg border border-amber-500/30">X = <span className="text-amber-400">{eqResult.x.toFixed(4)}</span></div>
+                    )}
+                    {eqResult.type === 'quad' && eqResult.isComplex && (
+                      <>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₁ = <span className="text-red-400">{eqResult.real.toFixed(4)} + {eqResult.img.toFixed(4)}i</span></div>
+                        <div className="bg-[#050811] px-4 py-2 rounded-lg border border-red-500/30 text-lg">X₂ = <span className="text-red-400">{eqResult.real.toFixed(4)} - {eqResult.img.toFixed(4)}i</span></div>
+                      </>
+                    )}
+                  </div>
+
+                  {showSteps && (
+                    <div className="mt-4 p-4 bg-[#050811] rounded-xl border border-dashed border-sky-500/50 text-xs text-slate-300 font-mono animate-fade-in space-y-3">
+                      <div className="text-sky-400 font-bold mb-2 uppercase">📝 Step-by-Step Solution</div>
+                      {eqResult.type === '2x2' && (
+                        <>
+                          <div><span className="text-slate-400">1. Determinant หลัก (Δ):</span><br />Δ = ({eqResult.eq.a1})({eqResult.eq.b2}) - ({eqResult.eq.a2})({eqResult.eq.b1}) = <span className="text-amber-300">{eqResult.det}</span></div>
+                          <div><span className="text-slate-400">2. Δx =</span> <span className="text-amber-300">{eqResult.detX}</span> | <span className="text-slate-400">Δy =</span> <span className="text-amber-300">{eqResult.detY}</span></div>
+                          <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">X = {eqResult.detX} / {eqResult.det} = <b>{eqResult.x.toFixed(4)}</b><br />Y = {eqResult.detY} / {eqResult.det} = <b>{eqResult.y.toFixed(4)}</b></div>
+                        </>
+                      )}
+                      {eqResult.type === '3x3' && (
+                        <div className="text-sky-200">Δ = {eqResult.det} | Δx = {eqResult.detX} | Δy = {eqResult.detY} | Δz = {eqResult.detZ}</div>
+                      )}
+                      {eqResult.type === 'quad' && (
+                        <>
+                          <div><span className="text-slate-400">1. สมการ:</span> {eqResult.a}x² + {eqResult.b}x + {eqResult.c} = 0</div>
+                          <div><span className="text-slate-400">2. Discriminant (D):</span> ({eqResult.b})² - 4({eqResult.a})({eqResult.c}) = <span className="text-amber-300">{eqResult.D}</span></div>
+                          {eqResult.D >= 0 ? (
+                            <div className="pt-2 border-t border-[#1E3A5F] text-sky-200">x₁ = <b>{eqResult.x1?.toFixed(4) || eqResult.x?.toFixed(4)}</b>, x₂ = <b>{eqResult.x2?.toFixed(4) || '-'}</b></div>
+                          ) : (
+                            <div className="pt-2 border-t border-[#1E3A5F] text-red-300">D น้อยกว่า 0 ทำให้ได้รากเป็นจำนวนเชิงซ้อน (Complex Number)</div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mainMode === 'matrix_ops' && (
+        <div className="bg-[#050811] p-4 sm:p-6 rounded-xl border border-[#1E3A5F] w-full shadow-lg animate-fade-in">
+          <div className="flex justify-between items-center mb-6">
+            <div className="bg-[#0B1325] p-1.5 rounded-xl border border-[#1E3A5F] flex gap-1 text-[11px]">
+              <button type="button" onClick={() => setMatSize(2)} className={`px-3 py-1 rounded font-bold ${matSize === 2 ? 'bg-fuchsia-600 text-white' : 'text-slate-400 hover:text-white'}`}>2x2</button>
+              <button type="button" onClick={() => setMatSize(3)} className={`px-3 py-1 rounded font-bold ${matSize === 3 ? 'bg-fuchsia-600 text-white' : 'text-slate-400 hover:text-white'}`}>3x3</button>
+            </div>
+            <select value={matOp} onChange={(e) => setMatOp(e.target.value)} className="inp py-1.5 bg-[#0B1325] text-fuchsia-300 font-bold border-fuchsia-900/50 text-xs">
+              <option value="add">A + B (บวก)</option>
+              <option value="sub">A - B (ลบ)</option>
+              <option value="mul">A × B (คูณ)</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 font-mono text-sm overflow-x-auto no-scrollbar pb-4 pt-4">
+            <div className="relative">
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-fuchsia-400 font-bold font-sans">Matrix A</div>
+              <div className="border-l-2 border-r-2 border-fuchsia-500/50 rounded-[8px] p-2 grid gap-1.5 bg-fuchsia-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                  <input key={`a${r}${c}`} type="number" value={matA[r][c]} onChange={(e) => handleMatOpUpdate('A', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-fuchsia-900/50 focus:border-fuchsia-500" placeholder="0" />
+                )))}
+              </div>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-slate-400">{matOp === 'add' ? '+' : matOp === 'sub' ? '-' : '×'}</div>
+            <div className="relative">
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-sky-400 font-bold font-sans">Matrix B</div>
+              <div className="border-l-2 border-r-2 border-sky-500/50 rounded-[8px] p-2 grid gap-1.5 bg-sky-950/10" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                  <input key={`b${r}${c}`} type="number" value={matB[r][c]} onChange={(e) => handleMatOpUpdate('B', r, c, e.target.value)} className="inp w-12 sm:w-16 text-center px-1 border-sky-900/50 focus:border-sky-500" placeholder="0" />
+                )))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-center border-t border-[#1E3A5F] pt-6">
+            <button type="button" onClick={calculateMatrixOp} className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-2.5 px-10 rounded-xl text-sm shadow-[0_0_15px_rgba(192,38,211,0.3)] hover:scale-105 transition-transform">
+              <i className="fas fa-calculator mr-1"></i> คำนวณ (Calculate)
+            </button>
+          </div>
+
+          {opResult && (
+            <div className="mt-6 bg-[#0B1325] border border-emerald-500/30 rounded-xl p-5 shadow-2xl flex flex-col items-center animate-fade-in">
+              <div className="text-emerald-400 font-bold text-sm mb-4">✨ ผลลัพธ์ (Result Matrix)</div>
+              <div className="border-l-4 border-r-4 border-emerald-500/50 rounded-[12px] p-4 grid gap-3 bg-[#050811] font-mono text-lg sm:text-xl font-bold" style={{ gridTemplateColumns: `repeat(${matSize}, minmax(0, 1fr))` }}>
+                {Array(matSize).fill().map((_, r) => Array(matSize).fill().map((_, c) => (
+                  <div key={`res${r}${c}`} className="w-16 sm:w-20 text-center text-white">{opResult[r][c]}</div>
+                )))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const ResistorCalcReal = () => {
+  const colors = [
+    { n: 'Black', v: 0, m: 1, c: '#000', t: '#fff' }, { n: 'Brown', v: 1, m: 10, c: '#8B4513', t: '#fff' },
+    { n: 'Red', v: 2, m: 100, c: '#FF0000', t: '#fff' }, { n: 'Orange', v: 3, m: 1000, c: '#FFA500', t: '#000' },
+    { n: 'Yellow', v: 4, m: 10000, c: '#FFFF00', t: '#000' }, { n: 'Green', v: 5, m: 100000, c: '#008000', t: '#fff' },
+    { n: 'Blue', v: 6, m: 1000000, c: '#0000FF', t: '#fff' }, { n: 'Violet', v: 7, m: 10000000, c: '#EE82EE', t: '#000' },
+    { n: 'Gray', v: 8, m: 100000000, c: '#808080', t: '#fff' }, { n: 'White', v: 9, m: 1000000000, c: '#FFFFFF', t: '#000' }
+  ];
+  const tolColors = [{ n: 'Gold', tol: '5%', c: '#FFD700', t: '#000' }, { n: 'Silver', tol: '10%', c: '#C0C0C0', t: '#000' }];
+  const [b1, setB1] = useState(colors[1]);
+  const [b2, setB2] = useState(colors[0]);
+  const [mult, setMult] = useState(colors[2]);
+  const [tol, setTol] = useState(tolColors[0]);
+
+  const formatVal = (v) => (v >= 1000000 ? v / 1000000 + ' MΩ' : v >= 1000 ? v / 1000 + ' kΩ' : v + ' Ω');
+  const val = (b1.v * 10 + b2.v) * mult.m;
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-4 w-full max-w-xl mx-auto">
+      <div className="text-3xl font-bold text-amber-400 bg-[#0F2547] p-6 rounded-xl border border-[#1E3A5F] w-full text-center font-mono shadow-inner">{formatVal(val)} ± {tol.tol}</div>
+      <div className="relative w-64 h-16 sm:w-80 sm:h-20 flex items-center justify-center my-2">
+        <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
+        <div className="relative w-40 sm:w-48 h-full bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-4 shadow-inner">
+          <div className="w-3 h-full" style={{ backgroundColor: b1.c }}></div>
+          <div className="w-3 h-full" style={{ backgroundColor: b2.c }}></div>
+          <div className="w-3 h-full" style={{ backgroundColor: mult.c }}></div>
+          <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
+          <div className="w-3 h-full" style={{ backgroundColor: tol.c }}></div>
+        </div>
+      </div>
+      <div className="flex gap-2 sm:gap-4 w-full overflow-x-auto pb-2">
+        {[
+          { lbl: 'หลักที่ 1', list: colors, cur: b1, set: setB1, pfx: 'b1' },
+          { lbl: 'หลักที่ 2', list: colors, cur: b2, set: setB2, pfx: 'b2' },
+          { lbl: 'ตัวคูณ', list: colors, cur: mult, set: setMult, pfx: 'm' },
+          { lbl: 'คลาดเคลื่อน', list: tolColors, cur: tol, set: setTol, pfx: 't' }
+        ].map((col) => (
+          <div key={col.pfx} className="flex flex-col gap-1 flex-1 min-w-[70px]">
+            <span className="text-[10px] text-center text-slate-400 font-bold">{col.lbl}</span>
+            {col.list.map((c) => (
+              <button key={col.pfx + c.n} type="button" onClick={() => col.set(c)} style={{ background: c.c, color: c.t }} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${col.cur.n === c.n ? 'border-white scale-110 z-10 ring-2 ring-sky-400' : 'border-transparent'}`}>
+                {c.n}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default function AcademicTools({ toolId }) {
+  if (toolId === 'converter') return <AdvancedUnitConverter />;
+  if (toolId === 'solver') return <MatrixSolver />;
+  if (toolId === 'resistor') return <ResistorCalcReal />;
+  if (toolId === 'grade_crisis') return <GradeCrisisManager />;
+  if (toolId === 'gacha') return <GachaSimulator />;
+  if (toolId === 'projectile') return <InteractiveProjectile />;
+  if (toolId === 'finance') return <FinancialReality />;
+  if (toolId === 'math_latex') return <MathSymbolBuilder />;
+  return null;
+}
