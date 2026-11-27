@@ -5,6 +5,7 @@ import './styles/themes.css';
 import { auth } from './lib/firebase';
 import { installLinkGuard } from './lib/security';
 import { AuthProvider } from './contexts/AuthContext';
+import { UIProvider } from './contexts/UIContext';
 import App from './App';
 
 installLinkGuard();
@@ -44,7 +45,9 @@ function AuthGate({ children }) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <AuthGate>
     <AuthProvider>
-      <App />
+      <UIProvider>
+        <App />
+      </UIProvider>
     </AuthProvider>
   </AuthGate>
 );
