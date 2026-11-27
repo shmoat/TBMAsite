@@ -274,9 +274,9 @@ export default function GlobalModals({
               </button>
             </div>
 
-            <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar">
+            <div className="h-72 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
               {myNotifs.filter((n) => n.category === notifTab).length === 0 ? (
-                <div className="text-center text-slate-500 py-8 border border-dashed border-[#1E3A5F] rounded-xl">
+                <div className="h-full flex items-center justify-center text-center text-slate-500 border border-dashed border-[#1E3A5F] rounded-xl">
                   ไม่มีการแจ้งเตือนในหมวดนี้
                 </div>
               ) : (
