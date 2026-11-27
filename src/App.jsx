@@ -1111,7 +1111,7 @@ export default function App() {
             </div>
           </button>
 
-          <nav className="relative flex items-center justify-start md:justify-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 flex-1 md:flex-none md:mx-auto overflow-x-auto no-scrollbar mx-1 sm:mx-2">
+          <nav ref={navRef} className="relative flex items-center justify-start md:justify-center gap-1 bg-[#050811] border border-[#1E3A5F] rounded-full p-1 flex-1 md:flex-none md:mx-auto overflow-x-auto no-scrollbar mx-1 sm:mx-2">
             <div
               className="absolute inset-y-1 bg-white rounded-full transition-all duration-300 ease-out pointer-events-none hidden md:block"
               style={{ left: navPill.left, width: navPill.width }}
