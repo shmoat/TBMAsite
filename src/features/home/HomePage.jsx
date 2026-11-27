@@ -109,7 +109,8 @@ export default function HomePage({
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="flex flex-wrap gap-3 w-full max-w-md justify-center z-10 shrink-0">
