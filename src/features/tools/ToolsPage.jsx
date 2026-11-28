@@ -6,13 +6,15 @@ const MusicTools = lazy(() => import('./MusicTools'));
 const CivilTools = lazy(() => import('./CivilTools'));
 const AcademicTools = lazy(() => import('./AcademicTools'));
 const CommunityTools = lazy(() => import('./CommunityTools'));
+const MedTools = lazy(() => import('./MedTools'));
 
 const CATEGORY_STYLES = {
   ALL: { icon: '🌟', textClass: 'text-slate-100', borderClass: 'border-slate-500', hoverBorder: 'hover:border-slate-500' },
   'Music & Audio': { icon: '🎵', textClass: 'text-fuchsia-400', borderClass: 'border-fuchsia-500/50', hoverBorder: 'hover:border-fuchsia-500/50' },
   'Civil Engineering': { icon: '🏗️', textClass: 'text-amber-400', borderClass: 'border-amber-500/50', hoverBorder: 'hover:border-amber-500/50' },
   'Calculate & Academic': { icon: '🧮', textClass: 'text-sky-400', borderClass: 'border-sky-500/50', hoverBorder: 'hover:border-sky-500/50' },
-  'Community Utilities': { icon: '👥', textClass: 'text-purple-400', borderClass: 'border-purple-500/50', hoverBorder: 'hover:border-purple-500/50' }
+  'Community Utilities': { icon: '👥', textClass: 'text-purple-400', borderClass: 'border-purple-500/50', hoverBorder: 'hover:border-purple-500/50' },
+  'Medical & Pharmacy': { icon: '🩺', textClass: 'text-emerald-400', borderClass: 'border-emerald-500/50', hoverBorder: 'hover:border-emerald-500/50' }
 };
 
 export const TOOLS = [
@@ -40,7 +42,10 @@ export const TOOLS = [
   { id: 'cipher', category: 'Community Utilities', name: 'Secret Cipher', icon: '🕵️', desc: 'เข้ารหัสข้อความลับ (Base64, Caesar, ฯลฯ) เอาไว้ส่งความลับให้เพื่อนในแชต' },
   { id: 'qrcode', category: 'Community Utilities', name: 'QR Generator', icon: '🔲', desc: 'สร้าง QR Code ปรับสี ใส่โลโก้ และตั้งค่าวันหมดอายุหรือจำกัดสแกนได้' },
   { id: 'randomizer', category: 'Community Utilities', name: 'Spin the Wheel', icon: '🎡', desc: 'สุ่มรายชื่อสมาชิกหรือหัวข้อสนทนาแบบข้อความ และวงล้อหมุนอนิเมชั่น' },
-  { id: 'currency', category: 'Community Utilities', name: 'แปลงค่าเงิน (Currency Converter)', icon: '💱', desc: 'แปลงสกุลเงินเรียลไทม์พร้อมกราฟแนวโน้ม 30 วัน อ้างอิงอัตราจากธนาคารกลาง (Frankfurter)' }
+  { id: 'currency', category: 'Community Utilities', name: 'แปลงค่าเงิน (Currency Converter)', icon: '💱', desc: 'แปลงสกุลเงินเรียลไทม์พร้อมกราฟแนวโน้ม 30 วัน อ้างอิงอัตราจากธนาคารกลาง (Frankfurter)' },
+  { id: 'renal_weight', category: 'Medical & Pharmacy', name: 'Renal & Weight Suite', icon: '🩺', desc: 'คำนวณ CrCl (Cockcroft-Gault), eGFR (CKD-EPI 2021 / Schwartz), BMI, BSA, IBW และ AdjBW' },
+  { id: 'abg_electrolyte', category: 'Medical & Pharmacy', name: 'ABG & Electrolyte Analyzer', icon: '🫁', desc: "แปลผล ABG 5 ขั้น, Winter's Formula, Corrected AG/Ca/Na, Free Water Deficit และ Osmolality" },
+  { id: 'drug_dose', category: 'Medical & Pharmacy', name: 'Drug Dose & Converter', icon: '💊', desc: 'คำนวณยาเด็ก (mL), อัตราหยด IV, กฎ 4-2-1, ยา High-Alert, เทียบ Steroid, Alligation และ mEq' }
 ];
 
 export default function ToolsPage({ activeTool, onOpenTool }) {
@@ -174,6 +179,7 @@ export default function ToolsPage({ activeTool, onOpenTool }) {
               {activeMeta?.category === 'Civil Engineering' && <CivilTools toolId={activeTool} />}
               {activeMeta?.category === 'Calculate & Academic' && <AcademicTools toolId={activeTool} />}
               {activeMeta?.category === 'Community Utilities' && <CommunityTools toolId={activeTool} />}
+              {activeMeta?.category === 'Medical & Pharmacy' && <MedTools toolId={activeTool} />}
               {!activeMeta && <div className="py-12 text-center text-slate-400 text-xs">ไม่พบเครื่องมือที่ระบุ</div>}
             </Suspense>
           </div>
