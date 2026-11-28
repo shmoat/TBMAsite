@@ -44,7 +44,8 @@ export default function HomePage({
         </p>
       </div>
 
-      <div
+      <div className="relative w-full max-w-[760px] h-[700px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
+        <div
           onClick={() => onNavigate('feed')}
           className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition-all duration-500"
           style={
@@ -69,17 +70,6 @@ export default function HomePage({
         </div>
 
         {rings.map((ring, ri) => {
-          const ringKey = `${ri}-${ring.items.map((m) => m.id).join('_')}`;
-          return (
-            <div
-              key={ringKey}
-              className={
-                'absolute top-1/2 left-1/2 rounded-full border border-[#1E3A5F]/70 pointer-events-none ' +
-                (ring.items.length > 0 ? ring.rc : '-translate-x-1/2 -translate-y-1/2')
-              }
-              style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}
-            >
-            {rings.map((ring, ri) => {
           const ringKey = `${ri}-${ring.items.map((m) => m.id).join('_')}`;
           return (
             <div
@@ -208,6 +198,7 @@ export default function HomePage({
           </li>
         </ul>
       </div>
+
       {isHalloween && (
         <div
           aria-hidden="true"
