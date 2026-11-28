@@ -930,52 +930,951 @@ export const MatrixSolver = () => {
 };
 
 export const ResistorCalcReal = () => {
-  const colors = [
-    { n: 'Black', v: 0, m: 1, c: '#000', t: '#fff' }, { n: 'Brown', v: 1, m: 10, c: '#8B4513', t: '#fff' },
-    { n: 'Red', v: 2, m: 100, c: '#FF0000', t: '#fff' }, { n: 'Orange', v: 3, m: 1000, c: '#FFA500', t: '#000' },
-    { n: 'Yellow', v: 4, m: 10000, c: '#FFFF00', t: '#000' }, { n: 'Green', v: 5, m: 100000, c: '#008000', t: '#fff' },
-    { n: 'Blue', v: 6, m: 1000000, c: '#0000FF', t: '#fff' }, { n: 'Violet', v: 7, m: 10000000, c: '#EE82EE', t: '#000' },
-    { n: 'Gray', v: 8, m: 100000000, c: '#808080', t: '#fff' }, { n: 'White', v: 9, m: 1000000000, c: '#FFFFFF', t: '#000' }
+  const DIGIT_COLORS = [
+    { n: 'Black', th: 'ดำ', abbr: 'Blk', v: 0, m: 1, mLbl: '×1Ω', c: '#111827', t: '#fff' },
+    { n: 'Brown', th: 'น้ำตาล', abbr: 'Brn', v: 1, m: 10, mLbl: '×10Ω', tol: 1, tcr: 100, c: '#8B4513', t: '#fff' },
+    { n: 'Red', th: 'แดง', abbr: 'Red', v: 2, m: 100, mLbl: '×100Ω', tol: 2, tcr: 50, c: '#DC2626', t: '#fff' },
+    { n: 'Orange', th: 'ส้ม', abbr: 'Org', v: 3, m: 1e3, mLbl: '×1kΩ', tcr: 15, c: '#F97316', t: '#000' },
+    { n: 'Yellow', th: 'เหลือง', abbr: 'Yel', v: 4, m: 1e4, mLbl: '×10kΩ', tcr: 25, c: '#FACC15', t: '#000' },
+    { n: 'Green', th: 'เขียว', abbr: 'Grn', v: 5, m: 1e5, mLbl: '×100kΩ', tol: 0.5, c: '#16A34A', t: '#fff' },
+    { n: 'Blue', th: 'น้ำเงิน', abbr: 'Blu', v: 6, m: 1e6, mLbl: '×1MΩ', tol: 0.25, tcr: 10, c: '#2563EB', t: '#fff' },
+    { n: 'Violet', th: 'ม่วง', abbr: 'Vio', v: 7, m: 1e7, mLbl: '×10MΩ', tol: 0.1, tcr: 5, c: '#9333EA', t: '#fff' },
+    { n: 'Gray', th: 'เทา', abbr: 'Gry', v: 8, m: 1e8, mLbl: '×100MΩ', tol: 0.05, c: '#6B7280', t: '#fff' },
+    { n: 'White', th: 'ขาว', abbr: 'Wht', v: 9, m: 1e9, mLbl: '×1GΩ', c: '#F8FAFC', t: '#000' }
   ];
-  const tolColors = [{ n: 'Gold', tol: '5%', c: '#FFD700', t: '#000' }, { n: 'Silver', tol: '10%', c: '#C0C0C0', t: '#000' }];
-  const [b1, setB1] = useState(colors[1]);
-  const [b2, setB2] = useState(colors[0]);
-  const [mult, setMult] = useState(colors[2]);
-  const [tol, setTol] = useState(tolColors[0]);
 
-  const formatVal = (v) => (v >= 1000000 ? v / 1000000 + ' MΩ' : v >= 1000 ? v / 1000 + ' kΩ' : v + ' Ω');
-  const val = (b1.v * 10 + b2.v) * mult.m;
+  const MULT_COLORS = [
+    ...DIGIT_COLORS,
+    { n: 'Gold', th: 'ทอง', abbr: 'Gld', m: 0.1, mLbl: '×0.1Ω', tol: 5, c: '#EAB308', t: '#000' },
+    { n: 'Silver', th: 'เงิน', abbr: 'Slv', m: 0.01, mLbl: '×0.01Ω', tol: 10, c: '#CBD5E1', t: '#000' }
+  ];
 
-  return (
-    <div className="flex flex-col items-center gap-6 py-4 w-full max-w-xl mx-auto">
-      <div className="text-3xl font-bold text-amber-400 bg-[#0F2547] p-6 rounded-xl border border-[#1E3A5F] w-full text-center font-mono shadow-inner">{formatVal(val)} ± {tol.tol}</div>
-      <div className="relative w-64 h-16 sm:w-80 sm:h-20 flex items-center justify-center my-2">
-        <div className="absolute w-full h-2 bg-slate-400 z-0"></div>
-        <div className="relative w-40 sm:w-48 h-full bg-[#f4a460] rounded-[30px] border border-amber-800 z-10 flex items-center justify-between px-4 shadow-inner">
-          <div className="w-3 h-full" style={{ backgroundColor: b1.c }}></div>
-          <div className="w-3 h-full" style={{ backgroundColor: b2.c }}></div>
-          <div className="w-3 h-full" style={{ backgroundColor: mult.c }}></div>
-          <div className="w-1.5 h-full bg-transparent border-l border-amber-800/30 mx-1"></div>
-          <div className="w-3 h-full" style={{ backgroundColor: tol.c }}></div>
+  const TOL_COLORS = MULT_COLORS.filter((x) => x.tol !== undefined);
+  const TCR_COLORS = DIGIT_COLORS.filter((x) => x.tcr !== undefined);
+
+  const E24_BASE = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
+  const EIA96_BASE = [
+    100, 102, 105, 107, 110, 113, 115, 118, 121, 124, 127, 130, 133, 137, 140, 143,
+    147, 150, 154, 158, 162, 165, 169, 174, 178, 182, 187, 191, 196, 200, 205, 210,
+    215, 221, 226, 232, 237, 243, 249, 255, 261, 267, 274, 280, 287, 294, 301, 309,
+    316, 324, 332, 340, 348, 357, 365, 374, 383, 392, 402, 412, 422, 432, 442, 453,
+    464, 475, 487, 499, 511, 523, 536, 549, 562, 576, 590, 604, 619, 634, 649, 665,
+    681, 698, 715, 732, 750, 768, 787, 806, 825, 845, 866, 887, 909, 931, 953, 976
+  ];
+  const EIA96_MULT = { Z: 0.001, Y: 0.01, R: 0.01, X: 0.1, S: 0.1, A: 1, B: 10, H: 10, C: 100, D: 1000, E: 10000, F: 100000 };
+
+  const formatOhm = (v) => {
+    if (v === null || v === undefined || Number.isNaN(v)) return '-';
+    if (v === 0) return '0 Ω';
+    const clean = (n) => parseFloat(n.toFixed(3)).toString();
+    if (v >= 1e9) return `${clean(v / 1e9)} GΩ`;
+    if (v >= 1e6) return `${clean(v / 1e6)} MΩ`;
+    if (v >= 1e3) return `${clean(v / 1e3)} kΩ`;
+    return `${clean(v)} Ω`;
+  };
+
+  const parseOhm = (raw) => {
+    if (!raw) return null;
+    const s = String(raw).trim().replace(/Ω|ohm|ohms|\s+/gi, '');
+    if (!s) return null;
+    const rNotation = s.match(/^(\d*)([rRkKmMgG])(\d+)$/);
+    if (rNotation) {
+      const num = parseFloat(`${rNotation[1] || '0'}.${rNotation[3]}`);
+      const unit = rNotation[2].toUpperCase();
+      const mult = unit === 'R' ? 1 : unit === 'K' ? 1e3 : unit === 'M' ? 1e6 : 1e9;
+      return num * mult;
+    }
+    const std = s.match(/^(\d+(?:\.\d+)?)([rRkKmMgG])?$/);
+    if (!std) return null;
+    const num = parseFloat(std[1]);
+    const unit = (std[2] || 'R').toUpperCase();
+    const mult = unit === 'R' ? 1 : unit === 'K' ? 1e3 : unit === 'M' ? 1e6 : 1e9;
+    return num * mult;
+  };
+
+  const getNearestE24 = (target, ceilOnly = false) => {
+    if (!target || target <= 0) return null;
+    let best = null;
+    let bestDiff = Infinity;
+    for (let dec = -1; dec <= 7; dec++) {
+      const factor = Math.pow(10, dec);
+      for (const base of E24_BASE) {
+        const val = parseFloat((base * factor).toPrecision(4));
+        if (ceilOnly && val < target) continue;
+        const diff = Math.abs(val - target);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = val;
+        }
+      }
+    }
+    return best;
+  };
+
+  const recommendWatt = (p) => {
+    const safe = p * 2;
+    if (safe <= 0.125) return '1/8W (0.125W)';
+    if (safe <= 0.25) return '1/4W (0.25W)';
+    if (safe <= 0.5) return '1/2W (0.5W)';
+    if (safe <= 1) return '1W';
+    if (safe <= 2) return '2W';
+    if (safe <= 5) return '5W';
+    return `${Math.ceil(safe)}W+ (ตัวต้านทานกำลังสูง)`;
+  };
+
+  // Main Tabs
+  const [tab, setTab] = useState('color'); // 'color' | 'smd' | 'circuit' | 'quiz'
+
+  // --- TAB 1: COLOR CODE ---
+  const [bandCount, setBandCount] = useState(4);
+  const [b1, setB1] = useState(DIGIT_COLORS[1]); // Brown
+  const [b2, setB2] = useState(DIGIT_COLORS[0]); // Black
+  const [b3, setB3] = useState(DIGIT_COLORS[0]); // Black
+  const [mult, setMult] = useState(MULT_COLORS[2]); // Red (x100)
+  const [tol, setTol] = useState(TOL_COLORS.find((x) => x.n === 'Gold'));
+  const [tcr, setTcr] = useState(TCR_COLORS[0]); // Brown 100ppm
+  const [activeSlot, setActiveSlot] = useState('b1');
+  const [valueInput, setValueInput] = useState('');
+  const [valueInputErr, setValueInputErr] = useState('');
+  const [pwrMode, setPwrMode] = useState('V'); // 'V' | 'I'
+  const [pwrVal, setPwrVal] = useState('5');
+  const [copiedRes, setCopiedRes] = useState(false);
+
+  const currentOhm = bandCount === 4
+    ? (b1.v * 10 + b2.v) * mult.m
+    : (b1.v * 100 + b2.v * 10 + b3.v) * mult.m;
+
+  const minOhm = currentOhm * (1 - (tol.tol || 0) / 100);
+  const maxOhm = currentOhm * (1 + (tol.tol || 0) / 100);
+  const nearestE24 = getNearestE24(currentOhm);
+  const isExactE24 = nearestE24 !== null && Math.abs(nearestE24 - currentOhm) / Math.max(currentOhm, 1e-9) < 0.005;
+
+  const applyOhmToBands = (ohmVal, targetBandCount = bandCount) => {
+    if (!ohmVal || ohmVal <= 0) return false;
+    const isFour = targetBandCount === 4;
+    let exp = Math.floor(Math.log10(ohmVal)) - (isFour ? 1 : 2);
+    let sig = Math.round(ohmVal / Math.pow(10, exp));
+    const maxSig = isFour ? 100 : 1000;
+    const minSig = isFour ? 10 : 100;
+    if (sig >= maxSig) { sig = Math.round(sig / 10); exp += 1; }
+    if (sig < minSig) { sig *= 10; exp -= 1; }
+    if (exp < -2 || exp > 9) return false;
+
+    const targetMult = Math.pow(10, exp);
+    const multObj = MULT_COLORS.find((x) => Math.abs(x.m - targetMult) / Math.max(targetMult, 1e-9) < 0.01);
+    if (!multObj) return false;
+
+    if (isFour) {
+      setB1(DIGIT_COLORS[Math.floor(sig / 10)] || DIGIT_COLORS[1]);
+      setB2(DIGIT_COLORS[sig % 10] || DIGIT_COLORS[0]);
+    } else {
+      setB1(DIGIT_COLORS[Math.floor(sig / 100)] || DIGIT_COLORS[1]);
+      setB2(DIGIT_COLORS[Math.floor((sig % 100) / 10)] || DIGIT_COLORS[0]);
+      setB3(DIGIT_COLORS[sig % 10] || DIGIT_COLORS[0]);
+    }
+    setMult(multObj);
+    return true;
+  };
+
+  const handleApplyInput = (e) => {
+    e?.preventDefault?.();
+    const parsed = parseOhm(valueInput);
+    if (!parsed || parsed <= 0) {
+      setValueInputErr('รูปแบบไม่ถูกต้อง ลองพิมพ์เช่น 220, 4.7k, 4R7, 1M');
+      return;
+    }
+    const ok = applyOhmToBands(parsed, bandCount);
+    if (!ok) {
+      setValueInputErr('ค่านี้อยู่นอกช่วงแถบสีมาตรฐาน (0.1Ω – 999GΩ)');
+    } else {
+      setValueInputErr('');
+    }
+  };
+
+  const handleBandCountChange = (n) => {
+    setBandCount(n);
+    if (n === 4 && (activeSlot === 'b3' || activeSlot === 'tcr')) setActiveSlot('b1');
+    if (n === 5 && activeSlot === 'tcr') setActiveSlot('b1');
+    applyOhmToBands(currentOhm, n);
+  };
+
+  const powerNum = parseFloat(pwrVal);
+  const calcPower = currentOhm > 0 && !Number.isNaN(powerNum) && powerNum >= 0
+    ? (pwrMode === 'V' ? (powerNum * powerNum) / currentOhm : (powerNum / 1000) * (powerNum / 1000) * currentOhm)
+    : 0;
+  const calcCurrentMa = currentOhm > 0 && !Number.isNaN(powerNum) && powerNum >= 0
+    ? (pwrMode === 'V' ? (powerNum / currentOhm) * 1000 : powerNum)
+    : 0;
+
+  const bandSlots = [
+    { key: 'b1', lbl: 'หลัก 1', cur: b1, set: setB1, list: DIGIT_COLORS.slice(1), tag: `${b1.abbr} (${b1.v})` },
+    { key: 'b2', lbl: 'หลัก 2', cur: b2, set: setB2, list: DIGIT_COLORS, tag: `${b2.abbr} (${b2.v})` },
+    ...(bandCount >= 5 ? [{ key: 'b3', lbl: 'หลัก 3', cur: b3, set: setB3, list: DIGIT_COLORS, tag: `${b3.abbr} (${b3.v})` }] : []),
+    { key: 'mult', lbl: 'ตัวคูณ', cur: mult, set: setMult, list: MULT_COLORS, tag: `${mult.abbr} (${mult.mLbl})` },
+    { key: 'tol', lbl: 'คลาดเคลื่อน', cur: tol, set: setTol, list: TOL_COLORS, tag: `${tol.abbr} (±${tol.tol}%)` },
+    ...(bandCount === 6 ? [{ key: 'tcr', lbl: 'อุณหภูมิ', cur: tcr, set: setTcr, list: TCR_COLORS, tag: `${tcr.abbr} (${tcr.tcr}ppm)` }] : [])
+  ];
+  const currentSlotObj = bandSlots.find((s) => s.key === activeSlot) || bandSlots[0];
+
+  // --- TAB 2: SMD CODE ---
+  const [smdCode, setSmdCode] = useState('472');
+
+  const decodeSmd = (raw) => {
+    const code = String(raw || '').trim().toUpperCase();
+    if (!code) return null;
+
+    if (code === '0' || code === '000' || code === '0000') {
+      return { val: 0, type: 'Zero-Ohm Jumper', detail: 'จัมเปอร์ 0 Ω (ใช้เชื่อมลายวงจร)' };
+    }
+    if (code.includes('R')) {
+      const m = code.match(/^(\d*)R(\d*)$/);
+      if (m && (m[1] || m[2])) {
+        const val = parseFloat(`${m[1] || '0'}.${m[2] || '0'}`);
+        return { val, type: 'R-Notation (ทศนิยม)', detail: `ตัว R แทนจุดทศนิยม → ${val} Ω` };
+      }
+      return { err: 'รูปแบบ R-Notation ไม่ถูกต้อง (ตัวอย่าง: 4R7, R22, 10R5)' };
+    }
+    if (/^\d{3}$/.test(code)) {
+      const digits = parseInt(code.slice(0, 2), 10);
+      const exp = parseInt(code[2], 10);
+      const val = digits * Math.pow(10, exp);
+      return { val, type: '3-Digit Standard (±5%)', detail: `${digits} × 10^${exp} = ${formatOhm(val)}` };
+    }
+    if (/^\d{4}$/.test(code)) {
+      const digits = parseInt(code.slice(0, 3), 10);
+      const exp = parseInt(code[3], 10);
+      const val = digits * Math.pow(10, exp);
+      return { val, type: '4-Digit Precision (±1%)', detail: `${digits} × 10^${exp} = ${formatOhm(val)}` };
+    }
+    const eia = code.match(/^(\d{2})([A-Z])$/);
+    if (eia) {
+      const idx = parseInt(eia[1], 10);
+      const multVal = EIA96_MULT[eia[2]];
+      if (idx >= 1 && idx <= 96 && multVal !== undefined) {
+        const base = EIA96_BASE[idx - 1];
+        const val = base * multVal;
+        return { val, type: 'EIA-96 Precision (±1%)', detail: `รหัส ${eia[1]} (${base}) × ตัวคูณ ${eia[2]} (${multVal}) = ${formatOhm(val)}` };
+      }
+      return { err: 'รหัส EIA-96 ต้องเป็นเลข 01–96 ตามด้วยตัวอักษร Z,Y,R,X,S,A,B,H,C,D,E,F' };
+    }
+    return { err: 'ไม่ตรงรูปแบบ SMD มาตรฐาน ลองใส่เช่น 103, 4701, 4R7 หรือ 01C' };
+  };
+  const smdRes = decodeSmd(smdCode);
+
+  // --- TAB 3: CIRCUIT CALCULATORS ---
+  const [circSub, setCircSub] = useState('led'); // 'led' | 'divider' | 'target'
+  const [ledVs, setLedVs] = useState('5');
+  const [ledVf, setLedVf] = useState('2.0');
+  const [ledIf, setLedIf] = useState('20');
+  const [divVin, setDivVin] = useState('12');
+  const [divR1, setDivR1] = useState('10k');
+  const [divR2, setDivR2] = useState('4.7k');
+  const [targetStr, setTargetStr] = useState('750');
+
+  const ledCalc = (() => {
+    const vs = parseFloat(ledVs), vf = parseFloat(ledVf), imA = parseFloat(ledIf);
+    if ([vs, vf, imA].some((x) => Number.isNaN(x)) || imA <= 0) return { err: 'กรุณากรอกค่าตัวเลขให้ถูกต้อง' };
+    if (vs <= vf) return { err: 'แรงดันแหล่งจ่าย (Vs) ต้องมากกว่าแรงดันตกคร่อม LED (Vf)' };
+    const iA = imA / 1000;
+    const rExact = (vs - vf) / iA;
+    const rStd = getNearestE24(rExact, true) || rExact;
+    const actualI = ((vs - vf) / rStd) * 1000;
+    const powerW = ((vs - vf) * (vs - vf)) / rStd;
+    return { rExact, rStd, actualI, powerW, recWatt: recommendWatt(powerW) };
+  })();
+
+  const divCalc = (() => {
+    const vin = parseFloat(divVin);
+    const r1 = parseOhm(divR1);
+    const r2 = parseOhm(divR2);
+    if (Number.isNaN(vin) || !r1 || !r2 || r1 <= 0 || r2 <= 0) return { err: 'กรุณากรอกค่า Vin, R1 และ R2 ให้ถูกต้อง (เช่น 10k, 4.7k)' };
+    const vout = vin * (r2 / (r1 + r2));
+    const iA = vin / (r1 + r2);
+    return { vout, iMa: iA * 1000, p1Mw: iA * iA * r1 * 1000, p2Mw: iA * iA * r2 * 1000, ratio: (r2 / (r1 + r2)) * 100 };
+  })();
+
+  const targetCalc = (() => {
+    const target = parseOhm(targetStr);
+    if (!target || target <= 0) return { err: 'พิมพ์ค่าความต้านทานเป้าหมาย เช่น 750, 3.5k, 12.5k' };
+    const single = getNearestE24(target);
+    const singleErr = ((single - target) / target) * 100;
+
+    const pool = [];
+    for (let dec = -1; dec <= 7; dec++) {
+      const f = Math.pow(10, dec);
+      for (const b of E24_BASE) {
+        const v = parseFloat((b * f).toPrecision(4));
+        if (v >= target / 50 && v <= target * 50) pool.push(v);
+      }
+    }
+
+    let bestSeries = null;
+    let bestParallel = null;
+    for (let i = 0; i < pool.length; i++) {
+      const r1 = pool[i];
+      for (let j = i; j < pool.length; j++) {
+        const r2 = pool[j];
+        const sVal = r1 + r2;
+        const sErr = Math.abs(sVal - target) / target;
+        if (!bestSeries || sErr < bestSeries.absErr) {
+          bestSeries = { r1, r2, val: sVal, err: ((sVal - target) / target) * 100, absErr: sErr };
+        }
+        const pVal = (r1 * r2) / (r1 + r2);
+        const pErr = Math.abs(pVal - target) / target;
+        if (!bestParallel || pErr < bestParallel.absErr) {
+          bestParallel = { r1, r2, val: pVal, err: ((pVal - target) / target) * 100, absErr: pErr };
+        }
+      }
+    }
+    return { target, single, singleErr, bestSeries, bestParallel };
+  })();
+
+  const jumpToColorCode = (ohmVal) => {
+    applyOhmToBands(ohmVal, bandCount);
+    setValueInput(formatOhm(ohmVal).replace(/\s*Ω$/, ''));
+    setValueInputErr('');
+    setTab('color');
+  };
+
+  // --- TAB 4: QUIZ MODE ---
+  const [quizBands, setQuizBands] = useState(4);
+  const [quizState, setQuizState] = useState(null);
+  const [quizStreak, setQuizStreak] = useState(0);
+  const [quizBest, setQuizBest] = useState(0);
+
+  const generateQuiz = (bandsMode = quizBands) => {
+    const base = E24_BASE[Math.floor(Math.random() * E24_BASE.length)];
+    const dec = [1, 2, 3, 4, 5][Math.floor(Math.random() * 5)];
+    const val = parseFloat((base * Math.pow(10, dec)).toPrecision(3));
+    const isFour = bandsMode === 4;
+    let exp = Math.floor(Math.log10(val)) - (isFour ? 1 : 2);
+    let sig = Math.round(val / Math.pow(10, exp));
+    if (sig >= (isFour ? 100 : 1000)) { sig = Math.round(sig / 10); exp += 1; }
+    const multObj = MULT_COLORS.find((x) => Math.abs(x.m - Math.pow(10, exp)) < 0.001) || MULT_COLORS[2];
+    const tolObj = TOL_COLORS[isFour ? 7 : 0] || TOL_COLORS[0];
+
+    const qBands = isFour
+      ? [DIGIT_COLORS[Math.floor(sig / 10)], DIGIT_COLORS[sig % 10], multObj, tolObj]
+      : [DIGIT_COLORS[Math.floor(sig / 100)], DIGIT_COLORS[Math.floor((sig % 100) / 10)], DIGIT_COLORS[sig % 10], multObj, tolObj];
+
+    const opts = new Set([val]);
+    const candidates = [
+      val * 10,
+      val / 10,
+      val * 100,
+      parseFloat((E24_BASE[(E24_BASE.indexOf(base) + 3) % E24_BASE.length] * Math.pow(10, dec)).toPrecision(3)),
+      parseFloat((E24_BASE[(E24_BASE.indexOf(base) + 7) % E24_BASE.length] * Math.pow(10, dec)).toPrecision(3))
+    ];
+    for (const c of candidates) {
+      if (opts.size < 4 && c > 0 && c !== val) opts.add(c);
+    }
+    const shuffled = Array.from(opts).sort(() => Math.random() - 0.5);
+    setQuizState({ val, bands: qBands, options: shuffled, picked: null, bandsMode });
+  };
+
+  useEffect(() => {
+    if (tab === 'quiz' && !quizState) generateQuiz(quizBands);
+  }, [tab]);
+
+  const handleAnswerQuiz = (opt) => {
+    if (!quizState || quizState.picked !== null) return;
+    const isCorrect = opt === quizState.val;
+    setQuizState((prev) => ({ ...prev, picked: opt }));
+    if (isCorrect) {
+      const next = quizStreak + 1;
+      setQuizStreak(next);
+      if (next > quizBest) setQuizBest(next);
+    } else {
+      setQuizStreak(0);
+    }
+  };
+
+  const renderResistorBody = (slots, interactive = true, isMetal = false) => (
+    <div className="flex flex-col items-center w-full my-1">
+      <div className="relative w-full max-w-[360px] h-20 sm:h-24 flex items-center justify-center select-none">
+        {/* ขาลวดตัวต้านทาน */}
+        <div className="absolute inset-x-0 h-2.5 bg-gradient-to-b from-slate-300 via-slate-400 to-slate-600 rounded-full shadow z-0"></div>
+        {/* ตัวถังตัวต้านทาน */}
+        <div
+          className={`relative w-56 sm:w-64 h-16 sm:h-20 rounded-[28px] border-2 z-10 flex items-center justify-between px-4 sm:px-5 shadow-[inset_0_4px_10px_rgba(255,255,255,0.28),inset_0_-6px_12px_rgba(0,0,0,0.45),0_8px_20px_rgba(0,0,0,0.5)] transition-colors duration-300 ${
+            isMetal
+              ? 'bg-gradient-to-b from-[#60A5FA] via-[#3B82F6] to-[#1D4ED8] border-sky-300/60'
+              : 'bg-gradient-to-b from-[#F5C68A] via-[#E5A763] to-[#C27D38] border-amber-900/80'
+          }`}
+        >
+          {slots.map((slot, idx) => {
+            const isTol = slot.key === 'tol';
+            const isSelected = interactive && activeSlot === slot.key;
+            return (
+              <React.Fragment key={slot.key || idx}>
+                {isTol && <div className="w-2 sm:w-3 shrink-0" />}
+                <button
+                  type="button"
+                  disabled={!interactive}
+                  onClick={() => interactive && setActiveSlot(slot.key)}
+                  title={interactive ? `คลิกเพื่อเปลี่ยนสี: ${slot.lbl}` : slot.cur.n}
+                  style={{ backgroundColor: slot.cur.c }}
+                  className={`relative w-3.5 sm:w-4 h-full shadow-md transition-all ${
+                    interactive ? 'cursor-pointer hover:scale-x-125' : 'cursor-default'
+                  } ${isSelected ? 'ring-2 ring-white scale-x-125 z-20 shadow-[0_0_12px_rgba(255,255,255,0.9)]' : 'border-x border-black/20'}`}
+                >
+                  {isSelected && (
+                    <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] text-sky-300 animate-bounce">▼</span>
+                  )}
+                </button>
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
-      <div className="flex gap-2 sm:gap-4 w-full overflow-x-auto pb-2">
+
+      {/* ป้ายตัวช่วยแยกสี (Colorblind / Low-light Aid) */}
+      {interactive && (
+        <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+          {slots.map((slot) => (
+            <button
+              key={slot.key}
+              type="button"
+              onClick={() => setActiveSlot(slot.key)}
+              className={`px-2 py-1 rounded-lg border text-[10px] font-bold flex items-center gap-1.5 transition-all ${
+                activeSlot === slot.key
+                  ? 'bg-sky-500/20 border-sky-400 text-sky-200 shadow-sm'
+                  : 'bg-[#050811] border-[#1E3A5F] text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full border border-white/40 shrink-0" style={{ backgroundColor: slot.cur.c }}></span>
+              <span>{slot.lbl}:</span>
+              <span className="font-mono text-white">{slot.tag}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+      {/* แถบเลือกโหมดหลัก */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[#0B1325] p-1.5 rounded-2xl border border-[#1E3A5F] font-bold">
         {[
-          { lbl: 'หลักที่ 1', list: colors, cur: b1, set: setB1, pfx: 'b1' },
-          { lbl: 'หลักที่ 2', list: colors, cur: b2, set: setB2, pfx: 'b2' },
-          { lbl: 'ตัวคูณ', list: colors, cur: mult, set: setMult, pfx: 'm' },
-          { lbl: 'คลาดเคลื่อน', list: tolColors, cur: tol, set: setTol, pfx: 't' }
-        ].map((col) => (
-          <div key={col.pfx} className="flex flex-col gap-1 flex-1 min-w-[70px]">
-            <span className="text-[10px] text-center text-slate-400 font-bold">{col.lbl}</span>
-            {col.list.map((c) => (
-              <button key={col.pfx + c.n} type="button" onClick={() => col.set(c)} style={{ background: c.c, color: c.t }} className={`py-1 text-[10px] font-bold border rounded-md shadow-sm ${col.cur.n === c.n ? 'border-white scale-110 z-10 ring-2 ring-sky-400' : 'border-transparent'}`}>
-                {c.n}
+          ['color', '🎨 แถบสี (4-6)'],
+          ['smd', '🔲 รหัส SMD'],
+          ['circuit', '⚡ คำนวณวงจร'],
+          ['quiz', '🎯 ฝึกอ่านสี']
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`py-2 px-3 rounded-xl transition-all ${
+              tab === id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ================= TAB 1: COLOR CODE ================= */}
+      {tab === 'color' && (
+        <div className="space-y-4">
+          {/* เลือกจำนวนแถบ + พิมพ์ค่าแบบ 2 ทาง */}
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+                {[4, 5, 6].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleBandCountChange(n)}
+                    className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                      bandCount === n ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {n} แถบ
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-400">
+                {bandCount === 4 ? 'Carbon Film (ตัวถังสีเบจ)' : 'Metal Film Precision (ตัวถังสีฟ้า)'}
+              </span>
+            </div>
+
+            <form onSubmit={handleApplyInput} className="flex gap-2">
+              <input
+                type="text"
+                value={valueInput}
+                onChange={(e) => { setValueInput(e.target.value); setValueInputErr(''); }}
+                placeholder="พิมพ์ค่าเพื่อแปลงเป็นสี เช่น 220, 4.7k, 4R7, 1M..."
+                className="inp flex-1 font-mono text-xs py-2 bg-[#050811]"
+              />
+              <button type="submit" className="btn-b px-4 text-xs font-bold shrink-0">แปลงเป็นสี</button>
+            </form>
+            {valueInputErr && <div className="text-[11px] text-red-400">{valueInputErr}</div>}
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 font-bold mr-1">ค่าฮิต:</span>
+              {[220, 330, 1000, 4700, 10000, 100000].map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => jumpToColorCode(v)}
+                  className="px-2.5 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] hover:border-sky-400 text-sky-200 font-mono text-[10px] transition-colors"
+                >
+                  {formatOhm(v)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* กล่องผลลัพธ์ + ตัวต้านทาน Interactive */}
+          <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+            <div className="relative bg-[#050811] border border-[#1E3A5F] rounded-2xl p-4 text-center space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${formatOhm(currentOhm)} ±${tol.tol}%${bandCount === 6 ? ` (${tcr.tcr} ppm/°C)` : ''}`);
+                  setCopiedRes(true);
+                  setTimeout(() => setCopiedRes(false), 1800);
+                }}
+                className={`absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
+                  copiedRes ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-[#0B1325] text-slate-300 border-[#1E3A5F] hover:text-white'
+                }`}
+              >
+                {copiedRes ? '✓ คัดลอกแล้ว' : '📋 Copy'}
+              </button>
+
+              <div className="text-3xl sm:text-4xl font-bold font-mono text-amber-400">
+                {formatOhm(currentOhm)} <span className="text-xl text-sky-300">± {tol.tol}%</span>
+              </div>
+              <div className="text-[11px] text-slate-300 font-mono">
+                ช่วงค่าจริง: <span className="text-emerald-300">{formatOhm(minOhm)}</span> – <span className="text-emerald-300">{formatOhm(maxOhm)}</span>
+                {bandCount === 6 && <span className="ml-2 text-purple-300">• TCR: {tcr.tcr} ppm/°C</span>}
+              </div>
+              <div className="pt-1 flex flex-wrap justify-center gap-2 text-[10px]">
+                {isExactE24 ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-bold">
+                    ✓ ค่ามาตรฐาน E24 (มีขายทั่วไป)
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => nearestE24 && jumpToColorCode(nearestE24)}
+                    className="px-2.5 py-0.5 rounded-full bg-amber-950/50 border border-amber-500/40 text-amber-300 hover:bg-amber-900/50 font-bold"
+                  >
+                    ⚠️ นอกมาตรฐาน E24 • ใกล้เคียงสุด: {formatOhm(nearestE24)} (คลิกเพื่อตั้งค่านี้)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {renderResistorBody(bandSlots, true, bandCount >= 5)}
+
+            {/* แผงเลือกสีของแถบที่กำลังเลือก */}
+            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sky-300">
+                  เลือกสีสำหรับ: <span className="text-white">{currentSlotObj.lbl}</span>
+                </span>
+                <span className="text-[10px] text-slate-400">คลิกที่แถบสีบนตัวต้านทานเพื่อสลับช่องได้</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                {currentSlotObj.list.map((c) => {
+                  const active = currentSlotObj.cur.n === c.n;
+                  const sub =
+                    currentSlotObj.key === 'mult'
+                      ? c.mLbl
+                      : currentSlotObj.key === 'tol'
+                        ? `±${c.tol}%`
+                        : currentSlotObj.key === 'tcr'
+                          ? `${c.tcr} ppm`
+                          : `${c.v}`;
+                  return (
+                    <button
+                      key={currentSlotObj.key + c.n}
+                      type="button"
+                      onClick={() => currentSlotObj.set(c)}
+                      style={{ backgroundColor: c.c, color: c.t }}
+                      className={`py-2 px-2 rounded-xl font-bold text-[11px] flex items-center justify-between border transition-all shadow-sm ${
+                        active ? 'border-white ring-2 ring-sky-400 scale-[1.03] z-10' : 'border-black/25 opacity-90 hover:opacity-100'
+                      }`}
+                    >
+                      <span>{c.n} ({c.th})</span>
+                      <span className="font-mono text-[10px] opacity-90">{sub}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* เช็กพิกัดกำลังไฟ (Power Dissipation Check) */}
+            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-amber-300"><i className="fas fa-bolt mr-1"></i> เช็กกำลังไฟและความร้อน (Power Check)</span>
+                <div className="flex bg-[#0B1325] rounded-lg border border-[#1E3A5F] p-0.5 text-[10px]">
+                  <button type="button" onClick={() => setPwrMode('V')} className={`px-2.5 py-1 rounded font-bold ${pwrMode === 'V' ? 'bg-sky-600 text-white' : 'text-slate-400'}`}>ป้อนแรงดัน (V)</button>
+                  <button type="button" onClick={() => setPwrMode('I')} className={`px-2.5 py-1 rounded font-bold ${pwrMode === 'I' ? 'bg-sky-600 text-white' : 'text-slate-400'}`}>ป้อนกระแส (mA)</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={pwrVal}
+                    onChange={(e) => setPwrVal(e.target.value)}
+                    className="inp w-full font-mono text-sm py-1.5"
+                  />
+                  <span className="font-bold text-slate-300 shrink-0">{pwrMode === 'V' ? 'V' : 'mA'}</span>
+                </div>
+                <div className="bg-[#0B1325] px-3 py-2 rounded-xl border border-[#1E3A5F] text-center font-mono">
+                  <div className="text-[10px] text-slate-400 font-sans">กำลังไฟสูญเสีย / กระแส</div>
+                  <div className={`font-bold ${calcPower > 0.25 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {calcPower >= 1 ? `${calcPower.toFixed(2)} W` : `${(calcPower * 1000).toFixed(1)} mW`} • {calcCurrentMa.toFixed(1)} mA
+                  </div>
+                </div>
+                <div className={`px-3 py-2 rounded-xl border text-center font-bold ${calcPower > 0.25 ? 'bg-red-950/40 border-red-500/60 text-red-300' : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'}`}>
+                  <div className="text-[10px] opacity-80">พิกัดวัตต์แนะนำ (เผื่อ 2×)</div>
+                  <div>{recommendWatt(calcPower)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB 2: SMD CODE ================= */}
+      {tab === 'smd' && (
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-5">
+          <div className="text-center space-y-1">
+            <h3 className="text-sm font-bold text-sky-300">ตัวแปลงรหัสตัวต้านทานแบบชิป (SMD Resistor Decoder)</h3>
+            <p className="text-[11px] text-slate-400">รองรับ 3 หลัก (103), 4 หลัก (4701), ทศนิยม R (4R7, R22) และ EIA-96 (01C)</p>
+          </div>
+
+          {/* ภาพชิป SMD */}
+          <div className="flex justify-center">
+            <div className="relative flex items-center">
+              <div className="w-7 h-20 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400 rounded-l-lg border border-slate-500 shadow"></div>
+              <div className="w-40 h-20 bg-[#0d1117] border-y-2 border-slate-700 flex items-center justify-center shadow-inner">
+                <span className="font-mono text-3xl font-bold tracking-widest text-slate-100 uppercase">
+                  {smdCode.trim() || '---'}
+                </span>
+              </div>
+              <div className="w-7 h-20 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400 rounded-r-lg border border-slate-500 shadow"></div>
+            </div>
+          </div>
+
+          <div className="max-w-sm mx-auto space-y-2.5">
+            <input
+              type="text"
+              maxLength={6}
+              value={smdCode}
+              onChange={(e) => setSmdCode(e.target.value.toUpperCase())}
+              placeholder="พิมพ์รหัสบนชิป เช่น 472, 1002, 4R7, 01C"
+              className="inp w-full text-center font-mono text-lg py-2.5 bg-[#050811] uppercase tracking-widest"
+            />
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {['103', '472', '4701', '4R7', 'R22', '01C', '68X', '000'].map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => setSmdCode(ex)}
+                  className="px-2.5 py-1 rounded-lg bg-[#050811] border border-[#1E3A5F] hover:border-sky-400 font-mono text-[11px] text-sky-200"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {smdRes && (
+            <div className={`p-4 rounded-2xl border text-center space-y-1.5 ${smdRes.err ? 'bg-red-950/30 border-red-500/50 text-red-300' : 'bg-[#050811] border-emerald-500/40'}`}>
+              {smdRes.err ? (
+                <div className="font-bold">{smdRes.err}</div>
+              ) : (
+                <>
+                  <div className="text-[11px] font-bold text-sky-400">{smdRes.type}</div>
+                  <div className="text-3xl font-mono font-bold text-amber-400">{formatOhm(smdRes.val)}</div>
+                  <div className="text-[11px] text-slate-300 font-mono">{smdRes.detail}</div>
+                  {smdRes.val > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => jumpToColorCode(smdRes.val)}
+                      className="mt-2 px-3 py-1 rounded-full bg-sky-900/40 border border-sky-500/50 text-sky-200 hover:bg-sky-600 text-[10px] font-bold"
+                    >
+                      🎨 ดูแถบสีของค่านี้
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 3: CIRCUIT CALCULATORS ================= */}
+      {tab === 'circuit' && (
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+          <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1 font-bold">
+            {[
+              ['led', '💡 LED Resistor'],
+              ['divider', '➗ แบ่งแรงดัน'],
+              ['target', '🔗 หาคู่ต่ออนุกรม/ขนาน']
+            ].map(([id, lbl]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setCircSub(id)}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] transition-colors ${
+                  circSub === id ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {lbl}
               </button>
             ))}
           </div>
-        ))}
-      </div>
+
+          {/* 3.1 LED Resistor */}
+          {circSub === 'led' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-bold">พรีเซตสี LED (Vf):</span>
+                {[
+                  ['แดง 2.0V', '2.0', 'bg-red-600'],
+                  ['เหลือง 2.1V', '2.1', 'bg-yellow-500 text-black'],
+                  ['เขียว 2.2V', '2.2', 'bg-green-600'],
+                  ['น้ำเงิน 3.2V', '3.2', 'bg-blue-600'],
+                  ['ขาว 3.3V', '3.3', 'bg-slate-200 text-black']
+                ].map(([lbl, vf, cls]) => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    onClick={() => setLedVf(vf)}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${cls}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">แรงดันแหล่งจ่าย Vs (V)</label>
+                  <input type="number" step="0.1" value={ledVs} onChange={(e) => setLedVs(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">แรงดัน LED Vf (V)</label>
+                  <input type="number" step="0.1" value={ledVf} onChange={(e) => setLedVf(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">กระแสที่ต้องการ If (mA)</label>
+                  <input type="number" step="1" value={ledIf} onChange={(e) => setLedIf(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+              </div>
+
+              {ledCalc.err ? (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-center font-bold">{ledCalc.err}</div>
+              ) : (
+                <div className="p-4 rounded-xl bg-[#050811] border border-emerald-500/40 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-[#0B1325] border border-[#1E3A5F]">
+                      <div className="text-[10px] text-slate-400">ค่าคำนวณเป๊ะ (R)</div>
+                      <div className="text-lg font-mono font-bold text-white">{formatOhm(ledCalc.rExact)}</div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/50">
+                      <div className="text-[10px] text-emerald-300 font-bold">ค่ามาตรฐาน E24 ที่แนะนำ</div>
+                      <div className="text-xl font-mono font-bold text-amber-400">{formatOhm(ledCalc.rStd)}</div>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-[#0B1325] border border-[#1E3A5F]">
+                      <div className="text-[10px] text-slate-400">พิกัดวัตต์แนะนำ</div>
+                      <div className="text-base font-bold text-sky-300">{ledCalc.recWatt}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 text-[11px] text-slate-300 font-mono">
+                    <span>กระแสจริงเมื่อใช้ {formatOhm(ledCalc.rStd)}: <b className="text-emerald-400">{ledCalc.actualI.toFixed(1)} mA</b> ({(ledCalc.powerW * 1000).toFixed(1)} mW)</span>
+                    <button
+                      type="button"
+                      onClick={() => jumpToColorCode(ledCalc.rStd)}
+                      className="px-3 py-1 rounded-full bg-sky-600 hover:bg-sky-500 text-white font-sans font-bold text-[10px]"
+                    >
+                      🎨 ดูแถบสี {formatOhm(ledCalc.rStd)}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3.2 Voltage Divider */}
+          {circSub === 'divider' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">แรงดันเข้า Vin (V)</label>
+                  <input type="number" step="0.1" value={divVin} onChange={(e) => setDivVin(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">R1 (ตัวบน เช่น 10k)</label>
+                  <input type="text" value={divR1} onChange={(e) => setDivR1(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">R2 (ตัวล่าง เช่น 4.7k)</label>
+                  <input type="text" value={divR2} onChange={(e) => setDivR2(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                </div>
+              </div>
+
+              {divCalc.err ? (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-center font-bold">{divCalc.err}</div>
+              ) : (
+                <div className="p-4 rounded-xl bg-[#050811] border border-sky-500/40 space-y-2 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">Vout = Vin × R2 / (R1 + R2)</div>
+                  <div className="text-3xl font-mono font-bold text-amber-400">
+                    {divCalc.vout.toFixed(3)} V <span className="text-sm text-sky-300">({divCalc.ratio.toFixed(1)}%)</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 font-mono text-[11px]">
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">กระแสวงจร<br /><b className="text-emerald-400">{divCalc.iMa.toFixed(2)} mA</b></div>
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">กำลังไฟ R1<br /><b className="text-sky-300">{divCalc.p1Mw.toFixed(2)} mW</b></div>
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">กำลังไฟ R2<br /><b className="text-sky-300">{divCalc.p2Mw.toFixed(2)} mW</b></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3.3 Target Resistance Finder */}
+          {circSub === 'target' && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">ค่าความต้านทานเป้าหมายที่อยากได้ (เช่น 750, 3.5k, 12.5k)</label>
+                <input type="text" value={targetStr} onChange={(e) => setTargetStr(e.target.value)} className="inp w-full font-mono text-base py-2 bg-[#050811]" />
+              </div>
+
+              {targetCalc.err ? (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-center font-bold">{targetCalc.err}</div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold">ตัวเดียว (Single E24 ใกล้สุด)</div>
+                      <div className="font-mono text-base font-bold text-white">{formatOhm(targetCalc.single)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] text-slate-300">คลาดเคลื่อน {targetCalc.singleErr >= 0 ? '+' : ''}{targetCalc.singleErr.toFixed(2)}%</span>
+                      <button type="button" onClick={() => jumpToColorCode(targetCalc.single)} className="px-2.5 py-1 rounded-lg bg-[#0B1325] border border-sky-500/40 text-sky-300 text-[10px] font-bold">ดูสี</button>
+                    </div>
+                  </div>
+
+                  {targetCalc.bestSeries && (
+                    <div className="p-3 rounded-xl bg-[#050811] border border-emerald-500/40 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] text-emerald-400 font-bold">ต่ออนุกรม (Series: R1 + R2)</div>
+                        <div className="font-mono text-base font-bold text-amber-300">
+                          {formatOhm(targetCalc.bestSeries.r1)} + {formatOhm(targetCalc.bestSeries.r2)} = {formatOhm(targetCalc.bestSeries.val)}
+                        </div>
+                      </div>
+                      <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+                        {targetCalc.bestSeries.err >= 0 ? '+' : ''}{targetCalc.bestSeries.err.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+
+                  {targetCalc.bestParallel && (
+                    <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] text-sky-400 font-bold">ต่อขนาน (Parallel: R1 ∥ R2)</div>
+                        <div className="font-mono text-base font-bold text-sky-200">
+                          {formatOhm(targetCalc.bestParallel.r1)} ∥ {formatOhm(targetCalc.bestParallel.r2)} = {formatOhm(targetCalc.bestParallel.val)}
+                        </div>
+                      </div>
+                      <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-500/40">
+                        {targetCalc.bestParallel.err >= 0 ? '+' : ''}{targetCalc.bestParallel.err.toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 4: QUIZ MODE ================= */}
+      {tab === 'quiz' && quizState && (
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-3">
+            <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1">
+              {[4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => { setQuizBands(n); generateQuiz(n); }}
+                  className={`px-3 py-1 rounded-lg font-bold ${quizBands === n ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  ฝึก {n} แถบ
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="px-2.5 py-1 rounded-full bg-amber-950/50 border border-amber-500/40 text-amber-300 font-bold">🔥 Streak: {quizStreak}</span>
+              <span className="px-2.5 py-1 rounded-full bg-[#050811] border border-[#1E3A5F] text-slate-300">🏆 Best: {quizBest}</span>
+            </div>
+          </div>
+
+          <div className="text-center text-slate-300 font-bold">ตัวต้านทานนี้มีค่าความต้านทานเท่าไร?</div>
+
+          {renderResistorBody(
+            quizState.bands.map((c, idx) => ({
+              key: idx === quizState.bands.length - 1 ? 'tol' : `q-${idx}`,
+              lbl: '',
+              cur: c
+            })),
+            false,
+            quizState.bandsMode === 5
+          )}
+
+          <div className="grid grid-cols-2 gap-2.5 pt-2">
+            {quizState.options.map((opt) => {
+              const isPicked = quizState.picked === opt;
+              const isRight = opt === quizState.val;
+              let cls = 'bg-[#050811] border-[#1E3A5F] text-white hover:border-sky-400';
+              if (quizState.picked !== null) {
+                if (isRight) cls = 'bg-emerald-600 border-emerald-400 text-white shadow-lg';
+                else if (isPicked) cls = 'bg-red-600 border-red-400 text-white';
+                else cls = 'bg-[#050811]/50 border-[#1E3A5F] text-slate-500';
+              }
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  disabled={quizState.picked !== null}
+                  onClick={() => handleAnswerQuiz(opt)}
+                  className={`py-3 px-4 rounded-xl border font-mono text-base font-bold transition-all ${cls}`}
+                >
+                  {formatOhm(opt)}
+                </button>
+              );
+            })}
+          </div>
+
+          {quizState.picked !== null && (
+            <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] flex flex-wrap items-center justify-between gap-2 animate-fade-in">
+              <div className="space-y-0.5">
+                <div className={`font-bold ${quizState.picked === quizState.val ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {quizState.picked === quizState.val ? '✓ ถูกต้อง!' : `✕ ผิด! คำตอบที่ถูกคือ ${formatOhm(quizState.val)}`}
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono">
+                  แถบสี: {quizState.bands.slice(0, -1).map((c) => `${c.th} (${c.n})`).join(' • ')}
+                </div>
+              </div>
+              <button type="button" onClick={() => generateQuiz(quizBands)} className="btn-w px-4 py-2 text-xs">
+                ข้อถัดไป →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
