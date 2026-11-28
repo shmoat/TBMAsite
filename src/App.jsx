@@ -9,6 +9,7 @@ import { FloatingRadio } from './components/FloatingRadio';
 import { MuteDurationModal } from './components/MuteDurationModal';
 import GlobalModals from './components/GlobalModals';
 import HalloweenGhostHunt from './features/events/HalloweenGhostHunt';
+import HalloweenCurseAndTreats, { playSpookySound } from './features/events/HalloweenCurseAndTreats';
 import {
   checkIsHalloween,
   checkIsLoyKrathong,
@@ -261,10 +262,17 @@ export default function App() {
       setCursedUserId(null);
       return;
     }
-    if (activeMembers.length > 0 && !cursedUserId) {
-      setCursedUserId(activeMembers[Math.floor(Math.random() * activeMembers.length)].id);
-    }
-  }, [IS_HALLOWEEN, activeMembers.length, cursedUserId]);
+    const year = getBkkNow().getFullYear();
+    const docRef = db.collection('bma_system').doc(`halloween_curse_${year}`);
+    return docRef.onSnapshot((doc) => {
+      if (doc.exists && doc.data()?.cursedUserId) {
+        setCursedUserId(doc.data().cursedUserId);
+      } else if (activeMembers.length > 0) {
+        const randId = activeMembers[Math.floor(Math.random() * activeMembers.length)].id;
+        docRef.set({ cursedUserId: randId, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }
+    }, () => {});
+  }, [IS_HALLOWEEN, activeMembers.length]);
 
   // 3. Measure Nav Pill Indicator
   useEffect(() => {
@@ -1326,10 +1334,20 @@ export default function App() {
             isLoyKrathong={IS_LOY_KRATHONG}
             cursedUserId={cursedUserId}
             onTriggerScare={(m) => {
+              playSpookySound();
               setScareTriggered(true);
               setTimeout(() => setScareTriggered(false), 1200);
-              const mems = activeMembers.filter((x) => x.id !== m.id);
-              setCursedUserId(mems.length > 0 ? mems[Math.floor(Math.random() * mems.length)].id : null);
+              const year = getBkkNow().getFullYear();
+              const nextId =
+                currentUser && currentUser.id !== m.id
+                  ? currentUser.id
+                  : activeMembers.filter((x) => x.id !== m.id)[0]?.id || null;
+              if (nextId) {
+                db.collection('bma_system')
+                  .doc(`halloween_curse_${year}`)
+                  .set({ cursedUserId: nextId, passedBy: m.id, updatedAt: Date.now() }, { merge: true })
+                  .catch(() => {});
+              }
             }}
           />
         )}
@@ -1667,6 +1685,7 @@ export default function App() {
 
       {/* HALLOWEEN OVERLAYS */}
       <HalloweenGhostHunt isHalloween={IS_HALLOWEEN} />
+      <HalloweenCurseAndTreats isHalloween={IS_HALLOWEEN} cursedUserId={cursedUserId} />
       {scareTriggered && (
         <div className="jump-scare-overlay">
           <div className="scare-img">👻</div>
