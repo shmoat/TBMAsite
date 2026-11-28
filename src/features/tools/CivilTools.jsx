@@ -800,129 +800,1640 @@ export const SoilPhaseCalculator = () => {
 };
 
 export const SoilStrengthCalculator = () => {
-  const [testMode, setTestMode] = useState('direct');
-  const [d1, setD1] = useState({ s: 50, t: 65 });
-  const [d2, setD2] = useState({ s: 100, t: 90 });
-  const [d3, setD3] = useState({ s: 200, t: 140 });
-  const [t1, setT1] = useState({ s3: 50, s1: 150 });
-  const [t2, setT2] = useState({ s3: 100, s1: 300 });
-  const [t3, setT3] = useState({ s3: 200, s1: 600 });
-  const [qu, setQu] = useState(120);
-  const [useThreePts, setUseThreePts] = useState(true);
+  const DEG = Math.PI / 180;
+  const RAD = 180 / Math.PI;
+  const solverSvgRef = React.useRef(null);
+  const labSvgRef = React.useRef(null);
 
-  let c = 0, phi = 0, circles = [], maxS = 100, error = '';
+  const [mainTab, setMainTab] = useState('solver'); // 'solver' | 'lab' | 'learn' | 'practice'
+  const [copiedMsg, setCopiedMsg] = useState('');
 
-  const linReg = (pts) => {
-    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-    const n = pts.length;
-    pts.forEach((p) => { sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x; });
-    const m = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const b = (sumY - m * sumX) / n;
-    return { m, b };
+  const flashCopy = (text, label = 'คัดลอกสรุปแล้ว') => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedMsg(label);
+    setTimeout(() => setCopiedMsg(''), 2000);
   };
 
-  try {
-    if (testMode === 'direct') {
-      const pts = [d1, d2];
-      if (useThreePts) pts.push(d3);
-      const { m, b } = linReg(pts.map((d) => ({ x: d.s, y: d.t })));
-      phi = Math.atan(m) * (180 / Math.PI);
-      c = b;
-      maxS = Math.max(...pts.map((d) => d.s)) * 1.2;
-    } else if (testMode === 'triaxial') {
-      const pts = [t1, t2];
-      if (useThreePts) pts.push(t3);
-      const reg = linReg(pts.map((d) => ({ x: d.s3, y: d.s1 })));
-      if (reg.m <= 0) error = 'ข้อมูลไม่สามารถหาจุดตัดความวิบัติได้';
-      else {
-        phi = 2 * (Math.atan(Math.sqrt(reg.m)) * (180 / Math.PI) - 45);
-        c = reg.b / (2 * Math.sqrt(reg.m));
-        circles = pts.map((d) => ({ cx: (d.s1 + d.s3) / 2, r: (d.s1 - d.s3) / 2 }));
-        maxS = Math.max(...pts.map((d) => d.s1)) * 1.1;
-      }
-    } else if (testMode === 'uct') {
-      c = qu / 2;
-      phi = 0;
-      circles = [{ cx: qu / 2, r: qu / 2 }];
-      maxS = qu * 1.2;
+  const downloadSvgChart = (svgEl, filename) => {
+    if (!svgEl) return;
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('width', '100%');
+    bg.setAttribute('height', '100%');
+    bg.setAttribute('fill', '#0a101f');
+    clone.insertBefore(bg, clone.firstChild);
+    const serialized = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}_${Date.now()}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const linReg = (pts, forceZeroIntercept = false) => {
+    const n = pts.length;
+    if (n === 0) return { m: 0, b: 0, r2: 0 };
+    if (forceZeroIntercept) {
+      const sumXY = pts.reduce((s, p) => s + p.x * p.y, 0);
+      const sumXX = pts.reduce((s, p) => s + p.x * p.x, 0);
+      const m = sumXX > 1e-12 ? sumXY / sumXX : 0;
+      const meanY = pts.reduce((s, p) => s + p.y, 0) / n;
+      const ssTot = pts.reduce((s, p) => s + Math.pow(p.y - meanY, 2), 0);
+      const ssRes = pts.reduce((s, p) => s + Math.pow(p.y - m * p.x, 2), 0);
+      const r2 = ssTot < 1e-12 ? 1 : Math.max(0, 1 - ssRes / ssTot);
+      return { m, b: 0, r2 };
     }
-  } catch { error = 'เกิดข้อผิดพลาดในการคำนวณ'; }
+    if (n < 2) return { m: 0, b: pts[0].y, r2: 1 };
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    pts.forEach((p) => { sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x; });
+    const denom = n * sumXX - sumX * sumX;
+    if (Math.abs(denom) < 1e-12) return { m: 0, b: sumY / n, r2: 0 };
+    const m = (n * sumXY - sumX * sumY) / denom;
+    const b = (sumY - m * sumX) / n;
+    const meanY = sumY / n;
+    const ssTot = pts.reduce((s, p) => s + Math.pow(p.y - meanY, 2), 0);
+    const ssRes = pts.reduce((s, p) => s + Math.pow(p.y - (m * p.x + b), 2), 0);
+    const r2 = ssTot < 1e-12 ? 1 : Math.max(0, 1 - ssRes / ssTot);
+    return { m, b, r2 };
+  };
 
-  if (maxS <= 0) maxS = 100;
-  const svgW = 400;
-  const svgH = 220;
-  const scale = (svgW - 50) / maxS;
+  // ==================== TAB 1: SOLVER & INTERACTIVE MOHR'S CIRCLE ====================
+  const [solverSub, setSolverSub] = useState('plane'); // 'plane' | 'principal'
+  const [s1In, setS1In] = useState('400');
+  const [s3In, setS3In] = useState('200');
+  const [uIn, setUIn] = useState('100');
+  const [cIn, setCIn] = useState('0');
+  const [phiIn, setPhiIn] = useState('30');
+  const [angleMode, setAngleMode] = useState('theta'); // 'theta' (from σ1 plane) | 'alpha' (from σ3 plane)
+  const [angleIn, setAngleIn] = useState('60');
+  const [showSolverSteps, setShowSolverSteps] = useState(true);
 
-  return (
-    <div className="flex flex-col gap-4 py-2 w-full max-w-2xl mx-auto">
-      <div className="bg-[#0B1325] p-4 rounded-xl border border-[#1E3A5F] shadow-inner space-y-3 text-xs">
-        <div className="flex justify-between items-center mb-2">
-          <label className="text-sky-400 font-bold">เลือกวิธีทดสอบ (Test Type)</label>
-          <select value={testMode} onChange={(e) => setTestMode(e.target.value)} className="inp py-1 bg-[#050811]">
-            <option value="direct">Direct Shear Test</option>
-            <option value="triaxial">Triaxial Test</option>
-            <option value="uct">Unconfined Compression Test (UCT)</option>
-          </select>
-        </div>
+  // Reverse Principal Stress Solver
+  const [revTarget, setRevTarget] = useState('s1'); // 's1' | 's3' | 'phi'
+  const [revS1, setRevS1] = useState('300');
+  const [revS3, setRevS3] = useState('100');
+  const [revC, setRevC] = useState('0');
+  const [revPhi, setRevPhi] = useState('30');
 
-        {testMode === 'direct' && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-center text-slate-400 font-bold"><span className="border-b border-[#1E3A5F] pb-1">Normal Stress (σ)</span><span className="border-b border-[#1E3A5F] pb-1">Shear Stress (τ)</span></div>
-            <div className="grid grid-cols-2 gap-2"><input type="number" value={d1.s} onChange={(e) => setD1({ ...d1, s: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={d1.t} onChange={(e) => setD1({ ...d1, t: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>
-            <div className="grid grid-cols-2 gap-2"><input type="number" value={d2.s} onChange={(e) => setD2({ ...d2, s: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={d2.t} onChange={(e) => setD2({ ...d2, t: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>
-            {useThreePts && <div className="grid grid-cols-2 gap-2"><input type="number" value={d3.s} onChange={(e) => setD3({ ...d3, s: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={d3.t} onChange={(e) => setD3({ ...d3, t: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>}
-            <label className="flex items-center gap-2 mt-2 text-sky-300 font-bold cursor-pointer"><input type="checkbox" checked={useThreePts} onChange={(e) => setUseThreePts(e.target.checked)} className="accent-sky-500" /> ใช้ข้อมูล 3 จุดประเมินค่า</label>
-          </div>
+  const s1 = parseFloat(s1In) || 0;
+  const s3 = parseFloat(s3In) || 0;
+  const u = parseFloat(uIn) || 0;
+  const cEff = Math.max(0, parseFloat(cIn) || 0);
+  const phiEff = Math.max(0, Math.min(89, parseFloat(phiIn) || 0));
+  const angVal = parseFloat(angleIn) || 0;
+
+  const s1Eff = s1 - u;
+  const s3Eff = s3 - u;
+  const pTot = (s1 + s3) / 2;
+  const pEff = (s1Eff + s3Eff) / 2;
+  const R = (s1 - s3) / 2;
+  const solverValid = s1 >= s3;
+
+  const thetaDeg = angleMode === 'theta' ? angVal : 90 - angVal;
+  const alphaDeg = angleMode === 'alpha' ? angVal : 90 - angVal;
+  const thetaF = 45 + phiEff / 2;
+  const alphaF = 45 - phiEff / 2;
+
+  // Stresses on chosen plane (Total & Effective)
+  const sigmaPlaneTot = pTot + R * Math.cos(2 * thetaDeg * DEG);
+  const sigmaPlaneEff = pEff + R * Math.cos(2 * thetaDeg * DEG);
+  const tauPlane = Math.abs(R * Math.sin(2 * thetaDeg * DEG));
+  const tauStrengthPlane = cEff + sigmaPlaneEff * Math.tan(phiEff * DEG);
+  const fsPlane = tauPlane > 1e-9 ? tauStrengthPlane / tauPlane : Infinity;
+
+  // Overall Mohr Circle vs Failure Envelope check
+  const distToEnv = pEff * Math.sin(phiEff * DEG) + cEff * Math.cos(phiEff * DEG);
+  const circleStatus = !solverValid
+    ? 'invalid'
+    : R > distToEnv + 0.05
+      ? 'fail'
+      : Math.abs(R - distToEnv) <= 0.05
+        ? 'tangent'
+        : 'stable';
+
+  // Mobilised Friction Angle (when c'=0) & Failure Pore Pressure
+  const phiMobCircle = cEff === 0 && pEff > R && R >= 0 ? Math.asin(R / pEff) * RAD : null;
+  const phiTotalApparent = cEff === 0 && pTot > R && R >= 0 ? Math.asin(R / pTot) * RAD : null;
+  const phiMobPlane = cEff === 0 && sigmaPlaneEff > 0 ? Math.atan(tauPlane / sigmaPlaneEff) * RAD : null;
+  const ufCircle = phiEff > 0 ? pTot - (R - cEff * Math.cos(phiEff * DEG)) / Math.sin(phiEff * DEG) : null;
+  const ufPlane = phiEff > 0 ? sigmaPlaneTot - (tauPlane - cEff) / Math.tan(phiEff * DEG) : null;
+  const sigmaFailPlane = pEff - R * Math.sin(phiEff * DEG);
+  const tauFailPlane = R * Math.cos(phiEff * DEG);
+
+  // Reverse Principal Stress Calculation
+  const revCalc = (() => {
+    const rS1 = parseFloat(revS1) || 0;
+    const rS3 = parseFloat(revS3) || 0;
+    const rC = Math.max(0, parseFloat(revC) || 0);
+    const rPhi = Math.max(0, Math.min(89, parseFloat(revPhi) || 0));
+    const nPhi = Math.pow(Math.tan((45 + rPhi / 2) * DEG), 2);
+    const sqrtN = Math.sqrt(nPhi);
+
+    if (revTarget === 's1') {
+      const outS1 = rS3 * nPhi + 2 * rC * sqrtN;
+      const p = (outS1 + rS3) / 2;
+      const rad = (outS1 - rS3) / 2;
+      const sn = p - rad * Math.sin(rPhi * DEG);
+      const tf = rad * Math.cos(rPhi * DEG);
+      return { label: "σ'₁ (Major Effective Principal Stress)", value: `${outS1.toFixed(2)} kPa`, nPhi, thetaF: 45 + rPhi / 2, sn, tf, s1: outS1, s3: rS3, phi: rPhi, c: rC };
+    }
+    if (revTarget === 's3') {
+      const outS3 = (rS1 - 2 * rC * sqrtN) / nPhi;
+      const p = (rS1 + outS3) / 2;
+      const rad = (rS1 - outS3) / 2;
+      const sn = p - rad * Math.sin(rPhi * DEG);
+      const tf = rad * Math.cos(rPhi * DEG);
+      return { label: "σ'₃ (Minor Effective Principal Stress)", value: `${outS3.toFixed(2)} kPa`, nPhi, thetaF: 45 + rPhi / 2, sn, tf, s1: rS1, s3: outS3, phi: rPhi, c: rC };
+    }
+    if (rS1 <= rS3 || rS1 + rS3 <= 0) return { err: "ต้องกำหนด σ'₁ > σ'₃ และ σ'₁ + σ'₃ > 0" };
+    const sinP = (rS1 - rS3) / (rS1 + rS3);
+    if (sinP >= 1) return { err: "ไม่สามารถหาค่า φ' ได้ (σ'₃ ต้องมากกว่า 0 เมื่อ c'=0)" };
+    const outPhi = Math.asin(sinP) * RAD;
+    const outN = (1 + sinP) / (1 - sinP);
+    const p = (rS1 + rS3) / 2;
+    const rad = (rS1 - rS3) / 2;
+    return {
+      label: "φ' (Effective Friction Angle เมื่อ c'=0)",
+      value: `${outPhi.toFixed(2)}°`,
+      nPhi: outN,
+      thetaF: 45 + outPhi / 2,
+      sn: p - rad * sinP,
+      tf: rad * Math.cos(outPhi * DEG),
+      s1: rS1,
+      s3: rS3,
+      phi: outPhi,
+      c: 0
+    };
+  })();
+
+  // ==================== TAB 2: LAB DATA PROCESSOR ====================
+  const [labMode, setLabMode] = useState('direct'); // 'direct' | 'triaxial' | 'uct'
+  const [dsInputType, setDsInputType] = useState('force'); // 'force' | 'stress'
+  const [boxW, setBoxW] = useState('60'); // mm
+  const [boxL, setBoxL] = useState('60'); // mm
+  const [dsForceZeroC, setDsForceZeroC] = useState(false);
+  const [dsPredictSig, setDsPredictSig] = useState('250');
+  const [dsRows, setDsRows] = useState([
+    { id: 'ds1', n: '360', tPeak: '252', tRes: '220', s: '100', tauPeak: '70', tauRes: '61' },
+    { id: 'ds2', n: '720', tPeak: '504', tRes: '440', s: '200', tauPeak: '140', tauRes: '122' },
+    { id: 'ds3', n: '1080', tPeak: '756', tRes: '660', s: '300', tauPeak: '210', tauRes: '183' }
+  ]);
+  const [showResidual, setShowResidual] = useState(false);
+
+  // Triaxial Lab State
+  const [triType, setTriType] = useState('CU'); // 'CD' | 'CU' | 'UU'
+  const [triInputStyle, setTriInputStyle] = useState('qf'); // 'qf' (σ3, qf) | 's1' (σ3, σ1)
+  const [triForceZeroC, setTriForceZeroC] = useState(false);
+  const [triRows, setTriRows] = useState([
+    { id: 'tr1', s3: '100', qf: '100', s1: '200', uf: '50' },
+    { id: 'tr2', s3: '200', qf: '200', s1: '400', uf: '100' }
+  ]);
+  const [showAreaTool, setShowAreaTool] = useState(false);
+  const [acD0, setAcD0] = useState('50'); // mm
+  const [acH0, setAcH0] = useState('100'); // mm
+  const [acDh, setAcDh] = useState('10'); // mm
+  const [acDv, setAcDv] = useState('4'); // cm³ (mL)
+  const [acF, setAcF] = useState('420'); // N
+
+  // UCT State
+  const [uctQu, setUctQu] = useState('120');
+
+  const boxAreaM2 = ((parseFloat(boxW) || 60) * (parseFloat(boxL) || 60)) / 1e6;
+
+  const dsParsed = dsRows
+    .map((r) => {
+      if (dsInputType === 'force') {
+        const sig = boxAreaM2 > 0 ? (parseFloat(r.n) || 0) / boxAreaM2 / 1000 : 0; // kPa
+        const tp = boxAreaM2 > 0 ? (parseFloat(r.tPeak) || 0) / boxAreaM2 / 1000 : 0;
+        const tr = boxAreaM2 > 0 ? (parseFloat(r.tRes) || 0) / boxAreaM2 / 1000 : 0;
+        return { id: r.id, s: sig, tp, tr };
+      }
+      return { id: r.id, s: parseFloat(r.s) || 0, tp: parseFloat(r.tauPeak) || 0, tr: parseFloat(r.tauRes) || 0 };
+    })
+    .filter((x) => !Number.isNaN(x.s) && !Number.isNaN(x.tp));
+
+  const dsPeakReg = linReg(dsParsed.map((p) => ({ x: p.s, y: p.tp })), dsForceZeroC);
+  const dsPeakPhi = Math.atan(dsPeakReg.m) * RAD;
+  const dsPeakC = dsPeakReg.b;
+
+  const dsResReg = linReg(dsParsed.map((p) => ({ x: p.s, y: p.tr })), dsForceZeroC);
+  const dsResPhi = Math.atan(dsResReg.m) * RAD;
+  const dsResC = dsResReg.b;
+
+  const dsMinS = dsParsed.length ? Math.min(...dsParsed.map((p) => p.s)) : 0;
+  const dsMaxS = dsParsed.length ? Math.max(...dsParsed.map((p) => p.s)) : 0;
+  const predSigVal = parseFloat(dsPredictSig);
+  const predTauVal = !Number.isNaN(predSigVal) ? dsPeakC + predSigVal * Math.tan(dsPeakPhi * DEG) : null;
+  const isExtrapolating = !Number.isNaN(predSigVal) && dsParsed.length >= 2 && (predSigVal < dsMinS || predSigVal > dsMaxS);
+
+  // Triaxial Analysis
+  const triParsed = triRows.map((r) => {
+    const sig3 = parseFloat(r.s3) || 0;
+    const sig1 = triInputStyle === 'qf' ? sig3 + (parseFloat(r.qf) || 0) : (parseFloat(r.s1) || 0);
+    const qfVal = sig1 - sig3;
+    const ufVal = triType === 'CU' ? (parseFloat(r.uf) || 0) : 0;
+    const s3e = sig3 - ufVal;
+    const s1e = sig1 - ufVal;
+    return {
+      id: r.id,
+      s3: sig3,
+      s1: sig1,
+      qf: qfVal,
+      uf: ufVal,
+      s3e,
+      s1e,
+      pTot: (sig1 + sig3) / 2,
+      pEff: (s1e + s3e) / 2,
+      R: qfVal / 2
+    };
+  });
+
+  const solveTriEnvelope = (circles, forceZeroC) => {
+    if (circles.length === 0) return { err: 'กรุณาเพิ่มข้อมูลอย่างน้อย 1 ตัวอย่าง' };
+    if (circles.some((x) => x.R <= 0)) return { err: 'ค่า σ₁ ต้องมากกว่า σ₃ (หรือ qf > 0) ทุกตัวอย่าง' };
+    if (circles.length === 1) {
+      const { p, R: rVal } = circles[0];
+      if (p <= rVal) return { err: 'ข้อมูลตัวอย่างเดียวไม่สอดคล้อง (R ≥ p)' };
+      const phi = Math.asin(rVal / p) * RAD;
+      return { c: 0, phi, r2: 1, note: "คำนวณจาก 1 ตัวอย่างโดยสมมติ c' = 0" };
+    }
+    const reg = linReg(circles.map((x) => ({ x: x.p, y: x.R })), forceZeroC);
+    if (reg.m >= 1 || reg.m < -0.05) return { err: 'ข้อมูลไม่สอดคล้องทางกายภาพ (ความชัน sin φ อยู่นอกช่วง 0–1)' };
+    const clampedM = Math.max(0, Math.min(0.9999, reg.m));
+    const phi = Math.asin(clampedM) * RAD;
+    const c = reg.b / Math.cos(phi * DEG);
+    return { c, phi, r2: reg.r2 };
+  };
+
+  const triEffectiveRes = triType === 'UU'
+    ? null
+    : solveTriEnvelope(triParsed.map((x) => ({ p: x.pEff, R: x.R })), triForceZeroC);
+
+  const triTotalRes = triType === 'UU'
+    ? {
+        c: triParsed.length ? triParsed.reduce((s, x) => s + x.R, 0) / triParsed.length : 0,
+        phi: 0,
+        r2: 1
+      }
+    : solveTriEnvelope(triParsed.map((x) => ({ p: x.pTot, R: x.R })), triForceZeroC);
+
+  // Triaxial Area Correction Calculation (Slide 37)
+  const areaCorr = (() => {
+    const d0 = parseFloat(acD0) || 0;
+    const h0 = parseFloat(acH0) || 0;
+    const dh = parseFloat(acDh) || 0;
+    const dvCm3 = parseFloat(acDv) || 0;
+    const fN = parseFloat(acF) || 0;
+    if (d0 <= 0 || h0 <= 0) return null;
+    const a0Mm2 = (Math.PI * d0 * d0) / 4;
+    const v0Cm3 = (a0Mm2 * h0) / 1000;
+    const epsA = dh / h0;
+    const epsV = dvCm3 / v0Cm3;
+    if (1 - epsA <= 0) return null;
+    const aCorrMm2 = a0Mm2 * ((1 - epsV) / (1 - epsA));
+    const qKpa = aCorrMm2 > 0 ? (fN / (aCorrMm2 / 1e6)) / 1000 : 0;
+    return { a0Mm2, v0Cm3, epsA, epsV, aCorrMm2, qKpa };
+  })();
+
+  // ==================== TAB 3: INTERACTIVE VISUAL LEARNING ====================
+  const [sandDrained, setSandDrained] = useState(false);
+  const [sandSv, setSandSv] = useState(20);
+  const [sandSh, setSandSh] = useState(10);
+  const [soilStateMode, setSoilStateMode] = useState('dense'); // 'dense' | 'loose'
+
+  const sandIsIsotropic = Math.abs(sandSv - sandSh) < 0.01;
+  const sandEffectiveMean = sandDrained ? (sandSv + sandSh) / 2 : (sandIsIsotropic ? 0 : null);
+  const sandUw = sandDrained ? 0 : (sandIsIsotropic ? sandSv : null);
+
+  // ==================== TAB 4: ENGINEERING PRACTICE ====================
+  const [pracCu, setPracCu] = useState('60');
+  const [pracC, setPracC] = useState('5');
+  const [pracPhi, setPracPhi] = useState('25');
+  const [pracSigN, setPracSigN] = useState('150');
+  const [pracCase, setPracCase] = useState('loading'); // 'loading' | 'excavation'
+
+  const [wizSoil, setWizSoil] = useState('clay'); // 'sand' | 'clay'
+  const [wizWork, setWizWork] = useState('loading_fast'); // 'loading_fast' | 'excavation' | 'long_term'
+
+  const shortTermTau = Math.max(0, parseFloat(pracCu) || 0);
+  const longTermTau = Math.max(0, (parseFloat(pracC) || 0) + (parseFloat(pracSigN) || 0) * Math.tan((parseFloat(pracPhi) || 0) * DEG));
+  const maxBarTau = Math.max(shortTermTau, longTermTau, 10);
+
+  const wizAdvice = (() => {
+    if (wizSoil === 'sand') {
+      return {
+        condition: 'Drained (ระบายน้ำได้ทันทีเพราะค่าความซึมน้ำสูง)',
+        params: "Effective Stress: c' (= 0 สำหรับทรายหลวม/Ultimate) และ φ'",
+        tests: 'Direct Shear Test (ทดสอบแห้งได้ รวดเร็ว) หรือ CD Triaxial Test',
+        critical: 'วิเคราะห์ด้วย Effective Stress ตลอดอายุงาน (ระวังระดับน้ำใต้ดินสูงขึ้นทำให้ σ\' ลดลง)'
+      };
+    }
+    if (wizWork === 'loading_fast') {
+      return {
+        condition: 'Short-term Undrained (ดินเหนียวระบายน้ำไม่ทัน แรงดันน้ำส่วนเกินพุ่งสูง)',
+        params: 'Total Stress: cu และ φu = 0 (ควรเช็ก Long-term คู่กันด้วย)',
+        tests: 'UU Triaxial Test, Unconfined Compression (UCT) หรือ Vane Shear ในสนาม',
+        critical: 'วันแรกหลังถมดิน/ก่อสร้าง (Short-term) มักวิกฤตที่สุด เพราะน้ำรับน้ำหนักแทนเม็ดดิน ทำให้กำลังเฉือนต่ำสุด'
+      };
+    }
+    if (wizWork === 'excavation') {
+      return {
+        condition: 'Long-term Drained (หลังขุดดิน แรงดันน้ำติดลบจะค่อยๆ คืนตัวจนดินอ่อนลง)',
+        params: "Effective Stress: c' และ φ' (เช็ก Short-term ตอนขุดด้วย)",
+        tests: 'CU Triaxial (พร้อมวัดแรงดันน้ำ u เพื่อได้ทั้ง Total & Effective) หรือ CD Triaxial',
+        critical: 'ระยะยาว (Long-term) เป็นช่วงอันตรายที่สุดสำหรับงานขุดบ่อ/ตัดลาดดิน เพราะเมื่อแรงดันน้ำลบสลายตัว ค่า σ\' จะลดลงจนลาดอาจพังทลาย'
+      };
+    }
+    return {
+      condition: 'Long-term Drained (แรงดันน้ำส่วนเกินระบายออกหมดแล้ว Δu = 0)',
+      params: "Effective Stress: c' และ φ'",
+      tests: 'CU Triaxial + วัด u (นิยมสุดเพราะเร็วกว่า CD) หรือ CD Triaxial / Slow Direct Shear',
+      critical: 'ใช้พารามิเตอร์ Effective Stress ควบคู่กับการประเมินระดับน้ำใต้ดินสูงสุดที่เป็นไปได้'
+    };
+  })();
+
+  // ==================== SVG RENDERER FOR SOLVER MOHR'S CIRCLE ====================
+  const renderSolverMohrSvg = () => {
+    const W = 460;
+    const H = 240;
+    const ox = 48;
+    const oy = 205;
+    const plotW = W - ox - 20;
+    const plotH = oy - 22;
+
+    const maxX = Math.max(s1 * 1.18, s1Eff * 1.18, 100);
+    const envAtMaxX = cEff + maxX * Math.tan(phiEff * DEG);
+    const maxY = Math.max(R * 1.45, Math.min(envAtMaxX, maxX * 0.85), 60);
+    const sc = Math.min(plotW / maxX, plotH / maxY);
+
+    const toX = (val) => ox + val * sc;
+    const toY = (val) => oy - val * sc;
+
+    const xTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round((plotW / sc) * f));
+    const yTicks = [0, 0.5, 1].map((f) => Math.round((plotH / sc) * f));
+
+    const envEndX = plotW / sc;
+    const envEndY = cEff + envEndX * Math.tan(phiEff * DEG);
+
+    // Clipping line to plot area
+    const effTopX = toX(s1Eff);
+    const effBotX = toX(s3Eff);
+    const totTopX = toX(s1);
+    const totBotX = toX(s3);
+    const rPx = Math.max(0, R * sc);
+
+    return (
+      <svg ref={solverSvgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none">
+        {/* Grid */}
+        {xTicks.map((v, i) => (
+          <g key={`xg-${i}`}>
+            <line x1={toX(v)} y1={18} x2={toX(v)} y2={oy} stroke="#1E3A5F" strokeWidth="0.7" strokeDasharray="3 3" opacity="0.6" />
+            <text x={toX(v)} y={oy + 14} fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">{v}</text>
+          </g>
+        ))}
+        {yTicks.map((v, i) => (
+          <g key={`yg-${i}`}>
+            <line x1={ox} y1={toY(v)} x2={W - 15} y2={toY(v)} stroke="#1E3A5F" strokeWidth="0.7" strokeDasharray="3 3" opacity="0.6" />
+            <text x={ox - 6} y={toY(v) + 3} fill="#94A3B8" fontSize="9" textAnchor="end" fontFamily="monospace">{v}</text>
+          </g>
+        ))}
+
+        {/* Axes */}
+        <line x1={ox} y1={oy} x2={W - 12} y2={oy} stroke="#64748B" strokeWidth="1.8" />
+        <line x1={ox} y1={oy} x2={ox} y2={15} stroke="#64748B" strokeWidth="1.8" />
+        <text x={W - 14} y={oy + 27} fill="#CBD5E1" fontSize="10" textAnchor="end" fontWeight="bold">Normal Stress, σ / σ&apos; (kPa)</text>
+        <text x={ox + 6} y={24} fill="#CBD5E1" fontSize="10" fontWeight="bold">τ (kPa)</text>
+
+        {/* Mohr-Coulomb Failure Envelope */}
+        <line
+          x1={toX(0)}
+          y1={toY(cEff)}
+          x2={toX(envEndX)}
+          y2={toY(envEndY)}
+          stroke="#F59E0B"
+          strokeWidth="2.4"
+        />
+
+        {/* Total Stress Semicircle (when u != 0) */}
+        {solverValid && Math.abs(u) > 0.01 && rPx > 0 && (
+          <g>
+            <path
+              d={`M ${totBotX} ${oy} A ${rPx} ${rPx} 0 0 1 ${totTopX} ${oy}`}
+              fill="rgba(148,163,184,0.08)"
+              stroke="#94A3B8"
+              strokeWidth="1.8"
+              strokeDasharray="5 4"
+            />
+            <circle cx={totBotX} cy={oy} r="3" fill="#94A3B8" />
+            <circle cx={totTopX} cy={oy} r="3" fill="#94A3B8" />
+            <text x={toX(pTot)} y={toY(R) - 6} fill="#94A3B8" fontSize="9" textAnchor="middle">Total</text>
+            {/* Shift arrow u */}
+            <line x1={toX(pTot)} y1={oy - 8} x2={toX(pEff)} y2={oy - 8} stroke="#2DD4BF" strokeWidth="1.5" />
+            <text x={(toX(pTot) + toX(pEff)) / 2} y={oy - 12} fill="#2DD4BF" fontSize="9" textAnchor="middle" fontFamily="monospace">u={u}</text>
+          </g>
         )}
 
-        {testMode === 'triaxial' && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-center text-slate-400 font-bold"><span className="border-b border-[#1E3A5F] pb-1">Confining Stress (σ3)</span><span className="border-b border-[#1E3A5F] pb-1">Major Principal (σ1)</span></div>
-            <div className="grid grid-cols-2 gap-2"><input type="number" value={t1.s3} onChange={(e) => setT1({ ...t1, s3: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={t1.s1} onChange={(e) => setT1({ ...t1, s1: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>
-            <div className="grid grid-cols-2 gap-2"><input type="number" value={t2.s3} onChange={(e) => setT2({ ...t2, s3: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={t2.s1} onChange={(e) => setT2({ ...t2, s1: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>
-            {useThreePts && <div className="grid grid-cols-2 gap-2"><input type="number" value={t3.s3} onChange={(e) => setT3({ ...t3, s3: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /><input type="number" value={t3.s1} onChange={(e) => setT3({ ...t3, s1: parseFloat(e.target.value) || 0 })} className="inp text-center font-mono" /></div>}
-            <label className="flex items-center gap-2 mt-2 text-sky-300 font-bold cursor-pointer"><input type="checkbox" checked={useThreePts} onChange={(e) => setUseThreePts(e.target.checked)} className="accent-sky-500" /> ใช้ข้อมูล 3 จุดประเมินค่า</label>
-          </div>
-        )}
+        {/* Effective Stress Semicircle */}
+        {solverValid && rPx > 0 && (
+          <g>
+            <path
+              d={`M ${effBotX} ${oy} A ${rPx} ${rPx} 0 0 1 ${effTopX} ${oy}`}
+              fill={circleStatus === 'fail' ? 'rgba(239,68,68,0.14)' : 'rgba(56,189,248,0.14)'}
+              stroke={circleStatus === 'fail' ? '#F87171' : '#38BDF8'}
+              strokeWidth="2.4"
+            />
+            <circle cx={effBotX} cy={oy} r="3.5" fill="#38BDF8" />
+            <circle cx={effTopX} cy={oy} r="3.5" fill="#38BDF8" />
+            <circle cx={toX(pEff)} cy={oy} r="2.8" fill="#F59E0B" />
+            <text x={effBotX} y={oy - 6} fill="#7DD3FC" fontSize="9" textAnchor="middle" fontFamily="monospace">σ&apos;₃</text>
+            <text x={effTopX} y={oy - 6} fill="#7DD3FC" fontSize="9" textAnchor="middle" fontFamily="monospace">σ&apos;₁</text>
 
-        {testMode === 'uct' && (
-          <div className="flex gap-4 items-center">
-            <label className="text-slate-400 font-bold">Unconfined Compressive Strength (qu)</label>
-            <input type="number" value={qu} onChange={(e) => setQu(parseFloat(e.target.value) || 0)} className="flex-1 inp text-center font-mono" />
-          </div>
+            {/* Radius to chosen plane */}
+            <line x1={toX(pEff)} y1={oy} x2={toX(sigmaPlaneEff)} y2={toY(tauPlane)} stroke="#EC4899" strokeWidth="1.6" strokeDasharray="3 2" />
+            <circle cx={toX(sigmaPlaneEff)} cy={toY(tauPlane)} r="4.5" fill="#EC4899" stroke="#fff" strokeWidth="1.5" />
+            <text x={toX(sigmaPlaneEff) + 6} y={toY(tauPlane) - 6} fill="#F472B6" fontSize="9" fontWeight="bold" fontFamily="monospace">
+              ({sigmaPlaneEff.toFixed(1)}, {tauPlane.toFixed(1)})
+            </text>
+          </g>
         )}
-      </div>
+      </svg>
+    );
+  };
 
-      <div className="bg-[#050811] border border-[#1E3A5F] rounded-xl p-4 sm:p-6 overflow-hidden flex flex-col shadow-lg">
-        {error ? (
-          <div className="text-red-400 font-bold bg-red-950/50 p-4 rounded-xl border border-red-900/50 w-full text-center">{error}</div>
-        ) : (
+  // ==================== SVG RENDERER FOR LAB PLOTTER ====================
+  const renderLabSvg = () => {
+    const W = 460;
+    const H = 240;
+    const ox = 48;
+    const oy = 205;
+    const plotW = W - ox - 20;
+    const plotH = oy - 22;
+
+    let maxX = 100;
+    let maxY = 60;
+
+    if (labMode === 'direct') {
+      maxX = Math.max(dsMaxS * 1.25, (!Number.isNaN(predSigVal) ? predSigVal * 1.15 : 0), 100);
+      maxY = Math.max(
+        ...dsParsed.map((p) => Math.max(p.tp, p.tr) * 1.25),
+        dsPeakC + maxX * Math.tan(dsPeakPhi * DEG),
+        60
+      );
+    } else if (labMode === 'triaxial') {
+      maxX = Math.max(...triParsed.map((x) => Math.max(x.s1, x.s1e) * 1.15), 100);
+      const envPhi = triEffectiveRes && !triEffectiveRes.err ? triEffectiveRes.phi : (triTotalRes?.phi || 0);
+      const envC = triEffectiveRes && !triEffectiveRes.err ? triEffectiveRes.c : (triTotalRes?.c || 0);
+      maxY = Math.max(...triParsed.map((x) => x.R * 1.4), envC + maxX * Math.tan(envPhi * DEG) * 0.7, 60);
+    } else {
+      const qv = Math.max(parseFloat(uctQu) || 0, 10);
+      maxX = qv * 1.3;
+      maxY = (qv / 2) * 1.6;
+    }
+
+    const sc = Math.min(plotW / maxX, plotH / maxY);
+    const toX = (v) => ox + v * sc;
+    const toY = (v) => oy - v * sc;
+    const endX = plotW / sc;
+    const xTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(endX * f));
+    const yTicks = [0, 0.5, 1].map((f) => Math.round((plotH / sc) * f));
+
+    return (
+      <svg ref={labSvgRef} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto select-none">
+        {xTicks.map((v, i) => (
+          <g key={`lxg-${i}`}>
+            <line x1={toX(v)} y1={18} x2={toX(v)} y2={oy} stroke="#1E3A5F" strokeWidth="0.7" strokeDasharray="3 3" opacity="0.6" />
+            <text x={toX(v)} y={oy + 14} fill="#94A3B8" fontSize="9" textAnchor="middle" fontFamily="monospace">{v}</text>
+          </g>
+        ))}
+        {yTicks.map((v, i) => (
+          <g key={`lyg-${i}`}>
+            <line x1={ox} y1={toY(v)} x2={W - 15} y2={toY(v)} stroke="#1E3A5F" strokeWidth="0.7" strokeDasharray="3 3" opacity="0.6" />
+            <text x={ox - 6} y={toY(v) + 3} fill="#94A3B8" fontSize="9" textAnchor="end" fontFamily="monospace">{v}</text>
+          </g>
+        ))}
+
+        <line x1={ox} y1={oy} x2={W - 12} y2={oy} stroke="#64748B" strokeWidth="1.8" />
+        <line x1={ox} y1={oy} x2={ox} y2={15} stroke="#64748B" strokeWidth="1.8" />
+        <text x={W - 14} y={oy + 27} fill="#CBD5E1" fontSize="10" textAnchor="end" fontWeight="bold">Normal Stress, σ (kPa)</text>
+        <text x={ox + 6} y={24} fill="#CBD5E1" fontSize="10" fontWeight="bold">τ (kPa)</text>
+
+        {/* Direct Shear Plot */}
+        {labMode === 'direct' && (
           <>
-            <div className="grid grid-cols-2 gap-3 text-center mb-6">
-              <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]"><div className="text-[10px] text-amber-400 font-bold uppercase mb-1">Cohesion (c)</div><div className="text-xl sm:text-2xl font-bold font-mono text-white">{c.toFixed(2)}</div></div>
-              <div className="bg-[#0B1325] p-3 rounded-lg border border-[#1E3A5F]"><div className="text-[10px] text-sky-400 font-bold uppercase mb-1">Friction Angle (φ)</div><div className="text-xl sm:text-2xl font-bold font-mono text-white">{phi.toFixed(2)}°</div></div>
-            </div>
-            <div className="w-full bg-[#0a101f] border border-slate-700 rounded-xl p-2 relative shadow-inner overflow-x-auto no-scrollbar">
-              <div className="text-[9px] text-slate-500 absolute top-2 right-4 font-mono font-bold">Mohr-Coulomb Failure Envelope</div>
-              <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full min-w-[300px] h-auto drop-shadow-md">
-                <g transform={`translate(20, ${svgH - 20}) scale(1, -1)`}>
-                  <line x1="0" y1="0" x2={svgW - 30} y2="0" stroke="#475569" strokeWidth="2" />
-                  <line x1="0" y1="0" x2="0" y2={svgH - 40} stroke="#475569" strokeWidth="2" />
-                  <line x1="0" y1={c * scale} x2={maxS * scale} y2={(c + maxS * Math.tan((phi * Math.PI) / 180)) * scale} stroke="#F59E0B" strokeWidth="2.5" />
-                  {(testMode === 'triaxial' || testMode === 'uct') && circles.map((cir, idx) => (
-                    <circle key={idx} cx={cir.cx * scale} cy="0" r={cir.r * scale} fill="none" stroke="#38BDF8" strokeWidth="1.5" strokeDasharray="4 2" />
-                  ))}
-                  {testMode === 'direct' && [d1, d2, useThreePts ? d3 : null].filter(Boolean).map((pt, idx) => (
-                    <circle key={idx} cx={pt.s * scale} cy={pt.t * scale} r="4" fill="#38BDF8" />
-                  ))}
-                </g>
-                <text x="25" y="15" fill="#94A3B8" fontSize="10" fontWeight="bold">τ</text>
-                <text x={svgW - 15} y={svgH - 5} fill="#94A3B8" fontSize="10" fontWeight="bold">σ</text>
-              </svg>
-            </div>
+            <line x1={toX(0)} y1={toY(dsPeakC)} x2={toX(endX)} y2={toY(dsPeakC + endX * Math.tan(dsPeakPhi * DEG))} stroke="#F59E0B" strokeWidth="2.3" />
+            {showResidual && (
+              <line x1={toX(0)} y1={toY(dsResC)} x2={toX(endX)} y2={toY(dsResC + endX * Math.tan(dsResPhi * DEG))} stroke="#34D399" strokeWidth="1.8" strokeDasharray="5 3" />
+            )}
+            {dsParsed.map((p) => (
+              <g key={p.id}>
+                <circle cx={toX(p.s)} cy={toY(p.tp)} r="4.5" fill="#38BDF8" stroke="#fff" strokeWidth="1.2" />
+                {showResidual && <circle cx={toX(p.s)} cy={toY(p.tr)} r="3.5" fill="#34D399" />}
+              </g>
+            ))}
+            {predTauVal !== null && predSigVal >= 0 && (
+              <g>
+                <rect x={toX(predSigVal) - 4} y={toY(predTauVal) - 4} width="8" height="8" fill="#10B981" stroke="#fff" strokeWidth="1.2" />
+                <text x={toX(predSigVal)} y={toY(predTauVal) - 8} fill="#34D399" fontSize="9" textAnchor="middle" fontFamily="monospace">
+                  ({predSigVal}, {predTauVal.toFixed(1)})
+                </text>
+              </g>
+            )}
           </>
         )}
+
+        {/* Triaxial Plot */}
+        {labMode === 'triaxial' && (
+          <>
+            {/* Total Stress Circles & Envelope */}
+            {triParsed.map((x) => {
+              const rPx = Math.max(0, x.R * sc);
+              if (rPx <= 0) return null;
+              return (
+                <path
+                  key={`tot-${x.id}`}
+                  d={`M ${toX(x.s3)} ${oy} A ${rPx} ${rPx} 0 0 1 ${toX(x.s1)} ${oy}`}
+                  fill={triType === 'UU' ? 'rgba(56,189,248,0.12)' : 'none'}
+                  stroke={triType === 'CU' ? '#94A3B8' : '#38BDF8'}
+                  strokeWidth={triType === 'CU' ? '1.6' : '2.2'}
+                  strokeDasharray={triType === 'CU' ? '4 4' : 'none'}
+                />
+              );
+            })}
+            {/* Effective Stress Circles for CU */}
+            {triType === 'CU' && triParsed.map((x) => {
+              const rPx = Math.max(0, x.R * sc);
+              if (rPx <= 0) return null;
+              return (
+                <path
+                  key={`eff-${x.id}`}
+                  d={`M ${toX(x.s3e)} ${oy} A ${rPx} ${rPx} 0 0 1 ${toX(x.s1e)} ${oy}`}
+                  fill="rgba(56,189,248,0.14)"
+                  stroke="#38BDF8"
+                  strokeWidth="2.3"
+                />
+              );
+            })}
+            {/* Total Envelope */}
+            {triTotalRes && !triTotalRes.err && (
+              <line
+                x1={toX(0)}
+                y1={toY(triTotalRes.c)}
+                x2={toX(endX)}
+                y2={toY(triTotalRes.c + endX * Math.tan(triTotalRes.phi * DEG))}
+                stroke={triType === 'CU' ? '#94A3B8' : '#F59E0B'}
+                strokeWidth={triType === 'CU' ? '1.6' : '2.4'}
+                strokeDasharray={triType === 'CU' ? '5 4' : 'none'}
+              />
+            )}
+            {/* Effective Envelope */}
+            {triType !== 'UU' && triEffectiveRes && !triEffectiveRes.err && (
+              <line
+                x1={toX(0)}
+                y1={toY(triEffectiveRes.c)}
+                x2={toX(endX)}
+                y2={toY(triEffectiveRes.c + endX * Math.tan(triEffectiveRes.phi * DEG))}
+                stroke="#F59E0B"
+                strokeWidth="2.4"
+              />
+            )}
+          </>
+        )}
+
+        {/* UCT Plot */}
+        {labMode === 'uct' && (() => {
+          const qv = Math.max(parseFloat(uctQu) || 0, 0);
+          const cuVal = qv / 2;
+          const rPx = cuVal * sc;
+          return (
+            <>
+              {rPx > 0 && (
+                <path
+                  d={`M ${toX(0)} ${oy} A ${rPx} ${rPx} 0 0 1 ${toX(qv)} ${oy}`}
+                  fill="rgba(56,189,248,0.14)"
+                  stroke="#38BDF8"
+                  strokeWidth="2.4"
+                />
+              )}
+              <line x1={toX(0)} y1={toY(cuVal)} x2={toX(endX)} y2={toY(cuVal)} stroke="#F59E0B" strokeWidth="2.4" />
+            </>
+          );
+        })()}
+      </svg>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+      {/* แถบเลือก 4 โหมดหลัก */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[#0B1325] p-1.5 rounded-2xl border border-[#1E3A5F] font-bold">
+        {[
+          ['solver', '📐 โมร์ & เช็กโจทย์'],
+          ['lab', '🧪 วิเคราะห์ผลแล็บ'],
+          ['learn', '💧 คอนเซปต์ระบายน้ำ'],
+          ['practice', '🏗️ งานออกแบบจริง']
+        ].map(([id, lbl]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMainTab(id)}
+            className={`py-2 px-2 rounded-xl transition-all ${
+              mainTab === id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'
+            }`}
+          >
+            {lbl}
+          </button>
+        ))}
       </div>
+
+      {copiedMsg && (
+        <div className="text-center text-[11px] font-bold text-emerald-300 bg-emerald-950/50 border border-emerald-500/40 py-1.5 rounded-xl">
+          ✓ {copiedMsg}
+        </div>
+      )}
+
+      {/* ==================== TAB 1: SOLVER ==================== */}
+      {mainTab === 'solver' && (
+        <div className="space-y-4">
+          <div className="flex bg-[#0B1325] p-1 rounded-xl border border-[#1E3A5F] gap-1 font-bold">
+            <button
+              type="button"
+              onClick={() => setSolverSub('plane')}
+              className={`flex-1 py-1.5 rounded-lg transition-colors ${solverSub === 'plane' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'}`}
+            >
+              วงกลมโมร์ &amp; เช็กระนาบวิบัติ (Total vs Effective)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSolverSub('principal')}
+              className={`flex-1 py-1.5 rounded-lg transition-colors ${solverSub === 'principal' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'}`}
+            >
+              แก้สมการ Principal Stress (σ&apos;₁, σ&apos;₃, Nφ)
+            </button>
+          </div>
+
+          {solverSub === 'plane' && (
+            <>
+              <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+                {/* ตัวอย่างด่วนจาก Lecture 8 */}
+                <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-[#1E3A5F]/70">
+                  <span className="text-[10px] text-slate-400 font-bold">โจทย์ตัวอย่าง:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setS1In('300'); setS3In('100'); setUIn('0'); setCIn('0'); setPhiIn('30'); setAngleMode('theta'); setAngleIn('60'); }}
+                    className="px-2.5 py-1 rounded-full bg-[#050811] border border-sky-500/40 text-sky-300 hover:bg-sky-600 hover:text-white text-[10px] font-bold"
+                  >
+                    CD Sand (สไลด์ 47)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setS1In('400'); setS3In('200'); setUIn('100'); setCIn('0'); setPhiIn('30'); setAngleMode('theta'); setAngleIn('60'); }}
+                    className="px-2.5 py-1 rounded-full bg-[#050811] border border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-[#050811] text-[10px] font-bold"
+                  >
+                    CU Clay + u (สไลด์ 56)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setS1In('200'); setS3In('75'); setUIn('0'); setCIn('0'); setPhiIn('30'); setAngleMode('theta'); setAngleIn('55'); }}
+                    className="px-2.5 py-1 rounded-full bg-[#050811] border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600 hover:text-white text-[10px] font-bold"
+                  >
+                    Dry Sand θ=55° (Stable)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">σ₁ รวม (kPa)</label>
+                    <input type="number" value={s1In} onChange={(e) => setS1In(e.target.value)} className="inp w-full font-mono text-center py-1.5" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">σ₃ รวม (kPa)</label>
+                    <input type="number" value={s3In} onChange={(e) => setS3In(e.target.value)} className="inp w-full font-mono text-center py-1.5" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-teal-300 font-bold block mb-1">แรงดันน้ำ u (kPa)</label>
+                    <input type="number" value={uIn} onChange={(e) => setUIn(e.target.value)} className="inp w-full font-mono text-center py-1.5 border-teal-500/50 bg-teal-950/20 text-teal-200" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-amber-300 font-bold block mb-1">c&apos; (kPa)</label>
+                    <input type="number" min="0" value={cIn} onChange={(e) => setCIn(e.target.value)} className="inp w-full font-mono text-center py-1.5" />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[10px] text-amber-300 font-bold block mb-1">φ&apos; (องศา)</label>
+                    <input type="number" min="0" max="89" step="0.5" value={phiIn} onChange={(e) => setPhiIn(e.target.value)} className="inp w-full font-mono text-center py-1.5" />
+                  </div>
+                </div>
+
+                {/* สไลเดอร์แรงดันน้ำ u + มุมระนาบ */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#1E3A5F]/60">
+                  <div className="bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F]">
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-teal-300 font-bold">ลองเลื่อนแรงดันน้ำ u (ดูวงกลมเลื่อนซ้าย)</span>
+                      <span className="font-mono text-white font-bold">{u} kPa</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={Math.min(-50, u)}
+                      max={Math.max(s3, 150)}
+                      step="1"
+                      value={u}
+                      onChange={(e) => setUIn(e.target.value)}
+                      className="w-full accent-teal-400 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] flex flex-col justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex bg-[#0B1325] rounded-lg border border-[#1E3A5F] p-0.5 text-[10px]">
+                        <button type="button" onClick={() => setAngleMode('theta')} className={`px-2 py-0.5 rounded font-bold ${angleMode === 'theta' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>θ (จากระนาบ σ₁)</button>
+                        <button type="button" onClick={() => setAngleMode('alpha')} className={`px-2 py-0.5 rounded font-bold ${angleMode === 'alpha' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>α (จากระนาบ σ₃)</button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAngleIn((angleMode === 'theta' ? thetaF : alphaF).toFixed(1))}
+                        className="text-[10px] text-amber-300 hover:underline font-bold"
+                      >
+                        ตั้งมุมวิบัติ ({(angleMode === 'theta' ? thetaF : alphaF).toFixed(1)}°)
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min="0" max="90" step="0.5" value={angVal} onChange={(e) => setAngleIn(e.target.value)} className="flex-1 accent-pink-500" />
+                      <input type="number" step="0.5" value={angleIn} onChange={(e) => setAngleIn(e.target.value)} className="inp w-16 py-0.5 font-mono text-center text-pink-300" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {!solverValid ? (
+                <div className="p-4 rounded-xl bg-red-950/50 border border-red-500/60 text-red-300 text-center font-bold">
+                  ⚠️ ค่า σ₁ ต้องมากกว่าหรือเท่ากับ σ₃
+                </div>
+              ) : (
+                <div className="bg-[#050811] border border-[#1E3A5F] rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                  {/* แถบสถานะวิบัติ + ปุ่ม Export */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                      circleStatus === 'fail'
+                        ? 'bg-red-950/60 border-red-500 text-red-300'
+                        : circleStatus === 'tangent'
+                          ? 'bg-amber-950/60 border-amber-400 text-amber-300'
+                          : 'bg-emerald-950/50 border-emerald-500 text-emerald-300'
+                    }`}>
+                      {circleStatus === 'fail'
+                        ? '✕ FAILURE — วงกลมเกินเส้น Mohr-Coulomb (ดินวิบัติ)'
+                        : circleStatus === 'tangent'
+                          ? '⚠️ AT FAILURE — วงกลมสัมผัสเส้นพอดี (เริ่มวิบัติ)'
+                          : '✓ STABLE — วงกลมอยู่ใต้เส้นวิบัติ (ดินเสถียร)'}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const txt = [
+                            `=== Soil Shear Strength Analysis ===`,
+                            `Total: σ1=${s1}, σ3=${s3}, u=${u} kPa`,
+                            `Effective: σ'1=${s1Eff.toFixed(2)}, σ'3=${s3Eff.toFixed(2)} kPa | p'=${pEff.toFixed(2)}, R=${R.toFixed(2)} kPa`,
+                            `Envelope: c'=${cEff} kPa, φ'=${phiEff}° | Status: ${circleStatus.toUpperCase()}`,
+                            `Plane (θ=${thetaDeg.toFixed(1)}°, α=${alphaDeg.toFixed(1)}°): σ'n=${sigmaPlaneEff.toFixed(2)} kPa, τ=${tauPlane.toFixed(2)} kPa, τf=${tauStrengthPlane.toFixed(2)} kPa, FS=${Number.isFinite(fsPlane) ? fsPlane.toFixed(2) : '∞'}`,
+                            phiMobCircle !== null ? `φ_mob (circle) = ${phiMobCircle.toFixed(2)}°` : '',
+                            ufCircle !== null ? `Failure pore pressure u_f (circle) = ${ufCircle.toFixed(2)} kPa` : ''
+                          ].filter(Boolean).join('\n');
+                          flashCopy(txt);
+                        }}
+                        className="btn-d py-1 px-2.5 text-[10px]"
+                      >
+                        📋 คัดลอกสรุป
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadSvgChart(solverSvgRef.current, 'BMA_Mohr_Circle')}
+                        className="btn-d py-1 px-2.5 text-[10px] text-sky-300"
+                      >
+                        📥 โหลดกราฟ (.svg)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* กราฟวงกลมโมร์ + รูปก้อนดินทรงกระบอก */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                    <div className="md:col-span-9 bg-[#0a101f] border border-slate-700/80 rounded-xl p-2 overflow-x-auto">
+                      {renderSolverMohrSvg()}
+                      <div className="flex flex-wrap justify-between px-2 pt-1 text-[9px] text-slate-400">
+                        <span>เส้นส้ม = Mohr-Coulomb • วงฟ้า = Effective • วงเทาประ = Total • จุดชมพู = ระนาบที่พิจารณา</span>
+                        <span className="text-sky-400">Sign Convention: แรงอัด (+)</span>
+                      </div>
+                    </div>
+
+                    {/* ก้อนดินแสดงระนาบเอียง */}
+                    <div className="md:col-span-3 bg-[#0a101f] border border-slate-700/80 rounded-xl p-3 flex flex-col items-center justify-center">
+                      <div className="text-[10px] font-bold text-slate-300 mb-1">Soil Element</div>
+                      <svg viewBox="0 0 110 135" className="w-24 h-28">
+                        {/* σ1 arrows */}
+                        <line x1="55" y1="4" x2="55" y2="20" stroke="#38BDF8" strokeWidth="2.5" />
+                        <polygon points="55,23 51,16 59,16" fill="#38BDF8" />
+                        <text x="55" y="11" fill="#7DD3FC" fontSize="9" textAnchor="middle" fontWeight="bold" dx="22">σ&apos;₁={s1Eff.toFixed(0)}</text>
+                        {/* σ3 arrows */}
+                        <line x1="6" y1="68" x2="22" y2="68" stroke="#2DD4BF" strokeWidth="2" />
+                        <polygon points="25,68 18,64 18,72" fill="#2DD4BF" />
+                        <line x1="104" y1="68" x2="88" y2="68" stroke="#2DD4BF" strokeWidth="2" />
+                        <polygon points="85,68 92,64 92,72" fill="#2DD4BF" />
+                        {/* Specimen */}
+                        <rect x="27" y="25" width="56" height="86" rx="4" fill="#1E293B" stroke="#64748B" strokeWidth="1.8" />
+                        {/* Critical failure plane θf */}
+                        {(() => {
+                          const cx = 55, cy = 68, len = 46;
+                          const dx = len * Math.cos(thetaF * DEG);
+                          const dy = len * Math.sin(thetaF * DEG);
+                          return <line x1={cx - dx} y1={cy + dy} x2={cx + dx} y2={cy - dy} stroke="#F59E0B" strokeWidth="2" strokeDasharray="4 2" />;
+                        })()}
+                        {/* Chosen plane θ */}
+                        {(() => {
+                          const cx = 55, cy = 68, len = 40;
+                          const dx = len * Math.cos(thetaDeg * DEG);
+                          const dy = len * Math.sin(thetaDeg * DEG);
+                          return <line x1={cx - dx} y1={cy + dy} x2={cx + dx} y2={cy - dy} stroke="#EC4899" strokeWidth="2.2" />;
+                        })()}
+                        <text x="55" y="126" fill="#FCD34D" fontSize="9" textAnchor="middle" fontFamily="monospace">θf = {thetaF.toFixed(1)}°</text>
+                      </svg>
+                      <div className="text-[9px] text-center text-slate-400 leading-tight">
+                        <span className="text-amber-300">ประส้ม</span> = ระนาบวิบัติ<br />
+                        <span className="text-pink-400">เส้นชมพู</span> = θ={thetaDeg.toFixed(1)}°
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* การ์ดผลลัพธ์หลัก */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center font-mono">
+                    <div className="bg-[#0B1325] p-2.5 rounded-xl border border-[#1E3A5F]">
+                      <div className="text-[10px] text-slate-400 font-sans font-bold">Effective Principal</div>
+                      <div className="text-sm font-bold text-sky-300 mt-0.5">{s1Eff.toFixed(1)} / {s3Eff.toFixed(1)}</div>
+                      <div className="text-[9px] text-slate-500">p&apos;={pEff.toFixed(1)}, R={R.toFixed(1)}</div>
+                    </div>
+                    <div className="bg-[#0B1325] p-2.5 rounded-xl border border-pink-500/40">
+                      <div className="text-[10px] text-pink-300 font-sans font-bold">บนระนาบ θ={thetaDeg.toFixed(1)}°</div>
+                      <div className="text-sm font-bold text-white mt-0.5">σ&apos;n={sigmaPlaneEff.toFixed(1)}</div>
+                      <div className="text-[10px] text-pink-300">τ={tauPlane.toFixed(2)} kPa</div>
+                    </div>
+                    <div className="bg-[#0B1325] p-2.5 rounded-xl border border-[#1E3A5F]">
+                      <div className="text-[10px] text-amber-300 font-sans font-bold">กำลังเฉือน τf / FS</div>
+                      <div className="text-sm font-bold text-amber-400 mt-0.5">{tauStrengthPlane.toFixed(2)} kPa</div>
+                      <div className={`text-[10px] font-bold ${fsPlane < 1 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        FS = {Number.isFinite(fsPlane) ? fsPlane.toFixed(2) : '∞'}
+                      </div>
+                    </div>
+                    <div className="bg-[#0B1325] p-2.5 rounded-xl border border-[#1E3A5F]">
+                      <div className="text-[10px] text-teal-300 font-sans font-bold">
+                        {phiMobCircle !== null ? 'φ_mob (วงกลม)' : 'แรงดันน้ำวิบัติ u_f'}
+                      </div>
+                      <div className="text-sm font-bold text-teal-300 mt-0.5">
+                        {phiMobCircle !== null ? `${phiMobCircle.toFixed(2)}°` : (ufCircle !== null ? `${ufCircle.toFixed(1)} kPa` : '-')}
+                      </div>
+                      <div className="text-[9px] text-slate-400">
+                        {ufCircle !== null ? `u_f (วงกลม)=${ufCircle.toFixed(1)}` : 'φ\'=0 (Undrained)'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* แสดงวิธีทำทีละขั้น (Show Steps) */}
+                  <div className="border-t border-[#1E3A5F] pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSolverSteps((v) => !v)}
+                      className="text-sky-300 hover:text-sky-200 font-bold text-xs flex items-center gap-1.5"
+                    >
+                      <i className={`fas ${showSolverSteps ? 'fa-chevron-down' : 'fa-chevron-right'}`}></i>
+                      <span>{showSolverSteps ? 'ซ่อนวิธีทำทีละขั้น (Hide Steps)' : '👁️ แสดงวิธีทำทีละขั้นสำหรับเช็กการบ้าน (Show Steps)'}</span>
+                    </button>
+
+                    {showSolverSteps && (
+                      <div className="mt-2.5 p-3.5 rounded-xl bg-[#0B1325] border border-dashed border-sky-500/40 font-mono text-[11px] text-slate-300 space-y-2 leading-relaxed">
+                        <div>
+                          <span className="text-sky-400 font-bold">1. Effective Principal Stresses:</span>{' '}
+                          σ&apos;₁ = {s1} − {u} = <b className="text-white">{s1Eff.toFixed(2)}</b> kPa,{' '}
+                          σ&apos;₃ = {s3} − {u} = <b className="text-white">{s3Eff.toFixed(2)}</b> kPa
+                        </div>
+                        <div>
+                          <span className="text-sky-400 font-bold">2. Mohr&apos;s Circle Center &amp; Radius:</span>{' '}
+                          p&apos; = ({s1Eff.toFixed(1)} + {s3Eff.toFixed(1)}) / 2 = <b className="text-white">{pEff.toFixed(2)}</b> kPa,{' '}
+                          R = τ_max = ({s1Eff.toFixed(1)} − {s3Eff.toFixed(1)}) / 2 = <b className="text-white">{R.toFixed(2)}</b> kPa
+                        </div>
+                        <div>
+                          <span className="text-sky-400 font-bold">3. Stress on Plane (θ = {thetaDeg.toFixed(1)}° | α = {alphaDeg.toFixed(1)}°):</span><br />
+                          σ&apos;n = {pEff.toFixed(2)} + {R.toFixed(2)} cos({(2 * thetaDeg).toFixed(1)}°) = <b className="text-pink-300">{sigmaPlaneEff.toFixed(2)} kPa</b><br />
+                          τ = {R.toFixed(2)} sin({(2 * thetaDeg).toFixed(1)}°) = <b className="text-pink-300">{tauPlane.toFixed(2)} kPa</b>
+                        </div>
+                        <div>
+                          <span className="text-sky-400 font-bold">4. Shear Strength &amp; Factor of Safety:</span><br />
+                          τ_f = c&apos; + σ&apos;n tan(φ&apos;) = {cEff} + ({sigmaPlaneEff.toFixed(2)}) tan({phiEff}°) = <b className="text-amber-300">{tauStrengthPlane.toFixed(2)} kPa</b>{' '}
+                          → FS = {tauStrengthPlane.toFixed(2)} / {tauPlane.toFixed(2)} = <b className="text-emerald-300">{Number.isFinite(fsPlane) ? fsPlane.toFixed(2) : '∞'}</b>
+                        </div>
+                        <div>
+                          <span className="text-sky-400 font-bold">5. Failure Check &amp; Critical Pore Pressure:</span><br />
+                          ระยะตั้งฉากจากจุดศูนย์กลางถึงเส้นวิบัติ d = p&apos;sin(φ&apos;) + c&apos;cos(φ&apos;) = <b className="text-white">{distToEnv.toFixed(2)} kPa</b> (เทียบกับ R = {R.toFixed(2)} kPa)<br />
+                          ระนาบวิบัติ: θ_f = 45° + {phiEff}/2 = <b className="text-amber-300">{thetaF.toFixed(2)}°</b> (α_f = {alphaF.toFixed(2)}°) → จุดสัมผัส ({sigmaFailPlane.toFixed(2)}, {tauFailPlane.toFixed(2)}) kPa
+                          {ufCircle !== null && (
+                            <>
+                              <br />แรงดันน้ำที่ทำให้วงกลมแตะเส้นวิบัติ: u_f = p − (R − c&apos;cosφ&apos;)/sinφ&apos; = <b className="text-teal-300">{ufCircle.toFixed(2)} kPa</b>
+                              {' '}| บนระนาบนี้ (คง σ, τ): u_f,plane = <b className="text-teal-300">{ufPlane.toFixed(2)} kPa</b>
+                            </>
+                          )}
+                          {phiMobCircle !== null && (
+                            <>
+                              <br />Mobilised Friction Angle (c&apos;=0): φ_mob(circle) = arcsin({R.toFixed(2)}/{pEff.toFixed(2)}) = <b className="text-teal-300">{phiMobCircle.toFixed(2)}°</b>
+                              {phiMobPlane !== null && <> | φ_mob(plane) = {phiMobPlane.toFixed(2)}°</>}
+                              {Math.abs(u) > 0.01 && phiTotalApparent !== null && (
+                                <> | φ_total (หลอก) = <b className="text-slate-400">{phiTotalApparent.toFixed(2)}°</b></>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Reverse Principal Stress Solver */}
+          {solverSub === 'principal' && (
+            <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+              <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2">
+                สมการ Mohr-Coulomb ในรูป Principal Stresses: σ&apos;₁ = σ&apos;₃ Nφ + 2c&apos;√Nφ
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ['s1', "หา σ'₁ (เมื่อทราบ σ'₃, c', φ')"],
+                  ['s3', "หา σ'₃ (เมื่อทราบ σ'₁, c', φ')"],
+                  ['phi', "หา φ' เมื่อ c'=0 (ทราบ σ'₁, σ'₃)"]
+                ].map(([id, lbl]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setRevTarget(id)}
+                    className={`px-3 py-1.5 rounded-xl font-bold border text-[11px] transition-colors ${
+                      revTarget === id ? 'bg-sky-600 text-white border-sky-400' : 'bg-[#050811] text-slate-300 border-[#1E3A5F]'
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {revTarget !== 's1' && (
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">σ&apos;₁ (kPa)</label>
+                    <input type="number" value={revS1} onChange={(e) => setRevS1(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                  </div>
+                )}
+                {revTarget !== 's3' && (
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">σ&apos;₃ (kPa)</label>
+                    <input type="number" value={revS3} onChange={(e) => setRevS3(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                  </div>
+                )}
+                {revTarget !== 'phi' && (
+                  <>
+                    <div>
+                      <label className="text-[10px] text-amber-300 font-bold block mb-1">c&apos; (kPa)</label>
+                      <input type="number" min="0" value={revC} onChange={(e) => setRevC(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-amber-300 font-bold block mb-1">φ&apos; (องศา)</label>
+                      <input type="number" min="0" max="89" value={revPhi} onChange={(e) => setRevPhi(e.target.value)} className="inp w-full font-mono text-center py-2" />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {revCalc.err ? (
+                <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-center font-bold">{revCalc.err}</div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-[#050811] border border-sky-500/40 space-y-3">
+                  <div className="text-center">
+                    <div className="text-[11px] text-slate-400 font-bold">{revCalc.label}</div>
+                    <div className="text-3xl font-mono font-bold text-amber-400 mt-1">{revCalc.value}</div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center font-mono text-[11px]">
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">
+                      Nφ = tan²(45°+φ&apos;/2)<br /><b className="text-sky-300">{revCalc.nPhi.toFixed(4)}</b>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">
+                      มุมระนาบวิบัติ θf<br /><b className="text-emerald-400">{revCalc.thetaF.toFixed(2)}°</b>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">
+                      จุดสัมผัส (σ&apos;n, τf)<br /><b className="text-pink-300">({revCalc.sn.toFixed(1)}, {revCalc.tf.toFixed(1)})</b>
+                    </div>
+                  </div>
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setS1In(revCalc.s1.toFixed(2));
+                        setS3In(revCalc.s3.toFixed(2));
+                        setUIn('0');
+                        setCIn(String(revCalc.c));
+                        setPhiIn(revCalc.phi.toFixed(2));
+                        setAngleMode('theta');
+                        setAngleIn(revCalc.thetaF.toFixed(1));
+                        setSolverSub('plane');
+                      }}
+                      className="px-4 py-1.5 rounded-full bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px]"
+                    >
+                      📐 ส่งค่านี้ไปวาดวงกลมโมร์
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================== TAB 2: LAB DATA PROCESSOR ==================== */}
+      {mainTab === 'lab' && (
+        <div className="space-y-4">
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-3">
+              <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1 font-bold">
+                {[
+                  ['direct', 'Direct Shear (กล่องเฉือน)'],
+                  ['triaxial', 'Triaxial (CD / CU / UU)'],
+                  ['uct', 'UCT (qu)']
+                ].map(([id, lbl]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setLabMode(id)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] transition-colors ${labMode === id ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => downloadSvgChart(labSvgRef.current, `BMA_Lab_${labMode}`)}
+                className="btn-d py-1 px-2.5 text-[10px] text-sky-300"
+              >
+                📥 โหลดกราฟ (.svg)
+              </button>
+            </div>
+
+            {/* 2.1 DIRECT SHEAR */}
+            {labMode === 'direct' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex bg-[#050811] p-0.5 rounded-lg border border-[#1E3A5F] text-[10px]">
+                    <button type="button" onClick={() => setDsInputType('force')} className={`px-2.5 py-1 rounded font-bold ${dsInputType === 'force' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>กรอกแรง N, T (นิวตัน) + ขนาดกล่อง</button>
+                    <button type="button" onClick={() => setDsInputType('stress')} className={`px-2.5 py-1 rounded font-bold ${dsInputType === 'stress' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>กรอก Stress (kPa) ตรงๆ</button>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-sky-300 font-bold">
+                      <input type="checkbox" checked={dsForceZeroC} onChange={(e) => setDsForceZeroC(e.target.checked)} className="accent-sky-500" />
+                      บังคับ c&apos; = 0
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-emerald-300 font-bold">
+                      <input type="checkbox" checked={showResidual} onChange={(e) => setShowResidual(e.target.checked)} className="accent-emerald-500" />
+                      เทียบเส้น Residual
+                    </label>
+                  </div>
+                </div>
+
+                {dsInputType === 'force' && (
+                  <div className="flex flex-wrap items-center gap-3 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F]">
+                    <span className="text-slate-400 font-bold">ขนาดกล่องเฉือน:</span>
+                    <input type="number" value={boxW} onChange={(e) => setBoxW(e.target.value)} className="inp w-16 py-1 text-center font-mono" />
+                    <span>×</span>
+                    <input type="number" value={boxL} onChange={(e) => setBoxL(e.target.value)} className="inp w-16 py-1 text-center font-mono" />
+                    <span className="text-slate-400">mm</span>
+                    <span className="font-mono text-sky-300 ml-auto">A = {boxAreaM2.toExponential(2)} m²</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <div className={`grid ${showResidual ? 'grid-cols-12' : 'grid-cols-10'} gap-2 text-[10px] text-slate-400 font-bold text-center`}>
+                    <div className="col-span-3">{dsInputType === 'force' ? 'แรงกด N (N)' : "σ'n (kPa)"}</div>
+                    <div className="col-span-3">{dsInputType === 'force' ? 'แรงเฉือน Peak T (N)' : 'τ Peak (kPa)'}</div>
+                    {showResidual && <div className="col-span-3 text-emerald-400">{dsInputType === 'force' ? 'T Residual (N)' : 'τ Res (kPa)'}</div>}
+                    <div className="col-span-3">ค่าแปลง (σ&apos;n, τp)</div>
+                    <div className="col-span-1"></div>
+                  </div>
+                  {dsRows.map((row, idx) => {
+                    const parsed = dsParsed[idx];
+                    return (
+                      <div key={row.id} className={`grid ${showResidual ? 'grid-cols-12' : 'grid-cols-10'} gap-2 items-center`}>
+                        <input
+                          type="number"
+                          value={dsInputType === 'force' ? row.n : row.s}
+                          onChange={(e) => setDsRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, [dsInputType === 'force' ? 'n' : 's']: e.target.value } : r)))}
+                          className="col-span-3 inp py-1.5 text-center font-mono"
+                        />
+                        <input
+                          type="number"
+                          value={dsInputType === 'force' ? row.tPeak : row.tauPeak}
+                          onChange={(e) => setDsRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, [dsInputType === 'force' ? 'tPeak' : 'tauPeak']: e.target.value } : r)))}
+                          className="col-span-3 inp py-1.5 text-center font-mono"
+                        />
+                        {showResidual && (
+                          <input
+                            type="number"
+                            value={dsInputType === 'force' ? row.tRes : row.tauRes}
+                            onChange={(e) => setDsRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, [dsInputType === 'force' ? 'tRes' : 'tauRes']: e.target.value } : r)))}
+                            className="col-span-3 inp py-1.5 text-center font-mono border-emerald-900/60"
+                          />
+                        )}
+                        <div className="col-span-3 text-center font-mono text-[10px] text-sky-300 bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
+                          {parsed ? `${parsed.s.toFixed(0)}, ${parsed.tp.toFixed(1)}` : '-'}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={dsRows.length <= 2}
+                          onClick={() => setDsRows((prev) => prev.filter((r) => r.id !== row.id))}
+                          className="col-span-1 text-red-400 hover:text-red-300 font-bold disabled:opacity-30"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <div className="flex flex-wrap justify-between items-center pt-1 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDsRows((prev) => [...prev, { id: `ds-${Date.now()}`, n: '1440', tPeak: '1008', tRes: '880', s: '400', tauPeak: '280', tauRes: '244' }])}
+                      className="btn-b py-1 px-3 text-[10px]"
+                    >
+                      + เพิ่มตัวอย่าง
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400">ทำนาย τf ที่ σ&apos;n =</span>
+                      <input type="number" value={dsPredictSig} onChange={(e) => setDsPredictSig(e.target.value)} className="inp w-20 py-1 font-mono text-center text-emerald-300" />
+                      <span className="text-[10px] text-slate-400">kPa →</span>
+                      <span className="font-mono font-bold text-emerald-400">{predTauVal !== null ? `${predTauVal.toFixed(2)} kPa` : '-'}</span>
+                    </div>
+                  </div>
+                  {isExtrapolating && (
+                    <div className="p-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-[10px]">
+                      ⚠️ ค่า σ&apos;n = {predSigVal} kPa อยู่นอกช่วงข้อมูลทดสอบ ({dsMinS.toFixed(0)}–{dsMaxS.toFixed(0)} kPa) — เส้น Mohr-Coulomb เป็นเส้นตรงเฉพาะช่วงความเค้นที่ทดสอบ การทำนายนอกช่วงอาจคลาดเคลื่อน
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 2.2 TRIAXIAL */}
+            {labMode === 'triaxial' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex bg-[#050811] p-0.5 rounded-lg border border-[#1E3A5F] text-[10px] font-bold">
+                    {['CD', 'CU', 'UU'].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          setTriType(t);
+                          if (t === 'UU') {
+                            setTriRows([
+                              { id: 'u1', s3: '100', qf: '120', s1: '220', uf: '0' },
+                              { id: 'u2', s3: '300', qf: '120', s1: '420', uf: '0' }
+                            ]);
+                          } else if (t === 'CU') {
+                            setTriRows([
+                              { id: 'c1', s3: '100', qf: '100', s1: '200', uf: '50' },
+                              { id: 'c2', s3: '200', qf: '200', s1: '400', uf: '100' }
+                            ]);
+                          } else {
+                            setTriRows([
+                              { id: 'd1', s3: '100', qf: '200', s1: '300', uf: '0' },
+                              { id: 'd2', s3: '200', qf: '400', s1: '600', uf: '0' }
+                            ]);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded ${triType === t ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        {t} Test
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setTriInputStyle((v) => (v === 'qf' ? 's1' : 'qf'))}
+                      className="px-2.5 py-1 rounded-lg bg-[#050811] border border-[#1E3A5F] text-sky-300 font-bold"
+                    >
+                      กรอกแบบ: {triInputStyle === 'qf' ? 'σ₃ + Deviator (qf)' : 'σ₃ + σ₁'}
+                    </button>
+                    {triType !== 'UU' && (
+                      <label className="flex items-center gap-1 cursor-pointer text-amber-300 font-bold">
+                        <input type="checkbox" checked={triForceZeroC} onChange={(e) => setTriForceZeroC(e.target.checked)} className="accent-amber-400" />
+                        c&apos;=0
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-400 font-bold text-center">
+                    <div className="col-span-3">Cell Pressure σ₃</div>
+                    <div className="col-span-4">{triInputStyle === 'qf' ? 'Deviator qf = Δσf' : 'Major Stress σ₁'}</div>
+                    <div className="col-span-4">{triType === 'CU' ? 'Pore Pressure uf' : 'σ₁ / σ₃ (kPa)'}</div>
+                    <div className="col-span-1"></div>
+                  </div>
+                  {triRows.map((row, idx) => {
+                    const p = triParsed[idx];
+                    return (
+                      <div key={row.id} className="grid grid-cols-12 gap-2 items-center">
+                        <input
+                          type="number"
+                          value={row.s3}
+                          onChange={(e) => setTriRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, s3: e.target.value } : r)))}
+                          className="col-span-3 inp py-1.5 text-center font-mono"
+                        />
+                        <input
+                          type="number"
+                          value={triInputStyle === 'qf' ? row.qf : row.s1}
+                          onChange={(e) => setTriRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, [triInputStyle === 'qf' ? 'qf' : 's1']: e.target.value } : r)))}
+                          className="col-span-4 inp py-1.5 text-center font-mono"
+                        />
+                        {triType === 'CU' ? (
+                          <input
+                            type="number"
+                            value={row.uf}
+                            onChange={(e) => setTriRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, uf: e.target.value } : r)))}
+                            className="col-span-4 inp py-1.5 text-center font-mono border-teal-500/40 text-teal-200"
+                          />
+                        ) : (
+                          <div className="col-span-4 text-center font-mono text-[10px] text-sky-300 bg-[#050811] py-1.5 rounded-lg border border-[#1E3A5F]">
+                            σ₁={p.s1.toFixed(0)} | R={p.R.toFixed(1)}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          disabled={triRows.length <= 1}
+                          onClick={() => setTriRows((prev) => prev.filter((r) => r.id !== row.id))}
+                          className="col-span-1 text-red-400 hover:text-red-300 font-bold disabled:opacity-30"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <div className="flex flex-wrap justify-between items-center pt-1 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTriRows((prev) => [...prev, { id: `tr-${Date.now()}`, s3: '300', qf: '300', s1: '600', uf: '150' }])}
+                      className="btn-b py-1 px-3 text-[10px]"
+                    >
+                      + เพิ่มตัวอย่าง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAreaTool((v) => !v)}
+                      className="text-[11px] text-sky-300 hover:underline font-bold"
+                    >
+                      📏 {showAreaTool ? 'ซ่อนตัวช่วยแก้พื้นที่หน้าตัด A' : 'คำนวณพื้นที่หน้าตัดปรับแก้ A = A₀(1-εv)/(1-εa)'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Area Correction Helper (Slide 37) */}
+                {showAreaTool && (
+                  <div className="p-3 rounded-xl bg-[#050811] border border-sky-500/40 space-y-2.5">
+                    <div className="text-[11px] font-bold text-sky-300">Triaxial Area Correction: A = A₀ · (1 − εv) / (1 − εa)</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div><label className="text-[9px] text-slate-400 block">d₀ (mm)</label><input type="number" value={acD0} onChange={(e) => setAcD0(e.target.value)} className="inp w-full py-1 font-mono text-center" /></div>
+                      <div><label className="text-[9px] text-slate-400 block">h₀ (mm)</label><input type="number" value={acH0} onChange={(e) => setAcH0(e.target.value)} className="inp w-full py-1 font-mono text-center" /></div>
+                      <div><label className="text-[9px] text-slate-400 block">Δh ยุบ (mm)</label><input type="number" value={acDh} onChange={(e) => setAcDh(e.target.value)} className="inp w-full py-1 font-mono text-center" /></div>
+                      <div><label className="text-[9px] text-slate-400 block">ΔV ลด (cm³)</label><input type="number" value={acDv} onChange={(e) => setAcDv(e.target.value)} className="inp w-full py-1 font-mono text-center" /></div>
+                      <div><label className="text-[9px] text-amber-300 block">แรงกด F (N)</label><input type="number" value={acF} onChange={(e) => setAcF(e.target.value)} className="inp w-full py-1 font-mono text-center" /></div>
+                    </div>
+                    {areaCorr && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-[10px] pt-1">
+                        <div className="p-1.5 rounded bg-[#0B1325] border border-[#1E3A5F]">εa = {(areaCorr.epsA * 100).toFixed(2)}%<br />εv = {(areaCorr.epsV * 100).toFixed(2)}%</div>
+                        <div className="p-1.5 rounded bg-[#0B1325] border border-[#1E3A5F]">A₀ = {areaCorr.a0Mm2.toFixed(1)} mm²</div>
+                        <div className="p-1.5 rounded bg-[#0B1325] border border-sky-500/40 text-sky-300 font-bold">A = {areaCorr.aCorrMm2.toFixed(1)} mm²</div>
+                        <div className="p-1.5 rounded bg-emerald-950/30 border border-emerald-500/40 text-emerald-300 font-bold">q = F/A = {areaCorr.qKpa.toFixed(2)} kPa</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2.3 UCT */}
+            {labMode === 'uct' && (
+              <div className="flex flex-wrap items-center gap-3 bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                <label className="text-slate-300 font-bold">Unconfined Compressive Strength (qu, kPa):</label>
+                <input type="number" min="0" value={uctQu} onChange={(e) => setUctQu(e.target.value)} className="inp w-32 font-mono text-center text-base py-1.5" />
+                <span className="text-[11px] text-slate-400">→ cu = qu / 2, φu = 0° (ดินเหนียวอิ่มตัว)</span>
+              </div>
+            )}
+          </div>
+
+          {/* ผลลัพธ์ + กราฟ Lab */}
+          <div className="bg-[#050811] border border-[#1E3A5F] rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+            {labMode === 'direct' && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center font-mono">
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-amber-500/40">
+                  <div className="text-[10px] text-amber-400 font-sans font-bold">Peak Cohesion (c&apos;)</div>
+                  <div className="text-xl font-bold text-white mt-0.5">{dsPeakC.toFixed(2)} <span className="text-[10px]">kPa</span></div>
+                </div>
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-sky-500/40">
+                  <div className="text-[10px] text-sky-400 font-sans font-bold">Peak Friction (φ&apos;)</div>
+                  <div className="text-xl font-bold text-white mt-0.5">{dsPeakPhi.toFixed(2)}°</div>
+                </div>
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
+                  <div className="text-[10px] text-slate-400 font-sans font-bold">Linear Fit (R²)</div>
+                  <div className="text-xl font-bold text-emerald-400 mt-0.5">{dsPeakReg.r2.toFixed(4)}</div>
+                </div>
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-[#1E3A5F]">
+                  <div className="text-[10px] text-emerald-300 font-sans font-bold">{showResidual ? 'Residual (c\'r, φ\'r)' : 'สมการเส้นวิบัติ'}</div>
+                  <div className="text-xs font-bold text-slate-200 mt-1.5">
+                    {showResidual
+                      ? `${dsResC.toFixed(1)} kPa, ${dsResPhi.toFixed(1)}°`
+                      : `τ = ${dsPeakC.toFixed(1)} + σ'tan(${dsPeakPhi.toFixed(1)}°)`}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {labMode === 'triaxial' && (
+              <div className="space-y-2.5">
+                {triType !== 'UU' && triEffectiveRes?.err ? (
+                  <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-center font-bold">{triEffectiveRes.err}</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+                    {triType !== 'UU' && triEffectiveRes && (
+                      <div className="bg-[#0B1325] p-3.5 rounded-xl border border-sky-500/50 text-center">
+                        <div className="text-[10px] text-sky-400 font-sans font-bold uppercase mb-1">Effective Stress Parameters ({triType})</div>
+                        <div className="text-lg font-bold text-white">
+                          c&apos; = <span className="text-amber-400">{triEffectiveRes.c.toFixed(2)}</span> kPa • φ&apos; = <span className="text-sky-300">{triEffectiveRes.phi.toFixed(2)}°</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{triEffectiveRes.note || `R² = ${triEffectiveRes.r2.toFixed(4)}`}</div>
+                      </div>
+                    )}
+                    {triTotalRes && !triTotalRes.err && (
+                      <div className={`bg-[#0B1325] p-3.5 rounded-xl border text-center ${triType === 'UU' ? 'sm:col-span-2 border-amber-500/50' : 'border-slate-600/60'}`}>
+                        <div className="text-[10px] text-slate-300 font-sans font-bold uppercase mb-1">
+                          {triType === 'UU' ? 'Undrained Shear Strength (UU, φu = 0)' : 'Total Stress Parameters (หลอกเมื่อ u ≠ 0)'}
+                        </div>
+                        <div className="text-lg font-bold text-white">
+                          {triType === 'UU' ? 'cu' : 'c'} = <span className="text-amber-300">{triTotalRes.c.toFixed(2)}</span> kPa •{' '}
+                          {triType === 'UU' ? 'φu' : 'φ'} = <span className="text-slate-300">{triTotalRes.phi.toFixed(2)}°</span>
+                        </div>
+                        {triType === 'CU' && (
+                          <div className="text-[10px] text-teal-300 mt-0.5">
+                            cu เฉลี่ยแต่ละตัวอย่าง = {triParsed.map((x) => x.R.toFixed(1)).join(', ')} kPa
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {labMode === 'uct' && (
+              <div className="grid grid-cols-2 gap-3 text-center font-mono">
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-amber-500/40">
+                  <div className="text-[10px] text-amber-400 font-sans font-bold">Undrained Shear Strength (cu)</div>
+                  <div className="text-2xl font-bold text-white mt-0.5">{((parseFloat(uctQu) || 0) / 2).toFixed(2)} kPa</div>
+                </div>
+                <div className="bg-[#0B1325] p-3 rounded-xl border border-sky-500/40">
+                  <div className="text-[10px] text-sky-400 font-sans font-bold">Undrained Friction Angle (φu)</div>
+                  <div className="text-2xl font-bold text-white mt-0.5">0.00°</div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-[#0a101f] border border-slate-700/80 rounded-xl p-2 overflow-x-auto">
+              {renderLabSvg()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 3: VISUAL LEARNING ==================== */}
+      {mainTab === 'learn' && (
+        <div className="space-y-4">
+          {/* 3.1 Drainage Sandbox */}
+          <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-sky-400">💧 Drainage &amp; Effective Stress Sandbox</h3>
+                <p className="text-[11px] text-slate-400">ลองเปิด-ปิดวาล์วระบายน้ำ และปรับแรงกดแนวตั้ง (σv) กับแนวนอน (σh)</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSandDrained((v) => !v)}
+                className={`px-4 py-1.5 rounded-full font-bold text-xs border transition-all ${
+                  sandDrained
+                    ? 'bg-sky-600 border-sky-400 text-white shadow-[0_0_15px_rgba(56,189,248,0.4)]'
+                    : 'bg-red-950/70 border-red-500 text-red-200'
+                }`}
+              >
+                {sandDrained ? '💧 วาล์วเปิด (DRAINED)' : '🚫 วาล์วปิด (UNDRAINED)'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+              <div className="space-y-3">
+                <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                  <div className="flex justify-between mb-1"><span className="text-slate-300 font-bold">แรงกดแนวตั้ง (σv)</span><span className="font-mono text-sky-300 font-bold">{sandSv} kPa</span></div>
+                  <input type="range" min="10" max="100" step="5" value={sandSv} onChange={(e) => setSandSv(parseInt(e.target.value, 10))} className="w-full accent-sky-400" />
+                </div>
+                <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                  <div className="flex justify-between mb-1"><span className="text-slate-300 font-bold">แรงกดด้านข้าง (σh)</span><span className="font-mono text-amber-300 font-bold">{sandSh} kPa</span></div>
+                  <input type="range" min="10" max="100" step="5" value={sandSh} onChange={(e) => setSandSh(parseInt(e.target.value, 10))} className="w-full accent-amber-400" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setSandSv(20); setSandSh(20); }} className="flex-1 btn-d py-1.5 text-[10px]">กดเท่ากันทุกด้าน (Isotropic)</button>
+                  <button type="button" onClick={() => { setSandSv(40); setSandSh(10); }} className="flex-1 btn-d py-1.5 text-[10px]">กดไม่เท่ากัน (Shear Distortion)</button>
+                </div>
+              </div>
+
+              <div className="bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F] flex flex-col items-center gap-3">
+                <div className="relative w-44 h-36 flex items-center justify-center">
+                  {/* ก้อนดินจำลองที่เปลี่ยนรูปทรง/ปริมาตร */}
+                  <div
+                    className={`border-2 rounded-lg flex flex-col items-center justify-center font-mono text-xs transition-all duration-500 ${
+                      sandDrained ? 'bg-amber-800/40 border-amber-400' : 'bg-blue-900/40 border-sky-400'
+                    }`}
+                    style={{
+                      width: sandDrained ? `${Math.max(76, 112 - sandSh * 0.3)}px` : (!sandIsIsotropic && sandSv > sandSh ? '122px' : !sandIsIsotropic ? '86px' : '104px'),
+                      height: sandDrained ? `${Math.max(64, 104 - sandSv * 0.3)}px` : (!sandIsIsotropic && sandSv > sandSh ? '84px' : !sandIsIsotropic ? '118px' : '98px')
+                    }}
+                  >
+                    <div className="font-bold text-white">
+                      σ&apos; = {sandDrained ? `${sandSv}/${sandSh}` : (sandIsIsotropic ? '0' : '≠ 0')}
+                    </div>
+                    <div className="text-[11px] text-teal-300">
+                      u_w = {sandUw !== null ? `${sandUw} kPa` : 'ขึ้นกับ Δq'}
+                    </div>
+                  </div>
+                  <div className="absolute right-0 bottom-4 text-sm font-bold">
+                    {sandDrained ? '💧' : '❌'}
+                  </div>
+                </div>
+                <div className="text-center text-[11px] text-slate-300 leading-relaxed">
+                  {sandDrained ? (
+                    <span className="text-emerald-300">
+                      <b>Drained:</b> น้ำระบายออกจน u_w = 0 เม็ดดินรับแรงเต็มๆ (σ&apos; = σ) <b>ปริมาตรดินลดลง</b> และกำลังรับแรงเฉือนเพิ่มขึ้น
+                    </span>
+                  ) : sandIsIsotropic ? (
+                    <span className="text-sky-300">
+                      <b>Undrained (Isotropic):</b> ปิดวาล์วแล้วเพิ่มแรงกดรอบทิศเท่ากัน น้ำรับแรงทั้งหมด (Δu = Δσ_r) ทำให้ σ&apos; = 0 <b>ปริมาตรและรูปทรงไม่เปลี่ยน</b> กำลังดินไม่เพิ่ม!
+                    </span>
+                  ) : (
+                    <span className="text-amber-300">
+                      <b>Undrained (σv ≠ σh):</b> แม้ปริมาตรรวมจะคงที่ (ΔV = 0) แต่เกิดความเค้นเฉือนทำให้<b>ก้อนดินบิดเบี้ยว (Distorted)</b> และเกิด σ&apos; ≠ 0
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3.2 Peak vs Ultimate */}
+          <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2">
+              <h3 className="font-bold text-sm text-amber-400">📊 พฤติกรรม Peak vs Ultimate (Dense/OC vs Loose/NC)</h3>
+              <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1 font-bold text-[11px]">
+                <button type="button" onClick={() => setSoilStateMode('dense')} className={`px-3 py-1 rounded-lg ${soilStateMode === 'dense' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>Dense Sand / OC Clay</button>
+                <button type="button" onClick={() => setSoilStateMode('loose')} className={`px-3 py-1 rounded-lg ${soilStateMode === 'loose' ? 'bg-sky-600 text-white' : 'text-slate-400'}`}>Loose Sand / NC Clay</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+              <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F]">
+                <svg viewBox="0 0 300 170" className="w-full h-auto">
+                  {/* Top chart: Shear stress vs displacement */}
+                  <line x1="30" y1="80" x2="285" y2="80" stroke="#475569" strokeWidth="1.2" />
+                  <line x1="30" y1="12" x2="30" y2="80" stroke="#475569" strokeWidth="1.2" />
+                  <text x="34" y="18" fill="#94A3B8" fontSize="9">Shear Stress (τ)</text>
+                  <line x1="30" y1="48" x2="280" y2="48" stroke="#64748B" strokeWidth="1" strokeDasharray="3 3" />
+                  <text x="280" y="45" fill="#94A3B8" fontSize="8" textAnchor="end">Ultimate / Residual (c&apos;=0)</text>
+                  {/* Dense curve */}
+                  <path d="M 30 80 Q 85 10 135 24 T 275 47" fill="none" stroke="#F59E0B" strokeWidth={soilStateMode === 'dense' ? '3' : '1.3'} opacity={soilStateMode === 'dense' ? '1' : '0.35'} />
+                  {/* Loose curve */}
+                  <path d="M 30 80 Q 110 52 275 49" fill="none" stroke="#38BDF8" strokeWidth={soilStateMode === 'loose' ? '3' : '1.3'} opacity={soilStateMode === 'loose' ? '1' : '0.35'} />
+
+                  {/* Bottom chart: Volume change */}
+                  <line x1="30" y1="130" x2="285" y2="130" stroke="#475569" strokeWidth="1.2" />
+                  <line x1="30" y1="95" x2="30" y2="162" stroke="#475569" strokeWidth="1.2" />
+                  <text x="34" y="103" fill="#34D399" fontSize="8">+ ขยายตัว (Dilation)</text>
+                  <text x="34" y="160" fill="#F87171" fontSize="8">− หดตัว (Contraction)</text>
+                  <path d="M 30 130 Q 65 138 110 124 T 275 102" fill="none" stroke="#F59E0B" strokeWidth={soilStateMode === 'dense' ? '2.8' : '1.2'} opacity={soilStateMode === 'dense' ? '1' : '0.35'} />
+                  <path d="M 30 130 Q 110 152 275 156" fill="none" stroke="#38BDF8" strokeWidth={soilStateMode === 'loose' ? '2.8' : '1.2'} opacity={soilStateMode === 'loose' ? '1' : '0.35'} />
+                </svg>
+              </div>
+              <div className="space-y-2 text-xs text-slate-300 leading-relaxed">
+                {soilStateMode === 'dense' ? (
+                  <>
+                    <div className="font-bold text-amber-300 text-sm">Dense Sand &amp; Overconsolidated Clay (OCR &gt; 1)</div>
+                    <p>• เกิดจุดยอด <b>Peak Strength</b> ชัดเจน และอาจอ่านค่าได้ <b>c&apos; &gt; 0</b></p>
+                    <p>• ในทรายแน่น ค่า c&apos; ไม่ใช่แรงยึดเหนี่ยว (กาว) แต่เกิดจากปรากฏการณ์ <b>Dilation</b> ที่เม็ดทรายต้องปีนข้ามกันขณะเฉือน</p>
+                    <p>• เมื่อเฉือนต่อเนื่องไปเรื่อยๆ แรงเฉือนจะลดลงเข้าสู่ <b>Ultimate State (c&apos; = 0)</b></p>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-bold text-sky-300 text-sm">Loose Sand &amp; Normally Consolidated Clay (OCR = 1)</div>
+                    <p>• ไม่มีจุดยอด Peak แยกต่างหาก กราฟค่อยๆ ไต่ระดับขึ้นสู่ค่าคงที่ (Ultimate)</p>
+                    <p>• ระหว่างเฉือนเม็ดดินจัดเรียงตัวแน่นขึ้น ทำให้<b>ปริมาตรหดตัว (Contraction)</b></p>
+                    <p>• เส้น Failure Envelope ผ่านจุดกำเนิดเสมอ: <b>c&apos; = 0</b> (Purely Frictional)</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TAB 4: ENGINEERING PRACTICE ==================== */}
+      {mainTab === 'practice' && (
+        <div className="space-y-4">
+          {/* 4.1 Short-term vs Long-term Comparator (Slide 60) */}
+          <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-sky-400">⚖️ เทียบกำลังดินระยะสั้น vs ระยะยาว (Short-Term vs Long-Term)</h3>
+                <p className="text-[11px] text-slate-400">เปรียบเทียบ cu (Undrained) กับ c&apos; + σ&apos;n tan φ&apos; (Drained) เพื่อหาเคสวิกฤต</p>
+              </div>
+              <div className="flex bg-[#050811] p-1 rounded-xl border border-[#1E3A5F] gap-1 text-[10px] font-bold">
+                <button type="button" onClick={() => setPracCase('loading')} className={`px-2.5 py-1 rounded-lg ${pracCase === 'loading' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>งานถม/ฐานราก (Loading)</button>
+                <button type="button" onClick={() => setPracCase('excavation')} className={`px-2.5 py-1 rounded-lg ${pracCase === 'excavation' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>งานขุด/ตัดลาด (Unloading)</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div><label className="text-[10px] text-sky-300 font-bold block mb-1">cu ระยะสั้น (kPa)</label><input type="number" min="0" value={pracCu} onChange={(e) => setPracCu(e.target.value)} className="inp w-full font-mono text-center py-1.5" /></div>
+              <div><label className="text-[10px] text-amber-300 font-bold block mb-1">c&apos; ระยะยาว (kPa)</label><input type="number" min="0" value={pracC} onChange={(e) => setPracC(e.target.value)} className="inp w-full font-mono text-center py-1.5" /></div>
+              <div><label className="text-[10px] text-amber-300 font-bold block mb-1">φ&apos; ระยะยาว (°)</label><input type="number" min="0" max="89" value={pracPhi} onChange={(e) => setPracPhi(e.target.value)} className="inp w-full font-mono text-center py-1.5" /></div>
+              <div><label className="text-[10px] text-slate-300 font-bold block mb-1">σ&apos;n บนระนาบ (kPa)</label><input type="number" min="0" value={pracSigN} onChange={(e) => setPracSigN(e.target.value)} className="inp w-full font-mono text-center py-1.5" /></div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end bg-[#050811] p-4 rounded-xl border border-[#1E3A5F]">
+              <div className="flex items-end justify-center gap-8 h-36 pt-4">
+                <div className="flex flex-col items-center gap-1 w-24">
+                  <span className="font-mono text-xs font-bold text-sky-300">{shortTermTau.toFixed(1)} kPa</span>
+                  <div className="w-16 rounded-t-lg bg-gradient-to-t from-sky-800 to-sky-500 transition-all duration-500" style={{ height: `${Math.max(12, (shortTermTau / maxBarTau) * 85)}px` }}></div>
+                  <span className="text-[10px] text-slate-300 font-bold">Short-term (cu)</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 w-24">
+                  <span className="font-mono text-xs font-bold text-amber-300">{longTermTau.toFixed(1)} kPa</span>
+                  <div className="w-16 rounded-t-lg bg-gradient-to-t from-amber-700 to-amber-400 transition-all duration-500" style={{ height: `${Math.max(12, (longTermTau / maxBarTau) * 85)}px` }}></div>
+                  <span className="text-[10px] text-slate-300 font-bold">Long-term (Drained)</span>
+                </div>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className={`p-3 rounded-xl border font-bold ${shortTermTau < longTermTau ? 'bg-sky-950/40 border-sky-500/50 text-sky-200' : 'bg-amber-950/40 border-amber-500/50 text-amber-200'}`}>
+                  ค่าต่ำสุด (Governing Strength): {Math.min(shortTermTau, longTermTau).toFixed(2)} kPa{' '}
+                  ({shortTermTau <= longTermTau ? 'Short-term Undrained คุม' : 'Long-term Drained คุม'})
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {pracCase === 'loading'
+                    ? '💡 งานถมดิน/ฐานรากบนดินเหนียว: วันแรก (Short-term) แรงดันน้ำส่วนเกินเป็นบวกสูงสุด ดินจะอ่อนที่สุด เมื่อเวลาผ่านไปน้ำระบายออกดินจะแข็งแรงขึ้น'
+                    : '⚠️ งานขุดบ่อ/ตัดลาดดินเหนียว: ตอนขุดใหม่ๆ แรงดันน้ำติดลบช่วยดึงดินไว้ชั่วคราว แต่ระยะยาว (Long-term) เมื่อน้ำซึมเข้ามาชดเชย ดินจะอ่อนลงจนอาจพังทลายได้'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 4.2 Drainage & Test Selector Wizard */}
+          <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+            <h3 className="font-bold text-sm text-emerald-400 border-b border-[#1E3A5F] pb-2">
+              🧭 Drainage &amp; Lab Test Selector Wizard (เลือกวิธีทดสอบให้ถูกงาน)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">1. ประเภทดินหลักหน้างาน</label>
+                <select value={wizSoil} onChange={(e) => setWizSoil(e.target.value)} className="inp w-full bg-[#050811] py-2 font-bold">
+                  <option value="clay">ดินเหนียว / ดินตะกอนอิ่มตัว (Clay / Silt — ซึมน้ำช้า)</option>
+                  <option value="sand">ดินทราย / กรวด (Sand / Gravel — ซึมน้ำเร็ว)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">2. ลักษณะงานและช่วงเวลาที่วิเคราะห์</label>
+                <select value={wizWork} onChange={(e) => setWizWork(e.target.value)} className="inp w-full bg-[#050811] py-2 font-bold">
+                  <option value="loading_fast">ก่อสร้างเร็ว / ถมคันดิน / ฐานรากระยะสั้น (Short-term)</option>
+                  <option value="excavation">ขุดบ่อก่อสร้าง / ตัดลาดดิน (Excavation / Cut Slope)</option>
+                  <option value="long_term">วิเคราะห์เสถียรภาพระยะยาว (Long-term Steady State)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-[#050811] border border-emerald-500/40 space-y-2 text-xs leading-relaxed">
+              <div><span className="text-sky-400 font-bold">สภาพการระบายน้ำ:</span> <span className="text-white">{wizAdvice.condition}</span></div>
+              <div><span className="text-amber-400 font-bold">พารามิเตอร์ที่ต้องใช้:</span> <span className="text-amber-200 font-mono">{wizAdvice.params}</span></div>
+              <div><span className="text-emerald-400 font-bold">การทดสอบในห้องแล็บที่แนะนำ:</span> <span className="text-white">{wizAdvice.tests}</span></div>
+              <div className="pt-1.5 border-t border-[#1E3A5F] text-[11px] text-slate-300">📌 <b>ข้อควรระวังหน้างาน:</b> {wizAdvice.critical}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
