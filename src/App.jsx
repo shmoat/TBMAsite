@@ -8,6 +8,7 @@ import { Logo, Avatar, RoleBadge, TagBadges } from './components/BasicUI';
 import { FloatingRadio } from './components/FloatingRadio';
 import { MuteDurationModal } from './components/MuteDurationModal';
 import GlobalModals from './components/GlobalModals';
+import HalloweenGhostHunt from './features/events/HalloweenGhostHunt';
 import {
   checkIsHalloween,
   checkIsLoyKrathong,
@@ -77,7 +78,6 @@ export default function App() {
   const [snowEnabled, setSnowEnabled] = useState(true);
   const [lanternEnabled, setLanternEnabled] = useState(true);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [ghosts, setGhosts] = useState([]);
   const [cursedUserId, setCursedUserId] = useState(null);
   const [scareTriggered, setScareTriggered] = useState(false);
 
@@ -258,22 +258,13 @@ export default function App() {
 
   useEffect(() => {
     if (!IS_HALLOWEEN) {
-      setGhosts([]);
       setCursedUserId(null);
       return;
     }
     if (activeMembers.length > 0 && !cursedUserId) {
       setCursedUserId(activeMembers[Math.floor(Math.random() * activeMembers.length)].id);
     }
-    const iv = setInterval(() => {
-      setGhosts((prev) => (prev.length < 3 ? [...prev, { id: Date.now() + Math.random(), x: 8 + Math.random() * 82, y: 12 + Math.random() * 72 }] : prev));
-    }, 8000);
-    return () => clearInterval(iv);
   }, [IS_HALLOWEEN, activeMembers.length, cursedUserId]);
-
-  const catchGhost = (id) => {
-    setGhosts((prev) => prev.filter((g) => g.id !== id));
-  };
 
   // 3. Measure Nav Pill Indicator
   useEffect(() => {
@@ -1675,9 +1666,7 @@ export default function App() {
       <FloatingRadio onOpenDiscJam={() => changeViewWithTransition('discjam')} />
 
       {/* HALLOWEEN OVERLAYS */}
-      {IS_HALLOWEEN && ghosts.map((g) => (
-        <div key={g.id} onClick={() => catchGhost(g.id)} className="ghost-hunt" style={{ left: g.x + 'vw', top: g.y + 'vh' }} title="จับผี!">👻</div>
-      ))}
+      <HalloweenGhostHunt isHalloween={IS_HALLOWEEN} />
       {scareTriggered && (
         <div className="jump-scare-overlay">
           <div className="scare-img">👻</div>
