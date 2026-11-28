@@ -556,3 +556,213 @@ export function PantipThread({ c, all, lbl, postId, me, getAuthor, canManage, on
     </div>
   );
 }
+function useResolvedMediaUrl(att) {
+  const initialUrl = safeUrl(att?.url);
+  const [url, setUrl] = useState(initialUrl || '');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (att?.isChunked && !initialUrl && att.chunkIds?.length) {
+      setLoading(true);
+      Promise.all(att.chunkIds.map((id) => defaultDb.collection('bma_file_chunks').doc(id).get()))
+        .then((docs) => {
+          if (!active) return;
+          const merged = docs
+            .map((d) => d.data())
+            .filter(Boolean)
+            .sort((a, b) => a.index - b.index)
+            .map((s) => s.data)
+            .join('');
+          setUrl(safeUrl(merged));
+          setLoading(false);
+        })
+        .catch(() => active && setLoading(false));
+    } else {
+      setUrl(initialUrl || '');
+      setLoading(false);
+    }
+    return () => { active = false; };
+  }, [att, initialUrl]);
+
+  return { url, loading };
+}
+
+function GridImageTile({ att, className = '', extraCount = 0, onClick }) {
+  const { url, loading } = useResolvedMediaUrl(att);
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className={`relative overflow-hidden bg-[#050811] group focus:outline-none ${className}`}
+    >
+      {loading || !url ? (
+        <div className="w-full h-full flex items-center justify-center text-[11px] text-sky-400 animate-pulse">
+          กำลังโหลด...
+        </div>
+      ) : (
+        <img
+          src={url}
+          alt={att.name || 'image'}
+          loading="lazy"
+          className="w-full h-full object-cover object-[50%_25%] group-hover:scale-105 transition-transform duration-300"
+        />
+      )}
+
+      {extraCount > 0 && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center">
+          <span className="text-2xl sm:text-3xl font-bold text-white drop-shadow">+{extraCount}</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function LightboxImage({ att }) {
+  const { url, loading } = useResolvedMediaUrl(att);
+
+  if (loading || !url) {
+    return <div className="text-sky-300 text-xs animate-pulse py-16">⏳ กำลังโหลดรูปภาพ...</div>;
+  }
+  return (
+    <img
+      src={url}
+      alt={att?.name || 'image'}
+      className="max-h-[82vh] max-w-[92vw] object-contain rounded-xl shadow-2xl select-none"
+    />
+  );
+}
+
+export function AttachmentGallery({ attachments = [] }) {
+  const [lightboxIdx, setLightboxIdx] = useState(null);
+  const touchStartX = useRef(null);
+
+  const isEmbedUrl = (u = '') =>
+    /drive\.google\.com\/(file\/d|open\?id=)|youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\//i.test(u);
+
+  const imageAtts = attachments.filter((a) => a?.type === 'image' && !isEmbedUrl(a.url));
+  const otherAtts = attachments.filter((a) => !(a?.type === 'image' && !isEmbedUrl(a.url)));
+
+  useEffect(() => {
+    if (lightboxIdx === null) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setLightboxIdx(null);
+      else if (e.key === 'ArrowRight') setLightboxIdx((i) => (i + 1) % imageAtts.length);
+      else if (e.key === 'ArrowLeft') setLightboxIdx((i) => (i - 1 + imageAtts.length) % imageAtts.length);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxIdx, imageAtts.length]);
+
+  if (!attachments || attachments.length === 0) return null;
+
+  const visibleImages = imageAtts.slice(0, 4);
+  const extraCount = Math.max(0, imageAtts.length - 4);
+
+  return (
+    <div className="mt-2 space-y-2">
+      {/* รูปภาพ: ถ้ามี 1 รูปใช้ SmartMedia เดิม, ถ้า 2 รูปขึ้นไปจัดเป็นกริด */}
+      {imageAtts.length === 1 && <SmartMedia att={imageAtts[0]} />}
+
+      {imageAtts.length >= 2 && (
+        <div className="grid grid-cols-2 gap-1 rounded-2xl overflow-hidden border border-[#1E3A5F] bg-[#050811] max-w-xl shadow-md">
+          {visibleImages.map((att, idx) => {
+            const isThreeTop = imageAtts.length === 3 && idx === 0;
+            const tileHeight =
+              imageAtts.length === 2
+                ? 'h-56 sm:h-64'
+                : isThreeTop
+                  ? 'col-span-2 h-56 sm:h-64'
+                  : 'h-44 sm:h-52';
+
+            return (
+              <GridImageTile
+                key={att.id || idx}
+                att={att}
+                className={tileHeight}
+                extraCount={idx === 3 ? extraCount : 0}
+                onClick={() => setLightboxIdx(idx)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* ไฟล์แนบอื่น ๆ (วิดีโอ, เสียง, ลิงก์ YouTube/Drive, เอกสาร) */}
+      {otherAtts.length > 0 && (
+        <div className="space-y-2">
+          {otherAtts.map((att, idx) => (
+            <SmartMedia key={att.id || idx} att={att} />
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox สำหรับเลื่อนดูหลายรูป */}
+      {lightboxIdx !== null && imageAtts[lightboxIdx] && (
+        <div
+          className="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4"
+          onClick={() => setLightboxIdx(null)}
+          onTouchStart={(e) => { touchStartX.current = e.touches?.[0]?.clientX ?? null; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const diff = (e.changedTouches?.[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+            if (Math.abs(diff) > 45) {
+              setLightboxIdx((i) =>
+                diff < 0 ? (i + 1) % imageAtts.length : (i - 1 + imageAtts.length) % imageAtts.length
+              );
+            }
+            touchStartX.current = null;
+          }}
+        >
+          <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white">
+            {lightboxIdx + 1} / {imageAtts.length}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setLightboxIdx(null)}
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
+            title="ปิด (Esc)"
+          >
+            <i className="fas fa-times"></i>
+          </button>
+
+          {imageAtts.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxIdx((i) => (i - 1 + imageAtts.length) % imageAtts.length);
+                }}
+                className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-colors"
+                title="รูปก่อนหน้า"
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxIdx((i) => (i + 1) % imageAtts.length);
+                }}
+                className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition-colors"
+                title="รูปถัดไป"
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+            </>
+          )}
+
+          <div onClick={(e) => e.stopPropagation()} className="flex flex-col items-center">
+            <LightboxImage att={imageAtts[lightboxIdx]} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

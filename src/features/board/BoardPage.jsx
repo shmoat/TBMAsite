@@ -6,7 +6,7 @@ import { GAMES } from '../../lib/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUI } from '../../contexts/UIContext';
 import { Avatar, TagBadges } from '../../components/BasicUI';
-import { SmartMedia, FormattedText, LikeButton, GiphyPickerPopover, PantipThread } from '../../components/RichUI';
+import { AttachmentGallery, FormattedText, LikeButton, GiphyPickerPopover, PantipThread } from '../../components/RichUI';
 import { formatMuteUntil } from '../../components/MuteDurationModal';
 import { KrathongSVG } from '../../components/KrathongSVG';
 
