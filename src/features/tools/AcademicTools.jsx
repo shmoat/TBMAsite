@@ -272,110 +272,985 @@ export const AdvancedUnitConverter = () => {
 };
 
 export const GradeCrisisManager = () => {
-  const [midtermFull, setMidtermFull] = useState(30);
-  const [midtermScore, setMidtermScore] = useState(15);
-  const [projectFull, setProjectFull] = useState(30);
-  const [projectScore, setProjectScore] = useState(25);
-  const [finalFull, setFinalFull] = useState(40);
-  const [targetGrade, setTargetGrade] = useState(80);
+  const DEFAULT_SCALE = [
+    { grade: 'A', gp: 4.0, min: 80 },
+    { grade: 'B+', gp: 3.5, min: 75 },
+    { grade: 'B', gp: 3.0, min: 70 },
+    { grade: 'C+', gp: 2.5, min: 65 },
+    { grade: 'C', gp: 2.0, min: 60 },
+    { grade: 'D+', gp: 1.5, min: 55 },
+    { grade: 'D', gp: 1.0, min: 50 }
+  ];
 
-  const currentScore = midtermScore + projectScore;
-  const totalFullSoFar = midtermFull + projectFull;
-  const needScore = targetGrade - currentScore;
+  const GRADE_POINTS = { A: 4.0, 'B+': 3.5, B: 3.0, 'C+': 2.5, C: 2.0, 'D+': 1.5, D: 1.0, F: 0.0 };
 
-  let status = 'safe';
-  let msg = 'สบายๆ ชิลๆ';
-  let colorClass = 'text-emerald-400';
-  let bgClass = 'bg-emerald-950/30 border-emerald-500/50';
+  const createDefaultSubject = (name = 'วิชาที่ 1') => ({
+    id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    items: [
+      { id: 'i1', name: 'Midterm', score: 18, full: 30, weight: 30 },
+      { id: 'i2', name: 'เก็บ / Quiz / Lab', score: 24, full: 30, weight: 30 }
+    ],
+    finalWeight: 40,
+    finalRawFull: 100,
+    targetGrade: 'A',
+    scale: DEFAULT_SCALE.map((s) => ({ ...s }))
+  });
 
-  if (needScore > finalFull) {
-    status = 'impossible';
-    msg = 'ปาฏิหาริย์เท่านั้นที่ช่วยคุณได้ (ต้องการคะแนนมากกว่าคะแนนเต็ม)';
-    colorClass = 'text-red-500 font-bold animate-pulse';
-    bgClass = 'bg-red-950/50 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]';
-  } else if (needScore > finalFull * 0.85) {
-    status = 'danger';
-    msg = 'วิกฤตหนัก! ต้องอ่านหนังสือแบบไม่ได้นอน';
-    colorClass = 'text-red-400';
-    bgClass = 'bg-red-950/30 border-red-500/50';
-  } else if (needScore > finalFull * 0.6) {
-    status = 'warning';
-    msg = 'ต้องตั้งใจอ่านหนังสือแล้วนะ ประมาทไม่ได้';
-    colorClass = 'text-amber-400';
-    bgClass = 'bg-amber-950/30 border-amber-500/50';
-  } else if (needScore <= 0) {
-    status = 'passed';
-    msg = 'ถึงไม่ไปสอบก็ผ่านเป้าหมายแล้ว นอนตีพุงอยู่บ้านได้เลย!';
-    colorClass = 'text-sky-400 font-bold';
-    bgClass = 'bg-sky-950/30 border-sky-500/50';
-  }
+  const loadLS = (key, fallback) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
-  const gaugeWidth = Math.max(0, Math.min(100, (needScore / (finalFull || 1)) * 100));
+  const saveLS = (key, val) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch {}
+  };
+
+  const [tab, setTab] = useState('subject'); // 'subject' | 'curve' | 'gpax'
+
+  // --- TAB 1: SINGLE SUBJECT CRISIS 2.0 ---
+  const [subjects, setSubjects] = useState(() => {
+    const saved = loadLS('bma_grade_subjects_v2', null);
+    return Array.isArray(saved) && saved.length > 0 ? saved : [createDefaultSubject('วิชาหลักเทอมนี้')];
+  });
+  const [activeSubId, setActiveSubId] = useState(() => subjects[0]?.id || '');
+  const [showScaleEdit, setShowScaleEdit] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
+
+  useEffect(() => {
+    saveLS('bma_grade_subjects_v2', subjects);
+    if (!subjects.some((s) => s.id === activeSubId) && subjects[0]) {
+      setActiveSubId(subjects[0].id);
+    }
+  }, [subjects, activeSubId]);
+
+  const activeSub = subjects.find((s) => s.id === activeSubId) || subjects[0];
+
+  const updateActiveSub = (updater) => {
+    setSubjects((prev) =>
+      prev.map((s) => (s.id === activeSub.id ? (typeof updater === 'function' ? updater(s) : { ...s, ...updater }) : s))
+    );
+  };
+
+  const handleAddSubject = () => {
+    const next = createDefaultSubject(`วิชาที่ ${subjects.length + 1}`);
+    setSubjects((prev) => [...prev, next]);
+    setActiveSubId(next.id);
+  };
+
+  const handleDeleteSubject = () => {
+    if (subjects.length <= 1) return;
+    if (!window.confirm(`ลบรายวิชา "${activeSub.name}" ออกจากรายการที่บันทึกไว้?`)) return;
+    const remain = subjects.filter((s) => s.id !== activeSub.id);
+    setSubjects(remain);
+    setActiveSubId(remain[0].id);
+  };
+
+  const handleAddItem = () => {
+    updateActiveSub((s) => ({
+      ...s,
+      items: [
+        ...s.items,
+        { id: `it-${Date.now()}`, name: `คะแนนเก็บ ${s.items.length + 1}`, score: 0, full: 10, weight: 10 }
+      ]
+    }));
+  };
+
+  const handleUpdateItem = (itemId, field, value) => {
+    updateActiveSub((s) => ({
+      ...s,
+      items: s.items.map((it) => (it.id === itemId ? { ...it, [field]: value } : it))
+    }));
+  };
+
+  const handleRemoveItem = (itemId) => {
+    updateActiveSub((s) => ({
+      ...s,
+      items: s.items.filter((it) => it.id !== itemId)
+    }));
+  };
+
+  const handleUpdateScale = (grade, minVal) => {
+    updateActiveSub((s) => ({
+      ...s,
+      scale: s.scale.map((sc) => (sc.grade === grade ? { ...sc, min: parseFloat(minVal) || 0 } : sc))
+    }));
+  };
+
+  const gradedWeight = activeSub.items.reduce((sum, it) => sum + (parseFloat(it.weight) || 0), 0);
+  const finalWeight = parseFloat(activeSub.finalWeight) || 0;
+  const finalRawFull = parseFloat(activeSub.finalRawFull) || 100;
+  const totalWeight = gradedWeight + finalWeight;
+
+  const currentScore = activeSub.items.reduce((sum, it) => {
+    const full = parseFloat(it.full) || 0;
+    const sc = parseFloat(it.score) || 0;
+    const w = parseFloat(it.weight) || 0;
+    return sum + (full > 0 ? (sc / full) * w : 0);
+  }, 0);
+
+  const evaluateGrade = (minScore) => {
+    const needPct = minScore - currentScore;
+    const needRatio = finalWeight > 0 ? (needPct / finalWeight) * 100 : needPct <= 0 ? 0 : Infinity;
+    const needRaw = finalWeight > 0 ? (needPct / finalWeight) * finalRawFull : 0;
+
+    if (needPct <= 0) {
+      return { needPct: 0, needRatio: 0, needRaw: 0, status: 'passed', badge: 'ผ่านแล้ว ✓', msg: 'คะแนนเก็บเกินเป้าแล้ว นอนตีพุงรอเกรดได้เลย!', color: 'text-sky-400', bg: 'bg-sky-950/35 border-sky-500/50', bar: 'bg-sky-400' };
+    }
+    if (needPct > finalWeight) {
+      return { needPct, needRatio: 100, needRaw, status: 'impossible', badge: 'หมดสิทธิ์ ✕', msg: 'คะแนนไฟนอลเต็มยังไม่พอ (ต้องพึ่งอิงกลุ่มหรือปาฏิหาริย์)', color: 'text-red-400', bg: 'bg-red-950/45 border-red-500/70', bar: 'bg-red-500' };
+    }
+    if (needRatio > 85) {
+      return { needPct, needRatio, needRaw, status: 'danger', badge: 'ต้องท็อปเซค 🔥', msg: 'วิกฤตหนัก! ต้องทำข้อสอบไฟนอลเกือบเต็มถึงจะรอด', color: 'text-red-400', bg: 'bg-red-950/30 border-red-500/50', bar: 'bg-red-400' };
+    }
+    if (needRatio > 60) {
+      return { needPct, needRatio, needRaw, status: 'warning', badge: 'ลุ้นไหว ⚡', msg: 'ยังมีหวัง แต่ต้องตั้งใจอ่านหนักและห้ามประมาท', color: 'text-amber-400', bg: 'bg-amber-950/30 border-amber-500/50', bar: 'bg-amber-400' };
+    }
+    return { needPct, needRatio, needRaw, status: 'safe', badge: 'ชิลๆ ✨', msg: 'อยู่ในโซนปลอดภัย ทบทวนตามปกติเก็บได้สบาย', color: 'text-emerald-400', bg: 'bg-emerald-950/30 border-emerald-500/50', bar: 'bg-emerald-400' };
+  };
+
+  const targetScaleObj = activeSub.scale.find((s) => s.grade === activeSub.targetGrade) || activeSub.scale[0];
+  const targetEval = evaluateGrade(targetScaleObj.min);
+
+  const handleCopySummary = () => {
+    const lines = [
+      `📊 สรุปเกรดวิชา: ${activeSub.name}`,
+      `• คะแนนเก็บปัจจุบัน: ${currentScore.toFixed(2)} / ${gradedWeight.toFixed(1)}% (ไฟนอล ${finalWeight}%)`,
+      ...activeSub.scale.map((s) => {
+        const ev = evaluateGrade(s.min);
+        const detail =
+          ev.status === 'passed'
+            ? 'ผ่านเกณฑ์แล้ว'
+            : ev.status === 'impossible'
+              ? 'เกินคะแนนเต็มไฟนอล'
+              : `ต้องการ ${ev.needPct.toFixed(1)}% (${ev.needRaw.toFixed(1)}/${finalRawFull} หรือ ${ev.needRatio.toFixed(0)}% ของไฟนอล)`;
+        return `  - ${s.grade} (${s.min}+): ${detail}`;
+      })
+    ];
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopiedSummary(true);
+    setTimeout(() => setCopiedSummary(false), 2000);
+  };
+
+  // --- TAB 2: CURVE / MEAN & SD ---
+  const [curveMy, setCurveMy] = useState('68');
+  const [curveMean, setCurveMean] = useState('60');
+  const [curveSd, setCurveSd] = useState('12');
+
+  const erfApprox = (x) => {
+    const sign = x >= 0 ? 1 : -1;
+    const ax = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * ax);
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t) * Math.exp(-ax * ax);
+    return sign * y;
+  };
+
+  const cMy = parseFloat(curveMy);
+  const cMean = parseFloat(curveMean);
+  const cSd = parseFloat(curveSd);
+  const curveValid = !Number.isNaN(cMy) && !Number.isNaN(cMean) && !Number.isNaN(cSd) && cSd > 0;
+  const zScore = curveValid ? (cMy - cMean) / cSd : 0;
+  const tScore = 50 + 10 * zScore;
+  const percentile = curveValid ? 0.5 * (1 + erfApprox(zScore / Math.SQRT2)) * 100 : 50;
+
+  const estCurveGrade = (() => {
+    if (zScore >= 1.5) return { g: 'A', desc: 'กลุ่มท็อปของห้อง (Top ~7%)', cls: 'text-emerald-400 border-emerald-500/50 bg-emerald-950/40' };
+    if (zScore >= 1.0) return { g: 'B+', desc: 'เหนือค่าเฉลี่ยชัดเจน', cls: 'text-sky-400 border-sky-500/50 bg-sky-950/40' };
+    if (zScore >= 0.5) return { g: 'B', desc: 'โซนบนของค่าเฉลี่ย', cls: 'text-sky-300 border-sky-500/40 bg-sky-950/30' };
+    if (zScore >= 0.0) return { g: 'C+', desc: 'เกาะเหนือ Mean เล็กน้อย', cls: 'text-amber-300 border-amber-500/40 bg-amber-950/30' };
+    if (zScore >= -0.5) return { g: 'C', desc: 'ใกล้ค่าเฉลี่ยฝั่งล่าง', cls: 'text-amber-400 border-amber-500/50 bg-amber-950/35' };
+    if (zScore >= -1.0) return { g: 'D+', desc: 'ต่ำกว่าค่าเฉลี่ย ต้องเร่งไฟนอล', cls: 'text-orange-400 border-orange-500/50 bg-orange-950/35' };
+    if (zScore >= -1.5) return { g: 'D', desc: 'โซนอันตราย เสี่ยงดึงเกรดตก', cls: 'text-red-400 border-red-500/50 bg-red-950/35' };
+    return { g: 'F', desc: 'ต่ำกว่า -1.5 SD เสี่ยงติด F สูง', cls: 'text-red-400 border-red-500 bg-red-950/55 animate-pulse' };
+  })();
+
+  const bellPath = (() => {
+    const pts = [];
+    for (let i = 0; i <= 70; i++) {
+      const z = -3.5 + (i / 70) * 7;
+      const x = 20 + ((z + 3.5) / 7) * 360;
+      const y = 112 - Math.exp(-0.5 * z * z) * 92;
+      pts.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+  })();
+  const zClamped = Math.max(-3.4, Math.min(3.4, zScore));
+  const markerX = 20 + ((zClamped + 3.5) / 7) * 360;
+  const markerY = 112 - Math.exp(-0.5 * zClamped * zClamped) * 92;
+
+  // --- TAB 3: GPA / GPAX + W SIMULATOR + TARGET PLANNER ---
+  const [gpaxData, setGpaxData] = useState(() =>
+    loadLS('bma_grade_gpax_v2', {
+      prevGpax: '3.10',
+      prevCredits: '60',
+      courses: [
+        { id: 'c1', name: 'วิชาภาค 1', credits: 3, grade: 'B', isW: false },
+        { id: 'c2', name: 'วิชาภาค 2', credits: 3, grade: 'C+', isW: false },
+        { id: 'c3', name: 'วิชาตัวโหด (ลองติ๊ก W)', credits: 3, grade: 'D', isW: false },
+        { id: 'c4', name: 'Lab / วิชาเลือก', credits: 1, grade: 'A', isW: false }
+      ],
+      targetGpax: '3.25',
+      futureCredits: '18',
+      planFrom: 'after_term' // 'after_term' | 'prev_only'
+    })
+  );
+
+  useEffect(() => {
+    saveLS('bma_grade_gpax_v2', gpaxData);
+  }, [gpaxData]);
+
+  const updateGpaxField = (field, val) => setGpaxData((prev) => ({ ...prev, [field]: val }));
+  const addCourse = () =>
+    setGpaxData((prev) => ({
+      ...prev,
+      courses: [...prev.courses, { id: `c-${Date.now()}`, name: `วิชาที่ ${prev.courses.length + 1}`, credits: 3, grade: 'B', isW: false }]
+    }));
+  const updateCourse = (cid, field, val) =>
+    setGpaxData((prev) => ({
+      ...prev,
+      courses: prev.courses.map((c) => (c.id === cid ? { ...c, [field]: val } : c))
+    }));
+  const removeCourse = (cid) =>
+    setGpaxData((prev) => ({ ...prev, courses: prev.courses.filter((c) => c.id !== cid) }));
+
+  const calcGpaxScenario = (applyW) => {
+    const prevG = Math.max(0, Math.min(4, parseFloat(gpaxData.prevGpax) || 0));
+    const prevC = Math.max(0, parseFloat(gpaxData.prevCredits) || 0);
+    const activeCourses = applyW ? gpaxData.courses.filter((c) => !c.isW) : gpaxData.courses;
+    const termCredits = activeCourses.reduce((sum, c) => sum + (parseFloat(c.credits) || 0), 0);
+    const termPoints = activeCourses.reduce((sum, c) => sum + (parseFloat(c.credits) || 0) * (GRADE_POINTS[c.grade] ?? 0), 0);
+    const termGpa = termCredits > 0 ? termPoints / termCredits : 0;
+    const totalCredits = prevC + termCredits;
+    const newGpax = totalCredits > 0 ? (prevG * prevC + termPoints) / totalCredits : 0;
+    return { prevG, prevC, termCredits, termGpa, totalCredits, newGpax, diffFromPrev: newGpax - prevG };
+  };
+
+  const simWithW = calcGpaxScenario(true);
+  const simNoW = calcGpaxScenario(false);
+  const wCount = gpaxData.courses.filter((c) => c.isW).length;
+
+  const targetPlanner = (() => {
+    const baseG = gpaxData.planFrom === 'after_term' ? simWithW.newGpax : simWithW.prevG;
+    const baseC = gpaxData.planFrom === 'after_term' ? simWithW.totalCredits : simWithW.prevC;
+    const targetG = parseFloat(gpaxData.targetGpax) || 0;
+    const futC = parseFloat(gpaxData.futureCredits) || 0;
+    if (futC <= 0) return { err: 'กรุณากรอกหน่วยกิตที่เหลือมากกว่า 0' };
+    const needGpa = (targetG * (baseC + futC) - baseG * baseC) / futC;
+    return { baseG, baseC, targetG, futC, needGpa };
+  })();
 
   return (
-    <div className="flex flex-col gap-6 py-4 w-full max-w-2xl mx-auto text-xs">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-4">
-          <div className="text-sky-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-2"><i className="fas fa-edit"></i> ใส่คะแนนที่มีปัจจุบัน</div>
-          <div className="flex items-center gap-3">
-            <span className="w-20 text-slate-400 font-bold">มิดเทอม (Mid)</span>
-            <input type="number" value={midtermScore} onChange={(e) => setMidtermScore(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
-            <span className="text-slate-500">/</span>
-            <input type="number" value={midtermFull} onChange={(e) => setMidtermFull(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="w-20 text-slate-400 font-bold">เก็บ/โปรเจกต์</span>
-            <input type="number" value={projectScore} onChange={(e) => setProjectScore(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
-            <span className="text-slate-500">/</span>
-            <input type="number" value={projectFull} onChange={(e) => setProjectFull(parseFloat(e.target.value) || 0)} className="w-16 inp font-mono text-center" />
-          </div>
-          <div className="pt-2 border-t border-[#1E3A5F] flex justify-between items-center bg-[#050811] p-3 rounded-xl mt-2">
-            <span className="text-slate-300 font-bold">คะแนนเก็บรวมตอนนี้</span>
-            <span className="text-xl font-mono font-bold text-white">{currentScore} <span className="text-[10px] text-slate-500">/ {totalFullSoFar}</span></span>
-          </div>
-        </div>
-
-        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 mb-4"><i className="fas fa-bullseye"></i> กำหนดเป้าหมาย</div>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-slate-400 font-bold">เป้าหมายเกรดที่อยากได้:</span>
-              <select value={targetGrade} onChange={(e) => setTargetGrade(parseInt(e.target.value, 10))} className="flex-1 inp bg-[#050811] font-bold text-amber-300 text-center">
-                <option value="80">A (80 คะแนน)</option>
-                <option value="75">B+ (75 คะแนน)</option>
-                <option value="70">B (70 คะแนน)</option>
-                <option value="65">C+ (65 คะแนน)</option>
-                <option value="60">C (60 คะแนน)</option>
-                <option value="55">D+ (55 คะแนน)</option>
-                <option value="50">D (50 คะแนน - แค่ผ่าน)</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-slate-400 font-bold">คะแนนเต็มไฟนอล (Final):</span>
-              <input type="number" value={finalFull} onChange={(e) => setFinalFull(parseFloat(e.target.value) || 0)} className="w-20 inp font-mono text-center" />
-            </div>
-          </div>
-          <div className="text-[10px] text-slate-500 text-center mt-4">⚠️ ตรวจสอบให้แน่ใจว่าผลรวมคะแนนเต็ม 3 ช่อง = 100 พอดี</div>
-        </div>
+    <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
+      {/* แถบเลือกโหมดหลัก */}
+      <div className="grid grid-cols-3 gap-1.5 bg-[#0B1325] p-1.5 rounded-2xl border border-[#1E3A5F] font-bold">
+        {[
+          ['subject', '🎯 เจาะลึกรายวิชา'],
+          ['curve', '📈 อิงกลุ่ม (Mean/SD)'],
+          ['gpax', '🎓 GPAX & จำลองถอน W']
+        ].map(([id, lbl]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`py-2 px-2 rounded-xl transition-all ${
+              tab === id ? 'bg-sky-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#0F2547]'
+            }`}
+          >
+            {lbl}
+          </button>
+        ))}
       </div>
 
-      <div className={`p-6 rounded-2xl border ${bgClass} shadow-2xl relative overflow-hidden transition-colors duration-500 text-center flex flex-col items-center justify-center min-h-[200px]`}>
-        <div className="text-slate-300 font-bold mb-2">เพื่อให้ได้เกรดเป้าหมาย คุณต้องทำคะแนนสอบไฟนอลให้ได้:</div>
-        <div className={`text-5xl md:text-6xl font-mono font-bold my-4 ${colorClass}`}>
-          {needScore > 0 ? needScore : 0} <span className="text-xl sm:text-2xl text-slate-400 font-sans">/ {finalFull}</span>
-        </div>
-        <div className={`text-sm md:text-base font-bold mb-6 ${colorClass}`}>"{msg}"</div>
-        <div className="w-full max-w-sm">
-          <div className="flex justify-between text-[10px] font-bold mb-1 px-1">
-            <span className="text-emerald-400">ชิลๆ</span>
-            <span className="text-amber-400">เริ่มเครียด</span>
-            <span className="text-red-400">วิกฤต</span>
+      {/* ================= TAB 1: SINGLE SUBJECT CRISIS 2.0 ================= */}
+      {tab === 'subject' && activeSub && (
+        <div className="space-y-4">
+          {/* แถบจัดการรายวิชาที่เซฟไว้ */}
+          <div className="bg-[#0B1325] p-3.5 rounded-2xl border border-[#1E3A5F] space-y-2.5 shadow-lg">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {subjects.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveSubId(s.id)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
+                    s.id === activeSub.id
+                      ? 'bg-sky-600 text-white border-sky-400 shadow'
+                      : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:border-sky-500/60'
+                  }`}
+                >
+                  {s.name || 'ไม่มีชื่อวิชา'}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddSubject}
+                className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-emerald-950/50 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600 hover:text-white transition-colors"
+              >
+                + เพิ่มวิชา
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#1E3A5F]/60">
+              <span className="text-slate-400 font-bold">ชื่อวิชา:</span>
+              <input
+                type="text"
+                value={activeSub.name}
+                onChange={(e) => updateActiveSub({ name: e.target.value })}
+                placeholder="เช่น CVE362 Soil Mechanics..."
+                className="inp flex-1 min-w-[160px] py-1.5 text-xs bg-[#050811] font-bold text-white"
+              />
+              <button
+                type="button"
+                onClick={handleCopySummary}
+                className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-colors ${
+                  copiedSummary ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-[#050811] text-sky-300 border-[#1E3A5F] hover:border-sky-400'
+                }`}
+              >
+                {copiedSummary ? '✓ คัดลอกสรุปแล้ว' : '📋 คัดลอกสรุป'}
+              </button>
+              {subjects.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleDeleteSubject}
+                  className="px-2.5 py-1.5 rounded-xl bg-red-950/40 border border-red-900/60 text-red-400 hover:bg-red-600 hover:text-white text-[11px] font-bold"
+                  title="ลบวิชานี้"
+                >
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              )}
+            </div>
           </div>
-          <div className="h-3 w-full bg-[#050811] rounded-full overflow-hidden border border-slate-700/50">
-            <div className={`h-full transition-all duration-700 ease-out ${status === 'impossible' ? 'bg-red-500' : status === 'danger' ? 'bg-red-400' : status === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'}`} style={{ width: `${gaugeWidth}%` }}></div>
+
+          {/* ช่องกรอกคะแนนเก็บ + น้ำหนัก (%) */}
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2">
+              <div className="font-bold text-sky-400 text-sm">
+                <i className="fas fa-tasks mr-1.5"></i>รายการคะแนนที่สอบ/เก็บแล้ว (แปลงเป็นน้ำหนัก % อัตโนมัติ)
+              </div>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="px-3 py-1 rounded-lg bg-[#050811] border border-sky-500/40 text-sky-300 hover:bg-sky-600 hover:text-white font-bold text-[11px]"
+              >
+                + เพิ่มหัวข้อคะแนน
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-12 gap-2 px-2 text-[10px] text-slate-400 font-bold">
+                <div className="col-span-4">หัวข้อ (เช่น Midterm, Quiz, Lab)</div>
+                <div className="col-span-2 text-center">คะแนนที่ได้</div>
+                <div className="col-span-2 text-center">คะแนนเต็มดิบ</div>
+                <div className="col-span-2 text-center">น้ำหนัก (%)</div>
+                <div className="col-span-2 text-right">คิดเป็น %</div>
+              </div>
+
+              {activeSub.items.map((it) => {
+                const earned = (parseFloat(it.full) || 0) > 0 ? ((parseFloat(it.score) || 0) / (parseFloat(it.full) || 1)) * (parseFloat(it.weight) || 0) : 0;
+                return (
+                  <div key={it.id} className="grid grid-cols-12 gap-2 items-center bg-[#050811] p-2 rounded-xl border border-[#1E3A5F]">
+                    <input
+                      type="text"
+                      value={it.name}
+                      onChange={(e) => handleUpdateItem(it.id, 'name', e.target.value)}
+                      className="col-span-12 sm:col-span-4 inp py-1.5 text-xs bg-[#0B1325]"
+                      placeholder="ชื่อหัวข้อ"
+                    />
+                    <div className="col-span-4 sm:col-span-2">
+                      <div className="sm:hidden text-[9px] text-slate-500 mb-0.5">ที่ได้</div>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={it.score}
+                        onChange={(e) => handleUpdateItem(it.id, 'score', e.target.value)}
+                        className="inp w-full py-1.5 font-mono text-center bg-[#0B1325]"
+                      />
+                    </div>
+                    <div className="col-span-4 sm:col-span-2">
+                      <div className="sm:hidden text-[9px] text-slate-500 mb-0.5">เต็มดิบ</div>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={it.full}
+                        onChange={(e) => handleUpdateItem(it.id, 'full', e.target.value)}
+                        className="inp w-full py-1.5 font-mono text-center bg-[#0B1325]"
+                      />
+                    </div>
+                    <div className="col-span-4 sm:col-span-2">
+                      <div className="sm:hidden text-[9px] text-slate-500 mb-0.5">น้ำหนัก %</div>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={it.weight}
+                        onChange={(e) => handleUpdateItem(it.id, 'weight', e.target.value)}
+                        className="inp w-full py-1.5 font-mono text-center text-sky-300 bg-[#0B1325]"
+                      />
+                    </div>
+                    <div className="col-span-12 sm:col-span-2 flex items-center justify-between sm:justify-end gap-2 pt-1 sm:pt-0">
+                      <span className="font-mono font-bold text-emerald-400">
+                        {earned.toFixed(2)}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(it.id)}
+                        className="w-6 h-6 rounded-lg bg-red-950/50 text-red-400 hover:bg-red-600 hover:text-white flex items-center justify-center text-[10px]"
+                        title="ลบหัวข้อนี้"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ส่วนข้อสอบไฟนอล + เช็กน้ำหนักรวม 100% */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#1E3A5F]/70">
+              <div className="bg-[#050811] p-3 rounded-xl border border-amber-500/35 flex items-center justify-between gap-2">
+                <span className="text-amber-300 font-bold">น้ำหนักไฟนอล (%)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={activeSub.finalWeight}
+                  onChange={(e) => updateActiveSub({ finalWeight: e.target.value })}
+                  className="inp w-20 py-1 font-mono text-center font-bold text-amber-300"
+                />
+              </div>
+              <div className="bg-[#050811] p-3 rounded-xl border border-[#1E3A5F] flex items-center justify-between gap-2">
+                <span className="text-slate-300 font-bold">คะแนนเต็มดิบไฟนอล</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={activeSub.finalRawFull}
+                  onChange={(e) => updateActiveSub({ finalRawFull: e.target.value })}
+                  className="inp w-20 py-1 font-mono text-center"
+                />
+              </div>
+              <div className="bg-[#050811] p-3 rounded-xl border border-emerald-500/40 flex items-center justify-between">
+                <span className="text-slate-300 font-bold">คะแนนเก็บสะสม</span>
+                <span className="font-mono text-lg font-bold text-white">
+                  {currentScore.toFixed(2)} <span className="text-[10px] text-slate-400">/ {gradedWeight}%</span>
+                </span>
+              </div>
+            </div>
+
+            {Math.abs(totalWeight - 100) > 0.01 && (
+              <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/60 text-amber-200 text-center font-bold">
+                ⚠️ น้ำหนักรวมตอนนี้อยู่ที่ {totalWeight.toFixed(1)}% ({totalWeight < 100 ? `ยังขาดอีก ${(100 - totalWeight).toFixed(1)}%` : `เกินมา ${(totalWeight - 100).toFixed(1)}%`}) — ตรวจสอบให้น้ำหนักเก็บ + ไฟนอล = 100%
+              </div>
+            )}
+          </div>
+
+          {/* การ์ด Panic Meter สำหรับเกรดเป้าหมาย */}
+          <div className={`p-5 rounded-2xl border shadow-2xl space-y-3 transition-colors ${targetEval.bg}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-200 font-bold">เป้าหมายเกรด:</span>
+                <select
+                  value={activeSub.targetGrade}
+                  onChange={(e) => updateActiveSub({ targetGrade: e.target.value })}
+                  className="inp py-1 px-3 bg-[#050811] font-bold text-amber-300"
+                >
+                  {activeSub.scale.map((s) => (
+                    <option key={s.grade} value={s.grade}>
+                      {s.grade} (เกณฑ์ ≥ {s.min})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScaleEdit((v) => !v)}
+                className="px-2.5 py-1 rounded-lg bg-[#050811]/80 border border-[#1E3A5F] text-slate-300 hover:text-white text-[10px] font-bold"
+              >
+                ⚙️ {showScaleEdit ? 'ปิดปรับเกณฑ์ตัดเกรด' : 'ปรับเกณฑ์ตัดเกรดเอง'}
+              </button>
+            </div>
+
+            {showScaleEdit && (
+              <div className="p-3 rounded-xl bg-[#050811]/90 border border-[#1E3A5F] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-sky-300">เกณฑ์คะแนนขั้นต่ำของแต่ละเกรด (Custom Scale)</span>
+                  <button
+                    type="button"
+                    onClick={() => updateActiveSub({ scale: DEFAULT_SCALE.map((s) => ({ ...s })) })}
+                    className="text-[10px] text-amber-300 hover:underline font-bold"
+                  >
+                    รีเซตมาตรฐาน (80–50)
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                  {activeSub.scale.map((s) => (
+                    <div key={s.grade} className="bg-[#0B1325] p-1.5 rounded-lg border border-[#1E3A5F] text-center">
+                      <div className="font-bold text-amber-300 mb-1">{s.grade}</div>
+                      <input
+                        type="number"
+                        value={s.min}
+                        onChange={(e) => handleUpdateScale(s.grade, e.target.value)}
+                        className="inp w-full py-1 text-center font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-center py-1 space-y-1.5">
+              <div className="text-slate-300 font-bold">
+                เพื่อให้ได้เกรด <span className="text-amber-300">{targetScaleObj.grade}</span> ต้องทำข้อสอบไฟนอลให้ได้อย่างน้อย:
+              </div>
+              <div className={`text-4xl sm:text-5xl font-mono font-bold ${targetEval.color}`}>
+                {targetEval.needPct.toFixed(1)}%{' '}
+                <span className="text-lg sm:text-xl text-slate-400 font-sans">/ {finalWeight}%</span>
+              </div>
+              {targetEval.status !== 'passed' && targetEval.status !== 'impossible' && (
+                <div className="text-xs font-mono text-slate-200">
+                  เทียบเท่าคะแนนดิบ <b className="text-white">{targetEval.needRaw.toFixed(1)} / {finalRawFull}</b> (ต้องทำได้{' '}
+                  <b className={targetEval.color}>{targetEval.needRatio.toFixed(1)}%</b> ของข้อสอบไฟนอล)
+                </div>
+              )}
+              <div className={`text-sm font-bold pt-1 ${targetEval.color}`}>"{targetEval.msg}"</div>
+            </div>
+
+            <div className="w-full max-w-md mx-auto">
+              <div className="flex justify-between text-[10px] font-bold mb-1">
+                <span className="text-emerald-400">ชิลๆ</span>
+                <span className="text-amber-400">เริ่มเครียด</span>
+                <span className="text-red-400">วิกฤต</span>
+              </div>
+              <div className="h-3 w-full bg-[#050811] rounded-full overflow-hidden border border-slate-700/60">
+                <div
+                  className={`h-full transition-all duration-500 ${targetEval.bar}`}
+                  style={{ width: `${Math.max(0, Math.min(100, targetEval.needRatio))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ตารางสรุปทุกเกรดพร้อมกัน (All-Grade Matrix) */}
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-2.5">
+            <div className="font-bold text-sky-400 text-sm flex items-center justify-between">
+              <span><i className="fas fa-table mr-1.5"></i>ตารางเช็กทุกเกรดพร้อมกัน (All-Grade Matrix)</span>
+              <span className="text-[10px] text-slate-400 font-normal">คลิกแถวเพื่อตั้งเป็นเป้าหมาย</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse font-mono text-xs">
+                <thead>
+                  <tr className="border-b border-[#1E3A5F] text-[10px] text-slate-400 font-sans">
+                    <th className="py-2 px-2">เกรด</th>
+                    <th className="py-2 px-2">เกณฑ์</th>
+                    <th className="py-2 px-2">ต้องเก็บไฟนอล (%)</th>
+                    <th className="py-2 px-2">คะแนนดิบ (/{finalRawFull})</th>
+                    <th className="py-2 px-2 text-right">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1E3A5F]/50">
+                  {activeSub.scale.map((s) => {
+                    const ev = evaluateGrade(s.min);
+                    const isSelected = activeSub.targetGrade === s.grade;
+                    return (
+                      <tr
+                        key={s.grade}
+                        onClick={() => updateActiveSub({ targetGrade: s.grade })}
+                        className={`cursor-pointer transition-colors ${isSelected ? 'bg-sky-950/45' : 'hover:bg-[#050811]/70'}`}
+                      >
+                        <td className="py-2 px-2 font-bold text-white">{s.grade}</td>
+                        <td className="py-2 px-2 text-slate-400">≥ {s.min}</td>
+                        <td className={`py-2 px-2 font-bold ${ev.color}`}>
+                          {ev.status === 'passed' ? '0.0%' : `${ev.needPct.toFixed(1)}% / ${finalWeight}%`}
+                        </td>
+                        <td className="py-2 px-2 text-slate-200">
+                          {ev.status === 'passed'
+                            ? 'ผ่านแล้ว'
+                            : ev.status === 'impossible'
+                              ? 'เกินคะแนนเต็ม'
+                              : `${ev.needRaw.toFixed(1)} (${ev.needRatio.toFixed(0)}%)`}
+                        </td>
+                        <td className="py-2 px-2 text-right font-sans">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${ev.bg} ${ev.color}`}>
+                            {ev.badge}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ================= TAB 2: CURVE / MEAN & SD ================= */}
+      {tab === 'curve' && (
+        <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-sky-400">📈 คาดการณ์เกรดอิงกลุ่ม (Bell Curve / Z-Score &amp; T-Score)</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">กรอกคะแนนจากประกาศผลสอบมิดเทอมหรือคะแนนรวมของเซค</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurveMy(currentScore.toFixed(2))}
+              className="px-3 py-1.5 rounded-xl bg-[#050811] border border-sky-500/40 text-sky-300 hover:bg-sky-600 hover:text-white text-[10px] font-bold"
+            >
+              ดึงคะแนนเก็บวิชาปัจจุบัน ({currentScore.toFixed(1)})
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">คะแนนของคุณ (X)</label>
+              <input type="number" step="0.5" value={curveMy} onChange={(e) => setCurveMy(e.target.value)} className="inp w-full font-mono text-center text-base py-2" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">ค่าเฉลี่ยห้อง (Mean)</label>
+              <input type="number" step="0.5" value={curveMean} onChange={(e) => setCurveMean(e.target.value)} className="inp w-full font-mono text-center text-base py-2" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold block mb-1">ส่วนเบี่ยงเบน (SD)</label>
+              <input type="number" step="0.5" min="0.1" value={curveSd} onChange={(e) => setCurveSd(e.target.value)} className="inp w-full font-mono text-center text-base py-2" />
+            </div>
+          </div>
+
+          {!curveValid ? (
+            <div className="p-4 rounded-xl bg-red-950/35 border border-red-500/50 text-red-300 text-center font-bold">
+              กรุณากรอกค่าคะแนน, Mean และ SD (ค่า SD ต้องมากกว่า 0)
+            </div>
+          ) : (
+            <>
+              {/* Bell Curve SVG */}
+              <div className="bg-[#050811] p-4 rounded-2xl border border-[#1E3A5F]">
+                <svg viewBox="0 0 400 135" className="w-full h-36 sm:h-44 overflow-visible">
+                  <defs>
+                    <linearGradient id="bellGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.45" />
+                      <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.02" />
+                    </linearGradient>
+                  </defs>
+                  {/* เส้นฐาน */}
+                  <line x1="15" y1="112" x2="385" y2="112" stroke="#1E3A5F" strokeWidth="1.5" />
+                  {/* เส้นแบ่ง SD */}
+                  {[-2, -1, 0, 1, 2].map((sdStep) => {
+                    const sx = 20 + ((sdStep + 3.5) / 7) * 360;
+                    return (
+                      <g key={sdStep}>
+                        <line x1={sx} y1="18" x2={sx} y2="112" stroke={sdStep === 0 ? '#F59E0B' : '#1E3A5F'} strokeWidth={sdStep === 0 ? '1.5' : '1'} strokeDasharray={sdStep === 0 ? '4 3' : '2 3'} />
+                        <text x={sx} y="126" textAnchor="middle" fill={sdStep === 0 ? '#FCD34D' : '#64748B'} fontSize="9" fontFamily="monospace">
+                          {sdStep === 0 ? 'Mean' : `${sdStep > 0 ? '+' : ''}${sdStep}σ`}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {/* เส้นโค้งปกติ */}
+                  <path d={`${bellPath} L 380 112 L 20 112 Z`} fill="url(#bellGrad)" />
+                  <path d={bellPath} fill="none" stroke="#38BDF8" strokeWidth="2.5" />
+                  {/* จุดตำแหน่งของคุณ */}
+                  <line x1={markerX} y1={markerY} x2={markerX} y2="112" stroke="#F43F5E" strokeWidth="2" />
+                  <circle cx={markerX} cy={markerY} r="5.5" fill="#F43F5E" stroke="#FFFFFF" strokeWidth="2" />
+                  <text x={markerX} y={Math.max(12, markerY - 10)} textAnchor="middle" fill="#FDA4AF" fontSize="10" fontWeight="bold">
+                    คุณ ({zScore >= 0 ? '+' : ''}{zScore.toFixed(2)}σ)
+                  </text>
+                </svg>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                  <div className="text-[10px] text-slate-400 font-bold">Z-Score / T-Score</div>
+                  <div className="text-xl font-mono font-bold text-sky-300 mt-1">
+                    {zScore >= 0 ? '+' : ''}{zScore.toFixed(2)} <span className="text-slate-500 text-xs">/</span> T={tScore.toFixed(1)}
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F]">
+                  <div className="text-[10px] text-slate-400 font-bold">อยู่สูงกว่าเพื่อนประมาณ</div>
+                  <div className="text-xl font-mono font-bold text-emerald-400 mt-1">
+                    {percentile.toFixed(1)}% <span className="text-[10px] text-slate-400 font-sans">(Top {(100 - percentile).toFixed(1)}%)</span>
+                  </div>
+                </div>
+                <div className={`p-3 rounded-xl border ${estCurveGrade.cls}`}>
+                  <div className="text-[10px] font-bold opacity-85">กลุ่มเกรดอิงกลุ่มคร่าวๆ</div>
+                  <div className="text-2xl font-mono font-bold mt-0.5">{estCurveGrade.g}</div>
+                  <div className="text-[10px]">{estCurveGrade.desc}</div>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 text-center">
+                * การประมาณเกรดอิงกลุ่มใช้ช่วงมาตรฐาน 0.5 SD รอบ Mean (เกณฑ์จริงขึ้นอยู่กับการกระจายคะแนนและดุลยพินิจอาจารย์ผู้สอน)
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 3: GPA / GPAX + W SIMULATOR + TARGET PLANNER ================= */}
+      {tab === 'gpax' && (
+        <div className="space-y-4">
+          {/* ข้อมูลสะสมเดิม + ผลลัพธ์รวม */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+              <div className="font-bold text-sky-400 text-sm border-b border-[#1E3A5F] pb-2">
+                <i className="fas fa-history mr-1.5"></i>เกรดสะสมก่อนเทอมนี้ (ถ้าปี 1 เทอม 1 ใส่ 0)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">GPAX เดิม</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="4"
+                    value={gpaxData.prevGpax}
+                    onChange={(e) => updateGpaxField('prevGpax', e.target.value)}
+                    className="inp w-full font-mono text-center text-base py-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">หน่วยกิตสะสมเดิม</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={gpaxData.prevCredits}
+                    onChange={(e) => updateGpaxField('prevCredits', e.target.value)}
+                    className="inp w-full font-mono text-center text-base py-2"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-[#0F2547] to-[#050811] p-4 rounded-2xl border border-sky-500/50 shadow-xl flex flex-col justify-center">
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="bg-[#050811]/70 p-3 rounded-xl border border-[#1E3A5F]">
+                  <div className="text-[10px] text-slate-400 font-bold">GPA เทอมนี้ ({simWithW.termCredits} นก.)</div>
+                  <div className="text-3xl font-mono font-bold text-amber-400 mt-1">{simWithW.termGpa.toFixed(2)}</div>
+                </div>
+                <div className="bg-[#050811]/70 p-3 rounded-xl border border-sky-500/40">
+                  <div className="text-[10px] text-sky-300 font-bold">GPAX ใหม่ ({simWithW.totalCredits} นก.)</div>
+                  <div className="text-3xl font-mono font-bold text-white mt-1">{simWithW.newGpax.toFixed(2)}</div>
+                  {simWithW.prevC > 0 && (
+                    <div className={`text-[10px] font-mono font-bold mt-0.5 ${simWithW.diffFromPrev >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {simWithW.diffFromPrev >= 0 ? '▲ +' : '▼ '}
+                      {simWithW.diffFromPrev.toFixed(2)} จากเดิม
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* กล่องเปรียบเทียบ: ถอน W vs ฝืนสู้ */}
+          {wCount > 0 && (
+            <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/55 shadow-lg space-y-2.5 animate-fade-in">
+              <div className="font-bold text-purple-300 text-sm flex items-center justify-between">
+                <span>⚖️ ตัวช่วยตัดสินใจ: จำลองติด W ({wCount} วิชา) เทียบกับฝืนสู้</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-200">
+                  GPAX ต่างกัน {simWithW.newGpax - simNoW.newGpax >= 0 ? '+' : ''}
+                  {(simWithW.newGpax - simNoW.newGpax).toFixed(2)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+                <div className="p-3 rounded-xl bg-[#050811] border border-purple-500/40 flex justify-between items-center">
+                  <div>
+                    <div className="text-[10px] text-purple-300 font-sans font-bold">ถ้าตัดสินใจถอน (ติด W)</div>
+                    <div className="text-slate-400 text-[10px] font-sans">หน่วยกิตเทอมนี้เหลือ {simWithW.termCredits} นก.</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-amber-300 font-bold">GPA {simWithW.termGpa.toFixed(2)}</div>
+                    <div className="text-base text-white font-bold">GPAX {simWithW.newGpax.toFixed(2)}</div>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[#050811] border border-[#1E3A5F] flex justify-between items-center">
+                  <div>
+                    <div className="text-[10px] text-slate-300 font-sans font-bold">ถ้าไม่ถอน (ได้ตามเกรดที่ตั้งไว้)</div>
+                    <div className="text-slate-400 text-[10px] font-sans">หน่วยกิตเทอมนี้ {simNoW.termCredits} นก.</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-slate-300 font-bold">GPA {simNoW.termGpa.toFixed(2)}</div>
+                    <div className="text-base text-slate-200 font-bold">GPAX {simNoW.newGpax.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* รายวิชาเทอมนี้ */}
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#1E3A5F] pb-2">
+              <span className="font-bold text-sky-400 text-sm">📚 รายวิชาเทอมนี้ (สลับเกรดหรือติ๊ก W เพื่อดูผลทันที)</span>
+              <button
+                type="button"
+                onClick={addCourse}
+                className="px-3 py-1 rounded-lg bg-[#050811] border border-sky-500/40 text-sky-300 hover:bg-sky-600 hover:text-white font-bold text-[11px]"
+              >
+                + เพิ่มวิชา
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {gpaxData.courses.map((c) => (
+                <div
+                  key={c.id}
+                  className={`grid grid-cols-12 gap-2 items-center p-2 rounded-xl border transition-all ${
+                    c.isW ? 'bg-purple-950/20 border-purple-500/50 opacity-80' : 'bg-[#050811] border-[#1E3A5F]'
+                  }`}
+                >
+                  <input
+                    type="text"
+                    value={c.name}
+                    onChange={(e) => updateCourse(c.id, 'name', e.target.value)}
+                    className={`col-span-12 sm:col-span-5 inp py-1.5 text-xs bg-[#0B1325] ${c.isW ? 'line-through text-slate-400' : ''}`}
+                    placeholder="ชื่อวิชา"
+                  />
+                  <div className="col-span-4 sm:col-span-2 flex items-center gap-1">
+                    <select
+                      value={c.credits}
+                      onChange={(e) => updateCourse(c.id, 'credits', parseFloat(e.target.value))}
+                      className="inp w-full py-1.5 text-center font-mono bg-[#0B1325]"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((cr) => (
+                        <option key={cr} value={cr}>{cr} นก.</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-4 sm:col-span-2">
+                    <select
+                      value={c.grade}
+                      onChange={(e) => updateCourse(c.id, 'grade', e.target.value)}
+                      className="inp w-full py-1.5 text-center font-mono font-bold text-amber-300 bg-[#0B1325]"
+                    >
+                      {Object.keys(GRADE_POINTS).map((g) => (
+                        <option key={g} value={g}>{g} ({GRADE_POINTS[g].toFixed(1)})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-4 sm:col-span-3 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateCourse(c.id, 'isW', !c.isW)}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                        c.isW
+                          ? 'bg-purple-600 text-white border-purple-400 shadow'
+                          : 'bg-[#0B1325] text-slate-400 border-[#1E3A5F] hover:text-purple-300 hover:border-purple-500/60'
+                      }`}
+                      title="จำลองติด W (ถอนวิชานี้)"
+                    >
+                      {c.isW ? 'ติด W อยู่' : 'จำลอง W'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCourse(c.id)}
+                      className="w-7 h-7 rounded-lg bg-red-950/50 text-red-400 hover:bg-red-600 hover:text-white flex items-center justify-center text-[10px] shrink-0"
+                      title="ลบวิชานี้"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Target GPAX Planner */}
+          <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] space-y-3 shadow-lg">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2">
+              <span className="font-bold text-amber-400 text-sm">🚀 Target GPAX Planner (วางแผนเกรดเทอมที่เหลือ)</span>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  ['หนีโปร 2.00', '2.00'],
+                  ['เกียรตินิยม 2 (3.25)', '3.25'],
+                  ['เกียรตินิยม 1 (3.50)', '3.50']
+                ].map(([lbl, val]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => updateGpaxField('targetGpax', val)}
+                    className="px-2 py-0.5 rounded-full bg-[#050811] border border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-[#050811] text-[10px] font-bold transition-colors"
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">เริ่มคำนวณจากฐาน</label>
+                <select
+                  value={gpaxData.planFrom}
+                  onChange={(e) => updateGpaxField('planFrom', e.target.value)}
+                  className="inp w-full py-2 bg-[#050811] text-xs font-bold"
+                >
+                  <option value="after_term">หลังจบเทอมนี้ ({simWithW.newGpax.toFixed(2)} / {simWithW.totalCredits} นก.)</option>
+                  <option value="prev_only">GPAX เดิมก่อนเทอมนี้ ({simWithW.prevG.toFixed(2)} / {simWithW.prevC} นก.)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">GPAX เป้าหมายที่อยากได้</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="4"
+                  value={gpaxData.targetGpax}
+                  onChange={(e) => updateGpaxField('targetGpax', e.target.value)}
+                  className="inp w-full py-2 font-mono text-center text-amber-300 font-bold bg-[#050811]"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold block mb-1">หน่วยกิตที่เหลือในอนาคต</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={gpaxData.futureCredits}
+                  onChange={(e) => updateGpaxField('futureCredits', e.target.value)}
+                  className="inp w-full py-2 font-mono text-center bg-[#050811]"
+                />
+              </div>
+            </div>
+
+            {targetPlanner.err ? (
+              <div className="p-3 rounded-xl bg-red-950/35 border border-red-500/50 text-red-300 text-center font-bold">{targetPlanner.err}</div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-[#050811] border border-[#1E3A5F] text-center space-y-1">
+                <div className="text-slate-300">
+                  เพื่อให้ GPAX แตะ <b className="text-amber-300 font-mono">{targetPlanner.targetG.toFixed(2)}</b> ภายในอีก{' '}
+                  <b className="text-white font-mono">{targetPlanner.futC}</b> หน่วยกิต คุณต้องทำ GPA เฉลี่ยอย่างน้อย:
+                </div>
+                <div
+                  className={`text-3xl font-mono font-bold ${
+                    targetPlanner.needGpa > 4
+                      ? 'text-red-400'
+                      : targetPlanner.needGpa <= 0
+                        ? 'text-sky-400'
+                        : targetPlanner.needGpa >= 3.5
+                          ? 'text-amber-400'
+                          : 'text-emerald-400'
+                  }`}
+                >
+                  {targetPlanner.needGpa <= 0 ? 'ถึงเป้าหมายแล้ว! ✓' : targetPlanner.needGpa.toFixed(2)}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {targetPlanner.needGpa > 4
+                    ? '⚠️ เกิน 4.00 — หน่วยกิตที่เหลือยังไม่พอ ต้องเพิ่มหน่วยกิตลงเรียนหรือปรับเป้าหมาย'
+                    : targetPlanner.needGpa <= 0
+                      ? 'เกรดสะสมปัจจุบันทะลุเป้าหมายเรียบร้อยแล้ว'
+                      : targetPlanner.needGpa >= 3.5
+                        ? '🔥 งานหนักหน่อย ต้องเก็บ A กับ B+ เกือบทุกวิชาที่เหลือ'
+                        : '✨ อยู่ในระยะที่ทำได้จริง รักษามาตรฐานไว้!'}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
