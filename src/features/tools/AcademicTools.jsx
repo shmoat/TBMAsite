@@ -1495,55 +1495,927 @@ export const InteractiveProjectile = () => {
 };
 
 export const MathSymbolBuilder = () => {
-  const [expression, setExpression] = useState('');
-  const btnGroups = {
-    'เศษส่วน & รูท': [{ l: 'a/b', v: '\\frac{x}{y}' }, { l: '√x', v: '\\sqrt{x}' }, { l: 'ⁿ√x', v: '\\sqrt[n]{x}' }],
-    'เลขยกกำลัง & ห้อย': [{ l: 'x²', v: 'x^2' }, { l: 'xⁿ', v: 'x^n' }, { l: 'xᵢ', v: 'x_i' }],
-    'แคลคูลัส': [{ l: '∫', v: '\\int' }, { l: '∫ limits', v: '\\int_{a}^{b}' }, { l: 'lim', v: '\\lim_{x \\to \\infty}' }, { l: '∑', v: '\\sum_{i=1}^{n}' }],
-    'กรีก & สัญลักษณ์': [{ l: 'α', v: '\\alpha' }, { l: 'β', v: '\\beta' }, { l: 'θ', v: '\\theta' }, { l: 'π', v: '\\pi' }, { l: '±', v: '\\pm' }, { l: '∞', v: '\\infty' }, { l: '≈', v: '\\approx' }, { l: '≠', v: '\\neq' }]
+  const SYMBOL_TABS = [
+    {
+      id: 'algebra',
+      label: 'พีชคณิต & วงเล็บ',
+      items: [
+        { l: 'a/b', tpl: '\\frac{$SEL$}{$CUR$}', kw: 'เศษส่วน fraction div' },
+        { l: '√x', tpl: '\\sqrt{$SEL$}', kw: 'รูท รากที่สอง sqrt root' },
+        { l: 'ⁿ√x', tpl: '\\sqrt[n]{$SEL$}', kw: 'รากที่ n nth root' },
+        { l: 'x²', tpl: '{$SEL$}^{2}', kw: 'กำลังสอง square power' },
+        { l: 'xⁿ', tpl: '{$SEL$}^{$CUR$}', kw: 'เลขยกกำลัง power exponent' },
+        { l: 'xᵢ', tpl: '{$SEL$}_{$CUR$}', kw: 'ตัวห้อย subscript' },
+        { l: 'xᵢⁿ', tpl: '{$SEL$}_{i}^{n}', kw: 'ยกกำลังและห้อย sub sup' },
+        { l: '( )', tpl: '\\left( $SEL$ \\right)', kw: 'วงเล็บ parenthesis bracket' },
+        { l: '[ ]', tpl: '\\left[ $SEL$ \\right]', kw: 'วงเล็บก้ามปู square bracket' },
+        { l: '|x|', tpl: '\\left| $SEL$ \\right|', kw: 'ค่าสัมบูรณ์ absolute' },
+        { l: 'sin', tpl: '\\sin($SEL$)', kw: 'ไซน์ ตรีโกณ sin' },
+        { l: 'cos', tpl: '\\cos($SEL$)', kw: 'โคไซน์ ตรีโกณ cos' },
+        { l: 'tan', tpl: '\\tan($SEL$)', kw: 'แทน ตรีโกณ tan' },
+        { l: 'log', tpl: '\\log_{10}($SEL$)', kw: 'ลอการิทึม log' },
+        { l: 'ln', tpl: '\\ln($SEL$)', kw: 'ลอการิทึมธรรมชาติ ln' },
+        { l: 'eˣ', tpl: 'e^{$SEL$}', kw: 'เอ็กซ์โพเนนเชียล exp' }
+      ]
+    },
+    {
+      id: 'calculus',
+      label: 'แคลคูลัส & เวกเตอร์',
+      items: [
+        { l: 'dy/dx', tpl: '\\frac{d$SEL$}{dx}', kw: 'อนุพันธ์ ดิฟ derivative' },
+        { l: '∂f/∂x', tpl: '\\frac{\\partial $SEL$}{\\partial x}', kw: 'อนุพันธ์ย่อย partial derivative' },
+        { l: '∫', tpl: '\\int $SEL$ \\, dx', kw: 'อินทิกรัล ปริพันธ์ integral' },
+        { l: '∫ₐᵇ', tpl: '\\int_{a}^{b} $SEL$ \\, dx', kw: 'อินทิกรัลจำกัดเขต definite integral' },
+        { l: '∬', tpl: '\\iint_{D} $SEL$ \\, dA', kw: 'อินทิกรัลสองชั้น double integral' },
+        { l: '∮', tpl: '\\oint_{C} $SEL$ \\, ds', kw: 'อินทิกรัลตามเส้นปิด contour integral' },
+        { l: 'lim', tpl: '\\lim_{x \\to \\infty} $SEL$', kw: 'ลิมิต limit' },
+        { l: '∑', tpl: '\\sum_{i=1}^{n} $SEL$', kw: 'ซิกมา ผลรวม sum sigma' },
+        { l: '∏', tpl: '\\prod_{i=1}^{n} $SEL$', kw: 'ผลคูณ product' },
+        { l: '∇', tpl: '\\nabla $SEL$', kw: 'เดล เกรเดียนต์ nabla del gradient' },
+        { l: 'F⃗', tpl: '\\vec{$SEL$}', kw: 'เวกเตอร์ vector arrow' },
+        { l: 'î', tpl: '\\hat{$SEL$}', kw: 'เวกเตอร์หนึ่งหน่วย หมวก unit vector hat' },
+        { l: 'A (หนา)', tpl: '\\mathbf{$SEL$}', kw: 'ตัวหนา เมทริกซ์ เวกเตอร์ bold' }
+      ]
+    },
+    {
+      id: 'greek',
+      label: 'กรีก (เล็ก-ใหญ่)',
+      items: [
+        { l: 'α', tpl: '\\alpha', kw: 'อัลฟา alpha' },
+        { l: 'β', tpl: '\\beta', kw: 'เบตา beta' },
+        { l: 'γ', tpl: '\\gamma', kw: 'แกมมา หน่วยน้ำหนัก gamma' },
+        { l: 'δ', tpl: '\\delta', kw: 'เดลตาเล็ก การโก่งตัว delta deflection' },
+        { l: 'ε', tpl: '\\varepsilon', kw: 'เอปซิลอน ความเครียด epsilon strain' },
+        { l: 'θ', tpl: '\\theta', kw: 'ทีตา มุม theta angle' },
+        { l: 'λ', tpl: '\\lambda', kw: 'แลมบ์ดา lambda' },
+        { l: 'μ', tpl: '\\mu', kw: 'มิว ค่าเฉลี่ย แรงเสียดทาน mu' },
+        { l: 'π', tpl: '\\pi', kw: 'พาย pi' },
+        { l: 'ρ', tpl: '\\rho', kw: 'โร ความหนาแน่น rho density' },
+        { l: 'σ', tpl: '\\sigma', kw: 'ซิกมา ความเค้นตั้งฉาก sigma stress' },
+        { l: 'τ', tpl: '\\tau', kw: 'ทาว ความเค้นเฉือน tau shear' },
+        { l: 'φ', tpl: '\\phi', kw: 'ฟาย มุมเสียดทาน phi friction' },
+        { l: 'ω', tpl: '\\omega', kw: 'โอเมกา ความเร็วเชิงมุม omega' },
+        { l: 'Δ', tpl: '\\Delta', kw: 'เดลตาใหญ่ ผลต่าง Delta change' },
+        { l: 'Σ', tpl: '\\Sigma', kw: 'ซิกมาใหญ่ ผลรวม Sigma' },
+        { l: 'Ω', tpl: '\\Omega', kw: 'โอห์ม โอเมกาใหญ่ Omega ohm' },
+        { l: 'Φ', tpl: '\\Phi', kw: 'ฟายใหญ่ ฟลักซ์ Phi' },
+        { l: 'Γ', tpl: '\\Gamma', kw: 'แกมมาใหญ่ Gamma' },
+        { l: 'Λ', tpl: '\\Lambda', kw: 'แลมบ์ดาใหญ่ Lambda' }
+      ]
+    },
+    {
+      id: 'logic',
+      label: 'ตรรกะ เซต & สถิติ',
+      items: [
+        { l: '±', tpl: '\\pm', kw: 'บวกลบ plus minus' },
+        { l: '×', tpl: '\\times', kw: 'คูณ multiply cross' },
+        { l: '·', tpl: '\\cdot', kw: 'จุดคูณ ดอท dot' },
+        { l: '÷', tpl: '\\div', kw: 'หาร divide' },
+        { l: '≈', tpl: '\\approx', kw: 'ประมาณ approx' },
+        { l: '≠', tpl: '\\neq', kw: 'ไม่เท่ากับ not equal' },
+        { l: '≤', tpl: '\\le', kw: 'น้อยกว่าเท่ากับ less equal' },
+        { l: '≥', tpl: '\\ge', kw: 'มากกว่าเท่ากับ greater equal' },
+        { l: '∞', tpl: '\\infty', kw: 'อนันต์ อินฟินิตี้ infinity' },
+        { l: 'x̄', tpl: '\\bar{$SEL$}', kw: 'ค่าเฉลี่ย เอ็กซ์บาร์ mean bar' },
+        { l: 'C(n,k)', tpl: '\\binom{n}{k}', kw: 'การจัดหมู่ binomial combination' },
+        { l: '∀', tpl: '\\forall', kw: 'สำหรับทุก for all' },
+        { l: '∃', tpl: '\\exists', kw: 'มีอย่างน้อยหนึ่ง exists' },
+        { l: '∈', tpl: '\\in', kw: 'เป็นสมาชิก in element' },
+        { l: '⊂', tpl: '\\subset', kw: 'สับเซต subset' },
+        { l: '∪', tpl: '\\cup', kw: 'ยูเนียน union' },
+        { l: '∩', tpl: '\\cap', kw: 'อินเตอร์เซกชัน intersection' },
+        { l: '⇒', tpl: '\\Rightarrow', kw: 'ถ้าแล้ว implies arrow' },
+        { l: '⇔', tpl: '\\Leftrightarrow', kw: 'ก็ต่อเมื่อ iff' }
+      ]
+    },
+    {
+      id: 'units',
+      label: 'ข้อความ & หน่วย',
+      items: [
+        { l: 'Text', tpl: '\\text{$SEL$}', kw: 'ข้อความ ตัวตรง text' },
+        { l: 'kPa', tpl: '\\text{ kPa}', kw: 'หน่วยความดัน ความเค้น kpa' },
+        { l: 'MPa', tpl: '\\text{ MPa}', kw: 'หน่วยความเค้น mpa' },
+        { l: 'm/s²', tpl: '\\text{ m/s}^2', kw: 'ความเร่ง acceleration' },
+        { l: 'kN·m', tpl: '\\text{ kN}\\cdot\\text{m}', kw: 'โมเมนต์ moment torque' },
+        { l: 'kg/m³', tpl: '\\text{ kg/m}^3', kw: 'ความหนาแน่น density' },
+        { l: '°', tpl: '^\\circ', kw: 'องศา degree' },
+        { l: '°C', tpl: '^\\circ\\text{C}', kw: 'องศาเซลเซียส celsius' },
+        { l: 'เว้นวรรค', tpl: '\\quad ', kw: 'ช่องว่าง space quad' },
+        { l: 'ขึ้นบรรทัด', tpl: ' \\\\\n', kw: 'ขึ้นบรรทัดใหม่ newline' }
+      ]
+    }
+  ];
+
+  const FORMULA_PRESETS = {
+    'โครงสร้าง & กลศาสตร์': [
+      { name: 'ความเค้นดัด (Bending)', tex: '\\sigma = \\frac{M y}{I}' },
+      { name: 'ความเค้นเฉือน (Shear)', tex: '\\tau = \\frac{V Q}{I t}' },
+      { name: 'โมเมนต์คานช่วงเดี่ยว', tex: 'M_{\\max} = \\frac{w L^2}{8}' },
+      { name: 'สมการสมดุล', tex: '\\sum F_x = 0, \\quad \\sum F_y = 0, \\quad \\sum M = 0' },
+      { name: 'โมเมนต์ความเฉื่อยสี่เหลี่ยม', tex: 'I_x = \\frac{b h^3}{12}' }
+    ],
+    'ปฐพี & ของไหล': [
+      { name: 'Mohr-Coulomb', tex: "\\tau_f = c' + \\sigma'_n \\tan\\phi'" },
+      { name: 'Effective Stress', tex: "\\sigma' = \\sigma - u" },
+      { name: 'Principal Stress (Nφ)', tex: "\\sigma'_1 = \\sigma'_3 N_\\phi + 2c'\\sqrt{N_\\phi}" },
+      { name: 'สมการแบร์นูลลี', tex: '\\frac{P_1}{\\gamma} + \\frac{v_1^2}{2g} + z_1 = \\frac{P_2}{\\gamma} + \\frac{v_2^2}{2g} + z_2' },
+      { name: 'สมการแมนนิ่ง (Manning)', tex: 'V = \\frac{1}{n} R^{2/3} S^{1/2}' }
+    ],
+    'คณิตศาสตร์ & สถิติ': [
+      { name: 'สมการกำลังสอง', tex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}' },
+      { name: 'Normal Distribution', tex: 'f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} e^{-\\frac{1}{2}\\left(\\frac{x - \\mu}{\\sigma}\\right)^2}' },
+      { name: 'Z-Score', tex: 'Z = \\frac{x - \\mu}{\\sigma}' },
+      { name: "Simpson's 1/3 Rule", tex: '\\int_a^b f(x)\\,dx \\approx \\frac{h}{3}\\left[y_0 + 4y_1 + y_2\\right]' }
+    ]
   };
 
-  const previewUrl = expression.trim()
-    ? `https://latex.codecogs.com/svg.image?\\color{white}\\large ${encodeURIComponent(expression)}`
+  const ALL_SYMBOLS = SYMBOL_TABS.flatMap((tab) =>
+    tab.items.map((it) => ({ ...it, cat: tab.label }))
+  );
+
+  // History (Undo / Redo)
+  const [history, setHistory] = useState(['']);
+  const [histIdx, setHistIdx] = useState(0);
+  const expression = history[histIdx] ?? '';
+  const [debouncedExpr, setDebouncedExpr] = useState('');
+
+  // Editor UI states
+  const [symTab, setSymTab] = useState('algebra');
+  const [symSearch, setSymSearch] = useState('');
+  const [presetCat, setPresetCat] = useState('โครงสร้าง & กลศาสตร์');
+  const [extraPanel, setExtraPanel] = useState('none'); // 'none' | 'matrix' | 'multiline' | 'saved'
+
+  // Matrix Builder
+  const [matType, setMatType] = useState('bmatrix');
+  const [matRows, setMatRows] = useState(2);
+  const [matCols, setMatCols] = useState(2);
+  const [matGrid, setMatGrid] = useState([
+    ['a', 'b', '0', '0', '0'],
+    ['c', 'd', '0', '0', '0'],
+    ['0', '0', '1', '0', '0'],
+    ['0', '0', '0', '1', '0'],
+    ['0', '0', '0', '0', '1']
+  ]);
+
+  // Multi-line / Cases Builder
+  const [multiType, setMultiType] = useState('cases'); // 'cases' | 'aligned'
+  const [multiLines, setMultiLines] = useState([
+    { left: 'x^2', right: 'x \\ge 0' },
+    { left: '-x', right: 'x < 0' }
+  ]);
+
+  // Preview & Export Settings
+  const [eqColor, setEqColor] = useState('white'); // 'white' | 'black' | 'blue' | 'red'
+  const [previewBg, setPreviewBg] = useState('dark'); // 'dark' | 'light' | 'checker'
+  const [dpi, setDpi] = useState(200); // 150 | 200 | 300
+  const [toast, setToast] = useState('');
+
+  // Saved Formulas (localStorage)
+  const [saveTitle, setSaveTitle] = useState('');
+  const [savedList, setSavedList] = useState(() => {
+    try {
+      const raw = localStorage.getItem('bma_latex_saved_v1');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedExpr(expression.trim()), 350);
+    return () => clearTimeout(t);
+  }, [expression]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bma_latex_saved_v1', JSON.stringify(savedList));
+    } catch {}
+  }, [savedList]);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2200);
+  };
+
+  const pushHistory = (nextVal) => {
+    if (nextVal === expression) return;
+    const nextHist = [...history.slice(0, histIdx + 1), nextVal].slice(-60);
+    setHistory(nextHist);
+    setHistIdx(nextHist.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (histIdx > 0) setHistIdx(histIdx - 1);
+  };
+
+  const handleRedo = () => {
+    if (histIdx < history.length - 1) setHistIdx(histIdx + 1);
+  };
+
+  // แทรกตรงตำแหน่งเคอร์เซอร์ + หุ้มข้อความที่ลากคลุมไว้
+  const insertAtCursor = (tpl) => {
+    const el = textareaRef.current;
+    const start = el ? el.selectionStart : expression.length;
+    const end = el ? el.selectionEnd : expression.length;
+    const selected = expression.slice(start, end);
+
+    let inserted = tpl;
+    let cursorOffset = 0;
+
+    if (selected) {
+      if (inserted.includes('$SEL$')) {
+        inserted = inserted.replace('$SEL$', selected);
+      } else {
+        inserted = `${inserted}${selected}`;
+      }
+      const curIdx = inserted.indexOf('$CUR$');
+      if (curIdx !== -1) {
+        inserted = inserted.replace('$CUR$', '');
+        cursorOffset = curIdx;
+      } else {
+        cursorOffset = inserted.length;
+      }
+    } else {
+      const selIdx = inserted.indexOf('$SEL$');
+      if (selIdx !== -1) {
+        inserted = inserted.replace('$SEL$', '').replace('$CUR$', '');
+        cursorOffset = selIdx;
+      } else {
+        const curIdx = inserted.indexOf('$CUR$');
+        if (curIdx !== -1) {
+          inserted = inserted.replace('$CUR$', '');
+          cursorOffset = curIdx;
+        } else {
+          cursorOffset = inserted.length;
+        }
+      }
+    }
+
+    const nextVal = expression.slice(0, start) + inserted + expression.slice(end);
+    pushHistory(nextVal);
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const pos = start + cursorOffset;
+        textareaRef.current.setSelectionRange(pos, pos);
+      }
+    });
+  };
+
+  // ตรวจสอบวงเล็บและคำสั่ง begin/end แบบเรียลไทม์
+  const syntaxIssues = (() => {
+    if (!expression.trim()) return [];
+    const issues = [];
+    let braceDepth = 0;
+    for (let i = 0; i < expression.length; i++) {
+      if (expression[i] === '\\') {
+        i++;
+        continue;
+      }
+      if (expression[i] === '{') braceDepth++;
+      else if (expression[i] === '}') {
+        braceDepth--;
+        if (braceDepth < 0) {
+          issues.push('พบปีกกาปิด "}" เกินมา (ไม่มี "{" คู่กัน)');
+          braceDepth = 0;
+        }
+      }
+    }
+    if (braceDepth > 0) issues.push(`ขาดปีกกาปิด "}" จำนวน ${braceDepth} ตัว`);
+
+    const leftCount = (expression.match(/\\left(?![a-zA-Z])/g) || []).length;
+    const rightCount = (expression.match(/\\right(?![a-zA-Z])/g) || []).length;
+    if (leftCount !== rightCount) {
+      issues.push(`จำนวน \\left (${leftCount}) ไม่เท่ากับ \\right (${rightCount})`);
+    }
+
+    const envStack = [];
+    const envRegex = /\\(begin|end)\{([^}]+)\}/g;
+    let m;
+    while ((m = envRegex.exec(expression)) !== null) {
+      if (m[1] === 'begin') {
+        envStack.push(m[2]);
+      } else {
+        const last = envStack.pop();
+        if (!last) issues.push(`พบ \\end{${m[2]}} โดยไม่มี \\begin{${m[2]}}`);
+        else if (last !== m[2]) issues.push(`Environment ไม่ตรงคู่: เปิด ${last} แต่ปิดด้วย ${m[2]}`);
+      }
+    }
+    if (envStack.length > 0) {
+      issues.push(`ยังไม่ได้ปิด Environment: ${envStack.map((e) => `\\end{${e}}`).join(', ')}`);
+    }
+    return issues;
+  })();
+
+  const handleInsertMatrix = () => {
+    const body = Array.from({ length: matRows }, (_, r) =>
+      Array.from({ length: matCols }, (_, c) => (matGrid[r]?.[c] || '0').trim() || '0').join(' & ')
+    ).join(' \\\\ ');
+    insertAtCursor(`\\begin{${matType}} ${body} \\end{${matType}}`);
+    setExtraPanel('none');
+  };
+
+  const handleInsertMultiline = () => {
+    const validLines = multiLines.filter((l) => l.left.trim() || l.right.trim());
+    if (validLines.length === 0) return;
+    const body =
+      multiType === 'cases'
+        ? validLines.map((l) => `${l.left.trim() || '0'} & \\text{if } ${l.right.trim() || '...'}`).join(' \\\\ ')
+        : validLines.map((l) => `${l.left.trim()} &= ${l.right.trim()}`).join(' \\\\ ');
+    insertAtCursor(`\\begin{${multiType}} ${body} \\end{${multiType}}`);
+    setExtraPanel('none');
+  };
+
+  const handleSaveFormula = (e) => {
+    e.preventDefault();
+    if (!expression.trim()) return;
+    const item = {
+      id: `eq-${Date.now()}`,
+      title: saveTitle.trim() || `สมการที่ ${savedList.length + 1}`,
+      tex: expression.trim()
+    };
+    setSavedList((prev) => [item, ...prev].slice(0, 30));
+    setSaveTitle('');
+    showToast('บันทึกสมการลงรายการโปรดแล้ว');
+  };
+
+  // URL สำหรับพรีวิวและดาวน์โหลดผ่าน CodeCogs
+  const colorCmd = `\\color{${eqColor}}`;
+  const svgUrl = debouncedExpr
+    ? `https://latex.codecogs.com/svg.image?${colorCmd}\\large ${encodeURIComponent(debouncedExpr)}`
     : null;
+  const pngUrl = debouncedExpr
+    ? `https://latex.codecogs.com/png.image?\\dpi{${dpi}}${colorCmd} ${encodeURIComponent(debouncedExpr)}`
+    : null;
+
+  const copyCodeFormat = (mode) => {
+    if (!expression.trim()) return;
+    let out = expression.trim();
+    if (mode === 'inline') out = `$${out}$`;
+    else if (mode === 'block') out = `$$\n${out}\n$$`;
+    else if (mode === 'word') {
+      // ปรับให้วางใน MS Word Equation (Alt + =) โหมด LaTeX ได้สะอาดขึ้น
+      out = out
+        .replace(/\\displaystyle\s*/g, '')
+        .replace(/\\color\{[^}]+\}\s*/g, '')
+        .replace(/\\,/g, ' ');
+    }
+    navigator.clipboard.writeText(out).then(() => {
+      const lbl =
+        mode === 'inline'
+          ? 'คัดลอก Inline ($...$) แล้ว'
+          : mode === 'block'
+            ? 'คัดลอก Block ($$...$$) แล้ว'
+            : mode === 'word'
+              ? 'คัดลอกสำหรับ MS Word (กด Alt+= แล้ววาง) แล้ว'
+              : 'คัดลอกโค้ด LaTeX แล้ว';
+      showToast(lbl);
+    });
+  };
+
+  const handleDownloadFile = async (format) => {
+    const targetUrl = format === 'svg' ? svgUrl : pngUrl;
+    if (!targetUrl) return;
+    try {
+      const res = await fetch(targetUrl);
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      const dlUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = dlUrl;
+      a.download = `BMA_Equation_${Date.now()}.${format}`;
+      a.click();
+      URL.revokeObjectURL(dlUrl);
+      showToast(`ดาวน์โหลดภาพ .${format.toUpperCase()} เรียบร้อย`);
+    } catch {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      showToast(`เปิดภาพ .${format.toUpperCase()} ในแท็บใหม่แล้ว`);
+    }
+  };
+
+  const handleCopyPngImage = async () => {
+    if (!pngUrl) return;
+    try {
+      if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+        throw new Error('unsupported');
+      }
+      const res = await fetch(pngUrl);
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      showToast('คัดลอกภาพ PNG พื้นใสแล้ว! กด Ctrl+V วางใน Word / PowerPoint ได้เลย');
+    } catch {
+      showToast('เบราว์เซอร์นี้ไม่รองรับ Copy Image อัตโนมัติ — คลิกขวาที่ภาพหรือกดปุ่มโหลด PNG แทนครับ');
+    }
+  };
+
+  const filteredSymbols = symSearch.trim()
+    ? ALL_SYMBOLS.filter((s) =>
+        `${s.l} ${s.tpl} ${s.kw}`.toLowerCase().includes(symSearch.trim().toLowerCase())
+      )
+    : SYMBOL_TABS.find((t) => t.id === symTab)?.items || [];
+
+  const previewBgStyle =
+    previewBg === 'light'
+      ? { backgroundColor: '#FFFFFF' }
+      : previewBg === 'checker'
+        ? {
+            backgroundColor: '#E2E8F0',
+            backgroundImage:
+              'linear-gradient(45deg, #CBD5E1 25%, transparent 25%), linear-gradient(-45deg, #CBD5E1 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #CBD5E1 75%), linear-gradient(-45deg, transparent 75%, #CBD5E1 75%)',
+            backgroundSize: '16px 16px',
+            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px'
+          }
+        : { background: 'linear-gradient(135deg, #050811 0%, #0a101f 100%)' };
 
   return (
     <div className="flex flex-col gap-4 py-2 w-full max-w-3xl mx-auto text-xs">
-      <div className="bg-[#0B1325] p-5 rounded-2xl border border-[#1E3A5F] shadow-lg flex flex-col gap-4">
-        <div className="text-amber-400 font-bold text-sm border-b border-[#1E3A5F] pb-2 flex justify-between items-center">
-          <span><i className="fas fa-square-root-alt"></i> เครื่องมือสร้างสมการ (LaTeX Builder)</span>
-          {previewUrl && (
-            <button type="button" onClick={() => { navigator.clipboard.writeText(expression); alert('คัดลอกโค้ด LaTeX เรียบร้อยแล้ว'); }} className="btn-d py-1 px-3 text-[10px]">
-              <i className="fas fa-copy"></i> ก๊อปปี้โค้ด LaTeX
-            </button>
-          )}
+      {/* แถบแจ้งเตือนสถานะ */}
+      {toast && (
+        <div className="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 text-center font-bold animate-fade-in">
+          ✓ {toast}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pb-2">
-          {Object.entries(btnGroups).map(([group, btns]) => (
-            <div key={group} className="bg-[#050811] p-2 rounded-lg border border-[#1E3A5F]">
-              <div className="text-[9px] text-slate-400 font-bold mb-1.5 text-center">{group}</div>
-              <div className="flex flex-wrap gap-1 justify-center">
-                {btns.map((btn, i) => (
-                  <button key={i} type="button" onClick={() => setExpression((prev) => prev + ' ' + btn.v + ' ')} className="px-2 py-1 bg-slate-800 hover:bg-sky-600 text-slate-200 hover:text-white rounded border border-slate-600 transition-colors font-mono text-[10px] shadow-sm">{btn.l}</button>
-                ))}
+      )}
+
+      {/* ส่วนหัว + เครื่องมือเสริม (Matrix / Cases / Saved) */}
+      <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] shadow-lg space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1E3A5F] pb-2.5">
+          <div className="text-amber-400 font-bold text-sm flex items-center gap-2">
+            <i className="fas fa-square-root-alt"></i>
+            <span>Math / LaTeX Builder Pro</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ['matrix', '⊞ สร้างเมทริกซ์'],
+              ['multiline', '☰ ระบบสมการ / Cases'],
+              ['saved', `⭐ สูตรที่บันทึก (${savedList.length})`]
+            ].map(([id, lbl]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setExtraPanel((p) => (p === id ? 'none' : id))}
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors ${
+                  extraPanel === id
+                    ? 'bg-sky-600 text-white border-sky-400'
+                    : 'bg-[#050811] text-slate-300 border-[#1E3A5F] hover:border-sky-400'
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Panel เสริม: Visual Matrix Builder */}
+        {extraPanel === 'matrix' && (
+          <div className="p-3.5 rounded-xl bg-[#050811] border border-sky-500/40 space-y-3 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-bold text-sky-300">⊞ Visual Matrix Builder</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={matType} onChange={(e) => setMatType(e.target.value)} className="inp py-1 px-2 text-[11px] bg-[#0B1325]">
+                  <option value="bmatrix">[ ] bmatrix (เมทริกซ์ก้ามปู)</option>
+                  <option value="pmatrix">( ) pmatrix (วงเล็บโค้ง)</option>
+                  <option value="vmatrix">| | vmatrix (Determinant)</option>
+                  <option value="Bmatrix">{'{ }'} Bmatrix (ปีกกา)</option>
+                </select>
+                <div className="flex items-center gap-1 text-[11px]">
+                  <span>แถว:</span>
+                  <select value={matRows} onChange={(e) => setMatRows(parseInt(e.target.value, 10))} className="inp py-1 px-1.5 bg-[#0B1325] font-mono">
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <span>× หลัก:</span>
+                  <select value={matCols} onChange={(e) => setMatCols(parseInt(e.target.value, 10))} className="inp py-1 px-1.5 bg-[#0B1325] font-mono">
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
-          ))}
+
+            <div
+              className="grid gap-1.5 max-w-md mx-auto"
+              style={{ gridTemplateColumns: `repeat(${matCols}, minmax(0, 1fr))` }}
+            >
+              {Array.from({ length: matRows }).map((_, r) =>
+                Array.from({ length: matCols }).map((__, c) => (
+                  <input
+                    key={`m-${r}-${c}`}
+                    type="text"
+                    value={matGrid[r]?.[c] ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMatGrid((prev) =>
+                        prev.map((row, ri) => (ri === r ? row.map((cell, ci) => (ci === c ? val : cell)) : row))
+                      );
+                    }}
+                    className="inp py-1.5 px-1 text-center font-mono text-xs bg-[#0B1325]"
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setExtraPanel('none')} className="btn-d py-1 px-3 text-[11px]">ปิด</button>
+              <button type="button" onClick={handleInsertMatrix} className="btn-b py-1 px-4 text-[11px] font-bold">
+                + แทรกเมทริกซ์ลงตำแหน่งเคอร์เซอร์
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Panel เสริม: Multi-line / Cases Builder */}
+        {extraPanel === 'multiline' && (
+          <div className="p-3.5 rounded-xl bg-[#050811] border border-sky-500/40 space-y-3 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-bold text-sky-300">☰ สร้างสมการหลายบรรทัด / ฟังก์ชันแยกเงื่อนไข</span>
+              <div className="flex bg-[#0B1325] p-0.5 rounded-lg border border-[#1E3A5F] text-[10px]">
+                <button type="button" onClick={() => setMultiType('cases')} className={`px-2.5 py-1 rounded font-bold ${multiType === 'cases' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>Cases (แยกเงื่อนไข)</button>
+                <button type="button" onClick={() => setMultiType('aligned')} className={`px-2.5 py-1 rounded font-bold ${multiType === 'aligned' ? 'bg-amber-400 text-[#050811]' : 'text-slate-400'}`}>Aligned (จัดแนว =)</button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {multiLines.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={row.left}
+                    onChange={(e) => setMultiLines((prev) => prev.map((r, i) => (i === idx ? { ...r, left: e.target.value } : r)))}
+                    placeholder={multiType === 'cases' ? 'ค่าฟังก์ชัน เช่น x^2' : 'ฝั่งซ้าย เช่น F'}
+                    className="inp flex-1 py-1.5 font-mono text-xs bg-[#0B1325]"
+                  />
+                  <span className="text-slate-400 font-bold shrink-0">{multiType === 'cases' ? 'เมื่อ' : '='}</span>
+                  <input
+                    type="text"
+                    value={row.right}
+                    onChange={(e) => setMultiLines((prev) => prev.map((r, i) => (i === idx ? { ...r, right: e.target.value } : r)))}
+                    placeholder={multiType === 'cases' ? 'เงื่อนไข เช่น x \\ge 0' : 'ฝั่งขวา เช่น ma'}
+                    className="inp flex-1 py-1.5 font-mono text-xs bg-[#0B1325]"
+                  />
+                  <button
+                    type="button"
+                    disabled={multiLines.length <= 1}
+                    onClick={() => setMultiLines((prev) => prev.filter((_, i) => i !== idx))}
+                    className="text-red-400 hover:text-red-300 px-1.5 font-bold disabled:opacity-30"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center">
+              <button
+                type="button"
+                onClick={() => setMultiLines((prev) => [...prev, { left: '', right: '' }])}
+                className="btn-d py-1 px-3 text-[11px]"
+              >
+                + เพิ่มบรรทัด
+              </button>
+              <button type="button" onClick={handleInsertMultiline} className="btn-b py-1 px-4 text-[11px] font-bold">
+                + แทรกลงสมการ
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Panel เสริม: Saved Formulas */}
+        {extraPanel === 'saved' && (
+          <div className="p-3.5 rounded-xl bg-[#050811] border border-amber-500/40 space-y-3 animate-fade-in">
+            <form onSubmit={handleSaveFormula} className="flex gap-2">
+              <input
+                type="text"
+                value={saveTitle}
+                onChange={(e) => setSaveTitle(e.target.value)}
+                placeholder="ตั้งชื่อสูตรเพื่อบันทึกสมการปัจจุบัน (เช่น สูตรหา FS แล็บดิน)..."
+                className="inp flex-1 py-1.5 text-xs bg-[#0B1325]"
+              />
+              <button type="submit" disabled={!expression.trim()} className="btn-w py-1.5 px-3 text-xs disabled:opacity-40 shrink-0">
+                ⭐ บันทึกสูตรนี้
+              </button>
+            </form>
+
+            {savedList.length === 0 ? (
+              <div className="text-center text-slate-500 py-4 text-[11px]">ยังไม่มีสมการที่บันทึกไว้ในเครื่อง</div>
+            ) : (
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                {savedList.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-[#0B1325] border border-[#1E3A5F]">
+                    <button
+                      type="button"
+                      onClick={() => { pushHistory(item.tex); setExtraPanel('none'); }}
+                      className="flex-1 text-left min-w-0 hover:text-sky-300"
+                    >
+                      <div className="font-bold text-white truncate">{item.title}</div>
+                      <div className="font-mono text-[10px] text-slate-400 truncate">{item.tex}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSavedList((prev) => prev.filter((x) => x.id !== item.id))}
+                      className="text-red-400 hover:text-red-300 px-2 font-bold shrink-0"
+                      title="ลบสูตรนี้"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* แม่แบบสูตรพร้อมใช้ (1-Click Presets) */}
+        <div className="bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-amber-300 font-bold mr-1">⚡ สูตรสำเร็จรูป:</span>
+            {Object.keys(FORMULA_PRESETS).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setPresetCat(cat)}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                  presetCat === cat ? 'bg-amber-400 text-[#050811]' : 'bg-[#0B1325] text-slate-400 hover:text-white'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {FORMULA_PRESETS[presetCat].map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => insertAtCursor(p.tex)}
+                className="px-2.5 py-1 rounded-full bg-[#0B1325] border border-[#1E3A5F] hover:border-sky-400 text-sky-200 text-[10px] font-semibold transition-colors"
+                title={p.tex}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
-        <div>
-          <label className="text-slate-400 font-bold mb-1 block">โค้ดสมการ (พิมพ์แก้ที่นี่ได้เลย)</label>
-          <textarea rows="3" value={expression} onChange={(e) => setExpression(e.target.value)} placeholder="พิมพ์สมการ หรือคลิกปุ่มด้านบนเพื่อแทรก..." className="w-full inp font-mono text-sky-200 bg-[#050811] resize-none"></textarea>
+
+        {/* ค้นหาสัญลักษณ์ + แท็บหมวดหมู่สัญลักษณ์ */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <i className="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]"></i>
+              <input
+                type="text"
+                value={symSearch}
+                onChange={(e) => setSymSearch(e.target.value)}
+                placeholder="ค้นหาสัญลักษณ์ไทย/อังกฤษ (เช่น ซิกมา, อนุพันธ์, องศา, ไม่เท่ากับ)..."
+                className="inp w-full py-1.5 pl-7 pr-7 text-[11px] bg-[#050811]"
+              />
+              {symSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSymSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-[10px]"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!symSearch.trim() && (
+            <div className="flex gap-1 overflow-x-auto no-scrollbar pb-0.5">
+              {SYMBOL_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSymTab(t.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap border transition-colors ${
+                    symTab === t.id
+                      ? 'bg-sky-600 text-white border-sky-400'
+                      : 'bg-[#050811] text-slate-400 border-[#1E3A5F] hover:text-white'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-1.5 bg-[#050811] p-2.5 rounded-xl border border-[#1E3A5F] min-h-[52px]">
+            {filteredSymbols.length === 0 ? (
+              <span className="text-slate-500 text-[11px] m-auto">ไม่พบสัญลักษณ์ที่ตรงกับ "{symSearch}"</span>
+            ) : (
+              filteredSymbols.map((btn, i) => (
+                <button
+                  key={`${btn.l}-${i}`}
+                  type="button"
+                  onClick={() => insertAtCursor(btn.tpl)}
+                  title={btn.tpl.replace(/\$SEL\$|\$CUR\$/g, '')}
+                  className="px-2.5 py-1.5 bg-[#0B1325] hover:bg-sky-600 text-slate-100 hover:text-white rounded-lg border border-[#1E3A5F] hover:border-sky-400 transition-colors font-mono text-[11px] shadow-sm"
+                >
+                  {btn.l}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* กล่องพิมพ์สมการพร้อม Undo / Redo / Clear และแจ้งเตือนวงเล็บ */}
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="text-slate-300 font-bold text-[11px]">
+              โค้ดสมการ LaTeX <span className="text-slate-500 font-normal">(ลากคลุมข้อความแล้วกดปุ่มสัญลักษณ์เพื่อหุ้มได้ทันที)</span>
+            </label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={histIdx <= 0}
+                className="btn-d py-1 px-2 text-[10px] disabled:opacity-35"
+                title="ย้อนกลับ (Undo)"
+              >
+                ↩ Undo
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={histIdx >= history.length - 1}
+                className="btn-d py-1 px-2 text-[10px] disabled:opacity-35"
+                title="ทำซ้ำ (Redo)"
+              >
+                ↪ Redo
+              </button>
+              <button
+                type="button"
+                onClick={() => pushHistory('')}
+                disabled={!expression}
+                className="px-2 py-1 rounded-lg bg-red-950/40 border border-red-900/60 text-red-400 hover:bg-red-600 hover:text-white text-[10px] font-bold disabled:opacity-35"
+              >
+                ล้าง
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            rows="3"
+            value={expression}
+            onChange={(e) => pushHistory(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) handleRedo();
+                else handleUndo();
+              }
+            }}
+            placeholder="พิมพ์โค้ด LaTeX หรือเลือกสัญลักษณ์ / สูตรสำเร็จรูปด้านบน..."
+            className="w-full inp font-mono text-sm text-sky-200 bg-[#050811] resize-y"
+          />
+
+          {/* Bracket & Environment Checker */}
+          {expression.trim() && (
+            syntaxIssues.length === 0 ? (
+              <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1.5">
+                <i className="fas fa-check-circle"></i> ไวยากรณ์วงเล็บและ Environment ครบคู่สมบูรณ์
+              </div>
+            ) : (
+              <div className="p-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-[11px] space-y-0.5">
+                {syntaxIssues.map((err, i) => (
+                  <div key={i}>⚠️ {err}</div>
+                ))}
+              </div>
+            )
+          )}
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-[#050811] to-[#0a101f] p-6 rounded-2xl border border-dashed border-sky-500/50 shadow-2xl flex flex-col items-center justify-center min-h-[150px] relative">
-        <div className="absolute top-3 left-4 text-[10px] text-sky-400 font-bold tracking-widest uppercase">Live Preview (พรีวิวภาพสมการ)</div>
-        {previewUrl ? (
-          <div className="mt-4 p-4"><img src={previewUrl} alt="Math Equation" className="max-w-full h-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" /></div>
-        ) : (
-          <div className="text-slate-500 mt-4"><i className="fas fa-laptop-code text-2xl mb-2 block text-center opacity-50"></i>ระบบจะเรนเดอร์ภาพสมการที่นี่</div>
-        )}
-        <div className="absolute bottom-3 right-4 text-[9px] text-slate-500">คุณสามารถคลิกขวาที่ภาพแล้วกด Copy Image ไปวางใน Word/PowerPoint ได้เลย</div>
+      {/* กล่อง Live Preview & Export Ready */}
+      <div className="bg-[#0B1325] p-4 rounded-2xl border border-[#1E3A5F] shadow-xl space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#1E3A5F]">
+          <span className="text-sky-400 font-bold text-xs uppercase tracking-wider">Live Preview &amp; Export</span>
+          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+            {/* เลือกสีตัวอักษร */}
+            <div className="flex items-center gap-1 bg-[#050811] p-1 rounded-lg border border-[#1E3A5F]">
+              <span className="text-slate-400 px-1">สีสูตร:</span>
+              {[
+                ['white', 'ขาว', 'dark'],
+                ['black', 'ดำ', 'light'],
+                ['blue', 'น้ำเงิน', 'light'],
+                ['red', 'แดง', 'light']
+              ].map(([col, lbl, autoBg]) => (
+                <button
+                  key={col}
+                  type="button"
+                  onClick={() => {
+                    setEqColor(col);
+                    if (previewBg !== 'checker') setPreviewBg(autoBg);
+                  }}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    eqColor === col ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            {/* เลือกพื้นหลังพรีวิว */}
+            <div className="flex items-center gap-1 bg-[#050811] p-1 rounded-lg border border-[#1E3A5F]">
+              {[
+                ['dark', 'มืด'],
+                ['light', 'ขาว'],
+                ['checker', 'พื้นใส']
+              ].map(([bg, lbl]) => (
+                <button
+                  key={bg}
+                  type="button"
+                  onClick={() => setPreviewBg(bg)}
+                  className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                    previewBg === bg ? 'bg-amber-400 text-[#050811]' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            {/* เลือกความละเอียด PNG */}
+            <select
+              value={dpi}
+              onChange={(e) => setDpi(parseInt(e.target.value, 10))}
+              className="bg-[#050811] text-sky-300 font-mono font-bold px-2 py-1 rounded-lg border border-[#1E3A5F] outline-none"
+              title="ความละเอียดภาพ PNG"
+            >
+              <option value={150}>150 DPI</option>
+              <option value={200}>200 DPI (HD)</option>
+              <option value={300}>300 DPI (พิมพ์)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* พื้นที่แสดงพรีวิว */}
+        <div
+          style={previewBgStyle}
+          className="rounded-2xl border border-dashed border-sky-500/50 min-h-[150px] p-6 flex items-center justify-center overflow-x-auto transition-colors"
+        >
+          {svgUrl ? (
+            <img
+              src={svgUrl}
+              alt="LaTeX Equation Preview"
+              className="max-w-full h-auto"
+            />
+          ) : (
+            <div className={`text-center ${previewBg === 'dark' ? 'text-slate-500' : 'text-slate-600'}`}>
+              <i className="fas fa-laptop-code text-2xl mb-1.5 block opacity-60"></i>
+              ระบบจะเรนเดอร์ภาพสมการที่นี่อัตโนมัติ
+            </div>
+          )}
+        </div>
+
+        {/* ปุ่ม Export ภาพและคัดลอกโค้ดหลายฟอร์แมต */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={!pngUrl}
+              onClick={handleCopyPngImage}
+              className="btn-w py-1.5 px-3 text-[11px] disabled:opacity-40"
+            >
+              🖼️ Copy Image (PNG)
+            </button>
+            <button
+              type="button"
+              disabled={!pngUrl}
+              onClick={() => handleDownloadFile('png')}
+              className="btn-b py-1.5 px-3 text-[11px] disabled:opacity-40"
+            >
+              📥 โหลด PNG ({dpi} DPI)
+            </button>
+            <button
+              type="button"
+              disabled={!svgUrl}
+              onClick={() => handleDownloadFile('svg')}
+              className="btn-d py-1.5 px-3 text-[11px] text-sky-300 disabled:opacity-40"
+            >
+              📥 โหลด SVG
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" disabled={!expression.trim()} onClick={() => copyCodeFormat('raw')} className="btn-d py-1 px-2.5 text-[10px] disabled:opacity-40">
+              📋 LaTeX
+            </button>
+            <button type="button" disabled={!expression.trim()} onClick={() => copyCodeFormat('inline')} className="btn-d py-1 px-2.5 text-[10px] disabled:opacity-40">
+              $Inline$
+            </button>
+            <button type="button" disabled={!expression.trim()} onClick={() => copyCodeFormat('block')} className="btn-d py-1 px-2.5 text-[10px] disabled:opacity-40">
+              $$Block$$
+            </button>
+            <button type="button" disabled={!expression.trim()} onClick={() => copyCodeFormat('word')} className="btn-d py-1 px-2.5 text-[10px] text-amber-300 disabled:opacity-40">
+              📝 MS Word
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
