@@ -707,7 +707,27 @@ export default function DiscJamPage({ chatMessages = [] }) {
                             {msg.text && <div className="text-xs text-slate-200 break-words whitespace-pre-line">{msg.text}</div>}
                             {msg.attachments?.length > 0 && (
                               <div className="mt-1.5 space-y-1.5">
-                                {msg.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}
+                                {msg.attachments.map((att) => {
+                                  const isGif =
+                                    att.size === 'GIF' ||
+                                    att.name === 'GIF' ||
+                                    /\.gif(\?|$)/i.test(att.url || '') ||
+                                    /giphy\.com/i.test(att.url || '');
+                                  if (isGif && att.url) {
+                                    return (
+                                      <div key={att.id} className="inline-block max-w-full">
+                                        <img
+                                          src={att.url}
+                                          alt={att.name || 'GIF'}
+                                          loading="lazy"
+                                          onClick={() => window.open(att.url, '_blank', 'noopener,noreferrer')}
+                                          className="block w-auto max-w-[260px] sm:max-w-[300px] max-h-60 rounded-xl border border-[#1E3A5F] object-contain shadow-md cursor-pointer hover:brightness-110 transition"
+                                        />
+                                      </div>
+                                    );
+                                  }
+                                  return <SmartMedia key={att.id} att={att} />;
+                                })}
                               </div>
                             )}
                             <div className="flex flex-wrap items-center gap-1 mt-1.5">

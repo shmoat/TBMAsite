@@ -102,10 +102,41 @@ export function SmartMedia({ att, onContextMenu }) {
     );
   }
   if (att.type === 'image') {
+    const isGif =
+      att.size === 'GIF' ||
+      att.name === 'GIF' ||
+      /\.gif(\?|$)/i.test(url) ||
+      /giphy\.com/i.test(url);
+    const displayUrl =
+      isGif && /\/100(w)?\.gif(\?|$)/i.test(url)
+        ? url.replace(/\/100(w)?\.gif(\?|$)/i, '/200$1.gif$2')
+        : url;
+
     return (
-      <div onContextMenu={handleMediaCtx} onClick={() => openZoom(url)} className="rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] max-w-md cursor-zoom-in relative group">
-        <img src={url} alt={att.name} className="max-h-80 w-auto mx-auto object-contain" />
-        <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] opacity-0 group-hover:opacity-100">🔍 ขยาย</span>
+      <div
+        onContextMenu={handleMediaCtx}
+        onClick={() => openZoom(displayUrl)}
+        className="inline-block max-w-full sm:max-w-md rounded-xl overflow-hidden border border-[#1E3A5F] bg-[#0B1325] cursor-zoom-in relative group shadow-md"
+      >
+        <img
+          src={displayUrl}
+          alt={att.name || 'image'}
+          loading="lazy"
+          onError={(e) => {
+            if (!e.currentTarget.dataset.fb) {
+              e.currentTarget.dataset.fb = '1';
+              e.currentTarget.src = url;
+            }
+          }}
+          className={
+            isGif
+              ? 'block min-h-[160px] max-h-64 w-auto max-w-[260px] sm:max-w-[340px] object-contain'
+              : 'block max-h-80 w-auto max-w-full object-contain'
+          }
+        />
+        <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
+          🔍 ขยาย
+        </span>
       </div>
     );
   }
@@ -294,7 +325,20 @@ export function GiphyPickerPopover({ onSelect, onClose, align = 'left' }) {
           : `/api/giphy?type=trending&limit=12&rating=pg-13`;
         const res = await fetch(url);
         const data = res.ok ? await res.json() : null;
-        if (active) setItems((data?.data || []).map((g) => g.images?.fixed_height_small?.url).filter(Boolean));
+        if (active) {
+          setItems(
+            (data?.data || [])
+              .map((g) => ({
+                preview: g.images?.fixed_height_small?.url || g.images?.fixed_height?.url,
+                full:
+                  g.images?.fixed_height?.url ||
+                  g.images?.downsized_medium?.url ||
+                  g.images?.original?.url ||
+                  g.images?.fixed_height_small?.url
+              }))
+              .filter((x) => x.preview && x.full)
+          );
+        }
       } catch {
         if (active) setItems([]);
       } finally {
@@ -330,13 +374,13 @@ export function GiphyPickerPopover({ onSelect, onClose, align = 'left' }) {
               กำลังโหลด GIF...
             </div>
           ) : items.length > 0 ? (
-            items.map((url, idx) => (
+            items.map((item, idx) => (
               <button
                 key={idx}
                 type="button"
-                onClick={() => { onSelect(url); onClose(); }}
+                onClick={() => { onSelect(item.full); onClose(); }}
                 className="h-20 rounded-lg bg-cover bg-center hover:ring-2 ring-purple-400 transition-all"
-                style={{ backgroundImage: `url('${url}')` }}
+                style={{ backgroundImage: `url('${item.preview}')` }}
               />
             ))
           ) : (
