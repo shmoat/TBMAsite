@@ -44,18 +44,28 @@ export default function HomePage({
         </p>
       </div>
 
-      <div className="relative w-full max-w-[760px] h-[700px] flex items-center justify-center orbit-sys select-none shrink-0 my-4">
-        <div
+      <div
           onClick={() => onNavigate('feed')}
-          className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition"
-          style={{
-            background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)',
-            boxShadow: '0 0 60px rgba(37,99,235,0.65)'
-          }}
+          className="relative z-20 w-32 h-32 rounded-full cursor-pointer flex flex-col items-center justify-center text-center p-4 hover:scale-105 transition-all duration-500"
+          style={
+            isHalloween
+              ? {
+                  background: 'radial-gradient(circle at 30% 30%, #FCA5A5, #DC2626 42%, #7F1D1D 78%, #1A0505 100%)',
+                  boxShadow: '0 0 65px rgba(220,38,38,0.8), 0 0 115px rgba(153,27,27,0.45)'
+                }
+              : {
+                  background: 'radial-gradient(circle at 30% 30%, #60A5FA, #1D4ED8 45%, #0F2547 80%, #050811 100%)',
+                  boxShadow: '0 0 60px rgba(37,99,235,0.65)'
+                }
+          }
         >
           <Logo s={32} />
-          <span className="text-[11px] font-bold uppercase mt-1">Blue Moon</span>
-          <span className="text-[10px] text-blue-200">{activeMembers.length} Satellites</span>
+          <span className="text-[11px] font-bold uppercase mt-1">
+            {isHalloween ? 'Blood Moon' : 'Blue Moon'}
+          </span>
+          <span className={`text-[10px] ${isHalloween ? 'text-red-200' : 'text-blue-200'}`}>
+            {activeMembers.length} Satellites
+          </span>
         </div>
 
         {rings.map((ring, ri) => {
@@ -69,46 +79,69 @@ export default function HomePage({
               }
               style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}
             >
-            {ring.items.map((m, mi) => {
-              const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
-              return (
-                <div
-                  key={m.id}
-                  style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }}
-                  className={'absolute pointer-events-auto ' + ring.cc}
-                >
-                  {currentUser ? (
-                    <button
-                      type="button"
-                      onContextMenu={(e) => onOpenMemberMenu?.(e, m)}
-                      onClick={() => {
-                        if (isHalloween && m.id === cursedUserId && onTriggerScare) {
-                          onTriggerScare(m);
-                        } else {
-                          openMemberProfile(m);
-                        }
-                      }}
-                      className="flex flex-col items-center"
-                    >
-                      <Avatar user={m} size="md" showStatus={true} />
-                      <div className="mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border border-[#1E3A5F] text-[10px] whitespace-nowrap">
-                        {m.displayName}
-                      </div>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อดูโปรไฟล์ดาวบริวารในวงโคจร')}
-                      title="สมาชิกสมาคม (เข้าสู่ระบบเพื่อดูโปรไฟล์)"
-                      className="w-5 h-5 rounded-full bg-gradient-to-br from-sky-300 to-blue-700 border border-white/60 shadow-[0_0_12px_rgba(96,165,250,0.8)] hover:scale-125 transition-transform flex items-center justify-center"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-white/90"></span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            {rings.map((ring, ri) => {
+          const ringKey = `${ri}-${ring.items.map((m) => m.id).join('_')}`;
+          return (
+            <div
+              key={ringKey}
+              className={
+                'absolute top-1/2 left-1/2 rounded-full border pointer-events-none ' +
+                (isHalloween ? 'border-red-900/65 ' : 'border-[#1E3A5F]/70 ') +
+                (ring.items.length > 0 ? ring.rc : '-translate-x-1/2 -translate-y-1/2')
+              }
+              style={{ width: ring.r * 2 + 'px', height: ring.r * 2 + 'px' }}
+            >
+              {ring.items.map((m, mi) => {
+                const rad = ((360 / Math.max(1, ring.items.length)) * mi * Math.PI) / 180;
+                const isCursed = isHalloween && m.id === cursedUserId;
+                return (
+                  <div
+                    key={m.id}
+                    style={{ left: ring.r + ring.r * Math.cos(rad) + 'px', top: ring.r + ring.r * Math.sin(rad) + 'px' }}
+                    className={'absolute pointer-events-auto ' + ring.cc}
+                  >
+                    {currentUser ? (
+                      <button
+                        type="button"
+                        onContextMenu={(e) => onOpenMemberMenu?.(e, m)}
+                        onClick={() => {
+                          if (isCursed && onTriggerScare) {
+                            onTriggerScare(m);
+                          } else {
+                            openMemberProfile(m);
+                          }
+                        }}
+                        className="flex flex-col items-center"
+                      >
+                        <div className={isCursed ? 'p-0.5 rounded-full ring-2 ring-red-500/80 shadow-[0_0_16px_rgba(239,68,68,0.85)] animate-pulse' : ''}>
+                          <Avatar user={m} size="md" showStatus={true} />
+                        </div>
+                        <div
+                          className={`mt-1 px-2 py-0.5 rounded-full bg-[#050811]/90 border text-[10px] whitespace-nowrap ${
+                            isCursed ? 'border-red-500/80 text-red-200' : 'border-[#1E3A5F]'
+                          }`}
+                        >
+                          {isCursed ? `☠️ ${m.displayName}` : m.displayName}
+                        </div>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openGuestPrompt('เข้าสู่ระบบสมาชิกเพื่อดูโปรไฟล์ดาวบริวารในวงโคจร')}
+                        title="สมาชิกสมาคม (เข้าสู่ระบบเพื่อดูโปรไฟล์)"
+                        className={`w-5 h-5 rounded-full border border-white/60 hover:scale-125 transition-transform flex items-center justify-center ${
+                          isHalloween
+                            ? 'bg-gradient-to-br from-red-400 to-red-800 shadow-[0_0_12px_rgba(239,68,68,0.8)]'
+                            : 'bg-gradient-to-br from-sky-300 to-blue-700 shadow-[0_0_12px_rgba(96,165,250,0.8)]'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/90"></span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           );
         })}
       </div>
@@ -175,6 +208,16 @@ export default function HomePage({
           </li>
         </ul>
       </div>
+      {isHalloween && (
+        <div
+          aria-hidden="true"
+          className="fixed bottom-0 left-0 right-0 h-44 pointer-events-none z-0"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(127, 29, 29, 0.28) 0%, rgba(88, 28, 135, 0.14) 45%, transparent 100%)'
+          }}
+        />
+      )}
     </div>
   );
 }

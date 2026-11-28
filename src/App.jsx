@@ -10,6 +10,7 @@ import { MuteDurationModal } from './components/MuteDurationModal';
 import GlobalModals from './components/GlobalModals';
 import HalloweenGhostHunt from './features/events/HalloweenGhostHunt';
 import HalloweenCurseAndTreats, { playSpookySound } from './features/events/HalloweenCurseAndTreats';
+import HalloweenFlashlight from './features/events/HalloweenFlashlight';
 import {
   checkIsHalloween,
   checkIsLoyKrathong,
@@ -78,6 +79,7 @@ export default function App() {
   const [xmasPreviewUnlock, setXmasPreviewUnlock] = useState(false);
   const [snowEnabled, setSnowEnabled] = useState(true);
   const [lanternEnabled, setLanternEnabled] = useState(true);
+  const [flashlightEnabled, setFlashlightEnabled] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [cursedUserId, setCursedUserId] = useState(null);
   const [scareTriggered, setScareTriggered] = useState(false);
@@ -1167,6 +1169,21 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {IS_HALLOWEEN && (
+              <button
+                type="button"
+                onClick={() => setFlashlightEnabled(!flashlightEnabled)}
+                className={`btn-d text-xs px-2 sm:px-2.5 flex items-center gap-1 transition-all ${
+                  flashlightEnabled
+                    ? 'text-orange-300 border-orange-500/80 shadow-[0_0_12px_rgba(249,115,22,0.45)]'
+                    : 'text-slate-400 opacity-75'
+                }`}
+                title={flashlightEnabled ? 'ปิดโหมดไฟฉาย' : 'เปิดโหมดไฟฉาย'}
+              >
+                <span>🔦</span>
+              </button>
+            )}
+
             {IS_CHRISTMAS && (
               <button
                 type="button"
@@ -1684,6 +1701,7 @@ export default function App() {
       <FloatingRadio onOpenDiscJam={() => changeViewWithTransition('discjam')} />
 
       {/* HALLOWEEN OVERLAYS */}
+      <HalloweenFlashlight enabled={IS_HALLOWEEN && flashlightEnabled} />
       <HalloweenGhostHunt isHalloween={IS_HALLOWEEN} />
       <HalloweenCurseAndTreats isHalloween={IS_HALLOWEEN} cursedUserId={cursedUserId} />
       {scareTriggered && (
