@@ -208,7 +208,7 @@ export default function SinglePostPage({
                 </div>
               )}
 
-              {post.attachments?.length > 0 && <div className="space-y-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
+              {post.attachments?.length > 0 && <AttachmentGallery attachments={post.attachments} />}
 
               <div className="flex justify-between pt-2.5 border-t border-[#1E3A5F] text-xs">
                 <LikeButton likes={post.likes} currentUser={currentUser} getAuthor={getAuthor} postId={post.id} db={db} />

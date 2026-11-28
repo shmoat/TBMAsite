@@ -445,7 +445,7 @@ export default function BoardPage({
                     </div>
                   )}
 
-                  {post.attachments?.length > 0 && <div className="space-y-2 mt-2">{post.attachments.map((att) => <SmartMedia key={att.id} att={att} />)}</div>}
+                  {post.attachments?.length > 0 && <AttachmentGallery attachments={post.attachments} />}
                 </div>
               )}
 
